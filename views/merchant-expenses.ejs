@@ -1,0 +1,46 @@
+<!-- views/merchant-expenses.ejs -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Business Expenses</title>
+  <style>
+    body { font-family: -apple-system, sans-serif; max-width: 800px; margin: 40px auto; color: #111; }
+    h1 { font-size: 22px; }
+    .subtitle { color: #888; font-size: 14px; margin-top: -8px; margin-bottom: 16px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+    th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid #eee; font-size: 14px; }
+    th { color: #888; font-weight: 500; font-size: 12px; text-transform: uppercase; }
+    .total-col { text-align: right; }
+    .pagination { margin-top: 16px; font-size: 14px; color: #666; }
+    .export-link { float: right; font-size: 14px; }
+    .empty { text-align: center; color: #888; margin-top: 40px; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <%- include('partials/dashboard-header', { activeNav: 'receipts' }) %>
+  <h1>Business Expenses</h1>
+  <div class="subtitle">Receipts you've saved from purchases at other ReceipTap merchants</div>
+  <a class="export-link" href="/dashboard/expenses/export">Export CSV</a>
+
+  <% if (expenses.length === 0) { %>
+    <div class="empty">No saved expenses yet. When you buy from another ReceipTap-enabled business, tap "Save as Business Expense" on the receipt to add it here.</div>
+  <% } else { %>
+    <table>
+      <thead>
+        <tr><th>Date</th><th>Purchased From</th><th class="total-col">Total</th></tr>
+      </thead>
+      <tbody>
+        <% expenses.forEach(function(e) { %>
+          <tr>
+            <td><%= e.date %></td>
+            <td><%= e.soldByName %></td>
+            <td class="total-col">$<%= e.total %></td>
+          </tr>
+        <% }); %>
+      </tbody>
+    </table>
+    <div class="pagination">Page <%= page %> of <%= totalPages %> (<%= totalCount %> total expenses)</div>
+  <% } %>
+</body>
+</html>

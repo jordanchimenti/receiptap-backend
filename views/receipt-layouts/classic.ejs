@@ -1,0 +1,46 @@
+<!-- views/receipt-layouts/classic.ejs -->
+<!-- Layout: Classic — centered card, rounded corners, soft shadow -->
+<style>
+  .layout-classic {
+    max-width: 420px; margin: 0 auto; background: #fff; border-radius: 12px;
+    padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); box-sizing: border-box;
+  }
+  .layout-classic .logo { max-height: 60px; display: block; margin: 0 auto 16px; }
+  .layout-classic .header-text { text-align: center; font-size: 15px; margin-bottom: 20px; color: #555; }
+  .layout-classic .business-name { text-align: center; font-size: 20px; font-weight: 600; margin-bottom: 4px; color: var(--primary); }
+  .layout-classic .meta { text-align: center; font-size: 13px; color: #888; margin-bottom: 20px; }
+  .layout-classic table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  .layout-classic td { padding: 6px 0; color: var(--primary); }
+  .layout-classic .qty { color: #888; width: 20px; }
+  .layout-classic .price { text-align: right; }
+  .layout-classic .totals-row { display: flex; justify-content: space-between; font-size: 14px; padding: 4px 0; color: var(--primary); }
+  .layout-classic .totals-row.total { font-weight: 700; font-size: 16px; border-top: 1px solid #eee; margin-top: 8px; padding-top: 10px; }
+  .layout-classic hr { border: none; border-top: 1px dashed #ddd; margin: 16px 0; }
+</style>
+<div class="layout-classic">
+  <% if (theme.logoUrl) { %>
+    <img class="logo" src="<%= theme.logoUrl %>" alt="<%= merchant.businessName %>" />
+  <% } %>
+  <div class="business-name"><%= merchant.businessName %></div>
+  <div class="meta"><%= transaction.date %></div>
+  <% if (theme.headerText) { %>
+    <div class="header-text"><%= theme.headerText %></div>
+  <% } %>
+  <hr />
+  <table>
+    <% transaction.lineItems.forEach(function(item) { %>
+      <tr>
+        <td class="qty"><%= item.quantity %>x</td>
+        <td><%= item.name %></td>
+        <td class="price">$<%= (item.total / 100).toFixed(2) %></td>
+      </tr>
+    <% }); %>
+  </table>
+  <hr />
+  <div class="totals-row"><span>Subtotal</span><span>$<%= transaction.subtotal %></span></div>
+  <div class="totals-row"><span>Tax</span><span>$<%= transaction.tax %></span></div>
+  <div class="totals-row total"><span>Total</span><span>$<%= transaction.total %></span></div>
+  <% if (transaction.paymentMethod) { %>
+    <div class="meta" style="margin-top:12px;"><%= transaction.paymentMethod %></div>
+  <% } %>
+</div>

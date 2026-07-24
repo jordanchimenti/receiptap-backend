@@ -1,0 +1,103 @@
+<!-- views/analytics.ejs -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Analytics</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+  <style>
+    body { font-family: -apple-system, sans-serif; max-width: 800px; margin: 0 auto; padding: 0 24px 40px; color: #111; }
+    h1 { font-size: 22px; margin-bottom: 4px; }
+    .subtitle { color: #666; font-size: 14px; margin-bottom: 20px; }
+    .tabs { display: flex; gap: 4px; border-bottom: 2px solid #eee; margin-bottom: 20px; }
+    .tab-button {
+      padding: 10px 18px; border: none; background: none; cursor: pointer;
+      font-size: 14px; font-weight: 600; color: #888; border-bottom: 2px solid transparent;
+      margin-bottom: -2px;
+    }
+    .tab-button.active { color: #111; border-bottom-color: #2563eb; }
+    .chart-card { background: #fff; border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+    .range-note { font-size: 12px; color: #999; margin-top: 12px; text-align: right; }
+  </style>
+</head>
+<body>
+  <%- include('partials/dashboard-header', { activeNav: 'analytics' }) %>
+  <h1>Analytics</h1>
+  <div class="subtitle">Last <%= days %> days</div>
+
+  <div class="tabs">
+    <button class="tab-button active" onclick="showChart('revenue')">Revenue</button>
+    <button class="tab-button" onclick="showChart('customers')">New vs. Repeat Customers</button>
+  </div>
+
+  <div class="chart-card">
+    <canvas id="analytics-chart" height="90"></canvas>
+  </div>
+  <div class="range-note">Data from the last <%= days %> days</div>
+
+  <script>
+    const dayLabels = <%- JSON.stringify(dayLabels) %>;
+    const revenueData = <%- JSON.stringify(revenueData) %>;
+    const newData = <%- JSON.stringify(newData) %>;
+    const repeatData = <%- JSON.stringify(repeatData) %>;
+
+    // Show short labels (e.g. "Jul 5") instead of full ISO dates on the axis
+    const shortLabels = dayLabels.map(d => {
+      const dt = new Date(d + 'T00:00:00');
+      return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    });
+
+    let chart = null;
+
+    function renderRevenueChart() {
+      return new Chart(document.getElementById('analytics-chart'), {
+        type: 'line',
+        data: {
+          labels: shortLabels,
+          datasets: [{
+            label: 'Revenue ($)',
+            data: revenueData,
+            borderColor: '#2563eb',
+            backgroundColor: 'rgba(37,99,235,0.08)',
+            fill: true,
+            tension: 0.3,
+            pointRadius: 2,
+          }],
+        },
+        options: {
+          responsive: true,
+          plugins: { legend: { display: false } },
+          scales: { y: { beginAtZero: true, ticks: { callback: (v) => '$' + v } } },
+        },
+      });
+    }
+
+    function renderCustomersChart() {
+      return new Chart(document.getElementById('analytics-chart'), {
+        type: 'bar',
+        data: {
+          labels: shortLabels,
+          datasets: [
+            { label: 'New', data: newData, backgroundColor: '#2563eb' },
+            { label: 'Repeat', data: repeatData, backgroundColor: '#a5b4fc' },
+          ],
+        },
+        options: {
+          responsive: true,
+          plugins: { legend: { display: true, position: 'top' } },
+          scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true, ticks: { stepSize: 1 } } },
+        },
+      });
+    }
+
+    function showChart(which) {
+      if (chart) chart.destroy();
+      chart = which === 'revenue' ? renderRevenueChart() : renderCustomersChart();
+      document.querySelectorAll('.tab-button').forEach(el => el.classList.remove('active'));
+      event.currentTarget.classList.add('active');
+    }
+
+    chart = renderRevenueChart();
+  </script>
+</body>
+</html>

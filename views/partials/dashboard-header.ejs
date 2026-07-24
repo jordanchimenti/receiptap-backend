@@ -1,0 +1,77 @@
+<!-- views/partials/dashboard-header.ejs
+     The merchant app rail. Included at the top of every dashboard page.
+     Optional local: activeNav — 'overview' | 'receipts' | 'pucks' | 'analytics'
+     | 'customers' | 'emails' | 'pos' | 'settings' | 'billing'
+     Renders only the rail, no per-page data required, so the older pages keep
+     working untouched. Pages with merchant data render their own .topbar. -->
+<link rel="stylesheet" href="/css/receiptap.css" />
+<script>document.body.classList.add('app');</script>
+<%
+  var nav = (typeof activeNav !== 'undefined') ? activeNav : '';
+  function on(k) { return nav === k ? 'active' : ''; }
+%>
+<nav class="rail">
+  <a class="rail-brand" href="/dashboard" style="background:none;padding-left:8px;">
+    <img src="/images/receiptap-logo.png" alt="ReceipTap" />
+  </a>
+
+  <a href="/dashboard" class="<%= on('overview') %>">
+    <svg viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg>
+    Overview
+  </a>
+  <a href="/dashboard/receipts-hub" class="<%= on('receipts') %>">
+    <svg viewBox="0 0 24 24"><path d="M6 2h12v20l-3-2-3 2-3-2-3 2Z"/><path d="M9 8h6M9 12h6"/></svg>
+    Receipts
+  </a>
+  <a href="/dashboard/pucks" class="<%= on('pucks') %>">
+    <svg viewBox="0 0 24 24"><ellipse cx="12" cy="12" rx="9" ry="5.5"/><path d="M3 12v2c0 3 4 5.5 9 5.5s9-2.5 9-5.5v-2"/></svg>
+    ReceipTaps
+  </a>
+
+  <div class="rail-group">Insights</div>
+  <a href="/dashboard/analytics" class="<%= on('analytics') %>">
+    <svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
+    Analytics
+  </a>
+  <a href="/dashboard/repeat-customers" class="<%= on('customers') %>">
+    <svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5"/><path d="M16 5.5a3.2 3.2 0 0 1 0 6M18 20c0-2.4-.9-4.2-2.3-5.3"/></svg>
+    Customers
+  </a>
+  <a href="/dashboard/customer-emails" class="<%= on('emails') %>">
+    <svg viewBox="0 0 24 24"><rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="m3 7 9 6 9-6"/></svg>
+    Customer emails
+  </a>
+
+  <div class="rail-group">Setup</div>
+  <a href="/dashboard/pos-setup" class="<%= on('pos') %>">
+    <svg viewBox="0 0 24 24"><path d="M9 3v6M15 3v6"/><path d="M6 9h12v4a6 6 0 0 1-12 0Z"/><path d="M12 19v3"/></svg>
+    POS connection
+  </a>
+  <a href="/dashboard/settings/receipt" class="<%= on('settings') %>">
+    <svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9c0-1.1-1-1.5-1.8-1.5H17a2.5 2.5 0 0 1 0-5h1.2C19 5.5 19 4 17.5 3.6A9 9 0 0 0 12 3Z"/><circle cx="8.5" cy="10" r="1"/><circle cx="12" cy="7.5" r="1"/></svg>
+    Receipt design
+  </a>
+  <a href="/dashboard/billing" class="<%= on('billing') %>">
+    <svg viewBox="0 0 24 24"><rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="M2.5 10h19"/></svg>
+    Billing
+  </a>
+
+  <div class="rail-spacer"></div>
+
+  <% if (typeof isOwner !== 'undefined' && isOwner === true) { %>
+    <div class="rail-group">Owner</div>
+    <a href="/admin" class="rail-owner <%= on('admin') %>">
+      <svg viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 4.4-2.9 8.3-7 10-4.1-1.7-7-5.6-7-10V6Z"/><path d="m9.2 11.8 2 2 3.6-3.6"/></svg>
+      Owner view
+    </a>
+  <% } %>
+
+  <div class="rail-help">
+    <strong>Need a hand?</strong>
+    <span>Setup questions, POS trouble, anything else.</span>
+    <a href="mailto:support@receiptap.com">Email support</a>
+  </div>
+  <form method="POST" action="/logout" style="margin:6px 0 0;">
+    <button type="submit" class="rail-help-out" style="width:100%;background:none;border:none;color:#7C8399;font-family:var(--font-body);font-size:12.5px;padding:9px;cursor:pointer;">Log out</button>
+  </form>
+</nav>

@@ -1,0 +1,199 @@
+<!-- views/customer-wallet.ejs -->
+<!-- The customer's cross-merchant receipt wallet: monthly summary, category
+     filter chips, account menu, and every saved receipt from every store. -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>My Receipts - ReceipTap</title>
+  <link rel="stylesheet" href="/css/receiptap.css" />
+  <style>
+    .wallet-shell { max-width: 520px; margin: 0 auto; padding: 24px 16px 48px; }
+    .wallet-header { display: flex; align-items: center; justify-content: space-between; }
+    .wallet-logo { height: 36px; }
+
+    /* Account menu */
+    .account-menu-wrap { position: relative; }
+    .account-menu-btn {
+      width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--line);
+      background: var(--paper-raised); color: var(--teal-deep); font-weight: 700;
+      font-size: 14px; cursor: pointer; text-transform: uppercase;
+    }
+    .account-menu {
+      display: none; position: absolute; right: 0; top: 44px; z-index: 20;
+      background: var(--paper-raised); border: 1px solid var(--line); border-radius: 12px;
+      min-width: 220px; box-shadow: 0 6px 24px rgba(28,27,25,0.08); overflow: hidden;
+    }
+    .account-menu.open { display: block; }
+    .account-menu-email {
+      font-size: 12.5px; color: var(--ink-soft); padding: 12px 16px;
+      border-bottom: 1px solid var(--line); word-break: break-all;
+    }
+    .account-menu form { margin: 0; }
+    .account-menu button {
+      display: block; width: 100%; text-align: left; background: none; border: none;
+      font-size: 13.5px; padding: 12px 16px; cursor: pointer; color: var(--danger);
+      font-weight: 500;
+    }
+    .account-menu button:hover { background: var(--paper); }
+
+    /* Summary bar */
+    .summary-card {
+      background: var(--paper-raised); border: 1px solid var(--line); border-radius: 14px;
+      padding: 18px 20px; margin: 18px 0 16px; display: flex; gap: 24px;
+    }
+    .summary-stat .summary-num {
+      font-family: var(--font-mono); font-variant-numeric: tabular-nums;
+      font-weight: 600; font-size: 20px;
+    }
+    .summary-stat .summary-label { font-size: 12px; color: var(--ink-soft); margin-top: 2px; }
+
+    /* Category chips */
+    .chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+    .chip {
+      font-size: 12.5px; font-weight: 600; padding: 6px 13px; border-radius: 999px;
+      text-decoration: none; border: 1px solid var(--line); color: var(--ink-soft);
+      background: var(--paper-raised);
+    }
+    .chip.active { background: var(--teal); border-color: var(--teal); color: #fff; }
+    .chip:hover:not(.active) { border-color: var(--teal); color: var(--teal-deep); }
+
+    .receipt-row {
+      display: flex; justify-content: space-between; align-items: flex-start;
+      padding: 15px 18px; text-decoration: none; color: var(--ink);
+    }
+    .receipt-row:hover { background: var(--paper); }
+    .merchant-name { font-weight: 600; font-size: 14.5px; }
+    .receipt-date { font-size: 12.5px; color: var(--ink-soft); margin-top: 2px; }
+    .receipt-total { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 600; font-size: 15px; }
+    .badges { display: flex; gap: 6px; margin-top: 7px; flex-wrap: wrap; }
+
+    .search-card {
+      background: var(--paper-raised); border: 1px solid var(--line); border-radius: 14px;
+      padding: 16px; margin-bottom: 16px;
+    }
+    .search-row { display: flex; gap: 10px; }
+    .search-row .field { flex: 1; margin-bottom: 0; }
+    .search-card .field { margin-bottom: 12px; }
+    .search-card summary {
+      font-size: 13px; font-weight: 600; color: var(--ink-soft); cursor: pointer;
+      list-style: none; display: flex; align-items: center; gap: 6px;
+    }
+    .search-card details[open] summary { margin-bottom: 12px; }
+    .clear-search { text-align: center; font-size: 12.5px; margin-top: 10px; }
+    .clear-search a { color: var(--ink-soft); }
+  </style>
+</head>
+<body>
+  <div class="wallet-shell">
+    <div class="wallet-header">
+      <img class="wallet-logo" src="/images/receiptap-logo.png" alt="ReceipTap" />
+      <div class="account-menu-wrap">
+        <button class="account-menu-btn" id="account-btn" aria-label="Account menu">
+          <%= (customerEmail || '?').charAt(0) %>
+        </button>
+        <div class="account-menu" id="account-menu">
+          <div class="account-menu-email"><%= customerEmail %></div>
+          <form method="POST" action="/account/logout">
+            <button type="submit">Log out</button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <div class="eyebrow" style="margin-top: 18px;">Your wallet</div>
+    <h1 style="font-size: 24px;">My Receipts</h1>
+
+    <div class="summary-card">
+      <div class="summary-stat">
+        <div class="summary-num">$<%= summary.monthTotal %></div>
+        <div class="summary-label">spent in <%= summary.monthName %></div>
+      </div>
+      <div class="summary-stat">
+        <div class="summary-num"><%= summary.monthStores %></div>
+        <div class="summary-label"><%= summary.monthStores === 1 ? 'store' : 'stores' %> this month</div>
+      </div>
+    </div>
+
+    <% if (categories.length > 0) { %>
+      <div class="chips">
+        <a class="chip <%= !filters.category ? 'active' : '' %>" href="/account/receipts">All</a>
+        <% categories.forEach(function(cat) { %>
+          <a class="chip <%= filters.category === cat ? 'active' : '' %>"
+             href="/account/receipts?category=<%= encodeURIComponent(cat) %>"><%= cat %></a>
+        <% }); %>
+      </div>
+    <% } %>
+
+    <form class="search-card" method="GET" action="/account/receipts">
+      <details <%= (filters.search || filters.from || filters.to) ? 'open' : '' %>>
+        <summary>Search by store or date</summary>
+        <div class="field">
+          <label>Business name</label>
+          <input type="text" name="search" placeholder="e.g. Tip Top Tint" value="<%= filters.search %>" />
+        </div>
+        <div class="search-row">
+          <div class="field">
+            <label>From</label>
+            <input type="date" name="from" value="<%= filters.from %>" />
+          </div>
+          <div class="field">
+            <label>To</label>
+            <input type="date" name="to" value="<%= filters.to %>" />
+          </div>
+        </div>
+        <button class="btn btn-primary" type="submit" style="margin-top: 12px;">Search</button>
+        <% if (filters.search || filters.from || filters.to) { %>
+          <div class="clear-search"><a href="/account/receipts">Clear search</a></div>
+        <% } %>
+      </details>
+    </form>
+
+    <% if (receipts.length === 0 && (filters.search || filters.from || filters.to || filters.category)) { %>
+      <div class="empty-state">
+        <div class="empty-title">No receipts match</div>
+        <div style="font-size: 13.5px; line-height: 1.5;">Try a different filter, store name, or date range.</div>
+      </div>
+    <% } else if (receipts.length === 0) { %>
+      <div class="empty-state">
+        <div class="empty-mark">⌁</div>
+        <div class="empty-title">No saved receipts yet</div>
+        <div style="font-size: 13.5px; line-height: 1.5; max-width: 320px; margin: 0 auto;">
+          Tap a ReceipTap puck at checkout and hit "Save to my ReceipTap account" to start building your history.
+        </div>
+      </div>
+    <% } else { %>
+      <div class="card-list">
+        <% receipts.forEach(function(r) { %>
+          <a class="receipt-row perforated" href="/receipt/<%= r.id %>">
+            <div>
+              <div class="merchant-name"><%= r.merchantName %></div>
+              <div class="receipt-date"><%= r.date %></div>
+              <% if (r.aiCategory) { %>
+                <div class="badges">
+                  <span class="badge badge-teal"><%= r.aiCategory %></span>
+                  <% if (r.aiTaxDeductible) { %>
+                    <span class="badge badge-amber" title="<%= r.aiReasoning %>">Possibly deductible</span>
+                  <% } %>
+                </div>
+              <% } %>
+            </div>
+            <div class="receipt-total">$<%= r.total %></div>
+          </a>
+        <% }); %>
+      </div>
+    <% } %>
+  </div>
+
+  <script>
+    const btn = document.getElementById('account-btn');
+    const menu = document.getElementById('account-menu');
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      menu.classList.toggle('open');
+    });
+    document.addEventListener('click', () => menu.classList.remove('open'));
+  </script>
+</body>
+</html>

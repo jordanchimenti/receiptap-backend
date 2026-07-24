@@ -1,0 +1,158 @@
+<!-- views/admin-overview.ejs — owner-only platform view.
+     Deliberately styled differently from the merchant dashboard (dark banner,
+     amber accent) so it's never ambiguous which view you're looking at. -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Owner view - ReceipTap</title>
+  <link rel="stylesheet" href="/css/receiptap.css" />
+  <style>
+    body { background: var(--app-bg); }
+    .owner-bar {
+      background: var(--rail); color: #E6E9F4; padding: 11px 28px;
+      display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap;
+    }
+    .owner-bar .tag {
+      display: inline-flex; align-items: center; gap: 8px;
+      font-size: 12.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+      color: #F0B45F;
+    }
+    .owner-bar .tag .sw { width: 8px; height: 8px; border-radius: 50%; background: #F0B45F; }
+    .owner-bar a { color: #9AA2BC; font-size: 12.5px; text-decoration: none; font-weight: 500; }
+    .owner-bar a:hover { color: #E6E9F4; }
+    .wrap { max-width: 1180px; margin: 0 auto; padding: 26px 28px 48px; }
+    .wrap > h1 { font-size: 23px; letter-spacing: -0.02em; margin: 0 0 3px; }
+    .wrap > .sub { font-size: 13.5px; color: var(--ink-soft); margin: 0 0 22px; }
+    .mini-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-bottom: 18px; }
+    .kv { display: flex; align-items: center; justify-content: space-between; padding: 10px 20px; font-size: 13.5px; }
+    .kv + .kv { border-top: 1px solid #F1F3F8; }
+    .kv .k { color: var(--ink-soft); display: flex; align-items: center; gap: 9px; }
+    .kv .k .sw { width: 9px; height: 9px; border-radius: 50%; }
+    .kv .v { font-family: var(--font-mono); font-weight: 600; }
+    @media (max-width: 900px) { .mini-grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+
+  <div class="owner-bar">
+    <span class="tag"><span class="sw"></span>Owner view — every merchant on ReceipTap</span>
+    <span>
+      <a href="/dashboard">← Back to my own dashboard</a>
+    </span>
+  </div>
+
+  <div class="wrap">
+    <h1>Platform overview</h1>
+    <p class="sub">Signed in as <%= admin.email %>. These numbers cover the whole platform, not just your own store.</p>
+
+    <!-- Money ------------------------------------------------------------- -->
+    <div class="stat-grid">
+      <div class="card stat">
+        <div class="tile tile-green">
+          <svg viewBox="0 0 24 24" stroke="currentColor"><path d="M12 2v20"/><path d="M17 6.5C17 4.6 14.8 3.5 12 3.5S7 4.6 7 6.5s2.2 2.8 5 3.3 5 1.4 5 3.3-2.2 3-5 3-5-1.1-5-3"/></svg>
+        </div>
+        <div class="label">Monthly recurring revenue</div>
+        <div class="value">$<%= Number(stats.mrr).toLocaleString('en-US', { minimumFractionDigits: 2 }) %></div>
+        <div class="foot">Paying subscriptions only</div>
+      </div>
+
+      <div class="card stat">
+        <div class="tile tile-amber">
+          <svg viewBox="0 0 24 24" stroke="currentColor"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+        </div>
+        <div class="label">In free trial</div>
+        <div class="value">$<%= Number(stats.trialPipeline).toLocaleString('en-US', { minimumFractionDigits: 2 }) %></div>
+        <div class="foot">Pipeline if every trial converts</div>
+      </div>
+
+      <div class="card stat">
+        <div class="tile tile-blue">
+          <svg viewBox="0 0 24 24" stroke="currentColor"><path d="M3 21h18"/><path d="M5 21V8l7-5 7 5v13"/><path d="M10 21v-6h4v6"/></svg>
+        </div>
+        <div class="label">Merchants</div>
+        <div class="value"><%= stats.merchants.toLocaleString('en-US') %></div>
+        <div class="foot <%= stats.newMerchants7 > 0 ? 'up' : '' %>">
+          <%= stats.newMerchants7 %> joined in the last 7 days
+        </div>
+      </div>
+
+      <div class="card stat">
+        <div class="tile tile-indigo">
+          <svg viewBox="0 0 24 24" stroke="currentColor"><path d="M6 2h12v20l-3-2-3 2-3-2-3 2Z"/><path d="M9 8h6M9 12h6"/></svg>
+        </div>
+        <div class="label">Receipts delivered</div>
+        <div class="value"><%= stats.receipts.toLocaleString('en-US') %></div>
+        <div class="foot"><%= stats.receipts30.toLocaleString('en-US') %> in the last 30 days</div>
+      </div>
+    </div>
+
+    <!-- Subscriptions + pucks --------------------------------------------- -->
+    <div class="mini-grid">
+      <div class="card">
+        <div class="card-head"><h2>Subscriptions</h2></div>
+        <div style="padding: 8px 0;">
+          <div class="kv"><span class="k"><span class="sw" style="background:var(--ok);"></span>Paying</span><span class="v"><%= byStatus.ACTIVE %></span></div>
+          <div class="kv"><span class="k"><span class="sw" style="background:var(--teal);"></span>In trial</span><span class="v"><%= byStatus.TRIALING %></span></div>
+          <div class="kv"><span class="k"><span class="sw" style="background:var(--amber);"></span>Payment failed</span><span class="v"><%= byStatus.PAST_DUE %></span></div>
+          <div class="kv"><span class="k"><span class="sw" style="background:#B6BCCE;"></span>Never started a trial</span><span class="v"><%= byStatus.INCOMPLETE %></span></div>
+          <div class="kv"><span class="k"><span class="sw" style="background:var(--danger);"></span>Canceled</span><span class="v"><%= byStatus.CANCELED %></span></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h2>Puck inventory</h2></div>
+        <div style="padding: 8px 0;">
+          <div class="kv"><span class="k">Pucks in the system</span><span class="v"><%= pucks.total %></span></div>
+          <div class="kv"><span class="k">Not yet activated</span><span class="v"><%= pucks.unclaimed %></span></div>
+          <div class="kv"><span class="k">Activated by a merchant</span><span class="v"><%= pucks.claimed %></span></div>
+          <div class="kv"><span class="k">Linked to a register</span><span class="v"><%= pucks.linked %></span></div>
+          <div class="kv"><span class="k">Customers with a wallet</span><span class="v"><%= stats.customers.toLocaleString('en-US') %></span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Merchant list ------------------------------------------------------ -->
+    <div class="card">
+      <div class="card-head">
+        <h2>All merchants</h2>
+        <span style="font-size:12.5px;color:var(--ink-soft);">Total sales processed: $<%= Number(stats.gmv).toLocaleString('en-US', { minimumFractionDigits: 2 }) %></span>
+      </div>
+      <% if (merchants.length === 0) { %>
+        <div class="blank">
+          <div class="bt">No merchants yet</div>
+          <div class="bd">Every account that signs up at your landing page will appear here, with its subscription state and activity.</div>
+        </div>
+      <% } else { %>
+        <table class="dtable">
+          <thead>
+            <tr><th>Business</th><th>Subscription</th><th>POS</th><th>Receipts</th><th>Pucks</th><th>Joined</th></tr>
+          </thead>
+          <tbody>
+            <% merchants.forEach(function (m) { %>
+              <tr>
+                <td>
+                  <div style="font-weight:600;"><%= m.name %></div>
+                  <div style="font-size:12px;color:var(--ink-soft);"><%= m.email %></div>
+                </td>
+                <td>
+                  <% if (m.status === 'ACTIVE') { %><span class="pill pill-green">Paying</span>
+                  <% } else if (m.status === 'TRIALING') { %><span class="pill">In trial</span>
+                  <% } else if (m.status === 'PAST_DUE') { %><span class="pill pill-amber">Payment failed</span>
+                  <% } else if (m.status === 'CANCELED') { %><span class="pill pill-grey">Canceled</span>
+                  <% } else { %><span class="pill pill-grey">No trial yet</span><% } %>
+                </td>
+                <td><% if (m.pos) { %><span class="pill pill-grey"><%= m.pos %></span><% } else { %><span style="color:#B6BCCE;">Not connected</span><% } %></td>
+                <td class="amt"><%= m.receipts.toLocaleString('en-US') %></td>
+                <td class="amt"><%= m.pucks %></td>
+                <td class="when"><%= new Date(m.joined).toLocaleDateString('en-US', { dateStyle: 'medium' }) %></td>
+              </tr>
+            <% }); %>
+          </tbody>
+        </table>
+      <% } %>
+    </div>
+  </div>
+</body>
+</html>

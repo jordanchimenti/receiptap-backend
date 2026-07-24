@@ -1,0 +1,48 @@
+<!-- views/repeat-customers.ejs -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Repeat Customers</title>
+  <style>
+    body { font-family: -apple-system, sans-serif; max-width: 800px; margin: 0 auto; padding: 0 24px 40px; color: #111; }
+    h1 { font-size: 22px; }
+    .subtitle { color: #666; font-size: 14px; margin-bottom: 16px; }
+    .export-link { float: right; font-size: 14px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+    th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid #eee; font-size: 14px; }
+    th { color: #888; font-weight: 500; font-size: 12px; text-transform: uppercase; }
+    .category-tag { font-size: 11px; background: #eef2ff; color: #4338ca; padding: 2px 8px; border-radius: 20px; }
+    .empty { text-align: center; color: #888; margin-top: 40px; font-size: 14px; }
+    .export-hint { background: #f9fafb; border-radius: 8px; padding: 12px 14px; font-size: 13px; color: #666; margin-top: 20px; }
+  </style>
+</head>
+<body>
+  <%- include('partials/dashboard-header', { activeNav: 'customers' }) %>
+  <h1>Repeat Customers</h1>
+  <div class="subtitle">Customers who've saved a receipt from you 2+ times, with their most common purchase category.</div>
+  <a class="export-link" href="/dashboard/repeat-customers/export">Export CSV</a>
+
+  <% if (customers.length === 0) { %>
+    <div class="empty">No repeat customers yet. As customers save receipts more than once, they'll show up here.</div>
+  <% } else { %>
+    <table>
+      <thead>
+        <tr><th>Customer</th><th>Visits</th><th>Total Spent</th><th>Last Visit</th><th>Top Category</th></tr>
+      </thead>
+      <tbody>
+        <% customers.forEach(function(c) { %>
+          <tr>
+            <td><%= c.name || c.email %></td>
+            <td><%= c.visitCount %></td>
+            <td>$<%= c.totalSpent %></td>
+            <td><%= c.lastVisit %></td>
+            <td><% if (c.topCategory) { %><span class="category-tag"><%= c.topCategory %></span><% } else { %>—<% } %></td>
+          </tr>
+        <% }); %>
+      </tbody>
+    </table>
+    <div class="export-hint">Export this list as a CSV and import it into Mailchimp, Klaviyo, or whatever email platform you already use — it includes visit count, total spent, and top category for segmenting your campaign.</div>
+  <% } %>
+</body>
+</html>

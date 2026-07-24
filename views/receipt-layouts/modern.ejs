@@ -1,0 +1,65 @@
+<!-- views/receipt-layouts/modern.ejs -->
+<!-- Layout: Modern — bold accent-colored header band, big emphasized total -->
+<style>
+  .layout-modern {
+    max-width: 420px; margin: 0 auto; background: #fff; border-radius: 16px;
+    overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.12); box-sizing: border-box;
+  }
+  .layout-modern .header-band {
+    background: var(--accent); color: #fff; padding: 28px 24px 22px; text-align: center;
+  }
+  .layout-modern .logo { max-height: 50px; display: block; margin: 0 auto 12px; filter: brightness(0) invert(1); }
+  .layout-modern .business-name { font-size: 21px; font-weight: 800; margin-bottom: 4px; }
+  .layout-modern .meta-light { font-size: 12px; opacity: 0.85; }
+  .layout-modern .header-text { font-size: 13px; opacity: 0.9; margin-top: 10px; }
+  .layout-modern .body-content { padding: 20px 24px; }
+  .layout-modern .item-row {
+    display: flex; justify-content: space-between; padding: 8px 0;
+    border-bottom: 1px solid #f2f2f2; font-size: 14px; color: var(--primary);
+  }
+  .layout-modern .item-name { font-weight: 500; }
+  .layout-modern .item-qty { color: #999; font-size: 12px; }
+  .layout-modern .totals-block { margin-top: 14px; }
+  .layout-modern .totals-row { display: flex; justify-content: space-between; font-size: 13px; padding: 3px 0; color: #666; }
+  .layout-modern .total-big {
+    display: flex; justify-content: space-between; align-items: baseline;
+    margin-top: 10px; padding-top: 12px; border-top: 2px solid var(--primary);
+  }
+  .layout-modern .total-big .label { font-size: 13px; color: #666; }
+  .layout-modern .total-big .amount { font-size: 26px; font-weight: 800; color: var(--primary); }
+  .layout-modern .payment-pill {
+    display: inline-block; margin-top: 12px; font-size: 12px; color: #666;
+    background: #f4f4f5; padding: 4px 10px; border-radius: 20px;
+  }
+</style>
+<div class="layout-modern">
+  <div class="header-band">
+    <% if (theme.logoUrl) { %>
+      <img class="logo" src="<%= theme.logoUrl %>" alt="<%= merchant.businessName %>" />
+    <% } %>
+    <div class="business-name"><%= merchant.businessName %></div>
+    <div class="meta-light"><%= transaction.date %></div>
+    <% if (theme.headerText) { %>
+      <div class="header-text"><%= theme.headerText %></div>
+    <% } %>
+  </div>
+  <div class="body-content">
+    <% transaction.lineItems.forEach(function(item) { %>
+      <div class="item-row">
+        <div>
+          <div class="item-name"><%= item.name %></div>
+          <div class="item-qty">Qty <%= item.quantity %></div>
+        </div>
+        <div>$<%= (item.total / 100).toFixed(2) %></div>
+      </div>
+    <% }); %>
+    <div class="totals-block">
+      <div class="totals-row"><span>Subtotal</span><span>$<%= transaction.subtotal %></span></div>
+      <div class="totals-row"><span>Tax</span><span>$<%= transaction.tax %></span></div>
+      <div class="total-big"><span class="label">Total</span><span class="amount">$<%= transaction.total %></span></div>
+    </div>
+    <% if (transaction.paymentMethod) { %>
+      <div class="payment-pill"><%= transaction.paymentMethod %></div>
+    <% } %>
+  </div>
+</div>

@@ -1,0 +1,68 @@
+<!-- views/customer-emails.ejs -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Customer Emails</title>
+  <style>
+    body { font-family: -apple-system, sans-serif; max-width: 800px; margin: 0 auto; padding: 0 24px 40px; color: #111; }
+    h1 { font-size: 22px; }
+    .subtitle { color: #666; font-size: 14px; margin-bottom: 16px; }
+    .export-link { float: right; font-size: 14px; margin-top: 2px; }
+    .tabs { display: flex; gap: 4px; border-bottom: 2px solid #eee; margin: 16px 0 0; }
+    .tab-button {
+      padding: 10px 16px; border: none; background: none; cursor: pointer;
+      font-size: 14px; font-weight: 600; color: #888; border-bottom: 2px solid transparent;
+      margin-bottom: -2px; text-decoration: none; display: inline-block;
+    }
+    .tab-button.active { color: #111; border-bottom-color: #2563eb; }
+    .tab-count { color: #aaa; font-weight: 500; }
+    .tab-button.active .tab-count { color: #2563eb; }
+    table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+    th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid #eee; font-size: 14px; }
+    th { color: #888; font-weight: 500; font-size: 12px; text-transform: uppercase; }
+    .segment-tag { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 20px; }
+    .segment-new { background: #eef2ff; color: #4338ca; }
+    .segment-repeat { background: #ecfdf5; color: #047857; }
+    .segment-lapsed { background: #fffbeb; color: #92400e; }
+    .empty { text-align: center; color: #888; margin-top: 30px; font-size: 14px; }
+    .segment-hint { background: #f9fafb; border-radius: 8px; padding: 12px 14px; font-size: 13px; color: #666; margin-top: 20px; }
+  </style>
+</head>
+<body>
+  <%- include('partials/dashboard-header', { activeNav: 'emails' }) %>
+  <h1>Customer Emails</h1>
+  <div class="subtitle">Collected when customers save their receipt from a tap at your store. Filter by segment for targeted email marketing.</div>
+  <a class="export-link" href="/dashboard/customer-emails/export<%= activeFilter !== 'all' ? '?segment=' + activeFilter : '' %>">Export CSV<%= activeFilter !== 'all' ? ' (' + activeFilter + ')' : '' %></a>
+
+  <div class="tabs">
+    <a class="tab-button <%= activeFilter === 'all' ? 'active' : '' %>" href="/dashboard/customer-emails">All <span class="tab-count">(<%= counts.all %>)</span></a>
+    <a class="tab-button <%= activeFilter === 'new' ? 'active' : '' %>" href="/dashboard/customer-emails?segment=new">New <span class="tab-count">(<%= counts.new %>)</span></a>
+    <a class="tab-button <%= activeFilter === 'repeat' ? 'active' : '' %>" href="/dashboard/customer-emails?segment=repeat">Repeat <span class="tab-count">(<%= counts.repeat %>)</span></a>
+    <a class="tab-button <%= activeFilter === 'lapsed' ? 'active' : '' %>" href="/dashboard/customer-emails?segment=lapsed">Lapsed <span class="tab-count">(<%= counts.lapsed %>)</span></a>
+  </div>
+
+  <% if (emails.length === 0) { %>
+    <div class="empty">No customers in this segment yet.</div>
+  <% } else { %>
+    <table>
+      <thead><tr><th>Email</th><th>Segment</th><th>Visits</th><th>Last Visit</th></tr></thead>
+      <tbody>
+        <% emails.forEach(function(e) { %>
+          <tr>
+            <td><%= e.email %></td>
+            <td><span class="segment-tag segment-<%= e.segment %>"><%= e.segment %></span></td>
+            <td><%= e.visitCount %></td>
+            <td><%= e.lastVisit %></td>
+          </tr>
+        <% }); %>
+      </tbody>
+    </table>
+    <div class="segment-hint">
+      <strong>New</strong> = one visit so far, hasn't returned yet — good for a welcome or "come back" nudge.
+      <strong>Repeat</strong> = 2+ visits, still active — good for loyalty or upsell offers.
+      <strong>Lapsed</strong> = hasn't visited in 60+ days, regardless of past visit count — good for a win-back campaign.
+    </div>
+  <% } %>
+</body>
+</html>

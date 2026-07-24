@@ -1,0 +1,429 @@
+/* ==========================================================================
+   ReceipTap design system
+   Paper + ink + one confident teal. Receipt-strip motifs throughout, since
+   the whole product is about a physical receipt going digital — the design
+   should still feel like it came from a receipt, not a generic dashboard.
+   ========================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+:root {
+  --paper: #FAF8F3;
+  --paper-raised: #FFFFFF;
+  --ink: #1C1B19;
+  --ink-soft: #5C5A54;
+  --line: #E4E0D6;
+  --teal: #056BFE;
+  --teal-deep: #0350BE;
+  --teal-wash: #DCE7F4;
+  --amber: #C97A2B;
+  --danger: #B4433A;
+  --danger-wash: #FBEAE8;
+
+  --font-display: 'Space Grotesk', sans-serif;
+  --font-body: 'Inter', sans-serif;
+  --font-mono: 'IBM Plex Mono', monospace;
+
+  color-scheme: light;
+}
+
+* { box-sizing: border-box; }
+
+html, body { height: 100%; }
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+a { color: inherit; }
+input, select, textarea, button { font-family: var(--font-body); }
+
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+/* Perforated divider — the signature motif. Use between receipt rows,
+   under headers, anywhere a physical receipt would have a tear line. */
+.perforated { position: relative; }
+.perforated::after {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 1px;
+  background-image: radial-gradient(circle, var(--line) 1px, transparent 1.4px);
+  background-size: 8px 1px;
+  background-repeat: repeat-x;
+}
+
+/* ---- Layout shells ------------------------------------------------------ */
+
+.centered-shell {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 380px;
+  background: var(--paper-raised);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 36px 32px;
+}
+
+.app-shell {
+  display: flex;
+  min-height: 100vh;
+}
+
+.sidebar {
+  width: 240px;
+  flex-shrink: 0;
+  background: var(--paper-raised);
+  border-right: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  padding: 28px 20px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 36px;
+  text-decoration: none;
+}
+
+.brand-mark { font-size: 22px; color: var(--teal); }
+.brand-name { font-family: var(--font-display); font-weight: 700; font-size: 18px; letter-spacing: -0.02em; color: var(--ink); }
+
+.nav { display: flex; flex-direction: column; gap: 2px; flex: 1; }
+
+.nav-link {
+  text-decoration: none;
+  color: var(--ink-soft);
+  font-size: 14px;
+  font-weight: 500;
+  padding: 10px 12px;
+  border-radius: 8px;
+  display: block;
+}
+.nav-link.active { background: var(--teal-wash); color: var(--teal-deep); }
+.nav-link:hover:not(.active) { background: var(--paper); }
+
+.main { flex: 1; padding: 36px 48px; max-width: 980px; }
+
+/* ---- Type & content ------------------------------------------------------ */
+
+.eyebrow {
+  font-size: 12px; font-weight: 600; color: var(--teal-deep);
+  text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px;
+}
+.page-title { font-size: 26px; margin-bottom: 8px; }
+.page-subtitle { font-size: 14px; color: var(--ink-soft); max-width: 480px; line-height: 1.5; }
+
+/* ---- Forms ---------------------------------------------------------------- */
+
+.field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+.field label { font-size: 13px; font-weight: 500; color: var(--ink-soft); }
+.field input, .field select, .field textarea {
+  font-size: 14px; padding: 10px 12px; border: 1px solid var(--line);
+  border-radius: 8px; color: var(--ink); background: #fff; width: 100%;
+}
+.field input:focus, .field select:focus, .field textarea:focus {
+  outline: 2px solid var(--teal); outline-offset: 1px; border-color: var(--teal);
+}
+
+.btn {
+  display: inline-block; font-size: 14px; font-weight: 600; text-align: center;
+  border: none; border-radius: 8px; padding: 11px 20px; cursor: pointer;
+  text-decoration: none;
+}
+.btn-primary { background: var(--teal); color: #fff; width: 100%; }
+.btn-primary:hover { background: var(--teal-deep); }
+.btn-secondary { background: var(--paper); color: var(--ink); border: 1px solid var(--line); }
+.btn-disabled { background: var(--line); color: var(--ink-soft); cursor: not-allowed; }
+
+.error-box {
+  font-size: 13px; color: var(--danger); background: var(--danger-wash);
+  padding: 8px 12px; border-radius: 8px; margin-bottom: 16px;
+}
+
+/* ---- Cards / lists (receipts, connections, etc.) -------------------------- */
+
+.card-list {
+  background: var(--paper-raised); border: 1px solid var(--line);
+  border-radius: 16px; overflow: hidden;
+}
+.card-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 22px;
+}
+.card-row:last-child::after { display: none; }
+
+.badge {
+  font-size: 11.5px; font-weight: 600; padding: 3px 9px; border-radius: 999px;
+}
+.badge-teal { background: var(--teal-wash); color: var(--teal-deep); }
+.badge-amber { background: #FAEEDD; color: var(--amber); }
+
+.empty-state {
+  background: var(--paper-raised); border: 1px dashed var(--line); border-radius: 16px;
+  padding: 48px 32px; text-align: center; color: var(--ink-soft);
+}
+.empty-mark { font-size: 26px; color: var(--teal); margin-bottom: 10px; }
+.empty-title { font-size: 16px; font-weight: 600; color: var(--ink); margin-bottom: 6px; }
+
+/* ---- Receipt display (the customer-facing view) --------------------------- */
+
+.receipt-box {
+  text-align: left; background: var(--paper); border: 1px dashed var(--line);
+  border-radius: 12px; padding: 16px 18px;
+}
+.receipt-line { display: flex; justify-content: space-between; font-size: 13.5px; padding: 4px 0; }
+.receipt-total { font-weight: 700; font-size: 15px; border-top: 1px solid var(--line); margin-top: 6px; padding-top: 10px; }
+
+:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+
+@media (max-width: 640px) {
+  .app-shell { flex-direction: column; }
+  .sidebar { width: 100%; border-right: none; border-bottom: 1px solid var(--line); }
+  .main { padding: 24px 20px; }
+}
+
+/* ==========================================================================
+   MERCHANT APP SHELL
+   The marketing pages are warm paper. The dashboard is a workspace: a cool
+   neutral surface, a deep navy rail, white cards. Different job, different
+   surface — but the same blue, type, and mono numerals tie them together.
+   ========================================================================== */
+
+:root {
+  --app-bg: #F3F5FA;
+  --rail: #131829;
+  --rail-line: #262C42;
+  --rail-text: #9AA2BC;
+  --card-line: #E7EAF2;
+  --ok: #17915C;
+  --ok-wash: #E4F4EC;
+  --warn-wash: #FBF0E2;
+  --indigo: #5B57D8;
+  --indigo-wash: #E8E7FB;
+  --rail-w: 236px;
+}
+
+/* --- Rail ---------------------------------------------------------------- */
+.rail {
+  position: fixed; top: 0; left: 0; bottom: 0; width: var(--rail-w); z-index: 40;
+  background: var(--rail); display: flex; flex-direction: column;
+  padding: 22px 14px 16px; overflow-y: auto;
+}
+.rail-brand { display: flex; align-items: center; padding: 0 8px 22px; }
+.rail-brand img { height: 30px; filter: brightness(0) invert(1); }
+.rail-group { font-size: 10.5px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase;
+  color: #5D6480; padding: 16px 10px 7px; }
+.rail a {
+  display: flex; align-items: center; gap: 11px; padding: 9px 11px; margin-bottom: 2px;
+  border-radius: 9px; text-decoration: none; color: var(--rail-text);
+  font-size: 13.5px; font-weight: 500; line-height: 1;
+}
+.rail a:hover { background: #1C2237; color: #E6E9F4; }
+.rail a.active { background: var(--teal); color: #fff; font-weight: 600; }
+.rail a svg { width: 17px; height: 17px; flex: none; stroke: currentColor; fill: none; stroke-width: 1.7; }
+.rail-spacer { flex: 1; }
+.rail-help {
+  background: #1B2137; border-radius: 12px; padding: 15px; margin-top: 14px;
+}
+.rail-help strong { display: block; color: #E6E9F4; font-size: 13px; margin-bottom: 3px; }
+.rail-help span { display: block; color: #7C8399; font-size: 12px; line-height: 1.45; margin-bottom: 11px; }
+.rail-help a { justify-content: center; background: #262C42; color: #E6E9F4; font-size: 12.5px; padding: 8px; margin: 0; }
+.rail-help a:hover { background: #2F3752; }
+
+/* Push every dashboard page clear of the rail. !important overrides the
+   leftover body rules on the older prototype pages. */
+body.app {
+  background: var(--app-bg) !important;
+  padding-left: var(--rail-w) !important;
+  max-width: none !important;
+  margin: 0 !important;
+}
+body.app .main,
+body.app > h1, body.app > .subtitle, body.app > div:not(.rail):not(.topbar):not(.app-body) {
+  max-width: none;
+}
+.app-body { padding: 0 28px 40px; }
+
+/* --- Topbar -------------------------------------------------------------- */
+.topbar {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding: 24px 28px 20px; flex-wrap: wrap;
+}
+.topbar h1 { font-size: 23px; letter-spacing: -0.02em; margin: 0 0 3px; }
+.topbar .sub { font-size: 13.5px; color: var(--ink-soft); margin: 0; }
+.topbar-right { display: flex; align-items: center; gap: 12px; }
+.plan-chip {
+  display: inline-flex; align-items: center; gap: 7px; background: #fff;
+  border: 1px solid var(--card-line); border-radius: 10px; padding: 8px 13px;
+  font-size: 12.5px; font-weight: 600; color: var(--ink); text-decoration: none;
+}
+.plan-chip .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); }
+.plan-chip .dot.warn { background: var(--amber); }
+.avatar {
+  width: 36px; height: 36px; border-radius: 50%; background: var(--teal-wash);
+  color: var(--teal-deep); font-weight: 700; font-size: 14px;
+  display: flex; align-items: center; justify-content: center; text-transform: uppercase;
+}
+.logout-btn {
+  background: none; border: none; color: var(--ink-soft); font-family: var(--font-body);
+  font-size: 12.5px; cursor: pointer; padding: 8px;
+}
+.logout-btn:hover { color: var(--danger); }
+
+/* --- Cards & grids ------------------------------------------------------- */
+.card {
+  background: #fff; border: 1px solid var(--card-line); border-radius: 14px;
+  box-shadow: 0 1px 2px rgba(19,24,41,0.04);
+}
+.card-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 17px 20px 13px; border-bottom: 1px solid var(--card-line);
+}
+.card-head h2 { font-size: 15.5px; margin: 0; letter-spacing: -0.01em; }
+.card-head a { font-size: 12.5px; font-weight: 600; color: var(--teal); text-decoration: none; }
+
+.stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 18px; }
+.stat { padding: 17px 18px; }
+.stat .tile {
+  width: 40px; height: 40px; border-radius: 11px; display: flex; align-items: center;
+  justify-content: center; margin-bottom: 13px;
+}
+.stat .tile svg { width: 19px; height: 19px; stroke-width: 1.8; fill: none; }
+.tile-blue { background: var(--teal-wash); color: var(--teal-deep); }
+.tile-indigo { background: var(--indigo-wash); color: var(--indigo); }
+.tile-green { background: var(--ok-wash); color: var(--ok); }
+.tile-amber { background: var(--warn-wash); color: var(--amber); }
+.stat .label { font-size: 12.5px; color: var(--ink-soft); margin-bottom: 5px; }
+.stat .value { font-family: var(--font-mono); font-size: 26px; font-weight: 600; letter-spacing: -0.02em; }
+.stat .foot { font-size: 12px; color: var(--ink-soft); margin-top: 7px; }
+.stat .foot.up { color: var(--ok); font-weight: 600; }
+
+.col-2 { display: grid; grid-template-columns: 1.55fr 1fr; gap: 16px; margin-bottom: 18px; }
+.col-2-flip { display: grid; grid-template-columns: 1fr 1.55fr; gap: 16px; }
+
+/* --- Data table ---------------------------------------------------------- */
+.dtable { width: 100%; border-collapse: collapse; }
+.dtable th {
+  text-align: left; font-size: 11.5px; font-weight: 600; color: var(--ink-soft);
+  padding: 11px 20px; border-bottom: 1px solid var(--card-line);
+}
+.dtable td { padding: 13px 20px; border-bottom: 1px solid #F1F3F8; font-size: 13.5px; }
+.dtable tr:last-child td { border-bottom: none; }
+.dtable tr:hover td { background: #FAFBFE; }
+.dtable .amt { font-family: var(--font-mono); font-weight: 600; }
+.dtable .when { color: var(--ink-soft); font-size: 12.5px; }
+.who { display: flex; align-items: center; gap: 10px; }
+.who .who-av {
+  width: 28px; height: 28px; border-radius: 50%; background: var(--teal-wash);
+  color: var(--teal-deep); font-size: 11.5px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center; flex: none; text-transform: uppercase;
+}
+.pill {
+  display: inline-block; font-size: 11.5px; font-weight: 600; padding: 3.5px 9px;
+  border-radius: 6px; background: var(--teal-wash); color: var(--teal-deep);
+}
+.pill-grey { background: #EEF0F6; color: #5C6480; }
+.pill-green { background: var(--ok-wash); color: var(--ok); }
+.pill-amber { background: var(--warn-wash); color: var(--amber); }
+
+/* --- Puck cards ---------------------------------------------------------- */
+.puck-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; padding: 18px 20px; }
+.puck-card {
+  border: 1px solid var(--card-line); border-radius: 12px; padding: 15px;
+  text-decoration: none; color: var(--ink); display: block;
+}
+.puck-card:hover { border-color: var(--teal); box-shadow: 0 3px 12px rgba(5,107,254,0.09); }
+.puck-card .disc {
+  width: 34px; height: 34px; border-radius: 50%; background: var(--ink);
+  display: flex; align-items: center; justify-content: center; margin-bottom: 11px;
+}
+.puck-card .disc i { width: 12px; height: 12px; border: 2px solid var(--teal); border-radius: 50%; }
+.puck-card .nm { font-weight: 600; font-size: 13.5px; margin-bottom: 2px; }
+.puck-card .meta { font-size: 12px; color: var(--ink-soft); line-height: 1.5; }
+
+/* --- Status legend + bar ------------------------------------------------- */
+.legend { padding: 16px 20px; }
+.legend-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; font-size: 13px; }
+.legend-row .lk { display: flex; align-items: center; gap: 9px; color: var(--ink-soft); }
+.legend-row .sw { width: 9px; height: 9px; border-radius: 50%; }
+.legend-row .lv { font-family: var(--font-mono); font-weight: 600; }
+.stackbar { display: flex; height: 9px; border-radius: 999px; overflow: hidden; background: #EEF0F6; margin-bottom: 6px; }
+.stackbar span { display: block; height: 100%; }
+.status-note {
+  margin: 4px 20px 18px; background: var(--ok-wash); border-radius: 10px; padding: 12px 14px;
+  font-size: 12.5px; color: #10714A; line-height: 1.5;
+}
+.status-note.warn { background: var(--warn-wash); color: #8A5316; }
+
+/* --- Quick actions ------------------------------------------------------- */
+.qa { padding: 12px; }
+.qa a {
+  display: flex; align-items: center; gap: 11px; padding: 12px 13px; border-radius: 10px;
+  text-decoration: none; color: var(--ink); font-size: 13.5px; font-weight: 500;
+}
+.qa a:hover { background: #F5F7FC; }
+.qa a .ic {
+  width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center;
+  justify-content: center; flex: none;
+}
+.qa a .ic svg { width: 15px; height: 15px; stroke-width: 1.8; fill: none; }
+.qa a .arw { margin-left: auto; color: #B6BCCE; font-size: 15px; }
+
+/* --- Empty state --------------------------------------------------------- */
+.blank { text-align: center; padding: 40px 24px; }
+.blank .bt { font-weight: 600; font-size: 14.5px; margin-bottom: 5px; }
+.blank .bd { font-size: 13px; color: var(--ink-soft); line-height: 1.55; max-width: 330px; margin: 0 auto 16px; }
+
+/* --- Responsive ---------------------------------------------------------- */
+@media (max-width: 1080px) {
+  .stat-grid { grid-template-columns: repeat(2, 1fr); }
+  .col-2, .col-2-flip { grid-template-columns: 1fr; }
+  .puck-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 760px) {
+  :root { --rail-w: 0px; }
+  .rail {
+    position: static; width: auto; flex-direction: row; flex-wrap: wrap;
+    gap: 4px; padding: 12px; align-items: center;
+  }
+  .rail-brand { padding: 0 8px 0 4px; }
+  .rail-group, .rail-help, .rail-spacer { display: none; }
+  .rail a { padding: 8px 10px; font-size: 12.5px; }
+  body.app { padding-left: 0 !important; }
+  .stat-grid { grid-template-columns: 1fr; }
+  .puck-grid { grid-template-columns: 1fr; }
+  .app-body, .topbar { padding-left: 16px; padding-right: 16px; }
+}
+
+/* Owner-only affordances. Amber, distinct from the merchant blue, so it's
+   always obvious when you're stepping outside your own store's data. */
+.rail a.rail-owner { color: #F0B45F; }
+.rail a.rail-owner:hover { background: #2A2416; color: #FFD79A; }
+.rail a.rail-owner.active { background: #F0B45F; color: #131829; }
+.plan-chip.owner-chip { color: #8A5316; border-color: #EBD5AE; background: var(--warn-wash); }
+.plan-chip.owner-chip:hover { border-color: #D9A65C; }

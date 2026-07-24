@@ -1,0 +1,52 @@
+<!-- views/merchant-receipts.ejs -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Receipt History</title>
+  <style>
+    body { font-family: -apple-system, sans-serif; max-width: 800px; margin: 40px auto; color: #111; }
+    h1 { font-size: 22px; }
+    .filters { display: flex; gap: 8px; margin: 16px 0; }
+    .filters input { padding: 6px 10px; border: 1px solid #ddd; border-radius: 6px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+    th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid #eee; font-size: 14px; }
+    th { color: #888; font-weight: 500; font-size: 12px; text-transform: uppercase; }
+    .total-col { text-align: right; }
+    .pagination { margin-top: 16px; font-size: 14px; color: #666; }
+    .export-link { float: right; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <%- include('partials/dashboard-header', { activeNav: 'receipts' }) %>
+  <h1>Receipt History</h1>
+  <a class="export-link" href="/dashboard/receipts/export">Export CSV</a>
+
+  <form class="filters" method="get">
+    <input type="date" name="from" value="<%= filters.from %>" />
+    <input type="date" name="to" value="<%= filters.to %>" />
+    <input type="text" name="search" placeholder="Search item name..." value="<%= filters.search %>" />
+    <button type="submit">Filter</button>
+  </form>
+
+  <table>
+    <thead>
+      <tr><th>Date</th><th>Transaction ID</th><th>Payment</th><th class="total-col">Total</th></tr>
+    </thead>
+    <tbody>
+      <% transactions.forEach(function(t) { %>
+        <tr>
+          <td><%= t.date %></td>
+          <td><%= t.id %></td>
+          <td><%= t.paymentMethod || '—' %></td>
+          <td class="total-col">$<%= t.total %></td>
+        </tr>
+      <% }); %>
+    </tbody>
+  </table>
+
+  <div class="pagination">
+    Page <%= page %> of <%= totalPages %> (<%= totalCount %> total receipts)
+  </div>
+</body>
+</html>

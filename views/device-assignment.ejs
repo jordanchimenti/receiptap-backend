@@ -1,0 +1,56 @@
+<!-- views/device-assignment.ejs -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Assign Pucks to Registers</title>
+  <style>
+    body { font-family: -apple-system, sans-serif; max-width: 600px; margin: 40px auto; color: #111; }
+    h1 { font-size: 22px; }
+    .subtitle { color: #666; font-size: 14px; margin-bottom: 20px; }
+    .device-row { display: flex; justify-content: space-between; align-items: center; padding: 14px; background: #f9fafb; border-radius: 8px; margin-bottom: 8px; }
+    .device-id { font-family: monospace; font-size: 13px; color: #555; }
+    .last-seen { font-size: 12px; color: #999; }
+    select { padding: 6px 10px; border-radius: 6px; border: 1px solid #ddd; }
+    .empty { text-align: center; color: #888; margin-top: 30px; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <%- include('partials/dashboard-header', { activeNav: 'pos' }) %>
+  <h1>Assign Pucks to Registers</h1>
+  <div class="subtitle">
+    These are the registers we've seen ringing up real sales. If you only have one register, you can skip this — it's already handled automatically.
+  </div>
+
+  <% if (devices.length === 0) { %>
+    <div class="empty">No multi-register activity detected yet. If you only have one register, no action needed — your single puck is already matched automatically.</div>
+  <% } else { %>
+    <% devices.forEach(function(d) { %>
+      <div class="device-row">
+        <div>
+          <div class="device-id">Register: <%= d.deviceId %></div>
+          <div class="last-seen">Last sale: <%= new Date(d.lastSeen).toLocaleString() %></div>
+        </div>
+        <select onchange="assign('<%= d.deviceId %>', '<%= d.locationId %>', this.value)">
+          <option value="">Select a puck...</option>
+          <% pucks.forEach(function(p) { %>
+            <option value="<%= p.id %>" <%= p.posDeviceId === d.deviceId ? 'selected' : '' %>><%= p.id %></option>
+          <% }); %>
+        </select>
+      </div>
+    <% }); %>
+  <% } %>
+
+  <script>
+    async function assign(deviceId, locationId, puckId) {
+      if (!puckId) return;
+      await fetch('/dashboard/pos-setup/assign-device', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ puckId, deviceId, locationId }),
+      });
+      alert('Puck assigned to this register.');
+    }
+  </script>
+</body>
+</html>

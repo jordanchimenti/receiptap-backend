@@ -1,0 +1,159 @@
+// prisma/schema.prisma
+// One real, complete schema — merges everything built across this project.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Merchant — a business using ReceipTap
+// ---------------------------------------------------------------------------
+model Merchant {
+  id           String   @id @default(cuid())
+  businessName String
+  email        String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+
+  // Square OAuth
+  squareMerchantId  String? @unique
+  squareAccessToken String?
+
+  // Shopify OAuth (POS / storefront)
+  shopifyShopDomain   String? @unique
+  shopifyAccessToken  String?
+
+  // Billing — ReceipTap's own subscription (merchant pays ReceipTap monthly).
+  // Trial lives in Stripe: card collected at checkout, 30-day trial, then
+  // auto-charge. INCOMPLETE = signed up but hasn't completed checkout yet.
+  stripeCustomerId     String?            @unique
+  stripeSubscriptionId String?            @unique
+  subscriptionStatus   SubscriptionStatus @default(INCOMPLETE)
+  trialEndsAt          DateTime?
+
+  pucks             Puck[]
+  issuedReceipts    Transaction[]  @relation("IssuedReceipts")
+  collectedExpenses Transaction[]  @relation("CollectedExpenses")
+  receiptTheme      ReceiptTheme?
+}
+
+enum SubscriptionStatus {
+  INCOMPLETE
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+}
+
+// ---------------------------------------------------------------------------
+// Puck — a physical NFC device
+// ---------------------------------------------------------------------------
+model Puck {
+  id        String     @id // short unique ID, e.g. "K7mP2xQ9wZ" — encoded on the NFC chip as /r/{id}
+  claimCode String     @unique // 6-char code printed on the insert card
+
+  status    PuckStatus @default(UNCLAIMED)
+
+  merchantId    String?
+  merchant      Merchant? @relation(fields: [merchantId], references: [id])
+  posLocationId String?   // which Square location this puck belongs to
+  posDeviceId   String?   // which SPECIFIC register/terminal within that location — needed when a store has 2+ lanes
+
+  currentTransactionId String?
+  transactionExpiresAt DateTime?
+
+  createdAt  DateTime  @default(now())
+  claimedAt  DateTime?
+
+  @@index([merchantId])
+  @@index([claimCode])
+}
+
+enum PuckStatus {
+  UNCLAIMED
+  CLAIMED
+}
+
+// ---------------------------------------------------------------------------
+// Transaction — one sale, saved from a POS webhook
+// ---------------------------------------------------------------------------
+model Transaction {
+  id            String   @id // reuse the POS's own transaction ID
+  merchantId    String   // who ISSUED the receipt (the seller)
+  merchant      Merchant @relation("IssuedReceipts", fields: [merchantId], references: [id])
+
+  posProvider   String   // "square" | "shopify" | "clover" | "toast" | ...
+  posLocationId String?
+  posDeviceId   String?  // which specific register/terminal rang this up, if Square provided one
+
+  lineItems     Json     // [{ name, quantity, unitPrice, total }]
+  subtotal      Int      // cents
+  tax           Int      // cents
+  total         Int      // cents
+  paymentMethod String?
+
+  // Consumer wallet — set only if a customer explicitly claims this receipt
+  customerId String?
+  customer   Customer? @relation(fields: [customerId], references: [id])
+
+  // AI categorization — populated after a customer/merchant saves this receipt.
+  // Null until categorized; categorization is best-effort and never blocks the save.
+  aiCategory       String?  // e.g. "Food & Drink", "Office Supplies", "Hardware & Tools"
+  aiTaxDeductible  Boolean?
+  aiReasoning      String?  // short human-readable explanation, shown as a tooltip
+  aiCategorizedAt  DateTime?
+
+  // Merchant expense tracking — set only if a DIFFERENT merchant claims this
+  // as a purchase they made (buying from another ReceipTap merchant)
+  collectedByMerchantId String?
+  collectedByMerchant   Merchant? @relation("CollectedExpenses", fields: [collectedByMerchantId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([merchantId])
+  @@index([customerId])
+  @@index([collectedByMerchantId])
+}
+
+// ---------------------------------------------------------------------------
+// ReceiptTheme — one row per merchant, the customizable receipt branding
+// ---------------------------------------------------------------------------
+model ReceiptTheme {
+  merchantId String   @id
+  merchant   Merchant @relation(fields: [merchantId], references: [id])
+
+  layoutId     String  @default("classic") // "classic" | "modern" | "minimal" — which structural template to render
+  logoUrl      String?
+  primaryColor String  @default("#111111")
+  accentColor  String  @default("#2563eb")
+
+  headerText String?
+  footerText String?
+
+  showGoogleReview Boolean @default(false)
+  googleReviewUrl  String?
+  showWarranty     Boolean @default(false)
+  showLoyalty      Boolean @default(false)
+  showWalletSave   Boolean @default(true)
+
+  updatedAt DateTime @updatedAt
+}
+
+// ---------------------------------------------------------------------------
+// Customer — a consumer with a personal receipt wallet across ALL merchants
+// ---------------------------------------------------------------------------
+model Customer {
+  id           String        @id @default(cuid())
+  email        String        @unique
+  passwordHash String?
+  googleId     String?       @unique // set if they signed in with Google instead of email
+  name         String?
+  createdAt    DateTime      @default(now())
+
+  transactions Transaction[]
+}

@@ -1,0 +1,304 @@
+<!-- views/experience.ejs — scroll-scrubbed REAL 3D render of the ReceipTap puck.
+     Apple product-page technique: 120 pre-rendered frames driven by scroll.
+     DOM overlays handle the receipt-on-phone moment and wallet act. -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ReceipTap — The tap that replaces paper</title>
+  <link rel="stylesheet" href="/css/receiptap.css" />
+  <style>
+    html { scroll-behavior: smooth; }
+    body { background: var(--paper); overflow-x: hidden; }
+
+    #frame-canvas {
+      position: fixed; inset: 0; margin: auto; z-index: 0; pointer-events: none;
+      max-width: min(92vw, 780px); max-height: 86vh;
+      -webkit-mask-image: radial-gradient(ellipse 72% 72% at 50% 50%, #000 55%, transparent 78%);
+      mask-image: radial-gradient(ellipse 72% 72% at 50% 50%, #000 55%, transparent 78%);
+      transition: opacity 0.5s ease;
+    }
+    #frame-canvas.dimmed { opacity: 0.22; }
+
+    .exp-nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 30;
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 16px 5vw;
+      background: linear-gradient(to bottom, rgba(250,248,243,0.92), rgba(250,248,243,0));
+    }
+    .exp-nav img { height: 36px; }
+    .exp-nav a.cta { background: var(--teal); color: #fff; font-weight: 700; font-size: 13.5px; padding: 9px 16px; border-radius: 8px; text-decoration: none; }
+
+    .story { position: relative; z-index: 10; }
+    .panel { min-height: 100vh; display: flex; align-items: center; padding: 0 7vw; }
+    .panel-inner {
+      max-width: 400px; opacity: 0; transform: translateY(26px);
+      transition: opacity 0.7s ease, transform 0.7s ease;
+      background: color-mix(in srgb, var(--paper) 72%, transparent);
+      backdrop-filter: blur(2px); border-radius: 16px; padding: 8px 6px;
+    }
+    @supports not (background: color-mix(in srgb, red 50%, blue)) {
+      .panel-inner { background: rgba(250,248,243,0.72); }
+    }
+    .panel-inner.visible { opacity: 1; transform: translateY(0); }
+    .panel.right { justify-content: flex-end; }
+    .panel.center { justify-content: center; text-align: center; }
+    .panel h1 { font-size: clamp(34px, 5vw, 58px); line-height: 1.05; letter-spacing: -0.02em; margin-bottom: 16px; }
+    .panel h2 { font-size: clamp(24px, 3.2vw, 38px); letter-spacing: -0.015em; margin-bottom: 12px; }
+    .panel p { font-size: 15.5px; color: var(--ink-soft); line-height: 1.6; margin: 0; }
+    .panel .eyebrow { font-size: 12px; font-weight: 700; color: var(--teal-deep); text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 10px; }
+    .scroll-hint {
+      position: absolute; bottom: 28px; left: 50%; transform: translateX(-50%);
+      font-size: 12px; color: var(--ink-soft); letter-spacing: 0.05em;
+      animation: bob 2s ease-in-out infinite;
+    }
+    @keyframes bob { 0%,100% { transform: translateX(-50%) translateY(0); } 50% { transform: translateX(-50%) translateY(7px); } }
+
+    /* --- The digital moment: CSS phone with the receipt appearing --- */
+    .phone-stage {
+      position: fixed; inset: 0; z-index: 5; display: flex; align-items: center; justify-content: center;
+      pointer-events: none; opacity: 0; transform: translateY(40px) scale(0.96);
+      transition: opacity 0.6s ease, transform 0.6s ease;
+    }
+    .phone-stage.visible { opacity: 1; transform: translateY(0) scale(1); }
+    .phone-frame {
+      width: min(64vw, 270px); aspect-ratio: 9 / 18.5; background: #1a1a1d;
+      border-radius: 38px; padding: 11px; box-shadow: 0 24px 60px rgba(28,27,25,0.28);
+      position: relative;
+    }
+    .phone-screen {
+      width: 100%; height: 100%; background: var(--paper); border-radius: 28px;
+      overflow: hidden; display: flex; flex-direction: column; align-items: center;
+    }
+    .receipt-card {
+      width: 84%; background: #fff; border: 1px solid var(--line); margin-top: 26px;
+      padding: 14px 14px 10px; font-family: var(--font-mono); font-size: 11px; line-height: 1.9;
+      transform: translateY(110%); transition: transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+    .phone-stage.visible .receipt-card { transform: translateY(0); }
+    .receipt-card .rhead { text-align: center; font-weight: 700; font-size: 12px; margin-bottom: 6px; }
+    .receipt-card .rrow { display: flex; justify-content: space-between; }
+    .receipt-card .rtotal { font-weight: 700; border-top: 1px dashed var(--line); margin-top: 5px; padding-top: 6px; }
+    .receipt-card .rsaved {
+      margin-top: 10px; text-align: center; font-family: var(--font-body); font-size: 11px;
+      font-weight: 700; color: var(--teal-deep); background: var(--teal-wash);
+      border-radius: 999px; padding: 5px 0;
+    }
+    /* wallet act: fanned receipts behind the phone */
+    .fan { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
+    .fan .card {
+      position: absolute; width: 120px; height: 190px; background: #fff; border: 1px solid var(--line);
+      border-radius: 10px; box-shadow: 0 10px 26px rgba(28,27,25,0.12);
+      opacity: 0; transition: transform 0.7s ease, opacity 0.7s ease;
+      transform: translate(0, 30px) rotate(0deg);
+    }
+    .phone-stage.wallet .card { opacity: 1; }
+    .phone-stage.wallet .card:nth-child(1) { transform: translate(-180px, -30px) rotate(-14deg); }
+    .phone-stage.wallet .card:nth-child(2) { transform: translate(180px, -24px) rotate(13deg); }
+    .phone-stage.wallet .card:nth-child(3) { transform: translate(-150px, 120px) rotate(-7deg); }
+    .phone-stage.wallet .card:nth-child(4) { transform: translate(155px, 115px) rotate(8deg); }
+    .fan .card::after {
+      content: ''; position: absolute; inset: 14px 12px auto 12px; height: 8px;
+      background: var(--line); border-radius: 3px;
+      box-shadow: 0 18px 0 var(--line), 0 36px 0 var(--line), 0 54px 0 var(--teal-wash);
+    }
+
+    .final-cta { text-align: center; }
+    .final-cta .cta-main {
+      display: inline-block; background: var(--teal); color: #fff; font-size: 16px; font-weight: 700;
+      padding: 15px 30px; border-radius: 10px; text-decoration: none; margin-top: 20px;
+      pointer-events: auto;
+    }
+    .final-cta .fine { font-size: 12.5px; color: var(--ink-soft); margin-top: 10px; }
+
+    @media (prefers-reduced-motion: reduce) {
+      .panel-inner { opacity: 1; transform: none; transition: none; }
+      .scroll-hint { animation: none; }
+      .phone-stage { transition: none; }
+      .receipt-card { transition: none; }
+    }
+    @media (max-width: 700px) {
+      .panel, .panel.right { justify-content: center; text-align: center; }
+      .fan .card { width: 84px; height: 140px; }
+      .phone-stage.wallet .card:nth-child(1) { transform: translate(-110px, -40px) rotate(-14deg); }
+      .phone-stage.wallet .card:nth-child(2) { transform: translate(112px, -34px) rotate(13deg); }
+      .phone-stage.wallet .card:nth-child(3) { transform: translate(-96px, 118px) rotate(-7deg); }
+      .phone-stage.wallet .card:nth-child(4) { transform: translate(98px, 112px) rotate(8deg); }
+    }
+  </style>
+</head>
+<body>
+
+  <nav class="exp-nav">
+    <a href="/"><img src="/images/receiptap-logo.png" alt="ReceipTap" /></a>
+    <a class="cta" href="/signup">Start free trial</a>
+  </nav>
+
+  <canvas id="frame-canvas" width="800" height="823"></canvas>
+  <noscript><img src="/experience-frames/f001.webp" alt="The ReceipTap puck" style="max-width: 90vw; display: block; margin: 20vh auto;" /></noscript>
+
+  <div class="phone-stage" id="phone-stage" aria-hidden="true">
+    <div class="fan">
+      <div class="card"></div><div class="card"></div><div class="card"></div><div class="card"></div>
+    </div>
+    <div class="phone-frame">
+      <div class="phone-screen">
+        <div class="receipt-card">
+          <div class="rhead">TIP TOP TINT</div>
+          <div class="rrow"><span>Ceramic tint 2dr</span><span>380.00</span></div>
+          <div class="rrow"><span>Windshield strip</span><span>60.00</span></div>
+          <div class="rrow"><span>HST 13%</span><span>57.20</span></div>
+          <div class="rrow rtotal"><span>TOTAL</span><span>497.20</span></div>
+          <div class="rsaved">✓ Saved to your wallet</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="story">
+    <section class="panel">
+      <div class="panel-inner">
+        <div class="eyebrow">Meet the puck</div>
+        <h1>Paper receipts end here.</h1>
+        <p>One small puck on your counter turns every sale into a digital receipt — and every receipt into a customer relationship.</p>
+      </div>
+      <div class="scroll-hint">scroll ↓</div>
+    </section>
+    <section class="panel right">
+      <div class="panel-inner">
+        <div class="eyebrow">The hardware</div>
+        <h2>Small. Sealed. Nothing to install.</h2>
+        <p>No wires into your register. No software on your till. It sits beside checkout and waits for a tap.</p>
+      </div>
+    </section>
+    <section class="panel">
+      <div class="panel-inner">
+        <div class="eyebrow">The tap</div>
+        <h2>Customers tap their phone.<br />That's the whole workflow.</h2>
+        <p>No app to download. No account required. After paying, they touch their phone to the puck — done.</p>
+      </div>
+    </section>
+    <section class="panel right">
+      <div class="panel-inner">
+        <div class="eyebrow">The receipt</div>
+        <h2>Their receipt appears. Instantly. Digitally.</h2>
+        <p>Line items, totals, your branding, your Google review link — on their screen before they've pocketed their phone.</p>
+      </div>
+    </section>
+    <section class="panel">
+      <div class="panel-inner">
+        <div class="eyebrow">The wallet</div>
+        <h2>Every receipt, from every visit, in one place.</h2>
+        <p>Your customers build a searchable history — categorized by AI, ready for returns, warranties, and tax season. And you see who keeps coming back.</p>
+      </div>
+    </section>
+    <section class="panel center">
+      <div class="panel-inner final-cta">
+        <h1>Put it on your counter.</h1>
+        <p>Works with Square & Shopify POS. Live in an afternoon.</p>
+        <a class="cta-main" href="/signup">Start your 30-day free trial</a>
+        <div class="fine">$49.99 USD/month after trial · cancel anytime</div>
+      </div>
+    </section>
+  </div>
+
+  <script>
+  (function () {
+    var FRAME_COUNT = 120;
+    var prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var canvas = document.getElementById('frame-canvas');
+    var ctx = canvas.getContext('2d');
+    var phoneStage = document.getElementById('phone-stage');
+
+    // Text panels reveal
+    var panels = document.querySelectorAll('.panel-inner');
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) { if (e.isIntersecting) e.target.classList.add('visible'); });
+    }, { threshold: 0.35 });
+    panels.forEach(function (p) { io.observe(p); });
+
+    function framePath(i) {
+      return '/experience-frames/f' + String(i + 1).padStart(3, '0') + '.webp';
+    }
+
+    var frames = new Array(FRAME_COUNT);
+    var loadedCount = 0;
+
+    function drawFrame(i) {
+      // draw the nearest loaded frame at or below i, so scrubbing works mid-load
+      var j = i;
+      while (j >= 0 && !frames[j]) j--;
+      if (j < 0) return;
+      var img = frames[j];
+      if (canvas.width !== img.naturalWidth) {
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+      }
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0);
+    }
+
+    var currentFrame = 0;
+    function onScroll() {
+      var doc = document.documentElement;
+      var p = Math.max(0, Math.min(1, window.scrollY / (doc.scrollHeight - window.innerHeight)));
+
+      // The rotation plays across the first 70% of the page; the last 30%
+      // belongs to the receipt/wallet/CTA acts with the render dimmed behind
+      var fp = Math.max(0, Math.min(1, p / 0.7));
+      var idx = Math.min(FRAME_COUNT - 1, Math.round(fp * (FRAME_COUNT - 1)));
+      if (idx !== currentFrame) { currentFrame = idx; drawFrame(idx); }
+
+      // Receipt act: 0.55–0.78 shows the phone; 0.66+ fans the wallet; hide for CTA
+      var showPhone = p > 0.55 && p < 0.86;
+      phoneStage.classList.toggle('visible', showPhone);
+      phoneStage.classList.toggle('wallet', p > 0.66 && p < 0.86);
+      canvas.classList.toggle('dimmed', showPhone || p > 0.86);
+    }
+
+    if (prefersReduced) {
+      // Static: just show the first frame, no scrubbing, no fixed overlays
+      var still = new Image();
+      still.onload = function () { frames[0] = still; drawFrame(0); };
+      still.src = framePath(0);
+      phoneStage.style.display = 'none';
+      return;
+    }
+
+    // Progressive load: first frame immediately, rest in small batches
+    function loadFrame(i, cb) {
+      var img = new Image();
+      img.onload = function () { frames[i] = img; loadedCount++; if (cb) cb(); };
+      img.onerror = function () { if (cb) cb(); };
+      img.src = framePath(i);
+    }
+    loadFrame(0, function () { drawFrame(currentFrame); });
+    var next = 1;
+    function pump() {
+      if (next >= FRAME_COUNT) return;
+      var batchEnd = Math.min(FRAME_COUNT, next + 6);
+      var pending = batchEnd - next;
+      for (var i = next; i < batchEnd; i++) {
+        loadFrame(i, function () {
+          pending--;
+          if (pending === 0) pump();
+        });
+      }
+      next = batchEnd;
+    }
+    pump();
+
+    var ticking = false;
+    window.addEventListener('scroll', function () {
+      if (!ticking) {
+        ticking = true;
+        requestAnimationFrame(function () { onScroll(); ticking = false; });
+      }
+    }, { passive: true });
+    window.addEventListener('resize', onScroll);
+    onScroll();
+  })();
+  </script>
+</body>
+</html>

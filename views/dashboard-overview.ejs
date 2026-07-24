@@ -1,0 +1,229 @@
+<!-- views/dashboard-overview.ejs — the merchant home screen. -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Overview - ReceipTap</title>
+  <link rel="stylesheet" href="/css/receiptap.css" />
+</head>
+<body>
+  <%- include('partials/dashboard-header', { activeNav: 'overview' }) %>
+
+  <%
+    var name = (merchant.businessName || 'there').split(' ')[0];
+    var initial = (merchant.businessName || '?').charAt(0);
+    var trialing = merchant.subscriptionStatus === 'TRIALING';
+    var pastDue = merchant.subscriptionStatus === 'PAST_DUE';
+    var st = puckStatus;
+    var pct = function (n) { return st.total ? (n / st.total) * 100 : 0; };
+  %>
+
+  <div class="topbar">
+    <div>
+      <h1>Welcome back, <%= name %></h1>
+      <p class="sub">Here's what's happening at your counter today.</p>
+    </div>
+    <div class="topbar-right">
+      <% if (typeof isOwner !== 'undefined' && isOwner === true) { %>
+        <a class="plan-chip owner-chip" href="/admin">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="width:14px;height:14px;"><path d="M12 3l7 3v5c0 4.4-2.9 8.3-7 10-4.1-1.7-7-5.6-7-10V6Z"/></svg>
+          Owner view
+        </a>
+      <% } %>
+      <a class="plan-chip" href="/dashboard/billing">
+        <span class="dot <%= (trialing || pastDue) ? 'warn' : '' %>"></span>
+        <% if (trialing) { %>Free trial<% } else if (pastDue) { %>Payment failed<% } else if (merchant.subscriptionStatus === 'ACTIVE') { %>Subscribed<% } else { %>Start trial<% } %>
+      </a>
+      <div class="avatar"><%= initial %></div>
+    </div>
+  </div>
+
+  <div class="app-body">
+
+    <!-- Stats ------------------------------------------------------------ -->
+    <div class="stat-grid">
+      <div class="card stat">
+        <div class="tile tile-blue">
+          <svg viewBox="0 0 24 24" stroke="currentColor"><path d="M6 2h12v20l-3-2-3 2-3-2-3 2Z"/><path d="M9 8h6M9 12h6"/></svg>
+        </div>
+        <div class="label">Receipts delivered</div>
+        <div class="value"><%= stats.receipts.toLocaleString('en-US') %></div>
+        <div class="foot <%= (stats.receiptsDelta !== null && stats.receiptsDelta >= 0) ? 'up' : '' %>">
+          <% if (stats.receiptsDelta === null) { %>
+            All time
+          <% } else { %>
+            <%= stats.receiptsDelta >= 0 ? '↑' : '↓' %> <%= Math.abs(stats.receiptsDelta) %>% vs last 7 days
+          <% } %>
+        </div>
+      </div>
+
+      <div class="card stat">
+        <div class="tile tile-indigo">
+          <svg viewBox="0 0 24 24" stroke="currentColor"><ellipse cx="12" cy="12" rx="9" ry="5.5"/><path d="M3 12v2c0 3 4 5.5 9 5.5s9-2.5 9-5.5v-2"/></svg>
+        </div>
+        <div class="label">ReceipTaps activated</div>
+        <div class="value"><%= stats.pucksActive %></div>
+        <div class="foot">
+          <% if (stats.pucksActive === 0) { %>None activated yet
+          <% } else if (stats.pucksLinked === stats.pucksActive) { %>All linked to a register
+          <% } else { %><%= stats.pucksActive - stats.pucksLinked %> still need linking<% } %>
+        </div>
+      </div>
+
+      <div class="card stat">
+        <div class="tile tile-green">
+          <svg viewBox="0 0 24 24" stroke="currentColor"><path d="M12 2v20"/><path d="M17 6.5C17 4.6 14.8 3.5 12 3.5S7 4.6 7 6.5s2.2 2.8 5 3.3 5 1.4 5 3.3-2.2 3-5 3-5-1.1-5-3"/></svg>
+        </div>
+        <div class="label">Sales in <%= stats.monthLabel %></div>
+        <div class="value">$<%= Number(stats.monthRevenue).toLocaleString('en-US', { minimumFractionDigits: 2 }) %></div>
+        <div class="foot">Across receipts issued this month</div>
+      </div>
+
+      <div class="card stat">
+        <div class="tile tile-amber">
+          <svg viewBox="0 0 24 24" stroke="currentColor"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5"/><path d="M16 5.5a3.2 3.2 0 0 1 0 6M18 20c0-2.4-.9-4.2-2.3-5.3"/></svg>
+        </div>
+        <div class="label">Customers reached</div>
+        <div class="value"><%= stats.customers.toLocaleString('en-US') %></div>
+        <div class="foot">Saved a receipt to their wallet</div>
+      </div>
+    </div>
+
+    <!-- Recent receipts + ReceipTap status -------------------------------- -->
+    <div class="col-2">
+      <div class="card">
+        <div class="card-head">
+          <h2>Recent receipts</h2>
+          <a href="/dashboard/receipts-hub">View all</a>
+        </div>
+        <% if (recent.length === 0) { %>
+          <div class="blank">
+            <div class="bt">No receipts yet</div>
+            <div class="bd">Once your POS is connected and a customer taps a ReceipTap, their receipts land here within seconds.</div>
+            <a class="btn btn-primary" href="/dashboard/pos-setup" style="display:inline-block;width:auto;">Connect your POS</a>
+          </div>
+        <% } else { %>
+          <table class="dtable">
+            <thead>
+              <tr><th>Customer</th><th>Payment</th><th>Amount</th><th>When</th></tr>
+            </thead>
+            <tbody>
+              <% recent.forEach(function (r) { %>
+                <tr>
+                  <td>
+                    <div class="who">
+                      <div class="who-av"><%= r.identified ? r.who.charAt(0) : '·' %></div>
+                      <span style="<%= r.identified ? '' : 'color:var(--ink-soft);' %>"><%= r.who %></span>
+                    </div>
+                  </td>
+                  <td><% if (r.method) { %><span class="pill pill-grey"><%= r.method %></span><% } else { %><span style="color:#B6BCCE;">—</span><% } %></td>
+                  <td class="amt">$<%= r.total %></td>
+                  <td class="when"><%= r.when %></td>
+                </tr>
+              <% }); %>
+            </tbody>
+          </table>
+        <% } %>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>ReceipTap status</h2>
+          <a href="/dashboard/pucks">Manage</a>
+        </div>
+        <div class="legend">
+          <div class="stackbar">
+            <span style="width: <%= pct(st.linked) %>%; background: var(--ok);"></span>
+            <span style="width: <%= pct(st.pairing) %>%; background: var(--teal);"></span>
+            <span style="width: <%= pct(st.setup) %>%; background: var(--amber);"></span>
+          </div>
+          <div class="legend-row">
+            <span class="lk"><span class="sw" style="background:var(--ok);"></span>Linked to a register</span>
+            <span class="lv"><%= st.linked %></span>
+          </div>
+          <div class="legend-row">
+            <span class="lk"><span class="sw" style="background:var(--teal);"></span>Pairing right now</span>
+            <span class="lv"><%= st.pairing %></span>
+          </div>
+          <div class="legend-row">
+            <span class="lk"><span class="sw" style="background:var(--amber);"></span>Needs linking</span>
+            <span class="lv"><%= st.setup %></span>
+          </div>
+        </div>
+        <% if (st.total === 0) { %>
+          <div class="status-note warn">No ReceipTaps activated yet. Tap a new puck with your phone, or enter its activation code, to add it to this account.</div>
+        <% } else if (st.setup > 0) { %>
+          <div class="status-note warn">
+            <%= st.setup %> <%= st.setup === 1 ? 'ReceipTap needs' : 'ReceipTaps need' %> to be linked to a register before receipts will reach it. Tap it and choose "Assign to next sale."
+          </div>
+        <% } else { %>
+          <div class="status-note">Everything is linked. Receipts are routed to the right counter automatically.</div>
+        <% } %>
+      </div>
+    </div>
+
+    <!-- ReceipTaps + quick actions ---------------------------------------- -->
+    <div class="col-2">
+      <div class="card">
+        <div class="card-head">
+          <h2>Your ReceipTaps</h2>
+          <a href="/dashboard/pucks">See all</a>
+        </div>
+        <% if (pucks.length === 0) { %>
+          <div class="blank">
+            <div class="bt">No ReceipTaps on this account</div>
+            <div class="bd">Each puck ships with a six-character activation code on its insert card. Tap the puck or enter the code to add it here.</div>
+          </div>
+        <% } else { %>
+          <div class="puck-grid">
+            <% pucks.forEach(function (p) { %>
+              <a class="puck-card" href="/pucks/<%= p.id %>/manage">
+                <div class="disc"><i></i></div>
+                <div class="nm">ReceipTap <%= p.id.slice(0, 4).toUpperCase() %></div>
+                <div class="meta">
+                  <% if (p.linked) { %>
+                    <span class="pill pill-green">Linked</span>
+                  <% } else if (p.pairing) { %>
+                    <span class="pill">Pairing…</span>
+                  <% } else { %>
+                    <span class="pill pill-amber">Needs linking</span>
+                  <% } %>
+                  <div style="margin-top:7px;">Added <%= p.claimedAt ? new Date(p.claimedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—' %></div>
+                </div>
+              </a>
+            <% }); %>
+          </div>
+        <% } %>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h2>Quick actions</h2></div>
+        <div class="qa">
+          <a href="/dashboard/pos-setup">
+            <span class="ic tile-blue"><svg viewBox="0 0 24 24" stroke="currentColor"><path d="M9 3v6M15 3v6"/><path d="M6 9h12v4a6 6 0 0 1-12 0Z"/><path d="M12 19v3"/></svg></span>
+            Connect or change your POS
+            <span class="arw">›</span>
+          </a>
+          <a href="/dashboard/settings/receipt">
+            <span class="ic tile-indigo"><svg viewBox="0 0 24 24" stroke="currentColor"><path d="M4 20h16"/><path d="M6 16 16 6a2.1 2.1 0 0 1 3 3L9 19l-4 1Z"/></svg></span>
+            Design your receipt
+            <span class="arw">›</span>
+          </a>
+          <a href="/dashboard/customer-emails">
+            <span class="ic tile-green"><svg viewBox="0 0 24 24" stroke="currentColor"><rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="m3 7 9 6 9-6"/></svg></span>
+            Export your customer list
+            <span class="arw">›</span>
+          </a>
+          <a href="/dashboard/analytics">
+            <span class="ic tile-amber"><svg viewBox="0 0 24 24" stroke="currentColor"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg></span>
+            See what's selling
+            <span class="arw">›</span>
+          </a>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</body>
+</html>

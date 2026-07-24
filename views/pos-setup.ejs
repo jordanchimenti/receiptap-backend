@@ -1,0 +1,52 @@
+<!-- views/pos-setup.ejs -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Connect Your POS</title>
+  <style>
+    body { font-family: -apple-system, sans-serif; max-width: 600px; margin: 40px auto; color: #111; }
+    h1 { font-size: 22px; }
+    .connect-btn { display: inline-block; background: #111; color: #fff; padding: 12px 20px; border-radius: 8px; text-decoration: none; font-weight: 600; margin-top: 12px; }
+    .location-row { display: flex; justify-content: space-between; align-items: center; padding: 14px; background: #f9fafb; border-radius: 8px; margin-bottom: 8px; }
+    select { padding: 6px 10px; border-radius: 6px; border: 1px solid #ddd; }
+    .connected-badge { color: #059669; font-weight: 600; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <%- include('partials/dashboard-header', { activeNav: 'pos' }) %>
+  <h1>Connect Your Point of Sale</h1>
+
+  <% if (!connected) { %>
+    <p>Connect your Square account so ReceipTap can automatically generate receipts from your sales.</p>
+    <a class="connect-btn" href="/oauth/square/connect">Connect Square</a>
+  <% } else { %>
+    <div class="connected-badge">✅ Square Connected</div>
+    <p>Assign a ReceipTap puck to each register:</p>
+
+    <% locations.forEach(function(loc) { %>
+      <div class="location-row">
+        <div><strong><%= loc.name %></strong> <div style="font-size:13px;color:#888;"><%= loc.address ? loc.address.address_line_1 : '' %></div></div>
+        <select onchange="assignPuck('<%= loc.id %>', this.value)">
+          <option value="">Select a puck...</option>
+          <% pucks.forEach(function(p) { %>
+            <option value="<%= p.id %>" <%= p.posLocationId === loc.id ? 'selected' : '' %>><%= p.id %></option>
+          <% }); %>
+        </select>
+      </div>
+    <% }); %>
+  <% } %>
+
+  <script>
+    async function assignPuck(locationId, puckId) {
+      if (!puckId) return;
+      await fetch('/dashboard/pos-setup/assign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ puckId, locationId }),
+      });
+      alert('Puck assigned to this register.');
+    }
+  </script>
+</body>
+</html>

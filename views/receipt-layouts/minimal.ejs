@@ -1,0 +1,45 @@
+<!-- views/receipt-layouts/minimal.ejs -->
+<!-- Layout: Minimal — monospace, thermal-paper receipt look, no color, no shadow -->
+<style>
+  .layout-minimal {
+    max-width: 380px; margin: 0 auto; background: #fff;
+    padding: 24px 20px; box-sizing: border-box;
+    font-family: 'Courier New', Courier, monospace;
+    color: #222;
+    border: 1px solid #ddd;
+  }
+  .layout-minimal .logo { max-height: 40px; display: block; margin: 0 auto 10px; filter: grayscale(1); }
+  .layout-minimal .business-name { text-align: center; font-size: 16px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; }
+  .layout-minimal .meta { text-align: center; font-size: 11px; color: #666; margin-top: 4px; }
+  .layout-minimal .header-text { text-align: center; font-size: 12px; margin-top: 10px; color: #444; }
+  .layout-minimal .dashes { border: none; border-top: 1px dashed #999; margin: 14px 0; }
+  .layout-minimal .item-line { display: flex; justify-content: space-between; font-size: 12px; padding: 3px 0; }
+  .layout-minimal .item-line .name { flex: 1; }
+  .layout-minimal .totals-row { display: flex; justify-content: space-between; font-size: 12px; padding: 2px 0; }
+  .layout-minimal .totals-row.total { font-weight: 700; font-size: 14px; margin-top: 6px; }
+  .layout-minimal .meta-center { text-align: center; font-size: 11px; color: #666; margin-top: 10px; }
+</style>
+<div class="layout-minimal">
+  <% if (theme.logoUrl) { %>
+    <img class="logo" src="<%= theme.logoUrl %>" alt="<%= merchant.businessName %>" />
+  <% } %>
+  <div class="business-name"><%= merchant.businessName %></div>
+  <div class="meta"><%= transaction.date %></div>
+  <% if (theme.headerText) { %>
+    <div class="header-text"><%= theme.headerText %></div>
+  <% } %>
+  <hr class="dashes" />
+  <% transaction.lineItems.forEach(function(item) { %>
+    <div class="item-line">
+      <span class="name"><%= item.quantity %>x <%= item.name %></span>
+      <span>$<%= (item.total / 100).toFixed(2) %></span>
+    </div>
+  <% }); %>
+  <hr class="dashes" />
+  <div class="totals-row"><span>SUBTOTAL</span><span>$<%= transaction.subtotal %></span></div>
+  <div class="totals-row"><span>TAX</span><span>$<%= transaction.tax %></span></div>
+  <div class="totals-row total"><span>TOTAL</span><span>$<%= transaction.total %></span></div>
+  <% if (transaction.paymentMethod) { %>
+    <div class="meta-center"><%= transaction.paymentMethod %></div>
+  <% } %>
+</div>

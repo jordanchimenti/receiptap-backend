@@ -1,0 +1,55 @@
+<!-- views/pucks-list.ejs — every ReceipTap on this account. -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ReceipTaps - ReceipTap</title>
+  <link rel="stylesheet" href="/css/receiptap.css" />
+</head>
+<body>
+  <%- include('partials/dashboard-header', { activeNav: 'pucks' }) %>
+
+  <div class="topbar">
+    <div>
+      <h1>ReceipTaps</h1>
+      <p class="sub">Every puck on your account, and which register it's linked to.</p>
+    </div>
+  </div>
+
+  <div class="app-body">
+    <div class="card">
+      <% if (pucks.length === 0) { %>
+        <div class="blank">
+          <div class="bt">No ReceipTaps yet</div>
+          <div class="bd">Every puck ships with a six-character activation code on its insert card. Tap the puck with your phone, or enter the code, to add it to this account.</div>
+        </div>
+      <% } else { %>
+        <table class="dtable">
+          <thead>
+            <tr><th>ReceipTap</th><th>Status</th><th>Added</th><th></th></tr>
+          </thead>
+          <tbody>
+            <% pucks.forEach(function (p) { %>
+              <tr>
+                <td style="font-weight:600;">ReceipTap <%= p.id.slice(0, 4).toUpperCase() %></td>
+                <td>
+                  <% if (p.linked) { %><span class="pill pill-green">Linked to a register</span>
+                  <% } else if (p.pairing) { %><span class="pill">Waiting for a test sale</span>
+                  <% } else { %><span class="pill pill-amber">Needs linking</span><% } %>
+                </td>
+                <td class="when"><%= p.claimedAt ? new Date(p.claimedAt).toLocaleDateString('en-US', { dateStyle: 'medium' }) : '—' %></td>
+                <td style="text-align:right;">
+                  <a href="/pucks/<%= p.id %>/manage" style="font-size:12.5px;font-weight:600;color:var(--teal);text-decoration:none;">
+                    <%= p.linked ? 'Manage' : 'Finish setup' %> ›
+                  </a>
+                </td>
+              </tr>
+            <% }); %>
+          </tbody>
+        </table>
+      <% } %>
+    </div>
+  </div>
+</body>
+</html>

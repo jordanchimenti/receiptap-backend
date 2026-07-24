@@ -1,0 +1,95 @@
+// routes/pucks.js
+// Mount this in your Express app, e.g. app.use(pucksRouter)
+
+const express = require('express');
+const router = express.Router();
+const { PrismaClient } = require('@prisma/client');
+const prisma = new PrismaClient();
+
+// Adjust this to however your app checks auth — placeholder shown here
+function requireAuth(req, res, next) {
+  if (!req.session?.merchantId) {
+    return res.redirect(`/login?redirect=${encodeURIComponent(req.originalUrl)}`);
+  }
+  next();
+}
+
+// ---------------------------------------------------------------------------
+// GET /r/:puckId
+// This is the URL permanently encoded (and locked) on every NFC chip.
+// Same URL forever — what it does depends on the puck's current status.
+// Also reached via QR scan during activation (QR encodes /claim/:puckId directly,
+// but leaving this route's logic documented here for clarity on the full lifecycle).
+// ---------------------------------------------------------------------------
+router.get('/r/:puckId', async (req, res) => {
+  const puck = await prisma.puck.findUnique({ where: { id: req.params.puckId } });
+
+  if (!puck) {
+    return res.redirect('/not-found');
+  }
+
+  if (puck.status === 'UNCLAIMED') {
+    return res.redirect(`/claim/${puck.id}`);
+  }
+
+  const hasLiveTransaction =
+    puck.currentTransactionId &&
+    puck.transactionExpiresAt &&
+    puck.transactionExpiresAt > new Date();
+
+  if (puck.status === 'CLAIMED' && !hasLiveTransaction) {
+    return res.redirect(`/merchant/${puck.merchantId}`);
+  }
+
+  // Claimed + a transaction was just rung in, still within the claim window
+  return res.redirect(`/receipt/${puck.currentTransactionId}`);
+});
+
+// ---------------------------------------------------------------------------
+// GET /claim/:puckId
+// Loaded either by tapping an unclaimed puck, or by scanning the QR code
+// on the insert card (QR = /claim/:puckId?code=XXXXXX, code pre-fills the form)
+// ---------------------------------------------------------------------------
+router.get('/claim/:puckId', requireAuth, async (req, res) => {
+  const puck = await prisma.puck.findUnique({ where: { id: req.params.puckId } });
+
+  if (!puck) return res.status(404).send('Puck not found');
+  if (puck.status !== 'UNCLAIMED') {
+    return res.status(400).send('This puck has already been activated.');
+  }
+
+  const prefilledCode = req.query.code || '';
+
+  // Render your actual claim page here — passing puckId + prefilledCode to the template
+  res.render('claim', { puckId: puck.id, prefilledCode });
+});
+
+// ---------------------------------------------------------------------------
+// POST /claim/:puckId
+// Submits the claim code and, if valid, links the puck to the logged-in merchant
+// ---------------------------------------------------------------------------
+router.post('/claim/:puckId', requireAuth, async (req, res) => {
+  const { claimCode } = req.body;
+  const puck = await prisma.puck.findUnique({ where: { id: req.params.puckId } });
+
+  if (!puck || puck.status !== 'UNCLAIMED') {
+    return res.status(400).json({ error: 'Puck not available to claim' });
+  }
+
+  if (!claimCode || puck.claimCode !== claimCode.trim().toUpperCase()) {
+    return res.status(400).json({ error: 'Incorrect activation code' });
+  }
+
+  const updated = await prisma.puck.update({
+    where: { id: puck.id },
+    data: {
+      status: 'CLAIMED',
+      merchantId: req.session.merchantId,
+      claimedAt: new Date(),
+    },
+  });
+
+  res.json({ success: true, puck: updated });
+});
+
+module.exports = router;

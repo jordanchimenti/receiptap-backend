@@ -1,0 +1,85 @@
+<!-- views/billing.ejs -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Billing - ReceipTap</title>
+  <link rel="stylesheet" href="/css/receiptap.css" />
+</head>
+<body>
+  <%- include('partials/dashboard-header', { activeNav: 'billing' }) %>
+
+  <div class="main" style="max-width: 640px; margin: 0 auto;">
+    <div class="eyebrow">Account</div>
+    <h1 class="page-title">Billing</h1>
+    <p class="page-subtitle" style="margin-bottom: 28px;">
+      Your ReceipTap subscription: 30-day free trial, then $49.99 USD/month.
+      Cancel anytime during the trial and you won't be charged.
+    </p>
+
+    <% if (error) { %><div class="error-box"><%= error %></div><% } %>
+    <% if (typeof blocked !== 'undefined' && blocked) { %>
+      <div class="error-box">
+        Your ReceipTap service is paused — start or restart your subscription below to regain access to your dashboard.
+      </div>
+    <% } %>
+    <% if (merchant.subscriptionStatus === 'PAST_DUE') { %>
+      <div class="error-box" style="color: var(--amber); background: #FAEEDD;">
+        Your last payment didn't go through. We'll retry automatically, but please update your card soon — service will be paused if payment continues to fail.
+      </div>
+    <% } %>
+    <% if (typeof success !== 'undefined' && success) { %>
+      <div class="error-box" style="color: var(--teal-deep); background: var(--teal-wash);">You're all set — your trial has started.</div>
+    <% } %>
+
+    <div class="card-list" style="padding: 24px 26px; margin-bottom: 20px;">
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
+        <div>
+          <div style="font-size: 15px; font-weight: 600; margin-bottom: 4px;">
+            <% if (merchant.subscriptionStatus === 'ACTIVE') { %>
+              Active subscription
+            <% } else if (merchant.subscriptionStatus === 'TRIALING') { %>
+              Free trial (card on file)
+            <% } else if (merchant.subscriptionStatus === 'PAST_DUE') { %>
+              Payment past due
+            <% } else if (merchant.subscriptionStatus === 'CANCELED') { %>
+              Subscription canceled
+            <% } else { %>
+              Trial not started
+            <% } %>
+          </div>
+          <div style="font-size: 13px; color: var(--ink-soft);">
+            <% if (merchant.subscriptionStatus === 'TRIALING') { %>
+              Your 30-day trial is running. You'll be charged $49.99 USD/month when it ends, unless you cancel first.
+            <% } else if (merchant.subscriptionStatus === 'ACTIVE') { %>
+              Your subscription renews automatically each month.
+            <% } else if (merchant.subscriptionStatus === 'PAST_DUE') { %>
+              Update your payment method to avoid losing access.
+            <% } else if (merchant.subscriptionStatus === 'CANCELED') { %>
+              Restart your subscription to keep using ReceipTap.
+            <% } else { %>
+              Start your 30-day free trial — add a card now, get charged only when the trial ends.
+            <% } %>
+          </div>
+        </div>
+        <span class="badge <%= access ? 'badge-teal' : 'badge-amber' %>">
+          <%= access ? 'Active' : 'Action needed' %>
+        </span>
+      </div>
+    </div>
+
+    <% if (merchant.subscriptionStatus === 'ACTIVE' || merchant.subscriptionStatus === 'TRIALING' || merchant.subscriptionStatus === 'PAST_DUE') { %>
+      <form method="POST" action="/dashboard/billing/portal">
+        <button type="submit" class="btn btn-secondary" style="width: 100%;">Manage subscription</button>
+      </form>
+    <% } else { %>
+      <form method="POST" action="/dashboard/billing/checkout">
+        <button type="submit" class="btn btn-primary">
+          <% if (merchant.subscriptionStatus === 'CANCELED') { %>Restart subscription<% } else { %>Start 30-day free trial<% } %>
+        </button>
+      </form>
+    <% } %>
+  </div>
+</body>
+</html>

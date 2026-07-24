@@ -1,0 +1,235 @@
+<!-- views/receipt.ejs -->
+<!-- One shared template for every merchant — appearance driven entirely by `theme`, data by `transaction` -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title><%= merchant.businessName %> - Receipt</title>
+  <style>
+    :root {
+      --primary: <%= theme.primaryColor %>;
+      --accent: <%= theme.accentColor %>;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f4f4f5;
+      margin: 0;
+      padding: 24px 16px;
+    }
+    .action-button {
+      display: block;
+      width: 100%;
+      text-align: center;
+      background: var(--accent);
+      color: #fff;
+      text-decoration: none;
+      padding: 12px;
+      border-radius: 8px;
+      font-weight: 600;
+      margin-top: 10px;
+      box-sizing: border-box;
+    }
+    .footer-text { text-align: center; font-size: 12px; color: #999; margin-top: 20px; }
+    .google-review-card {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: #fff;
+      border: 1px solid #dadce0;
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin-top: 10px;
+      text-decoration: none;
+      box-sizing: border-box;
+    }
+    .google-g { width: 28px; height: 28px; flex-shrink: 0; }
+    .google-review-title { font-size: 14px; font-weight: 600; color: #3c4043; }
+    .google-stars { color: #fbbc05; font-size: 13px; letter-spacing: 1px; margin-top: 1px; }
+
+    /* --- Email gate modal --- */
+    .modal-overlay {
+      display: none;
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.5);
+      align-items: center; justify-content: center;
+      z-index: 100;
+      padding: 16px;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal-box {
+      background: #fff; border-radius: 12px; padding: 24px;
+      max-width: 340px; width: 100%; box-sizing: border-box;
+    }
+    .modal-title { font-size: 17px; font-weight: 700; margin-bottom: 4px; }
+    .modal-subtitle { font-size: 13px; color: #666; margin-bottom: 18px; }
+    #google-signin-btn { display: flex; justify-content: center; margin-bottom: 14px; }
+    .modal-divider { display: flex; align-items: center; gap: 10px; font-size: 12px; color: #999; margin: 14px 0; }
+    .modal-divider::before, .modal-divider::after { content: ''; flex: 1; height: 1px; background: #eee; }
+    .modal-box input[type=email] {
+      width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px;
+      box-sizing: border-box; font-size: 14px; margin-bottom: 10px;
+    }
+    .modal-box button.primary {
+      width: 100%; padding: 11px; background: var(--accent); color: #fff;
+      border: none; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 14px;
+    }
+    .modal-error { color: #dc2626; font-size: 12px; margin-bottom: 8px; display: none; }
+    .modal-close { text-align: center; margin-top: 14px; font-size: 12px; color: #999; cursor: pointer; }
+
+    /* --- Print styling, so "Save as PDF" via the browser print dialog looks clean --- */
+    @media print {
+      body { background: #fff; padding: 0; }
+      .layout-classic, .layout-modern, .layout-minimal { box-shadow: none; max-width: 100%; }
+      .actions, .google-review-card, .modal-overlay { display: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <%- include('receipt-layouts/' + (theme.layoutId || 'classic'), { merchant, theme, transaction }) %>
+
+  <div class="actions" style="max-width:420px; margin: 10px auto 0;">
+    <% if (theme.showWalletSave) { %>
+      <a class="action-button" href="/receipt/<%= transaction.id %>/wallet">Add to Apple/Google Wallet</a>
+    <% } %>
+    <button class="action-button save-receipt-btn" style="background:#111; border:none; cursor:pointer;" onclick="openSaveModal()">
+      Save Receipt (PDF / Files)
+    </button>
+    <button class="action-button" style="border:none; cursor:pointer;" onclick="saveToReceiptapAccount('<%= transaction.id %>')">
+      Save to My ReceiptTap Account
+    </button>
+    <button class="action-button" style="background:#059669; border:none; cursor:pointer;" onclick="saveAsBusinessExpense('<%= transaction.id %>')">
+      Save as Business Expense
+    </button>
+    <% if (theme.showGoogleReview && theme.googleReviewUrl) { %>
+      <a class="google-review-card" href="<%= theme.googleReviewUrl %>">
+        <svg class="google-g" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+          <path fill="#4285F4" d="M45.12 24.5c0-1.56-.14-3.06-.4-4.5H24v8.51h11.84c-.51 2.75-2.06 5.08-4.39 6.64v5.52h7.11c4.16-3.83 6.56-9.47 6.56-16.17z"/>
+          <path fill="#34A853" d="M24 46c5.94 0 10.92-1.97 14.56-5.33l-7.11-5.52c-1.97 1.32-4.49 2.1-7.45 2.1-5.73 0-10.58-3.87-12.31-9.07H4.34v5.7C7.96 41.07 15.4 46 24 46z"/>
+          <path fill="#FBBC05" d="M11.69 28.18C11.25 26.86 11 25.45 11 24s.25-2.86.69-4.18v-5.7H4.34C2.85 17.09 2 20.45 2 24s.85 6.91 2.34 9.88l7.35-5.7z"/>
+          <path fill="#EA4335" d="M24 10.75c3.23 0 6.13 1.11 8.41 3.29l6.31-6.31C34.91 4.18 29.93 2 24 2 15.4 2 7.96 6.93 4.34 14.12l7.35 5.7c1.73-5.2 6.58-9.07 12.31-9.07z"/>
+        </svg>
+        <div class="google-review-text">
+          <div class="google-review-title">Rate us on Google</div>
+          <div class="google-stars">★★★★★</div>
+        </div>
+      </a>
+    <% } %>
+    <% if (theme.showWarranty) { %>
+      <a class="action-button" style="background:#555;" href="/receipt/<%= transaction.id %>/warranty">Register Warranty</a>
+    <% } %>
+    <% if (theme.showLoyalty) { %>
+      <a class="action-button" style="background:#555;" href="/loyalty/<%= merchant.id %>">Join Loyalty Program</a>
+    <% } %>
+    <% if (theme.footerText) { %>
+      <div class="footer-text"><%= theme.footerText %></div>
+    <% } %>
+  </div>
+
+  <!-- Email-gate modal: shown before the receipt can be saved as PDF/Files -->
+  <div class="modal-overlay" id="save-modal">
+    <div class="modal-box">
+      <div class="modal-title">Save Your Receipt</div>
+      <div class="modal-subtitle">Save this receipt and we'll automatically organize it by spending category and flag possible tax deductions — free, powered by AI.</div>
+
+      <div id="google-signin-btn"></div>
+
+      <div class="modal-divider">or</div>
+
+      <div class="modal-error" id="modal-error"></div>
+      <input type="email" id="modal-email-input" placeholder="you@example.com" />
+      <button class="primary" onclick="submitEmailCapture()">Continue</button>
+
+      <div class="modal-close" onclick="closeSaveModal()">Cancel</div>
+    </div>
+  </div>
+
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script>
+    const TRANSACTION_ID = '<%= transaction.id %>';
+
+    function openSaveModal() {
+      document.getElementById('save-modal').classList.add('open');
+    }
+    function closeSaveModal() {
+      document.getElementById('save-modal').classList.remove('open');
+      document.getElementById('modal-error').style.display = 'none';
+    }
+
+    function showModalError(msg) {
+      const el = document.getElementById('modal-error');
+      el.textContent = msg;
+      el.style.display = 'block';
+    }
+
+    // After email is captured (either path), close the modal and hand off
+    // to the browser's native print dialog — on both iOS and Android this
+    // offers "Save as PDF" / "Save to Files" as destinations.
+    function proceedToSave() {
+      closeSaveModal();
+      setTimeout(() => window.print(), 200);
+    }
+
+    async function submitEmailCapture() {
+      const email = document.getElementById('modal-email-input').value.trim();
+      if (!email) { showModalError('Enter your email to continue.'); return; }
+
+      const res = await fetch(`/receipt/${TRANSACTION_ID}/capture-email`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      const data = await res.json();
+      if (!res.ok) { showModalError(data.error || 'Something went wrong.'); return; }
+
+      proceedToSave();
+    }
+
+    async function handleGoogleSignIn(response) {
+      const res = await fetch(`/receipt/${TRANSACTION_ID}/capture-email-google`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ credential: response.credential }),
+      });
+      const data = await res.json();
+      if (!res.ok) { showModalError(data.error || 'Google sign-in failed.'); return; }
+
+      proceedToSave();
+    }
+
+    window.onload = function () {
+      if (window.google && window.google.accounts) {
+        google.accounts.id.initialize({
+          client_id: '<%= googleClientId %>',
+          callback: handleGoogleSignIn,
+        });
+        google.accounts.id.renderButton(
+          document.getElementById('google-signin-btn'),
+          { theme: 'outline', size: 'large', width: 280 }
+        );
+      }
+    };
+
+    async function saveToReceiptapAccount(transactionId) {
+      const res = await fetch(`/receipt/${transactionId}/save`, { method: 'POST' });
+      if (res.status === 401 || res.redirected) {
+        window.location.href = `/account/login?redirect=${encodeURIComponent(window.location.pathname)}`;
+        return;
+      }
+      alert('Saved to your ReceiptTap account.');
+    }
+
+    async function saveAsBusinessExpense(transactionId) {
+      const res = await fetch(`/receipt/${transactionId}/save-expense`, { method: 'POST' });
+      if (res.status === 401 || res.redirected) {
+        // Different login path — this is a MERCHANT session, not a customer one
+        window.location.href = `/login?redirect=${encodeURIComponent(window.location.pathname)}`;
+        return;
+      }
+      const data = await res.json();
+      if (!res.ok) { alert(data.error); return; }
+      alert('Saved to your business expenses.');
+    }
+  </script>
+</body>
+</html>

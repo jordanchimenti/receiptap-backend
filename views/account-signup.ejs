@@ -1,0 +1,98 @@
+<!-- views/account-signup.ejs -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sign Up - ReceipTap</title>
+  <link rel="stylesheet" href="/css/receiptap.css" />
+</head>
+<body>
+  <div class="centered-shell">
+    <div class="auth-card">
+      <img src="/images/receiptap-logo.png" alt="ReceipTap" style="height: 54px; margin-bottom: 18px;" />
+      <h1 style="font-size: 22px; margin-bottom: 6px;">Create your wallet</h1>
+      <p style="font-size: 13.5px; color: var(--ink-soft); margin: 8px 0 22px; line-height: 1.5;">
+        Keep every receipt, from every store, in one place — automatically organized.
+      </p>
+
+      <div class="error-box" id="error-box" style="display: none;"><%= error %></div>
+
+      <div id="google-signin-btn" style="display: flex; justify-content: center; margin-bottom: 14px;"></div>
+      <div style="display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--ink-soft); margin: 14px 0;">
+        <span style="flex: 1; height: 1px; background: var(--line);"></span>
+        or
+        <span style="flex: 1; height: 1px; background: var(--line);"></span>
+      </div>
+
+      <form id="signup-form">
+        <div class="field">
+          <label for="email">Email</label>
+          <input type="email" id="email" name="email" required />
+        </div>
+        <div class="field">
+          <label for="password">Password</label>
+          <input type="password" id="password" name="password" required minlength="8" />
+        </div>
+        <button class="btn btn-primary" type="submit">Sign up</button>
+      </form>
+
+      <p style="font-size: 13px; color: var(--ink-soft); margin-top: 20px; text-align: center;">
+        <a href="/account/login?redirect=<%= encodeURIComponent(redirect) %>" style="color: var(--teal-deep); font-weight: 600; text-decoration: none;">Already have an account? Log in</a>
+      </p>
+    </div>
+  </div>
+
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script>
+    const REDIRECT_TO = '<%= redirect %>';
+
+    function showError(msg) {
+      const el = document.getElementById('error-box');
+      el.textContent = msg;
+      el.style.display = 'block';
+    }
+
+    document.getElementById('signup-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = document.getElementById('email').value;
+      const password = document.getElementById('password').value;
+
+      const res = await fetch('/account/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+      const data = await res.json();
+      if (!res.ok) { showError(data.error || 'Something went wrong.'); return; }
+      window.location.href = REDIRECT_TO;
+    });
+
+    // Same endpoint as the login page — Google sign-in creates the account
+    // automatically if it doesn't exist yet, so signup and login converge here.
+    async function handleGoogleSignIn(response) {
+      const res = await fetch('/account/google', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ credential: response.credential }),
+      });
+      const data = await res.json();
+      if (!res.ok) { showError(data.error || 'Google sign-in failed.'); return; }
+      window.location.href = REDIRECT_TO;
+    }
+
+    window.onload = function () {
+      if (window.google && window.google.accounts) {
+        google.accounts.id.initialize({
+          client_id: '<%= googleClientId %>',
+          callback: handleGoogleSignIn,
+        });
+        google.accounts.id.renderButton(
+          document.getElementById('google-signin-btn'),
+          { theme: 'outline', size: 'large', width: 280, text: 'signup_with' }
+        );
+      }
+    };
+  </script>
+</body>
+</html>

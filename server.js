@@ -8,6 +8,14 @@ const path = require('path');
 
 const app = express();
 
+// Railway (like Heroku/Render) terminates HTTPS at its edge and forwards to
+// this container over a plain connection. Without telling Express to trust
+// that proxy, req.secure is always false, and express-session silently
+// refuses to send a Secure session cookie at all -- login "succeeds" but the
+// browser never gets a cookie to prove it, so every next request looks
+// logged out. Locally (no proxy in front) this line is a no-op.
+app.set('trust proxy', 1);
+
 // Safety net: without this, an error that isn't caught anywhere (e.g. a
 // transient "can't reach the database" blip during a request) crashes the
 // entire Node process and takes the site down for every merchant/customer,

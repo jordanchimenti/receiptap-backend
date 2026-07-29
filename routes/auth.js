@@ -54,30 +54,11 @@ router.post('/login', async (req, res) => {
     }
 
     req.session.merchantId = merchant.id;
-    console.log('[DEBUG login] set merchantId', merchant.id, 'sessionID', req.sessionID, 'cookie config', JSON.stringify(req.session.cookie));
-    req.session.save((saveErr) => {
-      if (saveErr) console.error('[DEBUG login] session save error', saveErr);
-      else console.log('[DEBUG login] session saved OK, redirecting to', redirect);
-      res.redirect(redirect);
-    });
+    res.redirect(redirect);
   } catch (err) {
     console.error('Login failed:', err);
     res.render('login', { error: 'Something went wrong on our end — please try again in a moment.', redirect });
   }
-});
-
-// Temporary, no-credentials-needed diagnostic for the production session bug.
-// Remove once login is confirmed working.
-router.get('/debug-session-test', (req, res) => {
-  req.session.testFlag = 'hello';
-  req.session.save((err) => {
-    console.log('[DEBUG session-test] set testFlag, sessionID', req.sessionID, 'saveErr', err, 'set-cookie will follow');
-    res.redirect('/debug-session-check');
-  });
-});
-router.get('/debug-session-check', (req, res) => {
-  console.log('[DEBUG session-check] sessionID', req.sessionID, 'testFlag', req.session.testFlag, 'cookie header', req.headers.cookie);
-  res.json({ sessionID: req.sessionID, testFlag: req.session.testFlag || null, cookieHeaderReceived: req.headers.cookie || null });
 });
 
 router.post('/logout', (req, res) => {

@@ -5,9 +5,6 @@
   <meta charset="UTF-8" />
   <title>Repeat Customers</title>
   <style>
-    body { font-family: -apple-system, sans-serif; max-width: 800px; margin: 0 auto; padding: 0 24px 40px; color: #111; }
-    h1 { font-size: 22px; }
-    .subtitle { color: #666; font-size: 14px; margin-bottom: 16px; }
     .export-link { float: right; font-size: 14px; }
     table { width: 100%; border-collapse: collapse; margin-top: 16px; }
     th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid #eee; font-size: 14px; }
@@ -19,8 +16,16 @@
 </head>
 <body>
   <%- include('partials/dashboard-header', { activeNav: 'customers' }) %>
-  <h1>Repeat Customers</h1>
-  <div class="subtitle">Customers who've saved a receipt from you 2+ times, with their most common purchase category.</div>
+
+  <div class="topbar">
+    <div>
+      <h1>Repeat Customers</h1>
+      <p class="sub">Customers who've saved a receipt from you 2+ times, with their most common purchase category.</p>
+    </div>
+  </div>
+
+  <div class="app-body">
+
   <a class="export-link" href="/dashboard/repeat-customers/export">Export CSV</a>
 
   <% if (customers.length === 0) { %>
@@ -44,5 +49,7 @@
     </table>
     <div class="export-hint">Export this list as a CSV and import it into Mailchimp, Klaviyo, or whatever email platform you already use — it includes visit count, total spent, and top category for segmenting your campaign.</div>
   <% } %>
+
+  </div>
 </body>
 </html>

@@ -7,10 +7,8 @@
 const express = require('express');
 const router = express.Router();
 const archiver = require('archiver');
-const { PrismaClient } = require('@prisma/client');
 const { generateReceiptPDFs } = require('../services/generate-receipt-pdf');
-
-const prisma = new PrismaClient();
+const prisma = require('../lib/prisma');
 
 function requireAuth(req, res, next) {
   if (!req.session?.merchantId) return res.redirect('/login');

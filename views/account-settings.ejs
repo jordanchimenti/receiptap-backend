@@ -1,0 +1,90 @@
+<!-- views/account-settings.ejs -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Settings - ReceipTap</title>
+  <link rel="stylesheet" href="/css/receiptap.css" />
+</head>
+<body>
+  <%- include('partials/dashboard-header', { activeNav: 'account' }) %>
+
+  <div class="topbar">
+    <div>
+      <h1>Settings</h1>
+      <p class="sub">Business info, password, POS connection, and account controls.</p>
+    </div>
+  </div>
+
+  <div class="app-body">
+    <!-- Business information -->
+    <div class="card" style="margin-bottom:20px;">
+      <div class="card-head"><h2>Business information</h2></div>
+      <div style="padding:18px 20px;">
+        <% if (businessError) { %><div class="error-box" style="margin-bottom:14px;"><%= businessError %></div><% } %>
+        <% if (businessSuccess) { %><div class="error-box" style="margin-bottom:14px; color:var(--teal-deep); background:var(--teal-wash);">Business info updated.</div><% } %>
+        <form method="POST" action="/dashboard/settings/account/business" style="margin:0;">
+          <div class="field">
+            <label for="businessName">Business name</label>
+            <input type="text" id="businessName" name="businessName" value="<%= merchant.businessName %>" required />
+          </div>
+          <div class="field">
+            <label for="email">Email</label>
+            <input type="email" id="email" name="email" value="<%= merchant.email %>" required />
+          </div>
+          <button type="submit" class="btn btn-primary" style="width:auto;">Save</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Change password -->
+    <div class="card" style="margin-bottom:20px;">
+      <div class="card-head"><h2>Change password</h2></div>
+      <div style="padding:18px 20px;">
+        <% if (passwordError) { %><div class="error-box" style="margin-bottom:14px;"><%= passwordError %></div><% } %>
+        <% if (passwordSuccess) { %><div class="error-box" style="margin-bottom:14px; color:var(--teal-deep); background:var(--teal-wash);">Password changed.</div><% } %>
+        <form method="POST" action="/dashboard/settings/account/password" style="margin:0;">
+          <div class="field">
+            <label for="currentPassword">Current password</label>
+            <input type="password" id="currentPassword" name="currentPassword" required />
+          </div>
+          <div class="field">
+            <label for="newPassword">New password</label>
+            <input type="password" id="newPassword" name="newPassword" required minlength="8" />
+          </div>
+          <div class="field">
+            <label for="confirmNewPassword">Confirm new password</label>
+            <input type="password" id="confirmNewPassword" name="confirmNewPassword" required minlength="8" />
+          </div>
+          <button type="submit" class="btn btn-primary" style="width:auto;">Change password</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- POS connection -->
+    <div class="card" style="margin-bottom:20px;">
+      <div class="card-head"><h2>POS connection</h2></div>
+      <div style="padding:18px 20px;">
+        <% if (posError) { %><div class="error-box" style="margin-bottom:14px;"><%= posError %></div><% } %>
+        <% if (merchant.squareMerchantId) { %>
+          <p style="font-size:13.5px; margin:0 0 14px;">Connected via <strong>Square</strong>.</p>
+          <form method="POST" action="/dashboard/settings/account/disconnect-pos" style="margin:0;" onsubmit="return confirm('Disconnect your POS? Sales will stop generating receipts until you reconnect.');">
+            <button type="submit" class="btn btn-secondary" style="width:auto; color:var(--danger);">Disconnect Square</button>
+          </form>
+        <% } else if (merchant.shopifyShopDomain) { %>
+          <p style="font-size:13.5px; margin:0 0 14px;">Connected via <strong>Shopify</strong> (<%= merchant.shopifyShopDomain %>).</p>
+          <form method="POST" action="/dashboard/settings/account/disconnect-pos" style="margin:0;" onsubmit="return confirm('Disconnect your POS? Sales will stop generating receipts until you reconnect.');">
+            <button type="submit" class="btn btn-secondary" style="width:auto; color:var(--danger);">Disconnect Shopify</button>
+          </form>
+        <% } else { %>
+          <div class="blank">
+            <div class="bt">No POS connected</div>
+            <div class="bd">Connect Square or Shopify from the <a href="/dashboard/pos-setup">POS connection</a> page.</div>
+          </div>
+        <% } %>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

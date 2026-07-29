@@ -16,9 +16,12 @@ datasource db {
 model Merchant {
   id           String   @id @default(cuid())
   businessName String
+  ownerName    String? // the person's own name, e.g. "Welcome back, Jordan" -- distinct from businessName
+  profilePhotoUrl String? // the person's own avatar photo, shown top-right in the dashboard rail
   email        String   @unique
   passwordHash String
   createdAt    DateTime @default(now())
+  isActive     Boolean  @default(true) // false once a merchant deactivates their own account
 
   // Square OAuth
   squareMerchantId  String? @unique
@@ -58,6 +61,7 @@ model Puck {
   claimCode String     @unique // 6-char code printed on the insert card
 
   status    PuckStatus @default(UNCLAIMED)
+  source    PuckSource @default(BATCH) // BATCH = scripts/generate-batch.js hardware order, ADMIN = one-off /admin/pucks button
 
   merchantId    String?
   merchant      Merchant? @relation(fields: [merchantId], references: [id])
@@ -77,6 +81,11 @@ model Puck {
 enum PuckStatus {
   UNCLAIMED
   CLAIMED
+}
+
+enum PuckSource {
+  BATCH
+  ADMIN
 }
 
 // ---------------------------------------------------------------------------
@@ -129,6 +138,8 @@ model ReceiptTheme {
 
   layoutId     String  @default("classic") // "classic" | "modern" | "minimal" — which structural template to render
   logoUrl      String?
+  displayName  String? // shown on receipts instead of Merchant.businessName, if set -- lets a merchant show a nicer/different name to customers without renaming their actual account
+  location     String? // free-text address/location line, shown on receipts if set -- e.g. "123 Main St, Springfield" -- not tied to any Location model, just display text
   primaryColor String  @default("#111111")
   accentColor  String  @default("#2563eb")
 

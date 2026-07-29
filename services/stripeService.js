@@ -1,6 +1,5 @@
 const Stripe = require('stripe');
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const prisma = require('../lib/prisma');
 
 const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2024-06-20' })
@@ -64,6 +63,32 @@ async function createPortalSession(merchant, returnUrl) {
 }
 
 /**
+ * Cancellation retention offer: a merchant clicking "Cancel Subscription" is
+ * shown a 50%-off-next-month offer before the cancellation goes through.
+ * RETENTION50 is a real Stripe coupon (50% off, one-time) created for this.
+ */
+const RETENTION_COUPON_ID = 'RETENTION50';
+
+async function applyRetentionDiscount(subscriptionId) {
+  if (!stripe) throw new Error('Stripe is not configured yet (missing STRIPE_SECRET_KEY).');
+  return stripe.subscriptions.update(subscriptionId, { coupon: RETENTION_COUPON_ID });
+}
+
+/** Cancels at the end of the current billing period — the merchant keeps
+ * access through what they already paid for, then it stops. */
+async function cancelSubscriptionAtPeriodEnd(subscriptionId) {
+  if (!stripe) throw new Error('Stripe is not configured yet (missing STRIPE_SECRET_KEY).');
+  return stripe.subscriptions.update(subscriptionId, { cancel_at_period_end: true });
+}
+
+/** Undoes a pending cancellation (merchant changed their mind before the
+ * period ended). */
+async function resumeSubscription(subscriptionId) {
+  if (!stripe) throw new Error('Stripe is not configured yet (missing STRIPE_SECRET_KEY).');
+  return stripe.subscriptions.update(subscriptionId, { cancel_at_period_end: false });
+}
+
+/**
  * Handles incoming Stripe webhook events. Keeps the local subscriptionStatus
  * in sync so the rest of the app never has to call Stripe directly to check
  * access — it just reads Merchant.subscriptionStatus.
@@ -119,4 +144,15 @@ function hasAccess(merchant) {
   return false;
 }
 
-module.exports = { stripe, createCheckoutSession, createPortalSession, handleWebhookEvent, hasAccess, TRIAL_DAYS };
+module.exports = {
+  stripe,
+  createCheckoutSession,
+  createPortalSession,
+  handleWebhookEvent,
+  hasAccess,
+  mapStripeStatus,
+  TRIAL_DAYS,
+  applyRetentionDiscount,
+  cancelSubscriptionAtPeriodEnd,
+  resumeSubscription,
+};

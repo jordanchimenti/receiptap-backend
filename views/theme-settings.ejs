@@ -5,7 +5,6 @@
   <meta charset="UTF-8" />
   <title>Receipt Settings</title>
   <style>
-    body { font-family: -apple-system, sans-serif; max-width: 520px; margin: 40px auto; color: #111; }
     h1 { font-size: 22px; }
     h2 { font-size: 15px; margin-top: 28px; margin-bottom: 8px; color: #555; }
     label { display: block; font-size: 13px; font-weight: 600; margin-top: 14px; margin-bottom: 4px; }
@@ -21,52 +20,103 @@
     .google-section { background: #f9fafb; border-radius: 8px; padding: 14px; margin-top: 20px; }
     .google-g-small { width: 18px; height: 18px; vertical-align: middle; margin-right: 6px; }
 
-    .layout-picker { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 8px; margin-bottom: 8px; }
-    .layout-option { flex: 0 0 auto; width: 150px; cursor: pointer; }
+    .layout-picker { display: flex; gap: 20px; margin-bottom: 8px; }
+    .layout-option { flex: 1 1 0; min-width: 0; max-width: 280px; cursor: pointer; }
     .layout-option-frame {
-      width: 150px; height: 220px; border: 2px solid #e5e7eb; border-radius: 10px;
+      width: 100%; aspect-ratio: 420 / 620; border: 2px solid #e5e7eb; border-radius: 10px;
       overflow: hidden; position: relative; background: #f4f4f5;
     }
     .layout-option.selected .layout-option-frame { border-color: #2563eb; box-shadow: 0 0 0 2px rgba(37,99,235,0.15); }
     .layout-option-frame iframe {
       width: 420px; height: 620px; border: none;
-      transform: scale(0.357); transform-origin: top left;
+      transform-origin: top left;
       pointer-events: none;
     }
     .layout-option-label { text-align: center; font-size: 13px; font-weight: 600; margin-top: 8px; }
+    .expand-btn-overlay {
+      position: absolute; bottom: 6px; left: 50%; transform: translateX(-50%);
+      width: auto; margin: 0;
+      background: rgba(255,255,255,0.92); border: 1px solid #ddd; border-radius: 6px;
+      padding: 3px 10px; font-size: 11px; color: #555; cursor: pointer; z-index: 2;
+    }
+    .expand-btn-overlay:hover { background: #fff; }
+
+    /* --- Full-size preview modal --- */
+    .preview-modal-overlay {
+      display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.55);
+      align-items: center; justify-content: center; z-index: 200; padding: 24px;
+    }
+    .preview-modal-overlay.open { display: flex; }
+    .preview-modal-box {
+      background: #fff; border-radius: 14px; padding: 16px 16px 20px;
+      max-height: 90vh; display: flex; flex-direction: column; align-items: center;
+      position: relative;
+    }
+    .preview-modal-head { display: flex; align-items: center; width: 420px; max-width: 100%; margin-bottom: 10px; }
+    .preview-modal-title { font-size: 15px; font-weight: 700; }
+    .preview-modal-close {
+      position: absolute; top: 12px; right: 12px;
+      width: 44px; height: 44px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      border: none; background: #f4f4f5; font-size: 32px; line-height: 1;
+      cursor: pointer; color: #555; z-index: 3;
+    }
+    .preview-modal-close:hover { background: #e5e7eb; }
+    .preview-modal-frame-wrap { width: 420px; max-width: 100%; height: 70vh; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 10px; }
+    .preview-modal-frame-wrap iframe { width: 100%; height: 620px; border: none; }
   </style>
 </head>
 <body>
   <%- include('partials/dashboard-header', { activeNav: 'settings' }) %>
-  <h1>Receipt Settings</h1>
+
+  <div class="topbar">
+    <div>
+      <h1>Receipt Settings</h1>
+      <p class="sub">Customize how your receipts look and what they include.</p>
+    </div>
+  </div>
+
+  <div class="app-body">
 
   <% if (saved) { %><div class="banner success">Settings saved.</div><% } %>
   <% if (error) { %><div class="banner error"><%= error %></div><% } %>
 
-  <form method="POST" action="/dashboard/settings/receipt">
+  <form method="POST" action="/dashboard/settings/receipt" enctype="multipart/form-data">
 
     <h2 style="margin-top:0;">Receipt Layout</h2>
     <div class="layout-picker">
       <% ['classic', 'modern', 'minimal'].forEach(function(id) { %>
-        <div class="layout-option <%= (theme.layoutId || 'classic') === id ? 'selected' : '' %>" onclick="selectLayout('<%= id %>')">
-          <div class="layout-option-frame">
+        <div class="layout-option <%= (theme.layoutId || 'classic') === id ? 'selected' : '' %>" data-layout-id="<%= id %>">
+          <div class="layout-option-frame" onclick="selectLayout('<%= id %>')">
             <iframe src="/dashboard/settings/receipt/preview/<%= id %>" scrolling="no"></iframe>
+            <button type="button" class="expand-btn-overlay" onclick="event.stopPropagation(); openPreviewModal('<%= id %>');">View</button>
           </div>
-          <div class="layout-option-label"><%= id.charAt(0).toUpperCase() + id.slice(1) %></div>
+          <div class="layout-option-label">
+            <%= id.charAt(0).toUpperCase() + id.slice(1) %>
+          </div>
         </div>
       <% }); %>
     </div>
     <input type="hidden" name="layoutId" id="layoutId-input" value="<%= theme.layoutId || 'classic' %>" />
 
     <h2>Branding</h2>
-    <label>Logo URL</label>
-    <input type="url" name="logoUrl" value="<%= theme.logoUrl || '' %>" placeholder="https://yoursite.com/logo.png" />
+    <label>Upload your logo</label>
+    <input type="file" name="logoFile" accept="image/png,image/jpeg,image/webp,image/svg+xml" />
+    <div class="hint">PNG, JPG, WEBP, or SVG — up to 2MB.</div>
 
     <label>Primary color</label>
     <input type="color" name="primaryColor" value="<%= theme.primaryColor || '#111111' %>" />
 
     <label>Accent color</label>
     <input type="color" name="accentColor" value="<%= theme.accentColor || '#2563eb' %>" />
+
+    <label>Business name on receipts</label>
+    <input type="text" name="displayName" value="<%= theme.displayName || '' %>" placeholder="<%= merchant.businessName %>" />
+    <div class="hint">Shown to customers on receipts instead of your account name (<%= merchant.businessName %>). Leave blank to just use your account name.</div>
+
+    <label>Business location</label>
+    <input type="text" name="location" value="<%= theme.location || '' %>" placeholder="123 Main St, Springfield" />
+    <div class="hint">Shown on receipts under your business name. Leave blank to not show a location.</div>
 
     <label>Header message</label>
     <input type="text" name="headerText" value="<%= theme.headerText || '' %>" placeholder="Thanks for shopping with us!" />
@@ -99,10 +149,6 @@
 
     <h2>Other receipt options</h2>
     <div class="toggle-row">
-      <input type="checkbox" id="showWalletSave" name="showWalletSave" <%= theme.showWalletSave ? 'checked' : '' %> />
-      <label for="showWalletSave">Show "Add to Apple/Google Wallet"</label>
-    </div>
-    <div class="toggle-row">
       <input type="checkbox" id="showWarranty" name="showWarranty" <%= theme.showWarranty ? 'checked' : '' %> />
       <label for="showWarranty">Show "Register Warranty"</label>
     </div>
@@ -114,35 +160,129 @@
     <button type="submit">Save Settings</button>
   </form>
 
+  </div>
+
+  <!-- Full-size preview: same live data as the thumbnails, just readable -->
+  <div class="preview-modal-overlay" id="preview-modal" onclick="if (event.target === this) closePreviewModal();">
+    <div class="preview-modal-box">
+      <button type="button" class="preview-modal-close" onclick="closePreviewModal();">&times;</button>
+      <div class="preview-modal-head">
+        <div class="preview-modal-title" id="preview-modal-title">Preview</div>
+      </div>
+      <div class="preview-modal-frame-wrap">
+        <iframe id="preview-modal-frame" scrolling="yes"></iframe>
+      </div>
+    </div>
+  </div>
+
   <script>
+    // The preview iframes are always rendered at their true 420x620 size,
+    // then scaled down to fit however wide each thumbnail actually rendered
+    // -- keeps them proportioned at any window width instead of a fixed
+    // pixel size that overflows on narrower screens.
+    function resizeLayoutPreviews() {
+      document.querySelectorAll('.layout-option-frame').forEach(frame => {
+        const scale = frame.clientWidth / 420;
+        frame.querySelector('iframe').style.transform = `scale(${scale})`;
+      });
+    }
+    window.addEventListener('resize', resizeLayoutPreviews);
+    resizeLayoutPreviews();
+
     function selectLayout(id) {
       document.getElementById('layoutId-input').value = id;
       document.querySelectorAll('.layout-option').forEach(el => el.classList.remove('selected'));
-      event.currentTarget.classList.add('selected');
+      document.querySelector(`.layout-option[data-layout-id="${id}"]`).classList.add('selected');
     }
 
-    // Live-update the 3 preview thumbnails as the merchant edits colors/text,
+    // Gathers every field that actually affects the rendered receipt, so both
+    // the small thumbnails and the full-size modal always show the merchant's
+    // real current (even if unsaved) choices -- never a stale or partial preview.
+    function buildPreviewParams() {
+      const val = (name) => document.querySelector(`[name=${name}]`).value;
+      const checked = (id) => document.getElementById(id).checked;
+      return new URLSearchParams({
+        primaryColor: val('primaryColor'),
+        accentColor: val('accentColor'),
+        headerText: val('headerText'),
+        footerText: val('footerText'),
+        displayName: val('displayName'),
+        location: val('location'),
+        googleReviewUrl: val('googleReviewUrl'),
+        showGoogleReview: checked('showGoogleReview'),
+        showWarranty: checked('showWarranty'),
+        showLoyalty: checked('showLoyalty'),
+      });
+    }
+
+    // Live-update the 3 preview thumbnails as the merchant edits any setting,
     // so they can see how each layout looks with THEIR branding before saving.
     function refreshPreviews() {
-      const primaryColor = document.querySelector('[name=primaryColor]').value;
-      const accentColor = document.querySelector('[name=accentColor]').value;
-      const headerText = document.querySelector('[name=headerText]').value;
-      const params = new URLSearchParams({ primaryColor, accentColor, headerText });
-
+      const params = buildPreviewParams();
       document.querySelectorAll('.layout-option-frame iframe').forEach(iframe => {
         const layoutId = iframe.src.split('/preview/')[1].split('?')[0];
         iframe.src = `/dashboard/settings/receipt/preview/${layoutId}?${params}`;
       });
     }
 
+    function openPreviewModal(layoutId) {
+      const params = buildPreviewParams();
+      const frame = document.getElementById('preview-modal-frame');
+      // Auto-size the iframe to its actual content once it loads, so
+      // everything below the fold (Google review card, warranty, loyalty,
+      // footer) is reachable via one obvious scroll on the modal itself,
+      // rather than a easy-to-miss scrollbar nested inside the iframe.
+      frame.style.height = '620px';
+      frame.onload = function () {
+        try {
+          const doc = frame.contentDocument || frame.contentWindow.document;
+          frame.style.height = doc.documentElement.scrollHeight + 'px';
+        } catch (e) {
+          // Cross-origin or not-yet-ready -- keep the default height
+        }
+      };
+      frame.src = `/dashboard/settings/receipt/preview/${layoutId}?${params}`;
+      document.getElementById('preview-modal-title').textContent = layoutId.charAt(0).toUpperCase() + layoutId.slice(1) + ' layout';
+      document.getElementById('preview-modal').classList.add('open');
+    }
+    function closePreviewModal() {
+      document.getElementById('preview-modal').classList.remove('open');
+    }
+
     let refreshTimer;
-    ['primaryColor', 'accentColor', 'headerText'].forEach(name => {
-      const el = document.querySelector(`[name=${name}]`);
-      el.addEventListener('input', () => {
+    ['primaryColor', 'accentColor', 'headerText', 'footerText', 'displayName', 'location', 'googleReviewUrl'].forEach(name => {
+      document.querySelector(`[name=${name}]`).addEventListener('input', () => {
         clearTimeout(refreshTimer);
         refreshTimer = setTimeout(refreshPreviews, 400); // debounce so it doesn't refresh on every keystroke
       });
     });
+    ['showGoogleReview', 'showWarranty', 'showLoyalty'].forEach(id => {
+      document.getElementById(id).addEventListener('change', refreshPreviews);
+    });
+
+    // Instant logo preview: reads the picked file locally (nothing is
+    // uploaded until Save) and pushes it into the preview iframes via
+    // postMessage, so the thumbnails/modal update immediately instead of
+    // only reflecting the logo after it's actually been saved.
+    function broadcastLogoPreview(dataUrl) {
+      const frames = document.querySelectorAll('.layout-option-frame iframe, #preview-modal-frame');
+      frames.forEach(iframe => {
+        if (iframe.contentWindow) {
+          iframe.contentWindow.postMessage({ type: 'receiptap-logo-preview', dataUrl }, window.location.origin);
+        }
+      });
+    }
+
+    const logoFileInput = document.querySelector('[name=logoFile]');
+    if (logoFileInput) {
+      logoFileInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => broadcastLogoPreview(reader.result);
+        reader.readAsDataURL(file);
+      });
+    }
   </script>
 </body>
 </html>

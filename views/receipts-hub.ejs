@@ -6,7 +6,6 @@
   <meta charset="UTF-8" />
   <title>Receipts</title>
   <style>
-    body { font-family: -apple-system, sans-serif; max-width: 800px; margin: 40px auto; color: #111; }
     h1 { font-size: 22px; margin-bottom: 4px; }
     .tabs { display: flex; gap: 4px; margin: 20px 0 0; border-bottom: 2px solid #eee; }
     .tab-button {
@@ -23,21 +22,51 @@
     .total-col { text-align: right; }
     .empty { text-align: center; color: #888; margin-top: 30px; font-size: 14px; }
     .export-link { float: right; font-size: 13px; margin-top: 2px; }
+    .date-filters { display: flex; align-items: flex-end; gap: 8px; margin: 16px 0; }
+    .date-filters .field { display: flex; flex-direction: column; gap: 3px; }
+    .date-filters label { font-size: 12px; color: #888; }
+    .date-filters input { padding: 6px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; }
+    .date-filters button { padding: 7px 14px; border: none; border-radius: 6px; background: #2563eb; color: #fff; font-size: 13px; font-weight: 600; cursor: pointer; }
+    .date-filters .clear-link { font-size: 13px; color: #888; }
   </style>
 </head>
 <body>
   <%- include('partials/dashboard-header', { activeNav: 'receipts' }) %>
-  <h1>Receipts</h1>
 
-  <div class="tabs">
-    <button class="tab-button active" onclick="showTab('customer')">Customer Receipts</button>
-    <button class="tab-button" onclick="showTab('merchant')">Merchant Receipts</button>
+  <div class="topbar">
+    <div>
+      <h1>Receipts</h1>
+      <p class="sub">Everything your business has issued and received.</p>
+    </div>
   </div>
 
+  <div class="app-body">
+
+  <div class="tabs">
+    <button class="tab-button <%= activeTab === 'customer' ? 'active' : '' %>" onclick="showTab('customer')">Customer Receipts</button>
+    <button class="tab-button <%= activeTab === 'merchant' ? 'active' : '' %>" onclick="showTab('merchant')">Merchant Receipts</button>
+  </div>
+
+  <form class="date-filters" method="get" id="date-filter-form">
+    <input type="hidden" name="tab" id="tab-input" value="<%= activeTab %>" />
+    <div class="field">
+      <label>From</label>
+      <input type="date" name="from" value="<%= filters.from %>" />
+    </div>
+    <div class="field">
+      <label>To</label>
+      <input type="date" name="to" value="<%= filters.to %>" />
+    </div>
+    <button type="submit">Filter</button>
+    <% if (filters.from || filters.to) { %>
+      <a class="clear-link" href="/dashboard/receipts-hub?tab=<%= activeTab %>">Clear dates</a>
+    <% } %>
+  </form>
+
   <!-- Customer Receipts = receipts THIS business issued to its customers -->
-  <div id="tab-customer" class="tab-panel active">
-    <a class="export-link" href="/dashboard/receipts/export">Export CSV</a>
-    <a class="export-link" href="/dashboard/receipts/pdf-export" style="margin-right:16px;">Export PDF Copies</a>
+  <div id="tab-customer" class="tab-panel <%= activeTab === 'customer' ? 'active' : '' %>">
+    <a class="export-link" href="/dashboard/receipts/export?from=<%= encodeURIComponent(filters.from) %>&to=<%= encodeURIComponent(filters.to) %>">Export CSV</a>
+    <a class="export-link" href="/dashboard/receipts/pdf-export?from=<%= encodeURIComponent(filters.from) %>&to=<%= encodeURIComponent(filters.to) %>" style="margin-right:16px;">Export PDF Copies</a>
     <% if (customerReceipts.length === 0) { %>
       <div class="empty">No sales recorded yet.</div>
     <% } else { %>
@@ -58,10 +87,10 @@
   </div>
 
   <!-- Merchant Receipts = receipts THIS business received as a purchaser elsewhere -->
-  <div id="tab-merchant" class="tab-panel">
-    <a class="export-link" href="/dashboard/expenses/export">Export CSV</a>
+  <div id="tab-merchant" class="tab-panel <%= activeTab === 'merchant' ? 'active' : '' %>">
+    <a class="export-link" href="/dashboard/expenses/export?from=<%= encodeURIComponent(filters.from) %>&to=<%= encodeURIComponent(filters.to) %>">Export CSV</a>
     <% if (merchantReceipts.length === 0) { %>
-      <div class="empty">No purchases saved yet. When you buy from another ReceipTap-enabled business, tap "Save as Business Expense" on the receipt.</div>
+      <div class="empty">No purchases saved yet.</div>
     <% } else { %>
       <table>
         <thead><tr><th>Date</th><th>Purchased From</th><th class="total-col">Total</th></tr></thead>
@@ -78,12 +107,17 @@
     <% } %>
   </div>
 
+  </div>
+
   <script>
     function showTab(name) {
       document.querySelectorAll('.tab-panel').forEach(el => el.classList.remove('active'));
       document.querySelectorAll('.tab-button').forEach(el => el.classList.remove('active'));
       document.getElementById('tab-' + name).classList.add('active');
       event.target.classList.add('active');
+      // Keep the date-filter form's hidden tab field in sync, so filtering
+      // dates re-submits to whichever tab the merchant is actually looking at
+      document.getElementById('tab-input').value = name;
     }
   </script>
 </body>

@@ -10,8 +10,7 @@
 // whenever the local status would block or warn. That way cancellations are
 // enforced and reactivations are honored even before webhooks are set up.
 
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const prisma = require('../lib/prisma');
 const { stripe } = require('../services/stripeService');
 
 const REFRESH_INTERVAL_MS = 10 * 60 * 1000;

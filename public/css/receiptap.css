@@ -235,7 +235,7 @@ input, select, textarea, button { font-family: var(--font-body); }
   padding: 22px 14px 16px; overflow-y: auto;
 }
 .rail-brand { display: flex; align-items: center; padding: 0 8px 22px; }
-.rail-brand img { height: 30px; filter: brightness(0) invert(1); }
+.rail-brand img { height: 60px; filter: brightness(0) invert(1); }
 .rail-group { font-size: 10.5px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase;
   color: #5D6480; padding: 16px 10px 7px; }
 .rail a {
@@ -288,7 +288,28 @@ body.app > h1, body.app > .subtitle, body.app > div:not(.rail):not(.topbar):not(
   width: 36px; height: 36px; border-radius: 50%; background: var(--teal-wash);
   color: var(--teal-deep); font-weight: 700; font-size: 14px;
   display: flex; align-items: center; justify-content: center; text-transform: uppercase;
+  object-fit: cover; /* only affects the <img> variant when a real photo is set */
 }
+.avatar-menu-wrap { position: relative; display: flex; align-items: center; gap: 4px; cursor: pointer; border: none; background: none; padding: 0; }
+.avatar-menu-wrap svg { width: 14px; height: 14px; color: var(--ink-soft); stroke: currentColor; fill: none; stroke-width: 2; }
+.avatar-menu {
+  display: none; position: absolute; right: 0; top: 46px; z-index: 30;
+  background: #fff; border: 1px solid var(--card-line); border-radius: 12px;
+  min-width: 180px; box-shadow: 0 6px 24px rgba(19,24,41,0.12); overflow: hidden;
+}
+.avatar-menu.open { display: block; }
+.avatar-menu-info { padding: 14px 16px; border-bottom: 1px solid var(--card-line); }
+.avatar-menu-name { font-size: 14px; font-weight: 600; color: var(--ink); margin-bottom: 2px; }
+.avatar-menu-email { font-size: 12.5px; color: var(--ink-soft); word-break: break-all; margin-bottom: 2px; }
+.avatar-menu-business { font-size: 12px; color: var(--ink-soft); }
+.avatar-menu a, .avatar-menu button {
+  display: block; width: 100%; text-align: left; background: none; border: none;
+  font-size: 13.5px; padding: 11px 16px; cursor: pointer; color: var(--ink);
+  text-decoration: none; font-weight: 500; font-family: var(--font-body);
+}
+.avatar-menu a:hover, .avatar-menu button:hover { background: var(--app-bg); }
+.avatar-menu button.danger { color: var(--danger); }
+.avatar-menu form { margin: 0; }
 .logout-btn {
   background: none; border: none; color: var(--ink-soft); font-family: var(--font-body);
   font-size: 12.5px; cursor: pointer; padding: 8px;
@@ -310,7 +331,7 @@ body.app > h1, body.app > .subtitle, body.app > div:not(.rail):not(.topbar):not(
 .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 18px; }
 .stat { padding: 17px 18px; }
 .stat .tile {
-  width: 40px; height: 40px; border-radius: 11px; display: flex; align-items: center;
+  width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center;
   justify-content: center; margin-bottom: 13px;
 }
 .stat .tile svg { width: 19px; height: 19px; stroke-width: 1.8; fill: none; }
@@ -412,6 +433,7 @@ body.app > h1, body.app > .subtitle, body.app > div:not(.rail):not(.topbar):not(
     gap: 4px; padding: 12px; align-items: center;
   }
   .rail-brand { padding: 0 8px 0 4px; }
+  .rail-brand img { height: 32px; }
   .rail-group, .rail-help, .rail-spacer { display: none; }
   .rail a { padding: 8px 10px; font-size: 12.5px; }
   body.app { padding-left: 0 !important; }
@@ -426,4 +448,42 @@ body.app > h1, body.app > .subtitle, body.app > div:not(.rail):not(.topbar):not(
 .rail a.rail-owner:hover { background: #2A2416; color: #FFD79A; }
 .rail a.rail-owner.active { background: #F0B45F; color: #131829; }
 .plan-chip.owner-chip { color: #8A5316; border-color: #EBD5AE; background: var(--warn-wash); }
+
+/* ---------------------------------------------------------------------------
+   Analytics page
+--------------------------------------------------------------------------- */
+
+/* 5-up stat row -- .stat-grid defaults to 4 columns */
+.stat-grid.cols-5 { grid-template-columns: repeat(5, 1fr); }
+@media (max-width: 1080px) { .stat-grid.cols-5 { grid-template-columns: repeat(2, 1fr); } }
+
+/* Chart canvases inside a .card */
+.chart-pad { padding: 18px 20px 20px; }
+
+/* Donut + legend side-by-side */
+.donut-wrap { display: flex; align-items: center; gap: 22px; padding: 18px 20px; }
+.donut-wrap canvas { width: 140px !important; height: 140px !important; flex: none; }
+.donut-wrap .legend { padding: 0; flex: 1; }
+
+/* Activity rows nested directly in .card (not .card-list, which carries the
+   warm-paper tokens meant for marketing/customer pages) */
+.card .card-row:not(:last-child) { border-bottom: 1px solid var(--card-line); }
+.card-row .when { font-size: 12px; color: var(--ink-soft); white-space: nowrap; }
+
+/* Live activity indicator -- genuinely tied to a ~20s poll, not decorative */
+.live-badge { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: var(--ok); }
+.live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); animation: livepulse 1.6s ease-in-out infinite; }
+@keyframes livepulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+/* ---------------------------------------------------------------------------
+   ReceipTaps page
+--------------------------------------------------------------------------- */
+
+/* Search input with a leading icon -- first use of this pattern in the app */
+.search-field { position: relative; }
+.search-field svg {
+  position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+  width: 15px; height: 15px; stroke: var(--ink-soft); stroke-width: 1.8; fill: none; pointer-events: none;
+}
+.search-field input { padding-left: 34px; }
 .plan-chip.owner-chip:hover { border-color: #D9A65C; }

@@ -5,9 +5,6 @@
   <meta charset="UTF-8" />
   <title>Customer Emails</title>
   <style>
-    body { font-family: -apple-system, sans-serif; max-width: 800px; margin: 0 auto; padding: 0 24px 40px; color: #111; }
-    h1 { font-size: 22px; }
-    .subtitle { color: #666; font-size: 14px; margin-bottom: 16px; }
     .export-link { float: right; font-size: 14px; margin-top: 2px; }
     .tabs { display: flex; gap: 4px; border-bottom: 2px solid #eee; margin: 16px 0 0; }
     .tab-button {
@@ -31,8 +28,16 @@
 </head>
 <body>
   <%- include('partials/dashboard-header', { activeNav: 'emails' }) %>
-  <h1>Customer Emails</h1>
-  <div class="subtitle">Collected when customers save their receipt from a tap at your store. Filter by segment for targeted email marketing.</div>
+
+  <div class="topbar">
+    <div>
+      <h1>Customer Emails</h1>
+      <p class="sub">Collected when customers save their receipt from a tap at your store. Filter by segment for targeted email marketing.</p>
+    </div>
+  </div>
+
+  <div class="app-body">
+
   <a class="export-link" href="/dashboard/customer-emails/export<%= activeFilter !== 'all' ? '?segment=' + activeFilter : '' %>">Export CSV<%= activeFilter !== 'all' ? ' (' + activeFilter + ')' : '' %></a>
 
   <div class="tabs">
@@ -64,5 +69,7 @@
       <strong>Lapsed</strong> = hasn't visited in 60+ days, regardless of past visit count — good for a win-back campaign.
     </div>
   <% } %>
+
+  </div>
 </body>
 </html>

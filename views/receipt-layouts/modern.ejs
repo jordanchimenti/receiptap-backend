@@ -8,8 +8,17 @@
   .layout-modern .header-band {
     background: var(--accent); color: #fff; padding: 28px 24px 22px; text-align: center;
   }
-  .layout-modern .logo { max-height: 50px; display: block; margin: 0 auto 12px; filter: brightness(0) invert(1); }
+  .layout-modern .brand-row { display: flex; margin-bottom: 10px; }
+  .layout-modern .powered-by { display: inline-flex; align-items: center; gap: 5px; font-size: 10px; color: rgba(255,255,255,0.75); text-decoration: none; }
+  .layout-modern .powered-logo { height: 19px; width: auto; filter: brightness(0) invert(1); }
+  .layout-modern .merchant-logo { max-height: 36px; max-width: 120px; object-fit: contain; display: block; margin: 0 auto 10px; filter: brightness(0) invert(1); }
+  .layout-modern .logo-placeholder {
+    height: 36px; width: 120px; margin: 0 auto 10px; display: flex; align-items: center; justify-content: center;
+    border: 1px dashed rgba(255,255,255,0.5); border-radius: 6px; background: rgba(255,255,255,0.1);
+    font-size: 10px; color: rgba(255,255,255,0.8); text-transform: uppercase; letter-spacing: 0.04em;
+  }
   .layout-modern .business-name { font-size: 21px; font-weight: 800; margin-bottom: 4px; }
+  .layout-modern .location { font-size: 12px; opacity: 0.8; margin-bottom: 4px; }
   .layout-modern .meta-light { font-size: 12px; opacity: 0.85; }
   .layout-modern .header-text { font-size: 13px; opacity: 0.9; margin-top: 10px; }
   .layout-modern .body-content { padding: 20px 24px; }
@@ -34,10 +43,21 @@
 </style>
 <div class="layout-modern">
   <div class="header-band">
+    <div class="brand-row">
+      <a class="powered-by" href="/">
+        <span>Powered by</span>
+        <img class="powered-logo" src="/images/receiptap-logo.png" alt="ReceipTap" />
+      </a>
+    </div>
     <% if (theme.logoUrl) { %>
-      <img class="logo" src="<%= theme.logoUrl %>" alt="<%= merchant.businessName %>" />
+      <img class="merchant-logo" src="<%= theme.logoUrl %>" alt="<%= merchant.businessName %>" />
+    <% } else if (typeof isPreview !== 'undefined' && isPreview) { %>
+      <div class="logo-placeholder">Custom Logo</div>
     <% } %>
-    <div class="business-name"><%= merchant.businessName %></div>
+    <div class="business-name"><%= theme.displayName || merchant.businessName %></div>
+    <% if (theme.location) { %>
+      <div class="location"><%= theme.location %></div>
+    <% } %>
     <div class="meta-light"><%= transaction.date %></div>
     <% if (theme.headerText) { %>
       <div class="header-text"><%= theme.headerText %></div>

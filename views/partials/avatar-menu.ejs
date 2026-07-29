@@ -1,0 +1,37 @@
+<!-- views/partials/avatar-menu.ejs
+     Top-right account avatar + dropdown, shared across dashboard pages.
+     Required local: merchant -->
+<%
+  var avatarInitial = (merchant.ownerName || merchant.businessName || '?').charAt(0);
+%>
+<div class="avatar-menu-wrap" id="avatar-btn">
+  <% if (merchant.profilePhotoUrl) { %>
+    <img class="avatar" src="<%= merchant.profilePhotoUrl %>" alt="Your photo" />
+  <% } else { %>
+    <div class="avatar"><%= avatarInitial %></div>
+  <% } %>
+  <svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>
+  <div class="avatar-menu" id="avatar-menu">
+    <div class="avatar-menu-info">
+      <div class="avatar-menu-name"><%= merchant.ownerName || merchant.businessName %></div>
+      <div class="avatar-menu-email"><%= merchant.email %></div>
+      <div class="avatar-menu-business"><%= merchant.businessName %></div>
+    </div>
+    <a href="/dashboard/billing">Billing</a>
+    <form method="POST" action="/logout">
+      <button type="submit" class="danger">Log out</button>
+    </form>
+  </div>
+</div>
+
+<script>
+  (function () {
+    var btn = document.getElementById('avatar-btn');
+    var menu = document.getElementById('avatar-menu');
+    btn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      menu.classList.toggle('open');
+    });
+    document.addEventListener('click', function () { menu.classList.remove('open'); });
+  })();
+</script>

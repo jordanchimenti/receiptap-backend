@@ -32,6 +32,15 @@
     .kv .k .sw { width: 9px; height: 9px; border-radius: 50%; }
     .kv .v { font-family: var(--font-mono); font-weight: 600; }
     @media (max-width: 900px) { .mini-grid { grid-template-columns: 1fr; } }
+    .admin-tabs {
+      display: flex; gap: 4px; padding: 10px 28px 0; background: var(--rail);
+    }
+    .admin-tab {
+      padding: 9px 16px; border-radius: 8px 8px 0 0; font-size: 13px; font-weight: 600;
+      color: #9AA2BC; text-decoration: none;
+    }
+    .admin-tab:hover { color: #E6E9F4; }
+    .admin-tab.active { background: var(--app-bg); color: var(--ink); }
   </style>
 </head>
 <body>
@@ -42,6 +51,8 @@
       <a href="/dashboard">← Back to my own dashboard</a>
     </span>
   </div>
+
+  <%- include('partials/admin-tabs', { activeTab }) %>
 
   <div class="wrap">
     <h1>Platform overview</h1>
@@ -110,6 +121,9 @@
           <div class="kv"><span class="k">Linked to a register</span><span class="v"><%= pucks.linked %></span></div>
           <div class="kv"><span class="k">Customers with a wallet</span><span class="v"><%= stats.customers.toLocaleString('en-US') %></span></div>
         </div>
+        <div style="padding: 14px 20px; border-top: 1px solid #F1F3F8;">
+          <a href="/admin/pucks" style="font-size:12.5px; font-weight:600; color:var(--teal);">Generate a test puck →</a>
+        </div>
       </div>
     </div>
 
@@ -117,7 +131,10 @@
     <div class="card">
       <div class="card-head">
         <h2>All merchants</h2>
-        <span style="font-size:12.5px;color:var(--ink-soft);">Total sales processed: $<%= Number(stats.gmv).toLocaleString('en-US', { minimumFractionDigits: 2 }) %></span>
+        <span style="display:flex; align-items:center; gap:14px;">
+          <span style="font-size:12.5px;color:var(--ink-soft);">Total sales processed: $<%= Number(stats.gmv).toLocaleString('en-US', { minimumFractionDigits: 2 }) %></span>
+          <a href="/admin/merchants/export" class="btn btn-secondary" style="width:auto; padding:6px 12px; font-size:12.5px;">Export CSV</a>
+        </span>
       </div>
       <% if (merchants.length === 0) { %>
         <div class="blank">
@@ -154,5 +171,6 @@
       <% } %>
     </div>
   </div>
+
 </body>
 </html>

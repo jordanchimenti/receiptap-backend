@@ -1,0 +1,90 @@
+<!-- views/admin-customers.ejs — owner-only view of every collected email,
+     across ALL merchants. Same self-contained dark theme as
+     admin-overview.ejs (see the comment at the top of that file for why). -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Customers - Owner view - ReceipTap</title>
+  <link rel="stylesheet" href="/css/receiptap.css" />
+  <style>
+    body { background: var(--app-bg); }
+    .owner-bar {
+      background: var(--rail); color: #E6E9F4; padding: 11px 28px;
+      display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap;
+    }
+    .owner-bar .tag {
+      display: inline-flex; align-items: center; gap: 8px;
+      font-size: 12.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+      color: #F0B45F;
+    }
+    .owner-bar .tag .sw { width: 8px; height: 8px; border-radius: 50%; background: #F0B45F; }
+    .owner-bar a { color: #9AA2BC; font-size: 12.5px; text-decoration: none; font-weight: 500; }
+    .owner-bar a:hover { color: #E6E9F4; }
+    .wrap { max-width: 1180px; margin: 0 auto; padding: 26px 28px 48px; }
+    .wrap > h1 { font-size: 23px; letter-spacing: -0.02em; margin: 0 0 3px; }
+    .wrap > .sub { font-size: 13.5px; color: var(--ink-soft); margin: 0 0 22px; }
+    .admin-tabs {
+      display: flex; gap: 4px; padding: 10px 28px 0; background: var(--rail);
+    }
+    .admin-tab {
+      padding: 9px 16px; border-radius: 8px 8px 0 0; font-size: 13px; font-weight: 600;
+      color: #9AA2BC; text-decoration: none;
+    }
+    .admin-tab:hover { color: #E6E9F4; }
+    .admin-tab.active { background: var(--app-bg); color: var(--ink); }
+  </style>
+</head>
+<body>
+
+  <div class="owner-bar">
+    <span class="tag"><span class="sw"></span>Owner view — every merchant on ReceipTap</span>
+    <span>
+      <a href="/dashboard">← Back to my own dashboard</a>
+    </span>
+  </div>
+
+  <%- include('partials/admin-tabs', { activeTab }) %>
+
+  <div class="wrap">
+    <h1>Customers</h1>
+    <p class="sub">Every email ReceipTap has collected across all merchants, from receipt saves and sign-ins.</p>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>All customers</h2>
+        <span style="display:flex; align-items:center; gap:14px;">
+          <span style="font-size:12.5px;color:var(--ink-soft);"><%= customers.length.toLocaleString('en-US') %> total</span>
+          <a href="/admin/customers/export" class="btn btn-secondary" style="width:auto; padding:6px 12px; font-size:12.5px;">Export CSV</a>
+        </span>
+      </div>
+      <% if (customers.length === 0) { %>
+        <div class="blank">
+          <div class="bt">No customers yet</div>
+          <div class="bd">Once a customer saves a receipt or signs in at any merchant, they'll show up here.</div>
+        </div>
+      <% } else { %>
+        <table class="dtable">
+          <thead>
+            <tr><th>Email</th><th>Name</th><th>Signed up via</th><th>Merchants</th><th>Receipts</th><th>First seen</th><th>Last activity</th></tr>
+          </thead>
+          <tbody>
+            <% customers.forEach(function (c) { %>
+              <tr>
+                <td><%= c.email %></td>
+                <td><%= c.name || '—' %></td>
+                <td><span class="pill <%= c.signupMethod === 'Google' ? 'pill-green' : 'pill-grey' %>"><%= c.signupMethod %></span></td>
+                <td class="amt"><%= c.merchantCount %></td>
+                <td class="amt"><%= c.receiptCount %></td>
+                <td class="when"><%= new Date(c.firstSeen).toLocaleDateString('en-US', { dateStyle: 'medium' }) %></td>
+                <td class="when"><%= new Date(c.lastActivity).toLocaleDateString('en-US', { dateStyle: 'medium' }) %></td>
+              </tr>
+            <% }); %>
+          </tbody>
+        </table>
+      <% } %>
+    </div>
+  </div>
+</body>
+</html>

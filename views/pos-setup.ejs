@@ -5,8 +5,6 @@
   <meta charset="UTF-8" />
   <title>Connect Your POS</title>
   <style>
-    body { font-family: -apple-system, sans-serif; max-width: 600px; margin: 40px auto; color: #111; }
-    h1 { font-size: 22px; }
     .connect-btn { display: inline-block; background: #111; color: #fff; padding: 12px 20px; border-radius: 8px; text-decoration: none; font-weight: 600; margin-top: 12px; }
     .location-row { display: flex; justify-content: space-between; align-items: center; padding: 14px; background: #f9fafb; border-radius: 8px; margin-bottom: 8px; }
     select { padding: 6px 10px; border-radius: 6px; border: 1px solid #ddd; }
@@ -15,7 +13,14 @@
 </head>
 <body>
   <%- include('partials/dashboard-header', { activeNav: 'pos' }) %>
-  <h1>Connect Your Point of Sale</h1>
+
+  <div class="topbar">
+    <div>
+      <h1>Connect Your Point of Sale</h1>
+    </div>
+  </div>
+
+  <div class="app-body">
 
   <% if (!connected) { %>
     <p>Connect your Square account so ReceipTap can automatically generate receipts from your sales.</p>
@@ -36,6 +41,8 @@
       </div>
     <% }); %>
   <% } %>
+
+  </div>
 
   <script>
     async function assignPuck(locationId, puckId) {

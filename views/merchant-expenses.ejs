@@ -5,9 +5,6 @@
   <meta charset="UTF-8" />
   <title>Business Expenses</title>
   <style>
-    body { font-family: -apple-system, sans-serif; max-width: 800px; margin: 40px auto; color: #111; }
-    h1 { font-size: 22px; }
-    .subtitle { color: #888; font-size: 14px; margin-top: -8px; margin-bottom: 16px; }
     table { width: 100%; border-collapse: collapse; margin-top: 16px; }
     th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid #eee; font-size: 14px; }
     th { color: #888; font-weight: 500; font-size: 12px; text-transform: uppercase; }
@@ -15,16 +12,45 @@
     .pagination { margin-top: 16px; font-size: 14px; color: #666; }
     .export-link { float: right; font-size: 14px; }
     .empty { text-align: center; color: #888; margin-top: 40px; font-size: 14px; }
+    .date-filters { display: flex; align-items: flex-end; gap: 8px; margin: 16px 0; }
+    .date-filters .field { display: flex; flex-direction: column; gap: 3px; }
+    .date-filters label { font-size: 12px; color: #888; }
+    .date-filters input { padding: 6px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; }
+    .date-filters button { padding: 7px 14px; border: none; border-radius: 6px; background: #2563eb; color: #fff; font-size: 13px; font-weight: 600; cursor: pointer; }
+    .date-filters .clear-link { font-size: 13px; color: #888; }
   </style>
 </head>
 <body>
   <%- include('partials/dashboard-header', { activeNav: 'receipts' }) %>
-  <h1>Business Expenses</h1>
-  <div class="subtitle">Receipts you've saved from purchases at other ReceipTap merchants</div>
-  <a class="export-link" href="/dashboard/expenses/export">Export CSV</a>
+
+  <div class="topbar">
+    <div>
+      <h1>Business Expenses</h1>
+      <p class="sub">Receipts you've saved from purchases at other ReceipTap merchants</p>
+    </div>
+  </div>
+
+  <div class="app-body">
+
+  <a class="export-link" href="/dashboard/expenses/export?from=<%= encodeURIComponent(filters.from) %>&to=<%= encodeURIComponent(filters.to) %>">Export CSV</a>
+
+  <form class="date-filters" method="get">
+    <div class="field">
+      <label>From</label>
+      <input type="date" name="from" value="<%= filters.from %>" />
+    </div>
+    <div class="field">
+      <label>To</label>
+      <input type="date" name="to" value="<%= filters.to %>" />
+    </div>
+    <button type="submit">Filter</button>
+    <% if (filters.from || filters.to) { %>
+      <a class="clear-link" href="/dashboard/expenses">Clear dates</a>
+    <% } %>
+  </form>
 
   <% if (expenses.length === 0) { %>
-    <div class="empty">No saved expenses yet. When you buy from another ReceipTap-enabled business, tap "Save as Business Expense" on the receipt to add it here.</div>
+    <div class="empty">No saved expenses.</div>
   <% } else { %>
     <table>
       <thead>
@@ -42,5 +68,7 @@
     </table>
     <div class="pagination">Page <%= page %> of <%= totalPages %> (<%= totalCount %> total expenses)</div>
   <% } %>
+
+  </div>
 </body>
 </html>

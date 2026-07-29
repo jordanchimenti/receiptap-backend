@@ -5,23 +5,32 @@
 
 const express = require('express');
 const router = express.Router();
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const prisma = require('../lib/prisma');
 
 function requireAuth(req, res, next) {
   if (!req.session?.merchantId) return res.redirect('/login');
   next();
 }
 
+// Sandbox apps (SQUARE_APP_ID starting with "sandbox-") only exist on
+// Square's sandbox servers — sending a sandbox client_id to
+// connect.squareup.com gets "Unable to find client by that client_id"
+// since production has never heard of it.
+const SQUARE_BASE_URL = process.env.SQUARE_APP_ID?.startsWith('sandbox-')
+  ? 'https://connect.squareupsandbox.com'
+  : 'https://connect.squareup.com';
+
 // Step 1: send the merchant to Square's own login/authorization page
 router.get('/oauth/square/connect', requireAuth, (req, res) => {
+  const redirectUri = `${req.protocol}://${req.get('host')}/oauth/square/callback`;
   const params = new URLSearchParams({
     client_id: process.env.SQUARE_APP_ID,
     scope: 'MERCHANT_PROFILE_READ PAYMENTS_READ ORDERS_READ',
     session: 'false',
     state: req.session.merchantId, // ties the callback back to the right merchant
+    redirect_uri: redirectUri, // Square 400s with no body if this is missing entirely
   });
-  res.redirect(`https://connect.squareup.com/oauth2/authorize?${params}`);
+  res.redirect(`${SQUARE_BASE_URL}/oauth2/authorize?${params}`);
 });
 
 // Step 2: Square redirects back here with a temporary code
@@ -29,7 +38,10 @@ router.get('/oauth/square/callback', requireAuth, async (req, res) => {
   const { code } = req.query;
   if (!code) return res.status(400).send('Missing authorization code from Square');
 
-  const tokenResponse = await fetch('https://connect.squareup.com/oauth2/token', {
+  // Must exactly match the redirect_uri used in the authorize request above.
+  const redirectUri = `${req.protocol}://${req.get('host')}/oauth/square/callback`;
+
+  const tokenResponse = await fetch(`${SQUARE_BASE_URL}/oauth2/token`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -37,6 +49,7 @@ router.get('/oauth/square/callback', requireAuth, async (req, res) => {
       client_secret: process.env.SQUARE_APP_SECRET,
       code,
       grant_type: 'authorization_code',
+      redirect_uri: redirectUri,
     }),
   });
 
@@ -62,7 +75,7 @@ router.get('/dashboard/pos-setup', requireAuth, async (req, res) => {
     return res.render('pos-setup', { connected: false, locations: [], pucks: [] });
   }
 
-  const locResponse = await fetch('https://connect.squareup.com/v2/locations', {
+  const locResponse = await fetch(`${SQUARE_BASE_URL}/v2/locations`, {
     headers: { Authorization: `Bearer ${merchant.squareAccessToken}` },
   });
   const { locations } = await locResponse.json();

@@ -17,6 +17,9 @@
       </p>
 
       <% if (error) { %><div class="error-box"><%= error %></div><% } %>
+      <% if (typeof deactivated !== 'undefined' && deactivated) { %>
+        <div class="error-box" style="color: var(--ink-soft); background: var(--paper);">Your account has been deactivated. Contact support if this was a mistake.</div>
+      <% } %>
 
       <form method="POST" action="/login">
         <input type="hidden" name="redirect" value="<%= redirect %>" />

@@ -1,4 +1,5 @@
-<!-- views/pucks-list.ejs — every ReceipTap on this account. -->
+<!-- views/pucks-list.ejs — every ReceipTap on this account, its setup state,
+     and a details panel for whichever one is selected. -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -10,46 +11,245 @@
 <body>
   <%- include('partials/dashboard-header', { activeNav: 'pucks' }) %>
 
+  <%
+    function qs(overrides) {
+      var params = Object.assign({ tab: tab, search: filters.search, location: filters.location, status: filters.status, page: page }, overrides);
+      var parts = [];
+      Object.keys(params).forEach(function (k) {
+        if (params[k] !== '' && params[k] !== null && typeof params[k] !== 'undefined') parts.push(k + '=' + encodeURIComponent(params[k]));
+      });
+      return '/dashboard/pucks?' + parts.join('&');
+    }
+  %>
+
   <div class="topbar">
     <div>
       <h1>ReceipTaps</h1>
-      <p class="sub">Every puck on your account, and which register it's linked to.</p>
+      <p class="sub">Manage all your ReceipTap devices and their status.</p>
+    </div>
+    <div class="topbar-right">
+      <%- include('partials/avatar-menu', { merchant }) %>
     </div>
   </div>
 
   <div class="app-body">
+
+    <details style="margin-bottom:16px;">
+      <summary class="btn btn-primary" style="display:inline-block;width:auto;cursor:pointer;">+ Add ReceipTap</summary>
+      <div class="card" style="margin-top:10px;padding:15px 18px;">
+        Every puck ships with a six-character activation code on its insert card. Tap the puck with your phone, or enter the code, to add it to this account.
+      </div>
+    </details>
+
+    <!-- Stats ------------------------------------------------------------ -->
+    <div class="stat-grid">
+      <div class="card stat">
+        <div class="tile tile-blue">
+          <svg viewBox="0 0 24 24" stroke="currentColor"><ellipse cx="12" cy="12" rx="9" ry="5.5"/><path d="M3 12v2c0 3 4 5.5 9 5.5s9-2.5 9-5.5v-2"/></svg>
+        </div>
+        <div class="label">Total ReceipTaps</div>
+        <div class="value"><%= stats.total.toLocaleString('en-US') %></div>
+        <div class="foot">All time</div>
+      </div>
+
+      <div class="card stat">
+        <div class="tile tile-green">
+          <svg viewBox="0 0 24 24" stroke="currentColor"><path d="M20 6 9 17l-5-5"/></svg>
+        </div>
+        <div class="label">Linked</div>
+        <div class="value"><%= stats.linked.toLocaleString('en-US') %></div>
+        <div class="foot"><%= stats.total ? Math.round((stats.linked / stats.total) * 100) : 0 %>% of your ReceipTaps</div>
+      </div>
+
+      <div class="card stat">
+        <div class="tile tile-amber">
+          <svg viewBox="0 0 24 24" stroke="currentColor"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 2"/></svg>
+        </div>
+        <div class="label">Needs Linking</div>
+        <div class="value"><%= stats.needsLinking.toLocaleString('en-US') %></div>
+        <div class="foot"><%= stats.needsLinking === 0 ? 'All set up' : 'Tap "Assign to next sale" to link' %></div>
+      </div>
+
+      <div class="card stat">
+        <div class="tile tile-indigo">
+          <svg viewBox="0 0 24 24" stroke="currentColor"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
+        </div>
+        <div class="label">Activated This Month</div>
+        <div class="value"><%= stats.activatedThisMonth.toLocaleString('en-US') %></div>
+        <div class="foot">Since <%= stats.monthLabel %> 1</div>
+      </div>
+    </div>
+
+    <!-- Tabs --------------------------------------------------------------- -->
+    <div style="display:flex;gap:4px;border-bottom:1px solid var(--card-line);margin-bottom:16px;">
+      <a href="<%= qs({ tab: 'list', page: 1 }) %>" style="padding:10px 16px;font-size:13.5px;font-weight:600;text-decoration:none;
+        color:<%= tab === 'list' ? 'var(--teal)' : 'var(--ink-soft)' %>;border-bottom:2px solid <%= tab === 'list' ? 'var(--teal)' : 'transparent' %>;margin-bottom:-1px;">All ReceipTaps</a>
+      <a href="<%= qs({ tab: 'location', page: 1 }) %>" style="padding:10px 16px;font-size:13.5px;font-weight:600;text-decoration:none;
+        color:<%= tab === 'location' ? 'var(--teal)' : 'var(--ink-soft)' %>;border-bottom:2px solid <%= tab === 'location' ? 'var(--teal)' : 'transparent' %>;margin-bottom:-1px;">By Location</a>
+    </div>
+
+    <!-- Search + filters ---------------------------------------------------- -->
+    <form method="get" style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
+      <input type="hidden" name="tab" value="<%= tab %>" />
+      <div class="field search-field" style="margin:0;flex:1;min-width:200px;">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+        <input type="text" name="search" placeholder="Search ReceipTaps..." value="<%= filters.search %>" />
+      </div>
+      <div class="field" style="margin:0;">
+        <select name="location" onchange="this.form.submit()">
+          <option value="">All Locations</option>
+          <% if (hasUnassigned) { %><option value="__unassigned__" <%= filters.location === '__unassigned__' ? 'selected' : '' %>>Unassigned</option><% } %>
+          <% locationOptions.forEach(function (o) { %>
+            <option value="<%= o.value %>" <%= filters.location === o.value ? 'selected' : '' %>><%= o.label %></option>
+          <% }); %>
+        </select>
+      </div>
+      <div class="field" style="margin:0;">
+        <select name="status" onchange="this.form.submit()">
+          <option value="">All Status</option>
+          <option value="linked" <%= filters.status === 'linked' ? 'selected' : '' %>>Linked</option>
+          <option value="pairing" <%= filters.status === 'pairing' ? 'selected' : '' %>>Pairing</option>
+          <option value="needsLinking" <%= filters.status === 'needsLinking' ? 'selected' : '' %>>Needs Linking</option>
+        </select>
+      </div>
+      <button class="btn btn-secondary" type="submit" style="width:auto;">Filter</button>
+    </form>
+
+    <!-- List/detail --------------------------------------------------------- -->
+    <div class="col-2">
+      <div class="card">
+        <% if (tab === 'list') { %>
+          <% if (pucks.length === 0) { %>
+            <div class="blank">
+              <div class="bt">No ReceipTaps match these filters</div>
+              <div class="bd">Try clearing your search or filters, or add a new ReceipTap using its activation code.</div>
+            </div>
+          <% } else { %>
+            <table class="dtable">
+              <thead>
+                <tr><th>ReceipTap</th><th>Location</th><th>Connected To</th><th>Status</th><th>Added</th><th></th></tr>
+              </thead>
+              <tbody>
+                <% pucks.forEach(function (p) { %>
+                  <tr>
+                    <td style="font-weight:600;">RT-<%= p.id.slice(0, 4).toUpperCase() %></td>
+                    <td><%= p.location %></td>
+                    <td><%= p.connectedTo %></td>
+                    <td>
+                      <% if (p.linked) { %><span class="pill pill-green">Linked to a register</span>
+                      <% } else if (p.pairing) { %><span class="pill">Waiting for a test sale</span>
+                      <% } else { %><span class="pill pill-amber">Needs linking</span><% } %>
+                    </td>
+                    <td class="when"><%= p.claimedAt ? new Date(p.claimedAt).toLocaleDateString('en-US', { dateStyle: 'medium' }) : '—' %></td>
+                    <td style="text-align:right;">
+                      <a href="<%= qs({ selected: p.id }) %>" style="font-size:12.5px;font-weight:600;color:var(--teal);text-decoration:none;">View ›</a>
+                    </td>
+                  </tr>
+                <% }); %>
+              </tbody>
+            </table>
+            <% if (totalPages > 1) { %>
+              <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 20px;">
+                <span style="font-size:12.5px;color:var(--ink-soft);">Showing <%= (page - 1) * 25 + 1 %> to <%= Math.min(page * 25, totalCount) %> of <%= totalCount %> ReceipTaps</span>
+                <div style="display:flex;gap:6px;">
+                  <% if (page > 1) { %><a class="btn btn-secondary" style="width:auto;padding:6px 12px;" href="<%= qs({ page: page - 1 }) %>">‹</a><% } %>
+                  <% if (page < totalPages) { %><a class="btn btn-secondary" style="width:auto;padding:6px 12px;" href="<%= qs({ page: page + 1 }) %>">›</a><% } %>
+                </div>
+              </div>
+            <% } %>
+          <% } %>
+        <% } else { %>
+          <% var groupKeys = Object.keys(grouped); %>
+          <% if (groupKeys.length === 0) { %>
+            <div class="blank">
+              <div class="bt">No ReceipTaps match these filters</div>
+              <div class="bd">Try clearing your search or filters.</div>
+            </div>
+          <% } else { %>
+            <% groupKeys.forEach(function (key) { %>
+              <div class="card-head"><h2><%= grouped[key].label %></h2><span style="font-size:12.5px;color:var(--ink-soft);"><%= grouped[key].rows.length %> ReceipTaps</span></div>
+              <table class="dtable">
+                <tbody>
+                  <% grouped[key].rows.forEach(function (p) { %>
+                    <tr>
+                      <td style="font-weight:600;">RT-<%= p.id.slice(0, 4).toUpperCase() %></td>
+                      <td><%= p.connectedTo %></td>
+                      <td>
+                        <% if (p.linked) { %><span class="pill pill-green">Linked</span>
+                        <% } else if (p.pairing) { %><span class="pill">Pairing</span>
+                        <% } else { %><span class="pill pill-amber">Needs linking</span><% } %>
+                      </td>
+                      <td style="text-align:right;"><a href="<%= qs({ selected: p.id }) %>" style="font-size:12.5px;font-weight:600;color:var(--teal);text-decoration:none;">View ›</a></td>
+                    </tr>
+                  <% }); %>
+                </tbody>
+              </table>
+            <% }); %>
+          <% } %>
+        <% } %>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h2>Device Details</h2></div>
+        <% if (!selectedPuck) { %>
+          <div class="blank">
+            <div class="bt">No ReceipTap selected</div>
+            <div class="bd">Choose a ReceipTap from the list to see its details.</div>
+          </div>
+        <% } else { %>
+          <div style="padding:15px 20px;">
+            <div style="font-size:16px;font-weight:700;margin-bottom:2px;">RT-<%= selectedPuck.id.slice(0, 4).toUpperCase() %></div>
+            <div style="font-size:11.5px;color:var(--ink-soft);font-family:var(--font-mono);margin-bottom:16px;">ID: <%= selectedPuck.id %></div>
+
+            <div style="margin-bottom:12px;">
+              <div class="label" style="font-size:12px;color:var(--ink-soft);margin-bottom:2px;">Location</div>
+              <div><%= selectedPuck.location %></div>
+            </div>
+            <div style="margin-bottom:12px;">
+              <div class="label" style="font-size:12px;color:var(--ink-soft);margin-bottom:2px;">Connected To</div>
+              <div><%= selectedPuck.connectedTo %></div>
+            </div>
+            <div style="margin-bottom:12px;">
+              <div class="label" style="font-size:12px;color:var(--ink-soft);margin-bottom:2px;">Activated On</div>
+              <div><%= selectedPuck.claimedAtLabel %></div>
+            </div>
+            <div style="margin-bottom:18px;">
+              <div class="label" style="font-size:12px;color:var(--ink-soft);margin-bottom:2px;">Status</div>
+              <div>
+                <% if (selectedPuck.linked) { %><span class="pill pill-green">Linked to a register</span>
+                <% } else if (selectedPuck.pairing) { %><span class="pill">Waiting for a test sale</span>
+                <% } else { %><span class="pill pill-amber">Needs linking</span><% } %>
+              </div>
+            </div>
+
+            <% if (selectedPuck.linked) { %>
+              <form method="post" action="/dashboard/pucks/<%= selectedPuck.id %>/unassign">
+                <button type="submit" class="btn btn-secondary" style="color:var(--danger);border-color:var(--danger);">Unassign ReceipTap</button>
+              </form>
+            <% } %>
+          </div>
+        <% } %>
+      </div>
+    </div>
+
+    <!-- Recent activity ------------------------------------------------------ -->
     <div class="card">
-      <% if (pucks.length === 0) { %>
+      <div class="card-head"><h2>Recent Activity</h2></div>
+      <% if (recentActivations.length === 0) { %>
         <div class="blank">
-          <div class="bt">No ReceipTaps yet</div>
-          <div class="bd">Every puck ships with a six-character activation code on its insert card. Tap the puck with your phone, or enter the code, to add it to this account.</div>
+          <div class="bt">No activity yet</div>
+          <div class="bd">Newly activated ReceipTaps will show up here.</div>
         </div>
       <% } else { %>
-        <table class="dtable">
-          <thead>
-            <tr><th>ReceipTap</th><th>Status</th><th>Added</th><th></th></tr>
-          </thead>
-          <tbody>
-            <% pucks.forEach(function (p) { %>
-              <tr>
-                <td style="font-weight:600;">ReceipTap <%= p.id.slice(0, 4).toUpperCase() %></td>
-                <td>
-                  <% if (p.linked) { %><span class="pill pill-green">Linked to a register</span>
-                  <% } else if (p.pairing) { %><span class="pill">Waiting for a test sale</span>
-                  <% } else { %><span class="pill pill-amber">Needs linking</span><% } %>
-                </td>
-                <td class="when"><%= p.claimedAt ? new Date(p.claimedAt).toLocaleDateString('en-US', { dateStyle: 'medium' }) : '—' %></td>
-                <td style="text-align:right;">
-                  <a href="/pucks/<%= p.id %>/manage" style="font-size:12.5px;font-weight:600;color:var(--teal);text-decoration:none;">
-                    <%= p.linked ? 'Manage' : 'Finish setup' %> ›
-                  </a>
-                </td>
-              </tr>
-            <% }); %>
-          </tbody>
-        </table>
+        <% recentActivations.forEach(function (a) { %>
+          <div class="card-row">
+            <span>ReceipTap RT-<%= a.id.slice(0, 4).toUpperCase() %> activated</span>
+            <span class="when"><%= a.when %></span>
+          </div>
+        <% }); %>
       <% } %>
     </div>
+
   </div>
 </body>
 </html>

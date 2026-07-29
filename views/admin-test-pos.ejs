@@ -1,0 +1,111 @@
+<!-- views/admin-test-pos.ejs — owner-only virtual terminal: rings a real
+     Square sandbox sale so the webhook -> puck-binding path can be tested
+     from a browser instead of running scripts or hand-editing the database.
+     Same self-contained dark theme as the other /admin pages. -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Test POS - Owner view - ReceipTap</title>
+  <link rel="stylesheet" href="/css/receiptap.css" />
+  <style>
+    body { background: var(--app-bg); }
+    .owner-bar {
+      background: var(--rail); color: #E6E9F4; padding: 11px 28px;
+      display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap;
+    }
+    .owner-bar .tag {
+      display: inline-flex; align-items: center; gap: 8px;
+      font-size: 12.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+      color: #F0B45F;
+    }
+    .owner-bar .tag .sw { width: 8px; height: 8px; border-radius: 50%; background: #F0B45F; }
+    .owner-bar a { color: #9AA2BC; font-size: 12.5px; text-decoration: none; font-weight: 500; }
+    .owner-bar a:hover { color: #E6E9F4; }
+    .wrap { max-width: 720px; margin: 0 auto; padding: 26px 28px 48px; }
+    .wrap > h1 { font-size: 23px; letter-spacing: -0.02em; margin: 0 0 3px; }
+    .wrap > .sub { font-size: 13.5px; color: var(--ink-soft); margin: 0 0 22px; }
+    .admin-tabs {
+      display: flex; gap: 4px; padding: 10px 28px 0; background: var(--rail);
+    }
+    .admin-tab {
+      padding: 9px 16px; border-radius: 8px 8px 0 0; font-size: 13px; font-weight: 600;
+      color: #9AA2BC; text-decoration: none;
+    }
+    .admin-tab:hover { color: #E6E9F4; }
+    .admin-tab.active { background: var(--app-bg); color: var(--ink); }
+    .item-row { display: flex; gap: 10px; margin-bottom: 10px; }
+    .item-row input { padding: 9px 10px; border: 1px solid var(--line); border-radius: 6px; font-size: 14px; }
+    .item-row .name { flex: 3; }
+    .item-row .price { flex: 1.2; }
+    .item-row .qty { flex: 0.8; }
+  </style>
+</head>
+<body>
+
+  <div class="owner-bar">
+    <span class="tag"><span class="sw"></span>Owner view — every merchant on ReceipTap</span>
+    <span>
+      <a href="/dashboard">← Back to my own dashboard</a>
+    </span>
+  </div>
+
+  <%- include('partials/admin-tabs', { activeTab }) %>
+
+  <div class="wrap">
+    <h1>Test POS</h1>
+    <p class="sub">Rings a real Square sandbox sale (real Order + Payment) so the actual webhook path can be tested end to end — not a database shortcut.</p>
+
+    <% if (error) { %><div class="error-box" style="margin-bottom:18px;"><%= error %></div><% } %>
+    <% if (result) { %>
+      <div class="error-box" style="margin-bottom:18px; color:var(--teal-deep); background:var(--teal-wash);">
+        Sale rung up — total $<%= result.total %>. Payment <%= result.paymentId %>.
+        Real webhook usually arrives within a few seconds, occasionally up to ~a minute. Once it does, tap your puck.
+      </div>
+    <% } %>
+
+    <% if (!connected) { %>
+      <div class="blank">
+        <div class="bt">No merchant has connected Square yet</div>
+        <div class="bd">Connect Square from <a href="/dashboard/pos-setup">POS connection</a> first.</div>
+      </div>
+    <% } else { %>
+      <div class="card">
+        <div class="card-head"><h2>Ring a sale</h2></div>
+        <div style="padding:18px 20px;">
+          <form method="POST" action="/admin/test-pos/charge">
+            <div class="field">
+              <label for="locationId">Location</label>
+              <select id="locationId" name="locationId" style="width:100%; padding:9px 10px; border:1px solid var(--line); border-radius:6px; font-size:14px;">
+                <% locations.forEach(function (loc) { %>
+                  <option value="<%= loc.id %>"><%= loc.name %></option>
+                <% }); %>
+              </select>
+            </div>
+
+            <div style="margin:16px 0 6px; font-size:13px; font-weight:600;">Line items</div>
+            <div class="item-row">
+              <input class="name" type="text" name="itemName" value="Latte" placeholder="Item name" />
+              <input class="price" type="number" step="0.01" name="itemPrice" value="4.95" placeholder="Price" />
+              <input class="qty" type="number" name="itemQty" value="1" placeholder="Qty" />
+            </div>
+            <div class="item-row">
+              <input class="name" type="text" name="itemName" value="Blueberry Muffin" placeholder="Item name" />
+              <input class="price" type="number" step="0.01" name="itemPrice" value="3.75" placeholder="Price" />
+              <input class="qty" type="number" name="itemQty" value="1" placeholder="Qty" />
+            </div>
+            <div class="item-row">
+              <input class="name" type="text" name="itemName" value="Bottled Water" placeholder="Item name" />
+              <input class="price" type="number" step="0.01" name="itemPrice" value="2.50" placeholder="Price" />
+              <input class="qty" type="number" name="itemQty" value="2" placeholder="Qty" />
+            </div>
+
+            <button type="submit" class="btn btn-primary" style="width:auto; margin-top:10px;">Ring Sale</button>
+          </form>
+        </div>
+      </div>
+    <% } %>
+  </div>
+</body>
+</html>

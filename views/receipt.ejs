@@ -5,7 +5,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title><%= merchant.businessName %> - Receipt</title>
+  <title><%= theme.displayName || merchant.businessName %> - Receipt</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <style>
     :root {
       --primary: <%= theme.primaryColor %>;
@@ -86,20 +87,14 @@
   </style>
 </head>
 <body>
-  <%- include('receipt-layouts/' + (theme.layoutId || 'classic'), { merchant, theme, transaction }) %>
+  <%- include('receipt-layouts/' + (theme.layoutId || 'classic'), { merchant, theme, transaction, isPreview: typeof isPreview !== 'undefined' ? isPreview : false }) %>
 
   <div class="actions" style="max-width:420px; margin: 10px auto 0;">
-    <% if (theme.showWalletSave) { %>
-      <a class="action-button" href="/receipt/<%= transaction.id %>/wallet">Add to Apple/Google Wallet</a>
-    <% } %>
-    <button class="action-button save-receipt-btn" style="background:#111; border:none; cursor:pointer;" onclick="openSaveModal()">
-      Save Receipt (PDF / Files)
+    <button class="action-button" style="border:none; cursor:pointer;" onclick="handleSaveClick('photo')">
+      Save to Photos
     </button>
-    <button class="action-button" style="border:none; cursor:pointer;" onclick="saveToReceiptapAccount('<%= transaction.id %>')">
-      Save to My ReceiptTap Account
-    </button>
-    <button class="action-button" style="background:#059669; border:none; cursor:pointer;" onclick="saveAsBusinessExpense('<%= transaction.id %>')">
-      Save as Business Expense
+    <button class="action-button save-receipt-btn" style="background:#111; border:none; cursor:pointer;" onclick="handleSaveClick('pdf')">
+      Save as PDF
     </button>
     <% if (theme.showGoogleReview && theme.googleReviewUrl) { %>
       <a class="google-review-card" href="<%= theme.googleReviewUrl %>">
@@ -147,6 +142,9 @@
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <script>
     const TRANSACTION_ID = '<%= transaction.id %>';
+    const ALREADY_SIGNED_UP = <%= typeof alreadySignedUp !== 'undefined' ? Boolean(alreadySignedUp) : false %>;
+
+    let pendingAction = null; // 'photo' | 'pdf' -- which button triggered the signup gate
 
     function openSaveModal() {
       document.getElementById('save-modal').classList.add('open');
@@ -162,12 +160,64 @@
       el.style.display = 'block';
     }
 
-    // After email is captured (either path), close the modal and hand off
-    // to the browser's native print dialog — on both iOS and Android this
-    // offers "Save as PDF" / "Save to Files" as destinations.
+    // Returning customers we already recognize skip the signup gate entirely --
+    // just silently link this (possibly different merchant's) receipt to their
+    // existing wallet, then run the action they actually clicked for.
+    function handleSaveClick(action) {
+      if (ALREADY_SIGNED_UP) {
+        fetch(`/receipt/${TRANSACTION_ID}/save`, { method: 'POST' })
+          .then(() => runAction(action))
+          .catch(() => runAction(action)); // link failing shouldn't block the save/print/photo itself
+      } else {
+        pendingAction = action;
+        openSaveModal();
+      }
+    }
+
+    function runAction(action) {
+      if (action === 'pdf') {
+        // Native print dialog -- both iOS and Android offer "Save as PDF" / "Save to Files" here
+        setTimeout(() => window.print(), 200);
+      } else if (action === 'photo') {
+        saveToPhotos();
+      }
+    }
+
+    // Rasterizes the receipt (buttons hidden) to a PNG and hands it to the
+    // OS share sheet, where "Save Image" writes straight to Photos -- falls
+    // back to a plain download if the browser has no Web Share file support.
+    async function saveToPhotos() {
+      const actions = document.querySelector('.actions');
+      actions.style.display = 'none';
+      try {
+        const canvas = await html2canvas(document.body, { backgroundColor: '#f4f4f5' });
+        canvas.toBlob(async (blob) => {
+          const file = new File([blob], 'receipt.png', { type: 'image/png' });
+          if (navigator.canShare && navigator.canShare({ files: [file] })) {
+            try {
+              await navigator.share({ files: [file], title: 'Receipt' });
+            } catch (err) {
+              // User canceled the share sheet -- not an error worth surfacing
+            }
+          } else {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'receipt.png';
+            a.click();
+            URL.revokeObjectURL(url);
+          }
+        }, 'image/png');
+      } finally {
+        actions.style.display = '';
+      }
+    }
+
+    // After email is captured (either path), close the modal and run
+    // whichever action the customer actually clicked.
     function proceedToSave() {
       closeSaveModal();
-      setTimeout(() => window.print(), 200);
+      runAction(pendingAction);
     }
 
     async function submitEmailCapture() {
@@ -209,27 +259,37 @@
         );
       }
     };
-
-    async function saveToReceiptapAccount(transactionId) {
-      const res = await fetch(`/receipt/${transactionId}/save`, { method: 'POST' });
-      if (res.status === 401 || res.redirected) {
-        window.location.href = `/account/login?redirect=${encodeURIComponent(window.location.pathname)}`;
-        return;
-      }
-      alert('Saved to your ReceiptTap account.');
-    }
-
-    async function saveAsBusinessExpense(transactionId) {
-      const res = await fetch(`/receipt/${transactionId}/save-expense`, { method: 'POST' });
-      if (res.status === 401 || res.redirected) {
-        // Different login path — this is a MERCHANT session, not a customer one
-        window.location.href = `/login?redirect=${encodeURIComponent(window.location.pathname)}`;
-        return;
-      }
-      const data = await res.json();
-      if (!res.ok) { alert(data.error); return; }
-      alert('Saved to your business expenses.');
-    }
   </script>
+  <% if (typeof isPreview !== 'undefined' && isPreview) { %>
+    <!-- Settings-page preview only: lets the Receipt Settings tab push a
+         just-picked (not-yet-saved) logo file in here instantly, without a
+         server round trip. Real customer receipts never load this script. -->
+    <script>
+      window.addEventListener('message', function (event) {
+        if (event.origin !== window.location.origin) return;
+        if (!event.data || event.data.type !== 'receiptap-logo-preview') return;
+
+        const existingLogo = document.querySelector('.merchant-logo');
+        const placeholder = document.querySelector('.logo-placeholder');
+
+        if (event.data.dataUrl) {
+          if (existingLogo) {
+            existingLogo.src = event.data.dataUrl;
+          } else if (placeholder) {
+            const img = document.createElement('img');
+            img.className = 'merchant-logo';
+            img.src = event.data.dataUrl;
+            img.alt = 'Logo preview';
+            placeholder.replaceWith(img);
+          }
+        } else if (existingLogo) {
+          const div = document.createElement('div');
+          div.className = 'logo-placeholder';
+          div.textContent = 'Custom Logo';
+          existingLogo.replaceWith(div);
+        }
+      });
+    </script>
+  <% } %>
 </body>
 </html>

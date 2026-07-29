@@ -6,18 +6,56 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Billing - ReceipTap</title>
   <link rel="stylesheet" href="/css/receiptap.css" />
+  <style>
+    .cancel-modal-overlay {
+      display: none;
+      position: fixed; inset: 0; background: rgba(15, 23, 42, 0.45);
+      align-items: center; justify-content: center; z-index: 100;
+    }
+    .cancel-modal-overlay.open { display: flex; }
+    .cancel-modal-box {
+      background: #fff; border-radius: 14px; padding: 28px; width: 380px; max-width: 90vw;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.25); text-align: center;
+    }
+    .cancel-modal-badge {
+      display: inline-block; background: var(--teal-wash); color: var(--teal-deep);
+      font-size: 22px; font-weight: 800; padding: 6px 14px; border-radius: 8px; margin-bottom: 14px;
+    }
+    .cancel-modal-box h2 { font-size: 18px; margin: 0 0 8px; }
+    .cancel-modal-box p { font-size: 13.5px; color: var(--ink-soft); margin: 0 0 20px; line-height: 1.5; }
+
+    .plan-menu-wrap { position: relative; display: inline-block; }
+    .plan-menu {
+      display: none; position: absolute; left: 0; top: calc(100% + 6px); z-index: 30;
+      background: #fff; border: 1px solid var(--card-line); border-radius: 12px;
+      min-width: 200px; box-shadow: 0 6px 24px rgba(19,24,41,0.12); overflow: hidden;
+    }
+    .plan-menu.open { display: block; }
+    .plan-menu a, .plan-menu button {
+      display: block; width: 100%; text-align: left; background: none; border: none;
+      font-size: 13.5px; padding: 11px 16px; cursor: pointer; color: var(--ink);
+      text-decoration: none; font-weight: 500; font-family: var(--font-body);
+    }
+    .plan-menu a:hover, .plan-menu button:hover { background: var(--app-bg); }
+    .plan-menu button.danger { color: var(--danger); }
+    .plan-menu button.teal { color: var(--teal-deep); }
+    .plan-menu form { margin: 0; }
+  </style>
 </head>
 <body>
   <%- include('partials/dashboard-header', { activeNav: 'billing' }) %>
 
-  <div class="main" style="max-width: 640px; margin: 0 auto;">
-    <div class="eyebrow">Account</div>
-    <h1 class="page-title">Billing</h1>
-    <p class="page-subtitle" style="margin-bottom: 28px;">
-      Your ReceipTap subscription: 30-day free trial, then $49.99 USD/month.
-      Cancel anytime during the trial and you won't be charged.
-    </p>
+  <div class="topbar">
+    <div>
+      <h1>Billing</h1>
+      <p class="sub">Manage your subscription, payment methods, and billing history.</p>
+    </div>
+    <div class="topbar-right">
+      <%- include('partials/avatar-menu', { merchant }) %>
+    </div>
+  </div>
 
+  <div class="app-body">
     <% if (error) { %><div class="error-box"><%= error %></div><% } %>
     <% if (typeof blocked !== 'undefined' && blocked) { %>
       <div class="error-box">
@@ -32,54 +70,240 @@
     <% if (typeof success !== 'undefined' && success) { %>
       <div class="error-box" style="color: var(--teal-deep); background: var(--teal-wash);">You're all set — your trial has started.</div>
     <% } %>
+    <% if (typeof discountApplied !== 'undefined' && discountApplied) { %>
+      <div class="error-box" style="color: var(--teal-deep); background: var(--teal-wash);">Your 50% discount is applied — it'll show up on your next invoice.</div>
+    <% } %>
+    <% if (typeof justCanceled !== 'undefined' && justCanceled) { %>
+      <div class="error-box" style="color: var(--teal-deep); background: var(--teal-wash);">Your subscription is set to cancel at the end of your current billing period.</div>
+    <% } %>
+    <% if (typeof justResumed !== 'undefined' && justResumed) { %>
+      <div class="error-box" style="color: var(--teal-deep); background: var(--teal-wash);">Your cancellation was undone — your subscription will continue as normal.</div>
+    <% } %>
+    <% if (typeof cancelAtPeriodEnd !== 'undefined' && cancelAtPeriodEnd) { %>
+      <div class="error-box" style="color: var(--amber); background: #FAEEDD; display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+        <span>Your subscription is set to cancel<% if (nextBillingDate) { %> on <%= nextBillingDate %><% } %> — you'll keep access until then.</span>
+        <form method="POST" action="/dashboard/billing/resume" style="margin:0;">
+          <button type="submit" class="btn btn-secondary" style="width:auto;">Keep my subscription</button>
+        </form>
+      </div>
+    <% } %>
 
+    <!-- Your profile -->
     <div class="card-list" style="padding: 24px 26px; margin-bottom: 20px;">
-      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
-        <div>
-          <div style="font-size: 15px; font-weight: 600; margin-bottom: 4px;">
-            <% if (merchant.subscriptionStatus === 'ACTIVE') { %>
-              Active subscription
-            <% } else if (merchant.subscriptionStatus === 'TRIALING') { %>
-              Free trial (card on file)
-            <% } else if (merchant.subscriptionStatus === 'PAST_DUE') { %>
-              Payment past due
-            <% } else if (merchant.subscriptionStatus === 'CANCELED') { %>
-              Subscription canceled
-            <% } else { %>
-              Trial not started
-            <% } %>
-          </div>
-          <div style="font-size: 13px; color: var(--ink-soft);">
-            <% if (merchant.subscriptionStatus === 'TRIALING') { %>
-              Your 30-day trial is running. You'll be charged $49.99 USD/month when it ends, unless you cancel first.
-            <% } else if (merchant.subscriptionStatus === 'ACTIVE') { %>
-              Your subscription renews automatically each month.
-            <% } else if (merchant.subscriptionStatus === 'PAST_DUE') { %>
-              Update your payment method to avoid losing access.
-            <% } else if (merchant.subscriptionStatus === 'CANCELED') { %>
-              Restart your subscription to keep using ReceipTap.
-            <% } else { %>
-              Start your 30-day free trial — add a card now, get charged only when the trial ends.
-            <% } %>
+      <div style="font-size: 15px; font-weight: 600; margin-bottom: 4px;">Your profile</div>
+      <div style="font-size: 13px; color: var(--ink-soft); margin-bottom: 14px;">Your name and photo are used for your dashboard greeting and the account menu — separate from your business name/logo.</div>
+      <form method="POST" action="/dashboard/billing/account" enctype="multipart/form-data">
+        <div style="display: flex; align-items: center; gap: 14px; margin-bottom: 14px;">
+          <% if (merchant.profilePhotoUrl) { %>
+            <img src="<%= merchant.profilePhotoUrl %>" alt="Your photo" style="width:56px; height:56px; border-radius:50%; object-fit:cover; border:1px solid var(--line);" />
+          <% } else { %>
+            <div style="width:56px; height:56px; border-radius:50%; background:var(--teal-wash); color:var(--teal-deep); display:flex; align-items:center; justify-content:center; font-weight:700; font-size:20px; text-transform:uppercase;">
+              <%= (merchant.ownerName || merchant.businessName || '?').charAt(0) %>
+            </div>
+          <% } %>
+          <div>
+            <input type="file" name="profilePhoto" accept="image/png,image/jpeg,image/webp" />
+            <div style="font-size:12px; color:var(--ink-soft); margin-top:4px;">PNG, JPG, or WEBP — up to 2MB.</div>
           </div>
         </div>
-        <span class="badge <%= access ? 'badge-teal' : 'badge-amber' %>">
-          <%= access ? 'Active' : 'Action needed' %>
-        </span>
+        <div style="display: flex; gap: 10px;">
+          <input type="text" name="ownerName" value="<%= merchant.ownerName || '' %>" placeholder="Your first and last name" style="flex:1; padding: 9px 10px; border: 1px solid var(--line); border-radius: 6px; font-size: 14px;" />
+          <button type="submit" class="btn btn-secondary" style="width: auto;">Save</button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Current Plan + Payment Method -->
+    <div class="col-2">
+      <div class="card">
+        <div class="card-head"><h2>Current Plan</h2></div>
+        <div style="padding: 18px 20px;">
+          <div style="display:flex; align-items:flex-start; justify-content:space-between; margin-bottom: 16px;">
+            <div>
+              <div style="font-size:16px; font-weight:700;">ReceipTap Monthly</div>
+              <div style="font-size:13px; color:var(--ink-soft);">$49.99 / month</div>
+            </div>
+            <span class="badge <%= access ? 'badge-teal' : 'badge-amber' %>">
+              <% if (merchant.subscriptionStatus === 'ACTIVE') { %>Active
+              <% } else if (merchant.subscriptionStatus === 'TRIALING') { %>Trialing
+              <% } else if (merchant.subscriptionStatus === 'PAST_DUE') { %>Past due
+              <% } else if (merchant.subscriptionStatus === 'CANCELED') { %>Canceled
+              <% } else { %>Not started<% } %>
+            </span>
+          </div>
+          <div style="display:flex; gap:28px; margin-bottom:18px;">
+            <div>
+              <div style="font-size:18px; font-weight:700;"><%= activeReceiptTaps %></div>
+              <div style="font-size:12px; color:var(--ink-soft);">Active ReceipTaps</div>
+            </div>
+            <% if (nextBillingDate) { %>
+              <div>
+                <div style="font-size:18px; font-weight:700;"><%= nextBillingDate %></div>
+                <div style="font-size:12px; color:var(--ink-soft);">Next billing date</div>
+              </div>
+            <% } %>
+          </div>
+          <% if (merchant.subscriptionStatus === 'ACTIVE' || merchant.subscriptionStatus === 'TRIALING' || merchant.subscriptionStatus === 'PAST_DUE') { %>
+            <div class="plan-menu-wrap" id="plan-menu-wrap">
+              <button type="button" class="btn btn-primary" id="plan-menu-toggle">Manage Plan</button>
+              <div class="plan-menu" id="plan-menu">
+                <form method="POST" action="/dashboard/billing/portal" style="margin:0;">
+                  <button type="submit">Manage in Stripe</button>
+                </form>
+                <% if (typeof cancelAtPeriodEnd !== 'undefined' && cancelAtPeriodEnd) { %>
+                  <form method="POST" action="/dashboard/billing/resume" style="margin:0;">
+                    <button type="submit" class="teal">Keep my subscription</button>
+                  </form>
+                <% } else { %>
+                  <button type="button" class="danger" id="open-cancel-modal">Cancel Subscription</button>
+                <% } %>
+              </div>
+            </div>
+          <% } else { %>
+            <form method="POST" action="/dashboard/billing/checkout" style="margin:0;">
+              <button type="submit" class="btn btn-primary">
+                <% if (merchant.subscriptionStatus === 'CANCELED') { %>Restart subscription<% } else { %>Start 30-day free trial<% } %>
+              </button>
+            </form>
+          <% } %>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h2>Payment Method</h2></div>
+        <% if (paymentMethod) { %>
+          <div style="padding: 18px 20px;">
+            <div style="font-size:14px; font-weight:600; margin-bottom:2px; text-transform:capitalize;">
+              <%= paymentMethod.card.brand %> ending in <%= paymentMethod.card.last4 %>
+            </div>
+            <div style="font-size:12.5px; color:var(--ink-soft); margin-bottom:18px;">
+              Expires <%= String(paymentMethod.card.exp_month).padStart(2, '0') %>/<%= paymentMethod.card.exp_year %>
+            </div>
+            <form method="POST" action="/dashboard/billing/portal" style="margin:0;">
+              <button type="submit" class="btn btn-secondary" style="width:100%;">Update Payment Method</button>
+            </form>
+          </div>
+        <% } else { %>
+          <div class="blank">
+            <div class="bt">No payment method on file</div>
+            <div class="bd">Start your subscription to add a card.</div>
+          </div>
+        <% } %>
       </div>
     </div>
 
-    <% if (merchant.subscriptionStatus === 'ACTIVE' || merchant.subscriptionStatus === 'TRIALING' || merchant.subscriptionStatus === 'PAST_DUE') { %>
-      <form method="POST" action="/dashboard/billing/portal">
-        <button type="submit" class="btn btn-secondary" style="width: 100%;">Manage subscription</button>
-      </form>
-    <% } else { %>
-      <form method="POST" action="/dashboard/billing/checkout">
-        <button type="submit" class="btn btn-primary">
-          <% if (merchant.subscriptionStatus === 'CANCELED') { %>Restart subscription<% } else { %>Start 30-day free trial<% } %>
-        </button>
-      </form>
-    <% } %>
+    <!-- Invoice History + Billing Summary -->
+    <div class="col-2">
+      <div class="card">
+        <div class="card-head"><h2>Invoice History</h2></div>
+        <% if (invoices.length === 0) { %>
+          <div class="blank">
+            <div class="bt">No invoices yet</div>
+            <div class="bd">Your invoices will show up here once billing starts.</div>
+          </div>
+        <% } else { %>
+          <table class="dtable">
+            <thead><tr><th>Invoice</th><th>Date</th><th>Amount</th><th>Status</th><th></th></tr></thead>
+            <tbody>
+              <% invoices.forEach(function (inv) { %>
+                <tr>
+                  <td><%= inv.id %></td>
+                  <td class="when"><%= inv.date %></td>
+                  <td class="amt">$<%= inv.amount %></td>
+                  <td><span class="pill <%= inv.status === 'Paid' ? 'pill-green' : 'pill-amber' %>"><%= inv.status %></span></td>
+                  <td style="text-align:right;">
+                    <% if (inv.pdfUrl) { %>
+                      <a href="<%= inv.pdfUrl %>" target="_blank" rel="noopener" style="font-size:12.5px; font-weight:600; color:var(--teal); text-decoration:none;">Download</a>
+                    <% } %>
+                  </td>
+                </tr>
+              <% }); %>
+            </tbody>
+          </table>
+          <div style="padding:14px 20px;">
+            <form method="POST" action="/dashboard/billing/portal" style="margin:0;">
+              <button type="submit" class="btn btn-secondary" style="width:auto;">View All Invoices</button>
+            </form>
+          </div>
+        <% } %>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h2>Billing Summary</h2></div>
+        <% if (upcoming) { %>
+          <div style="padding:18px 20px;">
+            <div style="font-size:12.5px; color:var(--ink-soft); margin-bottom:12px;">
+              Next payment<% if (upcoming.date) { %> on <%= upcoming.date %><% } %>
+            </div>
+            <% upcoming.lines.forEach(function (line) { %>
+              <div style="display:flex; justify-content:space-between; font-size:13.5px; padding:4px 0; color:var(--ink-soft);">
+                <span><%= line.description %></span><span>$<%= line.amount %></span>
+              </div>
+            <% }); %>
+            <% if (upcoming.discountAmount) { %>
+              <div style="display:flex; justify-content:space-between; font-size:13.5px; padding:4px 0; color:var(--teal-deep); font-weight:600;">
+                <span>Retention discount (50% off)</span><span>-$<%= upcoming.discountAmount %></span>
+              </div>
+            <% } %>
+            <div style="display:flex; justify-content:space-between; font-size:16px; font-weight:700; border-top:1px solid var(--card-line); margin-top:10px; padding-top:10px;">
+              <span>Total</span><span>$<%= upcoming.total %></span>
+            </div>
+          </div>
+        <% } else { %>
+          <div class="blank">
+            <div class="bt">No upcoming payment</div>
+            <div class="bd">Start your subscription to see your next invoice here.</div>
+          </div>
+        <% } %>
+      </div>
+    </div>
+
+    <!-- Need Help -->
+    <div class="card" style="padding:20px; margin-bottom:20px;">
+      <div style="font-weight:700; font-size:15px; margin-bottom:4px;">Need help?</div>
+      <div style="font-size:13px; color:var(--ink-soft); margin-bottom:14px;">Have questions about billing or your account?</div>
+      <a href="mailto:support@receiptap.com" class="btn btn-secondary" style="width:auto; display:inline-block;">Contact Support</a>
+    </div>
   </div>
+
+  <div class="cancel-modal-overlay" id="cancel-modal" onclick="if (event.target === this) closeCancelModal();">
+    <div class="cancel-modal-box">
+      <div class="cancel-modal-badge">50% OFF</div>
+      <h2>Wait — before you go</h2>
+      <p>Stay another month for half price. Your next invoice will be $24.99 instead of $49.99 — no strings, cancel anytime after.</p>
+      <form method="POST" action="/dashboard/billing/retention-discount" style="margin:0 0 10px;">
+        <button type="submit" class="btn btn-primary" style="width:100%;">Apply my discount &amp; stay</button>
+      </form>
+      <form method="POST" action="/dashboard/billing/cancel" style="margin:0 0 10px;">
+        <button type="submit" style="width:100%; background:none; border:none; padding:10px; font-size:13px; font-weight:600; color:var(--danger); cursor:pointer; font-family:var(--font-body);">No thanks, cancel my subscription</button>
+      </form>
+      <button type="button" onclick="closeCancelModal();" style="width:100%; background:none; border:none; padding:6px; font-size:12.5px; color:var(--ink-soft); cursor:pointer; font-family:var(--font-body);">Never mind, take me back</button>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      var toggle = document.getElementById('plan-menu-toggle');
+      var menu = document.getElementById('plan-menu');
+      if (toggle && menu) {
+        toggle.addEventListener('click', function (e) {
+          e.stopPropagation();
+          menu.classList.toggle('open');
+        });
+        document.addEventListener('click', function () {
+          menu.classList.remove('open');
+        });
+      }
+
+      var openBtn = document.getElementById('open-cancel-modal');
+      if (openBtn) openBtn.addEventListener('click', function () {
+        if (menu) menu.classList.remove('open');
+        document.getElementById('cancel-modal').classList.add('open');
+      });
+    })();
+    function closeCancelModal() {
+      document.getElementById('cancel-modal').classList.remove('open');
+    }
+  </script>
 </body>
 </html>

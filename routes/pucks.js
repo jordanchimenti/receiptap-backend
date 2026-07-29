@@ -3,8 +3,7 @@
 
 const express = require('express');
 const router = express.Router();
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const prisma = require('../lib/prisma');
 
 // Adjust this to however your app checks auth — placeholder shown here
 function requireAuth(req, res, next) {

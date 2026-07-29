@@ -5,41 +5,39 @@
 
 const express = require('express');
 const router = express.Router();
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const prisma = require('../lib/prisma');
 
 function requireAuth(req, res, next) {
   if (!req.session?.merchantId) return res.redirect('/login');
   next();
 }
 
-// Called from the receipt page when a logged-in MERCHANT (not a consumer
-// customer) taps "Save as Business Expense" instead of the customer wallet button
-router.post('/receipt/:transactionId/save-expense', requireAuth, async (req, res) => {
-  const transaction = await prisma.transaction.findUnique({
-    where: { id: req.params.transactionId },
-  });
-  if (!transaction) return res.status(404).json({ error: 'Receipt not found' });
+// NOTE: the "Save as Business Expense" receipt-page button that used to POST
+// to /receipt/:transactionId/save-expense has been removed (retired
+// intentionally) -- this was the only way collectedByMerchantId ever got
+// set, so no new expenses can be filed going forward. The page below still
+// works as a view-only record of whatever was collected while that button
+// existed.
 
-  // A merchant shouldn't file their own issued receipt as their own expense
-  if (transaction.merchantId === req.session.merchantId) {
-    return res.status(400).json({ error: 'This is a receipt your business issued, not received' });
-  }
+function dateRangeWhere(from, to) {
+  return from || to
+    ? {
+        createdAt: {
+          ...(from ? { gte: new Date(from) } : {}),
+          // Include the entire "to" day, not just midnight at its start
+          ...(to ? { lte: new Date(new Date(to).setHours(23, 59, 59, 999)) } : {}),
+        },
+      }
+    : {};
+}
 
-  await prisma.transaction.update({
-    where: { id: transaction.id },
-    data: { collectedByMerchantId: req.session.merchantId },
-  });
-
-  res.json({ success: true });
-});
-
-// GET /dashboard/expenses — everything this merchant has bought elsewhere and saved
+// GET /dashboard/expenses?from=&to= — everything this merchant has bought elsewhere and saved
 router.get('/dashboard/expenses', requireAuth, async (req, res) => {
   const page = parseInt(req.query.page, 10) || 1;
   const pageSize = 25;
+  const { from, to } = req.query;
 
-  const where = { collectedByMerchantId: req.session.merchantId };
+  const where = { collectedByMerchantId: req.session.merchantId, ...dateRangeWhere(from, to) };
 
   const [transactions, totalCount] = await Promise.all([
     prisma.transaction.findMany({
@@ -62,13 +60,15 @@ router.get('/dashboard/expenses', requireAuth, async (req, res) => {
     page,
     totalPages: Math.ceil(totalCount / pageSize),
     totalCount,
+    filters: { from: from || '', to: to || '' },
   });
 });
 
 // Same idea as the sales export — useful for expense tracking / tax prep
 router.get('/dashboard/expenses/export', requireAuth, async (req, res) => {
+  const { from, to } = req.query;
   const transactions = await prisma.transaction.findMany({
-    where: { collectedByMerchantId: req.session.merchantId },
+    where: { collectedByMerchantId: req.session.merchantId, ...dateRangeWhere(from, to) },
     include: { merchant: true },
     orderBy: { createdAt: 'desc' },
   });

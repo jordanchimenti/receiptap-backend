@@ -1,0 +1,147 @@
+<!-- views/admin-pucks.ejs — owner-only view of pucks generated one at a time
+     from this admin panel (not the bulk hardware-order pucks from
+     scripts/generate-batch.js). Same self-contained dark theme as
+     admin-overview.ejs / admin-customers.ejs. -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pucks - Owner view - ReceipTap</title>
+  <link rel="stylesheet" href="/css/receiptap.css" />
+  <style>
+    body { background: var(--app-bg); }
+    .owner-bar {
+      background: var(--rail); color: #E6E9F4; padding: 11px 28px;
+      display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap;
+    }
+    .owner-bar .tag {
+      display: inline-flex; align-items: center; gap: 8px;
+      font-size: 12.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+      color: #F0B45F;
+    }
+    .owner-bar .tag .sw { width: 8px; height: 8px; border-radius: 50%; background: #F0B45F; }
+    .owner-bar a { color: #9AA2BC; font-size: 12.5px; text-decoration: none; font-weight: 500; }
+    .owner-bar a:hover { color: #E6E9F4; }
+    .wrap { max-width: 1180px; margin: 0 auto; padding: 26px 28px 48px; }
+    .wrap > h1 { font-size: 23px; letter-spacing: -0.02em; margin: 0 0 3px; }
+    .wrap > .sub { font-size: 13.5px; color: var(--ink-soft); margin: 0 0 22px; }
+    .admin-tabs {
+      display: flex; gap: 4px; padding: 10px 28px 0; background: var(--rail);
+    }
+    .admin-tab {
+      padding: 9px 16px; border-radius: 8px 8px 0 0; font-size: 13px; font-weight: 600;
+      color: #9AA2BC; text-decoration: none;
+    }
+    .admin-tab:hover { color: #E6E9F4; }
+    .admin-tab.active { background: var(--app-bg); color: var(--ink); }
+    .page-link {
+      display: inline-block; min-width: 30px; text-align: center; padding: 5px 9px;
+      border-radius: 6px; font-size: 12.5px; text-decoration: none; color: var(--ink);
+      border: 1px solid var(--line); background: #fff;
+    }
+    .page-link:hover { background: var(--paper); }
+    .page-link.active { background: var(--teal); color: #fff; border-color: var(--teal); }
+    .page-link.disabled { color: #B6BCCE; pointer-events: none; }
+  </style>
+</head>
+<body>
+
+  <div class="owner-bar">
+    <span class="tag"><span class="sw"></span>Owner view — every merchant on ReceipTap</span>
+    <span>
+      <a href="/dashboard">← Back to my own dashboard</a>
+    </span>
+  </div>
+
+  <%- include('partials/admin-tabs', { activeTab }) %>
+
+  <div class="wrap">
+    <h1>Pucks</h1>
+    <p class="sub">Mint a single test puck to hand-write onto a physical NFC tag. Saved for good — refreshing or coming back later won't lose it.</p>
+
+    <% if (error) { %><div class="error-box" style="margin-bottom:18px;"><%= error %></div><% } %>
+
+    <div class="card" style="margin-bottom:20px;">
+      <div class="card-head"><h2>Generate a puck</h2></div>
+      <div style="padding: 18px 20px;">
+        <p style="font-size:13px; color:var(--ink-soft); margin:0 0 14px;">Creates one new UNCLAIMED puck with a unique id and claim code.</p>
+        <form method="POST" action="/admin/pucks/generate" style="margin:0;">
+          <button type="submit" class="btn btn-primary" style="width:auto;">Generate puck</button>
+        </form>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>Generated pucks</h2>
+        <span style="display:flex; align-items:center; gap:14px;">
+          <span style="font-size:12.5px;color:var(--ink-soft);"><%= total.toLocaleString('en-US') %> total</span>
+          <a href="/admin/pucks/export" class="btn btn-secondary" style="width:auto; padding:6px 12px; font-size:12.5px;">Export CSV</a>
+        </span>
+      </div>
+      <% if (pucks.length === 0) { %>
+        <div class="blank">
+          <div class="bt">No pucks generated yet</div>
+          <div class="bd">Click "Generate puck" above to mint your first test puck.</div>
+        </div>
+      <% } else { %>
+        <table class="dtable">
+          <thead>
+            <tr><th>URL</th><th>ID</th><th>Claim code</th><th>Status</th><th>Created</th><th></th></tr>
+          </thead>
+          <tbody>
+            <% pucks.forEach(function (p, i) { %>
+              <tr class="<%= i >= 5 ? 'puck-row-extra' : '' %>" style="<%= i >= 5 ? 'display:none;' : '' %>">
+                <td style="font-family:var(--font-mono); font-size:12.5px; word-break:break-all;"><%= p.url %></td>
+                <td style="font-family:var(--font-mono);"><%= p.id %></td>
+                <td style="font-family:var(--font-mono);"><%= p.claimCode %></td>
+                <td><span class="pill <%= p.status === 'CLAIMED' ? 'pill-green' : 'pill-grey' %>"><%= p.status === 'CLAIMED' ? 'Claimed' : 'Unclaimed' %></span></td>
+                <td class="when"><%= new Date(p.createdAt).toLocaleDateString('en-US', { dateStyle: 'medium' }) %></td>
+                <td style="text-align:right;">
+                  <button type="button" class="btn btn-secondary copy-url-btn" data-url="<%= p.url %>" style="width:auto; padding:5px 10px; font-size:12px;">Copy</button>
+                </td>
+              </tr>
+            <% }); %>
+          </tbody>
+        </table>
+
+        <% if (pucks.length > 5) { %>
+          <div style="padding:12px 20px; border-top:1px solid var(--card-line); text-align:center;">
+            <button type="button" id="see-more-pucks-btn" style="background:none; border:none; color:var(--teal); font-weight:600; font-size:12.5px; cursor:pointer; font-family:var(--font-body);">See more (<%= pucks.length - 5 %> more on this page)</button>
+          </div>
+        <% } %>
+
+        <% if (totalPages > 1) { %>
+          <div style="padding:14px 20px; display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+            <a href="?page=<%= page - 1 %>" class="page-link <%= page <= 1 ? 'disabled' : '' %>">‹ Prev</a>
+            <% for (let i = 1; i <= totalPages; i++) { %>
+              <a href="?page=<%= i %>" class="page-link <%= i === page ? 'active' : '' %>"><%= i %></a>
+            <% } %>
+            <a href="?page=<%= page + 1 %>" class="page-link <%= page >= totalPages ? 'disabled' : '' %>">Next ›</a>
+          </div>
+        <% } %>
+      <% } %>
+    </div>
+  </div>
+
+  <script>
+    document.querySelectorAll('.copy-url-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        navigator.clipboard.writeText(btn.getAttribute('data-url'));
+        var original = btn.textContent;
+        btn.textContent = 'Copied!';
+        setTimeout(function () { btn.textContent = original; }, 1500);
+      });
+    });
+
+    var seeMoreBtn = document.getElementById('see-more-pucks-btn');
+    if (seeMoreBtn) {
+      seeMoreBtn.addEventListener('click', function () {
+        document.querySelectorAll('.puck-row-extra').forEach(function (row) { row.style.display = ''; });
+        seeMoreBtn.style.display = 'none';
+      });
+    }
+  </script>
+</body>
+</html>

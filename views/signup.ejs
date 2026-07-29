@@ -20,8 +20,12 @@
 
       <form method="POST" action="/signup">
         <div class="field">
+          <label for="ownerName">Your name</label>
+          <input type="text" id="ownerName" name="ownerName" required autofocus />
+        </div>
+        <div class="field">
           <label for="businessName">Business name</label>
-          <input type="text" id="businessName" name="businessName" required autofocus />
+          <input type="text" id="businessName" name="businessName" required />
         </div>
         <div class="field">
           <label for="email">Email</label>

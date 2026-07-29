@@ -5,8 +5,6 @@
   <meta charset="UTF-8" />
   <title>Receipt History</title>
   <style>
-    body { font-family: -apple-system, sans-serif; max-width: 800px; margin: 40px auto; color: #111; }
-    h1 { font-size: 22px; }
     .filters { display: flex; gap: 8px; margin: 16px 0; }
     .filters input { padding: 6px 10px; border: 1px solid #ddd; border-radius: 6px; }
     table { width: 100%; border-collapse: collapse; margin-top: 16px; }
@@ -19,8 +17,16 @@
 </head>
 <body>
   <%- include('partials/dashboard-header', { activeNav: 'receipts' }) %>
-  <h1>Receipt History</h1>
-  <a class="export-link" href="/dashboard/receipts/export">Export CSV</a>
+
+  <div class="topbar">
+    <div>
+      <h1>Receipt History</h1>
+    </div>
+  </div>
+
+  <div class="app-body">
+
+  <a class="export-link" href="/dashboard/receipts/export?from=<%= encodeURIComponent(filters.from) %>&to=<%= encodeURIComponent(filters.to) %>&search=<%= encodeURIComponent(filters.search) %>">Export CSV</a>
 
   <form class="filters" method="get">
     <input type="date" name="from" value="<%= filters.from %>" />
@@ -47,6 +53,8 @@
 
   <div class="pagination">
     Page <%= page %> of <%= totalPages %> (<%= totalCount %> total receipts)
+  </div>
+
   </div>
 </body>
 </html>

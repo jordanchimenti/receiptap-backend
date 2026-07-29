@@ -1,0 +1,66 @@
+<!-- views/claim.ejs -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Activate Your ReceipTap - ReceipTap</title>
+  <link rel="stylesheet" href="/css/receiptap.css" />
+</head>
+<body>
+  <div class="centered-shell">
+    <div class="auth-card">
+      <img src="/images/receiptap-logo.png" alt="ReceipTap" style="height: 54px; margin-bottom: 18px;" />
+      <h1 style="font-size: 22px; margin-bottom: 6px;">Activate your ReceipTap</h1>
+      <p style="font-size: 13.5px; color: var(--ink-soft); margin: 8px 0 22px; line-height: 1.5;">
+        Enter the 6-character code printed on the insert card that came with this puck.
+      </p>
+
+      <div class="error-box" id="error-box" style="display: none;"></div>
+
+      <form id="claim-form">
+        <div class="field">
+          <label for="claimCode">Activation code</label>
+          <input
+            type="text"
+            id="claimCode"
+            name="claimCode"
+            value="<%= prefilledCode %>"
+            required
+            maxlength="6"
+            autocomplete="off"
+            autofocus
+            style="text-transform: uppercase; letter-spacing: 3px; font-family: var(--font-mono); font-size: 18px; text-align: center;"
+          />
+        </div>
+        <button class="btn btn-primary" type="submit">Activate</button>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    const PUCK_ID = '<%= puckId %>';
+
+    document.getElementById('claim-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const claimCode = document.getElementById('claimCode').value;
+      const errorBox = document.getElementById('error-box');
+      errorBox.style.display = 'none';
+
+      const res = await fetch(`/claim/${PUCK_ID}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ claimCode }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        errorBox.textContent = data.error || 'Something went wrong.';
+        errorBox.style.display = 'block';
+        return;
+      }
+      window.location.href = '/dashboard/pos-setup';
+    });
+  </script>
+</body>
+</html>

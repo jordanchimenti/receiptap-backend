@@ -5,43 +5,60 @@
 const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcrypt');
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const prisma = require('../lib/prisma');
 
 router.get('/signup', (req, res) => res.render('signup', { error: null }));
-router.get('/login', (req, res) => res.render('login', { error: null, redirect: req.query.redirect || '/dashboard/receipts-hub' }));
+router.get('/login', (req, res) => res.render('login', {
+  error: null,
+  deactivated: req.query.deactivated === '1',
+  redirect: req.query.redirect || '/dashboard/receipts-hub',
+}));
 
 router.post('/signup', async (req, res) => {
-  const { businessName, email, password } = req.body;
+  const { ownerName, businessName, email, password } = req.body;
 
-  if (!businessName || !email || !password) {
+  if (!ownerName || !businessName || !email || !password) {
     return res.render('signup', { error: 'All fields are required' });
   }
 
-  const existing = await prisma.merchant.findUnique({ where: { email } });
-  if (existing) {
-    return res.render('signup', { error: 'An account with this email already exists' });
+  try {
+    const existing = await prisma.merchant.findUnique({ where: { email } });
+    if (existing) {
+      return res.render('signup', { error: 'An account with this email already exists' });
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10);
+    const merchant = await prisma.merchant.create({
+      data: { ownerName, businessName, email, passwordHash },
+    });
+
+    req.session.merchantId = merchant.id;
+    res.redirect('/dashboard/receipts-hub');
+  } catch (err) {
+    console.error('Signup failed:', err);
+    res.render('signup', { error: 'Something went wrong on our end — please try again in a moment.' });
   }
-
-  const passwordHash = await bcrypt.hash(password, 10);
-  const merchant = await prisma.merchant.create({
-    data: { businessName, email, passwordHash },
-  });
-
-  req.session.merchantId = merchant.id;
-  res.redirect('/dashboard/receipts-hub');
 });
 
 router.post('/login', async (req, res) => {
   const { email, password } = req.body;
+  const redirect = req.body.redirect || '/dashboard/receipts-hub';
 
-  const merchant = await prisma.merchant.findUnique({ where: { email } });
-  if (!merchant || !(await bcrypt.compare(password, merchant.passwordHash))) {
-    return res.render('login', { error: 'Invalid email or password', redirect: req.body.redirect || '/dashboard/receipts-hub' });
+  try {
+    const merchant = await prisma.merchant.findUnique({ where: { email } });
+    if (!merchant || !(await bcrypt.compare(password, merchant.passwordHash))) {
+      return res.render('login', { error: 'Invalid email or password', redirect });
+    }
+    if (!merchant.isActive) {
+      return res.render('login', { error: 'This account has been deactivated.', redirect });
+    }
+
+    req.session.merchantId = merchant.id;
+    res.redirect(redirect);
+  } catch (err) {
+    console.error('Login failed:', err);
+    res.render('login', { error: 'Something went wrong on our end — please try again in a moment.', redirect });
   }
-
-  req.session.merchantId = merchant.id;
-  res.redirect(req.body.redirect || '/dashboard/receipts-hub');
 });
 
 router.post('/logout', (req, res) => {

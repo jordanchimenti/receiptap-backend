@@ -150,6 +150,12 @@
       </details>
     </form>
 
+    <div style="text-align:right; margin-top:-8px; margin-bottom:12px;">
+      <a href="/account/receipts/export?search=<%= encodeURIComponent(filters.search) %>&from=<%= encodeURIComponent(filters.from) %>&to=<%= encodeURIComponent(filters.to) %>&category=<%= encodeURIComponent(filters.category) %>" style="font-size:13px; font-weight:600; color:var(--teal);">
+        Export CSV<%= (filters.search || filters.from || filters.to || filters.category) ? ' (filtered)' : '' %>
+      </a>
+    </div>
+
     <% if (receipts.length === 0 && (filters.search || filters.from || filters.to || filters.category)) { %>
       <div class="empty-state">
         <div class="empty-title">No receipts match</div>
@@ -160,7 +166,7 @@
         <div class="empty-mark">⌁</div>
         <div class="empty-title">No saved receipts yet</div>
         <div style="font-size: 13.5px; line-height: 1.5; max-width: 320px; margin: 0 auto;">
-          Tap a ReceipTap puck at checkout and hit "Save to my ReceipTap account" to start building your history.
+          Tap a ReceipTap puck at checkout and save your receipt to start building your history.
         </div>
       </div>
     <% } else { %>

@@ -4,7 +4,7 @@
   "description": "ReceipTap core backend - merchant accounts, NFC puck claiming, POS integration, digital receipts",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
+    "start": "npx prisma migrate deploy && node server.js",
     "dev": "node --watch server.js",
     "generate-batch": "node scripts/generate-batch.js",
     "postinstall": "playwright install chromium"
@@ -20,6 +20,7 @@
     "express": "^4.22.2",
     "express-session": "^1.18.0",
     "google-auth-library": "^10.9.0",
+    "multer": "^2.2.0",
     "nanoid": "^3.3.7",
     "playwright": "^1.56.0",
     "qrcode": "^1.5.4",

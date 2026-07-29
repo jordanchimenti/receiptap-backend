@@ -11,8 +11,7 @@
   <%- include('partials/dashboard-header', { activeNav: 'overview' }) %>
 
   <%
-    var name = (merchant.businessName || 'there').split(' ')[0];
-    var initial = (merchant.businessName || '?').charAt(0);
+    var name = (merchant.ownerName || merchant.businessName || 'there').split(' ')[0];
     var trialing = merchant.subscriptionStatus === 'TRIALING';
     var pastDue = merchant.subscriptionStatus === 'PAST_DUE';
     var st = puckStatus;
@@ -21,7 +20,7 @@
 
   <div class="topbar">
     <div>
-      <h1>Welcome back, <%= name %></h1>
+      <h1>Welcome back, <%= name %> 👋</h1>
       <p class="sub">Here's what's happening at your counter today.</p>
     </div>
     <div class="topbar-right">
@@ -35,7 +34,7 @@
         <span class="dot <%= (trialing || pastDue) ? 'warn' : '' %>"></span>
         <% if (trialing) { %>Free trial<% } else if (pastDue) { %>Payment failed<% } else if (merchant.subscriptionStatus === 'ACTIVE') { %>Subscribed<% } else { %>Start trial<% } %>
       </a>
-      <div class="avatar"><%= initial %></div>
+      <%- include('partials/avatar-menu', { merchant }) %>
     </div>
   </div>
 
@@ -178,7 +177,7 @@
         <% } else { %>
           <div class="puck-grid">
             <% pucks.forEach(function (p) { %>
-              <a class="puck-card" href="/pucks/<%= p.id %>/manage">
+              <a class="puck-card" href="/dashboard/pucks?selected=<%= p.id %>">
                 <div class="disc"><i></i></div>
                 <div class="nm">ReceipTap <%= p.id.slice(0, 4).toUpperCase() %></div>
                 <div class="meta">

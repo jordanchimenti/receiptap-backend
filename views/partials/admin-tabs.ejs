@@ -1,0 +1,7 @@
+<!-- views/partials/admin-tabs.ejs — shared tab nav for the owner-only /admin pages -->
+<div class="admin-tabs">
+  <a href="/admin" class="admin-tab <%= activeTab === 'overview' ? 'active' : '' %>">Overview</a>
+  <a href="/admin/customers" class="admin-tab <%= activeTab === 'customers' ? 'active' : '' %>">Customers</a>
+  <a href="/admin/pucks" class="admin-tab <%= activeTab === 'pucks' ? 'active' : '' %>">Pucks</a>
+  <a href="/admin/test-pos" class="admin-tab <%= activeTab === 'test-pos' ? 'active' : '' %>">Test POS</a>
+</div>

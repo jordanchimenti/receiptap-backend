@@ -9,8 +9,7 @@
 //
 // Non-admins get a 404, not a 403: a 403 would confirm that /admin exists.
 
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const prisma = require('../lib/prisma');
 
 function adminEmails() {
   return (process.env.ADMIN_EMAILS || '')

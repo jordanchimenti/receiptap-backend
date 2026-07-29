@@ -3,8 +3,7 @@
 
 const express = require('express');
 const router = express.Router();
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const prisma = require('../lib/prisma');
 
 router.get('/receipt/:transactionId', async (req, res) => {
   const transaction = await prisma.transaction.findUnique({
@@ -42,6 +41,7 @@ router.get('/receipt/:transactionId', async (req, res) => {
     merchant,
     theme: safeTheme,
     googleClientId: process.env.GOOGLE_CLIENT_ID || '',
+    alreadySignedUp: Boolean(req.session.customerId),
     transaction: {
       ...transaction,
       lineItems: transaction.lineItems, // already JSON from Prisma

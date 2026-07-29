@@ -8,12 +8,26 @@ const path = require('path');
 
 const app = express();
 
+// Safety net: without this, an error that isn't caught anywhere (e.g. a
+// transient "can't reach the database" blip during a request) crashes the
+// entire Node process and takes the site down for every merchant/customer,
+// not just the one request that hit it. Logging and continuing means that
+// one request fails, but the server stays up for everyone else.
+process.on('unhandledRejection', (err) => {
+  console.error('Unhandled promise rejection (server stayed up):', err);
+});
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught exception (server stayed up):', err);
+});
+
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
-// Stripe webhook needs the raw, unparsed body for signature verification —
-// must be mounted BEFORE express.json() below, or verification always fails.
+// Stripe and Square webhooks both need the raw, unparsed body for signature
+// verification — must be mounted BEFORE express.json() below, or the global
+// parser drains the body stream first and verification always fails.
 app.use('/webhooks/stripe', express.raw({ type: 'application/json' }));
+app.use('/webhooks/pos/square', express.raw({ type: 'application/json' }));
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -54,14 +68,14 @@ app.use(require('./routes/oauth-square'));   // /oauth/square/connect + callback
 app.use(require('./routes/merchant-dashboard'));  // /dashboard/receipts, /dashboard/receipts-hub
 app.use(require('./routes/merchant-expenses'));   // /dashboard/expenses, save-expense
 app.use(require('./routes/repeat-customers'));      // /dashboard/repeat-customers, AI-recognized repeat customer analytics + CSV export
-app.use(require('./routes/analytics'));              // /dashboard/analytics, revenue + new-vs-repeat charts
+app.use(require('./routes/analytics'));              // /dashboard/analytics, stat cards + receipts/POS/customer-growth charts
 app.use(require('./routes/pdf-export'));              // /dashboard/receipts/pdf-export, bulk PDF receipt document export
 app.use(require('./routes/theme-settings'));       // /dashboard/settings/receipt (Google review link, branding)
+app.use(require('./routes/account-settings'));    // /dashboard/settings/account (business info, password, POS disconnect, deactivate)
 app.use(require('./routes/email-capture'));         // email/Google capture gate before receipt save, merchant email list
 app.use(require('./routes/customer-account'));    // consumer wallet: /account/*
-app.use(require('./routes/billing'));               // ReceipTap's own subscription billing 
+app.use(require('./routes/billing'));               // ReceipTap's own subscription billing (Stripe)
 app.use(require('./routes/admin'));
-(Stripe)
 
 // Root: marketing landing page for visitors, dashboard for logged-in merchants
 app.get('/', (req, res) => {

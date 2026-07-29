@@ -54,7 +54,12 @@ router.post('/login', async (req, res) => {
     }
 
     req.session.merchantId = merchant.id;
-    res.redirect(redirect);
+    console.log('[DEBUG login] set merchantId', merchant.id, 'sessionID', req.sessionID, 'cookie config', JSON.stringify(req.session.cookie));
+    req.session.save((saveErr) => {
+      if (saveErr) console.error('[DEBUG login] session save error', saveErr);
+      else console.log('[DEBUG login] session saved OK, redirecting to', redirect);
+      res.redirect(redirect);
+    });
   } catch (err) {
     console.error('Login failed:', err);
     res.render('login', { error: 'Something went wrong on our end — please try again in a moment.', redirect });

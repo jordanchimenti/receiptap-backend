@@ -6,6 +6,7 @@ const router = express.Router();
 const prisma = require('../lib/prisma');
 
 function requireAuth(req, res, next) {
+  console.log('[DEBUG requireAuth]', req.path, 'sessionID', req.sessionID, 'merchantId', req.session?.merchantId, 'cookie header', req.headers.cookie);
   if (!req.session?.merchantId) return res.redirect('/login');
   next();
 }

@@ -66,6 +66,20 @@ router.post('/login', async (req, res) => {
   }
 });
 
+// Temporary, no-credentials-needed diagnostic for the production session bug.
+// Remove once login is confirmed working.
+router.get('/debug-session-test', (req, res) => {
+  req.session.testFlag = 'hello';
+  req.session.save((err) => {
+    console.log('[DEBUG session-test] set testFlag, sessionID', req.sessionID, 'saveErr', err, 'set-cookie will follow');
+    res.redirect('/debug-session-check');
+  });
+});
+router.get('/debug-session-check', (req, res) => {
+  console.log('[DEBUG session-check] sessionID', req.sessionID, 'testFlag', req.session.testFlag, 'cookie header', req.headers.cookie);
+  res.json({ sessionID: req.sessionID, testFlag: req.session.testFlag || null, cookieHeaderReceived: req.headers.cookie || null });
+});
+
 router.post('/logout', (req, res) => {
   req.session.destroy(() => res.redirect('/login'));
 });

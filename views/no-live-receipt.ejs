@@ -1,0 +1,31 @@
+<!-- views/no-live-receipt.ejs -->
+<!-- Shown when a customer taps a claimed puck but no sale is currently live
+     at that register (either nothing has been rung in recently, or the
+     3-minute window on the last sale has already expired). -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ReceipTap</title>
+  <link rel="stylesheet" href="/css/receiptap.css" />
+</head>
+<body>
+  <div class="centered-shell">
+    <div class="auth-card">
+      <% if (logoUrl) { %>
+        <img src="<%= logoUrl %>" alt="<%= businessName %>" style="height: 54px; margin-bottom: 18px; border-radius: 8px;" />
+      <% } else { %>
+        <img src="/images/receiptap-logo.png" alt="ReceipTap" style="height: 54px; margin-bottom: 18px;" />
+      <% } %>
+      <h1 style="font-size: 20px; margin-bottom: 6px;">Thanks for visiting <%= businessName %>!</h1>
+      <p style="font-size: 13.5px; color: var(--ink-soft); margin: 8px 0 4px; line-height: 1.5;">
+        There's no receipt waiting for this tap right now.
+      </p>
+      <p style="font-size: 13.5px; color: var(--ink-soft); margin: 0; line-height: 1.5;">
+        If you just paid, ask your cashier to tap it for you within a couple minutes of ringing up your sale.
+      </p>
+    </div>
+  </div>
+</body>
+</html>

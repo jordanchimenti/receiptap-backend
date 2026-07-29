@@ -1,0 +1,23 @@
+<!-- views/puck-not-found.ejs -->
+<!-- Shown when a tapped puck ID doesn't match any row in the database at all
+     (as opposed to a claimed puck with no live sale -- see no-live-receipt.ejs). -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ReceipTap</title>
+  <link rel="stylesheet" href="/css/receiptap.css" />
+</head>
+<body>
+  <div class="centered-shell">
+    <div class="auth-card">
+      <img src="/images/receiptap-logo.png" alt="ReceipTap" style="height: 54px; margin-bottom: 18px;" />
+      <h1 style="font-size: 20px; margin-bottom: 6px;">We couldn't find that puck</h1>
+      <p style="font-size: 13.5px; color: var(--ink-soft); margin: 8px 0 0; line-height: 1.5;">
+        This link doesn't match a ReceipTap device. If you scanned or tapped this from a real puck, please let the merchant know.
+      </p>
+    </div>
+  </div>
+</body>
+</html>

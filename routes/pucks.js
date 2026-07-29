@@ -45,6 +45,32 @@ router.get('/r/:puckId', async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// GET /not-found
+// Reached from /r/:puckId when the tapped ID doesn't match any puck at all.
+// ---------------------------------------------------------------------------
+router.get('/not-found', (req, res) => {
+  res.status(404).render('puck-not-found');
+});
+
+// ---------------------------------------------------------------------------
+// GET /merchant/:id
+// Reached from /r/:puckId when the puck is claimed but no sale is currently
+// live at that register (nothing rung in recently, or the 3-minute window
+// on the last sale already expired).
+// ---------------------------------------------------------------------------
+router.get('/merchant/:id', async (req, res) => {
+  const merchant = await prisma.merchant.findUnique({ where: { id: req.params.id } });
+  if (!merchant) return res.redirect('/not-found');
+
+  const theme = await prisma.receiptTheme.findUnique({ where: { merchantId: merchant.id } });
+
+  res.render('no-live-receipt', {
+    businessName: theme?.displayName || merchant.businessName,
+    logoUrl: theme?.logoUrl || null,
+  });
+});
+
+// ---------------------------------------------------------------------------
 // GET /claim/:puckId
 // Loaded either by tapping an unclaimed puck, or by scanning the QR code
 // on the insert card (QR = /claim/:puckId?code=XXXXXX, code pre-fills the form)

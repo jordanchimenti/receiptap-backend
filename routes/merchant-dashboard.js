@@ -47,7 +47,7 @@ router.get('/dashboard/receipts', requireAuth, async (req, res) => {
     transactions: transactions.map((t) => ({
       ...t,
       total: (t.total / 100).toFixed(2),
-      date: t.createdAt.toLocaleDateString('en-US', { dateStyle: 'medium' }),
+      date: t.createdAt.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }),
     })),
     page,
     totalPages: Math.ceil(totalCount / pageSize),
@@ -125,12 +125,12 @@ router.get('/dashboard/receipts-hub', requireAuth, async (req, res) => {
     customerReceipts: issued.map((t) => ({
       ...t,
       total: (t.total / 100).toFixed(2),
-      date: t.createdAt.toLocaleDateString('en-US', { dateStyle: 'medium' }),
+      date: t.createdAt.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }),
     })),
     merchantReceipts: received.map((t) => ({
       ...t,
       total: (t.total / 100).toFixed(2),
-      date: t.createdAt.toLocaleDateString('en-US', { dateStyle: 'medium' }),
+      date: t.createdAt.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }),
       soldByName: t.merchant.businessName,
     })),
     filters: { from: from || '', to: to || '' },

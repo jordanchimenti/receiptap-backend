@@ -269,6 +269,9 @@
         xUrl: val('xUrl'),
         youtubeUrl: val('youtubeUrl'),
         linkedinUrl: val('linkedinUrl'),
+        loyaltyEnabled: checked('loyaltyEnabled'),
+        loyaltyOfferType: val('loyaltyOfferType'),
+        loyaltyOfferValue: val('loyaltyOfferValue'),
       });
     }
 
@@ -307,15 +310,16 @@
     }
 
     let refreshTimer;
-    ['primaryColor', 'accentColor', 'headerText', 'footerText', 'displayName', 'location', 'googleReviewUrl', 'instagramUrl', 'facebookUrl', 'tiktokUrl', 'xUrl', 'youtubeUrl', 'linkedinUrl'].forEach(name => {
+    ['primaryColor', 'accentColor', 'headerText', 'footerText', 'displayName', 'location', 'googleReviewUrl', 'instagramUrl', 'facebookUrl', 'tiktokUrl', 'xUrl', 'youtubeUrl', 'linkedinUrl', 'loyaltyOfferValue'].forEach(name => {
       document.querySelector(`[name=${name}]`).addEventListener('input', () => {
         clearTimeout(refreshTimer);
         refreshTimer = setTimeout(refreshPreviews, 400); // debounce so it doesn't refresh on every keystroke
       });
     });
-    ['showGoogleReview', 'showWarranty'].forEach(id => {
+    ['showGoogleReview', 'showWarranty', 'loyaltyEnabled'].forEach(id => {
       document.getElementById(id).addEventListener('change', refreshPreviews);
     });
+    document.getElementById('loyaltyOfferType').addEventListener('change', refreshPreviews);
 
     // Instant logo preview: reads the picked file locally (nothing is
     // uploaded until Save) and pushes it into the preview iframes via

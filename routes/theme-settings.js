@@ -120,8 +120,11 @@ router.get('/dashboard/settings/receipt', requireAuth, async (req, res) => {
 // exact same receipt.ejs shell + layout partials real customers see, so the
 // preview can never drift out of sync with the real thing.
 router.get('/dashboard/settings/receipt/preview/:layoutId', requireAuth, async (req, res) => {
-  const merchant = await prisma.merchant.findUnique({ where: { id: req.session.merchantId } });
-  const savedTheme = await prisma.receiptTheme.findUnique({ where: { merchantId: req.session.merchantId } });
+  const [merchant, savedTheme, savedLoyaltyProgram] = await Promise.all([
+    prisma.merchant.findUnique({ where: { id: req.session.merchantId } }),
+    prisma.receiptTheme.findUnique({ where: { merchantId: req.session.merchantId } }),
+    prisma.loyaltyProgram.findUnique({ where: { merchantId: req.session.merchantId } }),
+  ]);
 
   // Query params reflect the merchant's live, unsaved edits (sent by the
   // settings page's JS) -- fall back to the saved theme, then a sane
@@ -150,12 +153,38 @@ router.get('/dashboard/settings/receipt/preview/:layoutId', requireAuth, async (
     linkedinUrl: req.query.linkedinUrl || (savedTheme && savedTheme.linkedinUrl) || '',
   };
 
+  // Loyalty offer value travels as dollars for AMOUNT (matching what the
+  // form field shows), but the receipt template expects the same stored
+  // unit (cents) real theme data uses -- convert the same way the save
+  // route does, so a merchant editing this field sees an accurate preview.
+  const previewOfferType = req.query.loyaltyOfferType === 'AMOUNT' || req.query.loyaltyOfferType === 'PERCENT'
+    ? req.query.loyaltyOfferType
+    : (savedLoyaltyProgram && savedLoyaltyProgram.offerType) || 'PERCENT';
+  const rawOfferValue = req.query.loyaltyOfferValue !== undefined
+    ? parseFloat(req.query.loyaltyOfferValue)
+    : (savedLoyaltyProgram
+        ? (savedLoyaltyProgram.offerType === 'AMOUNT' ? savedLoyaltyProgram.offerValue / 100 : savedLoyaltyProgram.offerValue)
+        : 10);
+  const safeRawOfferValue = Number.isFinite(rawOfferValue) && rawOfferValue > 0 ? rawOfferValue : 10;
+
+  const previewLoyaltyProgram = {
+    enabled: bool(req.query.loyaltyEnabled, Boolean(savedLoyaltyProgram && savedLoyaltyProgram.enabled)),
+    offerType: previewOfferType,
+    offerValue: previewOfferType === 'AMOUNT' ? Math.round(safeRawOfferValue * 100) : Math.min(100, Math.round(safeRawOfferValue)),
+  };
+  // A representative "in progress" card so merchants can see the actual punch
+  // visual, not just the empty "Join Now" state -- only shown while enabled,
+  // matching exactly how the real receipt page decides whether to render it.
+  const previewLoyaltyCard = previewLoyaltyProgram.enabled
+    ? { id: 'preview', punches: 2, redemptionStatus: 'NONE', redemptionCode: null }
+    : null;
+
   res.render('receipt', {
     merchant,
     theme: previewTheme,
     googleClientId: '', // no need to render a live Google button inside a preview thumbnail
-    loyaltyProgram: null, // loyalty card isn't part of the layout thumbnail preview
-    loyaltyCard: null,
+    loyaltyProgram: previewLoyaltyProgram,
+    loyaltyCard: previewLoyaltyCard,
     transaction: {
       id: 'preview',
       date: 'Jul 18, 2026, 2:45 PM',

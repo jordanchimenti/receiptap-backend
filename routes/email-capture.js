@@ -9,6 +9,7 @@ const express = require('express');
 const router = express.Router();
 const { OAuth2Client } = require('google-auth-library');
 const { categorizeTransaction } = require('../services/categorize-receipt');
+const { incrementLoyaltyPunch } = require('./loyalty');
 const prisma = require('../lib/prisma');
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
@@ -65,6 +66,7 @@ router.post('/receipt/:transactionId/capture-email', async (req, res) => {
     where: { id: transaction.id },
     data: { customerId: customer.id },
   });
+  await incrementLoyaltyPunch(transaction.merchantId, customer.id);
 
   // Kick off AI categorization — doesn't block this response
   if (!transaction.aiCategorizedAt) {
@@ -113,6 +115,7 @@ router.post('/receipt/:transactionId/capture-email-google', async (req, res) => 
     where: { id: transaction.id },
     data: { customerId: customer.id },
   });
+  await incrementLoyaltyPunch(transaction.merchantId, customer.id);
 
   if (!transaction.aiCategorizedAt) {
     categorizeInBackground(transaction, transaction.merchant.businessName);

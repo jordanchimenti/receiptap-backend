@@ -147,6 +147,24 @@
       </div>
     </div>
 
+    <div class="google-section">
+      <h2 style="margin-top:0;">🎁 Loyalty Program</h2>
+      <label>Reward customers after 5 punches</label>
+      <div style="display:flex; gap:10px; align-items:center; margin-top:4px;">
+        <select name="loyaltyOfferType" id="loyaltyOfferType" style="padding:9px 10px; border:1px solid #ddd; border-radius:6px; font-size:14px;">
+          <option value="PERCENT" <%= loyalty.offerType === 'PERCENT' ? 'selected' : '' %>>% off</option>
+          <option value="AMOUNT" <%= loyalty.offerType === 'AMOUNT' ? 'selected' : '' %>>$ off</option>
+        </select>
+        <input type="number" name="loyaltyOfferValue" id="loyaltyOfferValue" min="1" step="<%= loyalty.offerType === 'AMOUNT' ? '0.01' : '1' %>" value="<%= loyalty.offerValue %>" style="width:110px; padding:9px 10px; border:1px solid #ddd; border-radius:6px; box-sizing:border-box; font-size:14px;" />
+        <span style="font-size:13px; color:#555;">their next order</span>
+      </div>
+      <div class="hint">Example: "10" with "% off" gives customers 10% off once they've collected all 5 punches.</div>
+      <div class="toggle-row">
+        <input type="checkbox" id="loyaltyEnabled" name="loyaltyEnabled" <%= loyalty.enabled ? 'checked' : '' %> />
+        <label for="loyaltyEnabled">Show the loyalty punch card on receipts</label>
+      </div>
+    </div>
+
     <h2>Social Media Links</h2>
     <div class="hint" style="margin-top:-6px; margin-bottom: 10px;">
       Add your social profiles and customers will see clickable icons on their receipt. Leave any blank to hide that icon.
@@ -173,10 +191,6 @@
     <div class="toggle-row">
       <input type="checkbox" id="showWarranty" name="showWarranty" <%= theme.showWarranty ? 'checked' : '' %> />
       <label for="showWarranty">Show "Register Warranty"</label>
-    </div>
-    <div class="toggle-row">
-      <input type="checkbox" id="showLoyalty" name="showLoyalty" <%= theme.showLoyalty ? 'checked' : '' %> />
-      <label for="showLoyalty">Show "Join Loyalty Program"</label>
     </div>
 
     <button type="submit">Save Settings</button>
@@ -217,6 +231,22 @@
       document.querySelector(`.layout-option[data-layout-id="${id}"]`).classList.add('selected');
     }
 
+    // Percent offers are whole numbers 1-100; dollar offers allow cents --
+    // adjust the value field's constraints to match whichever is selected.
+    function updateLoyaltyValueConstraints() {
+      const type = document.getElementById('loyaltyOfferType').value;
+      const valueInput = document.getElementById('loyaltyOfferValue');
+      if (type === 'PERCENT') {
+        valueInput.step = '1';
+        valueInput.max = '100';
+      } else {
+        valueInput.step = '0.01';
+        valueInput.removeAttribute('max');
+      }
+    }
+    document.getElementById('loyaltyOfferType').addEventListener('change', updateLoyaltyValueConstraints);
+    updateLoyaltyValueConstraints();
+
     // Gathers every field that actually affects the rendered receipt, so both
     // the small thumbnails and the full-size modal always show the merchant's
     // real current (even if unsaved) choices -- never a stale or partial preview.
@@ -233,7 +263,6 @@
         googleReviewUrl: val('googleReviewUrl'),
         showGoogleReview: checked('showGoogleReview'),
         showWarranty: checked('showWarranty'),
-        showLoyalty: checked('showLoyalty'),
         instagramUrl: val('instagramUrl'),
         facebookUrl: val('facebookUrl'),
         tiktokUrl: val('tiktokUrl'),
@@ -284,7 +313,7 @@
         refreshTimer = setTimeout(refreshPreviews, 400); // debounce so it doesn't refresh on every keystroke
       });
     });
-    ['showGoogleReview', 'showWarranty', 'showLoyalty'].forEach(id => {
+    ['showGoogleReview', 'showWarranty'].forEach(id => {
       document.getElementById(id).addEventListener('change', refreshPreviews);
     });
 

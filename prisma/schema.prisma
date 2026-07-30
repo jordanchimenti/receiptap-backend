@@ -43,6 +43,8 @@ model Merchant {
   issuedReceipts    Transaction[]  @relation("IssuedReceipts")
   collectedExpenses Transaction[]  @relation("CollectedExpenses")
   receiptTheme      ReceiptTheme?
+  loyaltyProgram    LoyaltyProgram?
+  loyaltyCards      LoyaltyCard[]
 }
 
 enum SubscriptionStatus {
@@ -149,7 +151,6 @@ model ReceiptTheme {
   showGoogleReview Boolean @default(false)
   googleReviewUrl  String?
   showWarranty     Boolean @default(false)
-  showLoyalty      Boolean @default(false)
   showWalletSave   Boolean @default(true)
 
   // Social links shown as clickable icons on receipts -- each is optional,
@@ -165,6 +166,48 @@ model ReceiptTheme {
 }
 
 // ---------------------------------------------------------------------------
+// LoyaltyProgram — one merchant's punch-card settings (their offer)
+// ---------------------------------------------------------------------------
+model LoyaltyProgram {
+  merchantId String   @id
+  merchant   Merchant @relation(fields: [merchantId], references: [id])
+
+  enabled Boolean @default(false)
+
+  offerType  String @default("PERCENT") // "PERCENT" | "AMOUNT"
+  offerValue Int    @default(10)        // percent (1-100) if PERCENT, cents if AMOUNT
+
+  updatedAt DateTime @updatedAt
+}
+
+// ---------------------------------------------------------------------------
+// LoyaltyCard — one customer's punch card at one merchant. Punches accrue as
+// they link more receipts to their account; once full they can request a
+// redemption code, the merchant confirms it in person, and the customer signs
+// on their own phone -- at which point the card resets for the next cycle.
+// ---------------------------------------------------------------------------
+model LoyaltyCard {
+  id         String   @id @default(cuid())
+  merchantId String
+  merchant   Merchant @relation(fields: [merchantId], references: [id])
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id])
+
+  punches Int @default(1) // 0-5
+
+  redemptionStatus String    @default("NONE") // NONE | PENDING | CONFIRMED
+  redemptionCode   String? // short code the customer reads off to the cashier
+  lastSignatureUrl String?   @db.Text // most recent redemption's signature, kept for the merchant's own record
+  lastRedeemedAt   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([merchantId, customerId])
+  @@index([redemptionCode])
+}
+
+// ---------------------------------------------------------------------------
 // Customer — a consumer with a personal receipt wallet across ALL merchants
 // ---------------------------------------------------------------------------
 model Customer {
@@ -176,4 +219,5 @@ model Customer {
   createdAt    DateTime      @default(now())
 
   transactions Transaction[]
+  loyaltyCards LoyaltyCard[]
 }

@@ -1,6 +1,7 @@
 // routes/theme-settings.js
 // Where a merchant sets everything that drives their receipt's appearance,
-// including the Google review link used by the "Rate us on Google" card.
+// including the Google review link used by the "Rate us on Google" card,
+// and their loyalty punch-card offer.
 
 const express = require('express');
 const router = express.Router();
@@ -12,6 +13,18 @@ const prisma = require('../lib/prisma');
 function requireAuth(req, res, next) {
   if (!req.session?.merchantId) return res.redirect('/login');
   next();
+}
+
+const DEFAULT_LOYALTY = { enabled: false, offerType: 'PERCENT', offerValue: 10 };
+
+// LoyaltyProgram.offerValue is stored in cents for AMOUNT offers (consistent
+// with how money is stored everywhere else) but merchants enter/see dollars.
+function loyaltyForDisplay(loyalty) {
+  if (!loyalty) return DEFAULT_LOYALTY;
+  return {
+    ...loyalty,
+    offerValue: loyalty.offerType === 'AMOUNT' ? loyalty.offerValue / 100 : loyalty.offerValue,
+  };
 }
 
 // Logo uploads -- stored on local disk under public/, served the same way
@@ -47,9 +60,10 @@ function handleLogoUpload(req, res, next) {
   uploadLogo(req, res, async (err) => {
     if (!err) return next();
 
-    const [theme, merchant] = await Promise.all([
+    const [theme, merchant, loyalty] = await Promise.all([
       prisma.receiptTheme.findUnique({ where: { merchantId: req.session.merchantId } }),
       prisma.merchant.findUnique({ where: { id: req.session.merchantId } }),
+      prisma.loyaltyProgram.findUnique({ where: { merchantId: req.session.merchantId } }),
     ]);
     const message =
       err.code === 'LIMIT_FILE_SIZE'
@@ -59,6 +73,7 @@ function handleLogoUpload(req, res, next) {
     res.status(400).render('theme-settings', {
       merchant,
       theme: theme || { layoutId: 'classic', primaryColor: '#111111', accentColor: '#2563eb', showWalletSave: true },
+      loyalty: loyaltyForDisplay(loyalty),
       saved: false,
       error: message,
     });
@@ -66,9 +81,10 @@ function handleLogoUpload(req, res, next) {
 }
 
 router.get('/dashboard/settings/receipt', requireAuth, async (req, res) => {
-  const [theme, merchant] = await Promise.all([
+  const [theme, merchant, loyalty] = await Promise.all([
     prisma.receiptTheme.findUnique({ where: { merchantId: req.session.merchantId } }),
     prisma.merchant.findUnique({ where: { id: req.session.merchantId } }),
+    prisma.loyaltyProgram.findUnique({ where: { merchantId: req.session.merchantId } }),
   ]);
 
   res.render('theme-settings', {
@@ -85,7 +101,6 @@ router.get('/dashboard/settings/receipt', requireAuth, async (req, res) => {
       showGoogleReview: false,
       googleReviewUrl: '',
       showWarranty: false,
-      showLoyalty: false,
       showWalletSave: true,
       instagramUrl: '',
       facebookUrl: '',
@@ -94,6 +109,7 @@ router.get('/dashboard/settings/receipt', requireAuth, async (req, res) => {
       youtubeUrl: '',
       linkedinUrl: '',
     },
+    loyalty: loyaltyForDisplay(loyalty),
     saved: false,
     error: null,
   });
@@ -125,7 +141,6 @@ router.get('/dashboard/settings/receipt/preview/:layoutId', requireAuth, async (
     googleReviewUrl: req.query.googleReviewUrl || (savedTheme && savedTheme.googleReviewUrl) || '',
     showGoogleReview: bool(req.query.showGoogleReview, Boolean(savedTheme && savedTheme.showGoogleReview)),
     showWarranty: bool(req.query.showWarranty, Boolean(savedTheme && savedTheme.showWarranty)),
-    showLoyalty: bool(req.query.showLoyalty, Boolean(savedTheme && savedTheme.showLoyalty)),
     showWalletSave: bool(req.query.showWalletSave, savedTheme ? Boolean(savedTheme.showWalletSave) : true),
     instagramUrl: req.query.instagramUrl || (savedTheme && savedTheme.instagramUrl) || '',
     facebookUrl: req.query.facebookUrl || (savedTheme && savedTheme.facebookUrl) || '',
@@ -139,6 +154,8 @@ router.get('/dashboard/settings/receipt/preview/:layoutId', requireAuth, async (
     merchant,
     theme: previewTheme,
     googleClientId: '', // no need to render a live Google button inside a preview thumbnail
+    loyaltyProgram: null, // loyalty card isn't part of the layout thumbnail preview
+    loyaltyCard: null,
     transaction: {
       id: 'preview',
       date: 'Jul 18, 2026, 2:45 PM',
@@ -162,8 +179,9 @@ router.get('/dashboard/settings/receipt/preview/:layoutId', requireAuth, async (
 router.post('/dashboard/settings/receipt', requireAuth, handleLogoUpload, async (req, res) => {
   const {
     layoutId, primaryColor, accentColor, headerText, footerText, displayName, location,
-    googleReviewUrl, showGoogleReview, showWarranty, showLoyalty, showWalletSave,
+    googleReviewUrl, showGoogleReview, showWarranty, showWalletSave,
     instagramUrl, facebookUrl, tiktokUrl, xUrl, youtubeUrl, linkedinUrl,
+    loyaltyEnabled, loyaltyOfferType, loyaltyOfferValue,
   } = req.body;
 
   const safeInstagramUrl = sanitizeUrl(instagramUrl);
@@ -174,6 +192,13 @@ router.post('/dashboard/settings/receipt', requireAuth, handleLogoUpload, async 
   const safeLinkedinUrl = sanitizeUrl(linkedinUrl);
 
   const safeLayoutId = ['classic', 'modern', 'minimal'].includes(layoutId) ? layoutId : 'classic';
+  const safeOfferType = loyaltyOfferType === 'AMOUNT' ? 'AMOUNT' : 'PERCENT';
+  const parsedOfferValue = parseFloat(loyaltyOfferValue);
+  const safeOfferValueDisplay = Number.isFinite(parsedOfferValue) && parsedOfferValue > 0 ? parsedOfferValue : 10;
+  const safeOfferValueStored = safeOfferType === 'AMOUNT'
+    ? Math.round(safeOfferValueDisplay * 100)
+    : Math.min(100, Math.round(safeOfferValueDisplay));
+
   const [existingTheme, merchant] = await Promise.all([
     prisma.receiptTheme.findUnique({ where: { merchantId: req.session.merchantId } }),
     prisma.merchant.findUnique({ where: { id: req.session.merchantId } }),
@@ -193,62 +218,71 @@ router.post('/dashboard/settings/receipt', requireAuth, handleLogoUpload, async 
     if (!googleReviewUrl || !isValidGoogleReviewUrl(googleReviewUrl)) {
       return res.render('theme-settings', {
         merchant,
-        theme: { ...existingTheme, layoutId: safeLayoutId, logoUrl, displayName, location, primaryColor, accentColor, headerText, footerText, googleReviewUrl, showGoogleReview: true, showWarranty: showWarranty === 'on', showLoyalty: showLoyalty === 'on', showWalletSave: showWalletSave === 'on', instagramUrl: safeInstagramUrl, facebookUrl: safeFacebookUrl, tiktokUrl: safeTiktokUrl, xUrl: safeXUrl, youtubeUrl: safeYoutubeUrl, linkedinUrl: safeLinkedinUrl },
+        theme: { ...existingTheme, layoutId: safeLayoutId, logoUrl, displayName, location, primaryColor, accentColor, headerText, footerText, googleReviewUrl, showGoogleReview: true, showWarranty: showWarranty === 'on', showWalletSave: showWalletSave === 'on', instagramUrl: safeInstagramUrl, facebookUrl: safeFacebookUrl, tiktokUrl: safeTiktokUrl, xUrl: safeXUrl, youtubeUrl: safeYoutubeUrl, linkedinUrl: safeLinkedinUrl },
+        loyalty: { enabled: loyaltyEnabled === 'on', offerType: safeOfferType, offerValue: safeOfferValueDisplay },
         saved: false,
         error: 'Enter a valid Google review link (should start with https:// and be a Google URL).',
       });
     }
   }
 
-  await prisma.receiptTheme.upsert({
-    where: { merchantId: req.session.merchantId },
-    update: {
-      layoutId: safeLayoutId,
-      logoUrl,
-      displayName: displayName || null,
-      location: location || null,
-      primaryColor: primaryColor || '#111111',
-      accentColor: accentColor || '#2563eb',
-      headerText: headerText || null,
-      footerText: footerText || null,
-      googleReviewUrl: googleReviewUrl || null,
-      showGoogleReview: showGoogleReview === 'on',
-      showWarranty: showWarranty === 'on',
-      showLoyalty: showLoyalty === 'on',
-      showWalletSave: showWalletSave === 'on',
-      instagramUrl: safeInstagramUrl,
-      facebookUrl: safeFacebookUrl,
-      tiktokUrl: safeTiktokUrl,
-      xUrl: safeXUrl,
-      youtubeUrl: safeYoutubeUrl,
-      linkedinUrl: safeLinkedinUrl,
-    },
-    create: {
-      merchantId: req.session.merchantId,
-      layoutId: safeLayoutId,
-      logoUrl,
-      displayName: displayName || null,
-      location: location || null,
-      primaryColor: primaryColor || '#111111',
-      accentColor: accentColor || '#2563eb',
-      headerText: headerText || null,
-      footerText: footerText || null,
-      googleReviewUrl: googleReviewUrl || null,
-      showGoogleReview: showGoogleReview === 'on',
-      showWarranty: showWarranty === 'on',
-      showLoyalty: showLoyalty === 'on',
-      showWalletSave: showWalletSave === 'on',
-      instagramUrl: safeInstagramUrl,
-      facebookUrl: safeFacebookUrl,
-      tiktokUrl: safeTiktokUrl,
-      xUrl: safeXUrl,
-      youtubeUrl: safeYoutubeUrl,
-      linkedinUrl: safeLinkedinUrl,
-    },
-  });
+  await Promise.all([
+    prisma.receiptTheme.upsert({
+      where: { merchantId: req.session.merchantId },
+      update: {
+        layoutId: safeLayoutId,
+        logoUrl,
+        displayName: displayName || null,
+        location: location || null,
+        primaryColor: primaryColor || '#111111',
+        accentColor: accentColor || '#2563eb',
+        headerText: headerText || null,
+        footerText: footerText || null,
+        googleReviewUrl: googleReviewUrl || null,
+        showGoogleReview: showGoogleReview === 'on',
+        showWarranty: showWarranty === 'on',
+        showWalletSave: showWalletSave === 'on',
+        instagramUrl: safeInstagramUrl,
+        facebookUrl: safeFacebookUrl,
+        tiktokUrl: safeTiktokUrl,
+        xUrl: safeXUrl,
+        youtubeUrl: safeYoutubeUrl,
+        linkedinUrl: safeLinkedinUrl,
+      },
+      create: {
+        merchantId: req.session.merchantId,
+        layoutId: safeLayoutId,
+        logoUrl,
+        displayName: displayName || null,
+        location: location || null,
+        primaryColor: primaryColor || '#111111',
+        accentColor: accentColor || '#2563eb',
+        headerText: headerText || null,
+        footerText: footerText || null,
+        googleReviewUrl: googleReviewUrl || null,
+        showGoogleReview: showGoogleReview === 'on',
+        showWarranty: showWarranty === 'on',
+        showWalletSave: showWalletSave === 'on',
+        instagramUrl: safeInstagramUrl,
+        facebookUrl: safeFacebookUrl,
+        tiktokUrl: safeTiktokUrl,
+        xUrl: safeXUrl,
+        youtubeUrl: safeYoutubeUrl,
+        linkedinUrl: safeLinkedinUrl,
+      },
+    }),
+    prisma.loyaltyProgram.upsert({
+      where: { merchantId: req.session.merchantId },
+      update: { enabled: loyaltyEnabled === 'on', offerType: safeOfferType, offerValue: safeOfferValueStored },
+      create: { merchantId: req.session.merchantId, enabled: loyaltyEnabled === 'on', offerType: safeOfferType, offerValue: safeOfferValueStored },
+    }),
+  ]);
 
-  const theme = await prisma.receiptTheme.findUnique({ where: { merchantId: req.session.merchantId } });
-  res.render('theme-settings', { merchant, theme, saved: true, error: null });
+  const [theme, loyalty] = await Promise.all([
+    prisma.receiptTheme.findUnique({ where: { merchantId: req.session.merchantId } }),
+    prisma.loyaltyProgram.findUnique({ where: { merchantId: req.session.merchantId } }),
+  ]);
+  res.render('theme-settings', { merchant, theme, loyalty: loyaltyForDisplay(loyalty), saved: true, error: null });
 });
 
 // Social links render as an href straight on the receipt page -- reject

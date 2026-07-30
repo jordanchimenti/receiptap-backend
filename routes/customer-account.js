@@ -9,6 +9,7 @@ const router = express.Router();
 const bcrypt = require('bcrypt');
 const { OAuth2Client } = require('google-auth-library');
 const { categorizeTransaction } = require('../services/categorize-receipt');
+const { incrementLoyaltyPunch } = require('./loyalty');
 const prisma = require('../lib/prisma');
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
@@ -129,6 +130,7 @@ router.post('/receipt/:transactionId/save', requireCustomerAuth, async (req, res
     where: { id: transaction.id },
     data: { customerId: req.session.customerId },
   });
+  await incrementLoyaltyPunch(transaction.merchantId, req.session.customerId);
 
   if (!transaction.aiCategorizedAt) {
     categorizeInBackground(transaction, transaction.merchant.businessName);

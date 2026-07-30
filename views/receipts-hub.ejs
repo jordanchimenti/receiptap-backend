@@ -28,6 +28,11 @@
     .date-filters input { padding: 6px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; }
     .date-filters button { padding: 7px 14px; border: none; border-radius: 6px; background: #2563eb; color: #fff; font-size: 13px; font-weight: 600; cursor: pointer; }
     .date-filters .clear-link { font-size: 13px; color: #888; }
+    .view-btn {
+      display: inline-block; padding: 5px 12px; border-radius: 6px; background: #2563eb;
+      color: #fff; text-decoration: none; font-size: 12.5px; font-weight: 600;
+    }
+    .view-btn:hover { background: #1d4ed8; }
   </style>
 </head>
 <body>
@@ -71,7 +76,7 @@
       <div class="empty">No sales recorded yet.</div>
     <% } else { %>
       <table>
-        <thead><tr><th>Date</th><th>Transaction ID</th><th>Payment</th><th class="total-col">Total</th></tr></thead>
+        <thead><tr><th>Date</th><th>Transaction ID</th><th>Payment</th><th class="total-col">Total</th><th></th></tr></thead>
         <tbody>
           <% customerReceipts.forEach(function(t) { %>
             <tr>
@@ -79,6 +84,7 @@
               <td><%= t.id %></td>
               <td><%= t.paymentMethod || '—' %></td>
               <td class="total-col">$<%= t.total %></td>
+              <td><a class="view-btn" href="/receipt/<%= t.id %>" target="_blank" rel="noopener noreferrer">View</a></td>
             </tr>
           <% }); %>
         </tbody>
@@ -93,13 +99,14 @@
       <div class="empty">No purchases saved yet.</div>
     <% } else { %>
       <table>
-        <thead><tr><th>Date</th><th>Purchased From</th><th class="total-col">Total</th></tr></thead>
+        <thead><tr><th>Date</th><th>Purchased From</th><th class="total-col">Total</th><th></th></tr></thead>
         <tbody>
           <% merchantReceipts.forEach(function(t) { %>
             <tr>
               <td><%= t.date %></td>
               <td><%= t.soldByName %></td>
               <td class="total-col">$<%= t.total %></td>
+              <td><a class="view-btn" href="/receipt/<%= t.id %>" target="_blank" rel="noopener noreferrer">View</a></td>
             </tr>
           <% }); %>
         </tbody>

@@ -87,6 +87,12 @@ router.get('/dashboard/settings/receipt', requireAuth, async (req, res) => {
       showWarranty: false,
       showLoyalty: false,
       showWalletSave: true,
+      instagramUrl: '',
+      facebookUrl: '',
+      tiktokUrl: '',
+      xUrl: '',
+      youtubeUrl: '',
+      linkedinUrl: '',
     },
     saved: false,
     error: null,
@@ -121,6 +127,12 @@ router.get('/dashboard/settings/receipt/preview/:layoutId', requireAuth, async (
     showWarranty: bool(req.query.showWarranty, Boolean(savedTheme && savedTheme.showWarranty)),
     showLoyalty: bool(req.query.showLoyalty, Boolean(savedTheme && savedTheme.showLoyalty)),
     showWalletSave: bool(req.query.showWalletSave, savedTheme ? Boolean(savedTheme.showWalletSave) : true),
+    instagramUrl: req.query.instagramUrl || (savedTheme && savedTheme.instagramUrl) || '',
+    facebookUrl: req.query.facebookUrl || (savedTheme && savedTheme.facebookUrl) || '',
+    tiktokUrl: req.query.tiktokUrl || (savedTheme && savedTheme.tiktokUrl) || '',
+    xUrl: req.query.xUrl || (savedTheme && savedTheme.xUrl) || '',
+    youtubeUrl: req.query.youtubeUrl || (savedTheme && savedTheme.youtubeUrl) || '',
+    linkedinUrl: req.query.linkedinUrl || (savedTheme && savedTheme.linkedinUrl) || '',
   };
 
   res.render('receipt', {
@@ -151,7 +163,15 @@ router.post('/dashboard/settings/receipt', requireAuth, handleLogoUpload, async 
   const {
     layoutId, primaryColor, accentColor, headerText, footerText, displayName, location,
     googleReviewUrl, showGoogleReview, showWarranty, showLoyalty, showWalletSave,
+    instagramUrl, facebookUrl, tiktokUrl, xUrl, youtubeUrl, linkedinUrl,
   } = req.body;
+
+  const safeInstagramUrl = sanitizeUrl(instagramUrl);
+  const safeFacebookUrl = sanitizeUrl(facebookUrl);
+  const safeTiktokUrl = sanitizeUrl(tiktokUrl);
+  const safeXUrl = sanitizeUrl(xUrl);
+  const safeYoutubeUrl = sanitizeUrl(youtubeUrl);
+  const safeLinkedinUrl = sanitizeUrl(linkedinUrl);
 
   const safeLayoutId = ['classic', 'modern', 'minimal'].includes(layoutId) ? layoutId : 'classic';
   const [existingTheme, merchant] = await Promise.all([
@@ -173,7 +193,7 @@ router.post('/dashboard/settings/receipt', requireAuth, handleLogoUpload, async 
     if (!googleReviewUrl || !isValidGoogleReviewUrl(googleReviewUrl)) {
       return res.render('theme-settings', {
         merchant,
-        theme: { ...existingTheme, layoutId: safeLayoutId, logoUrl, displayName, location, primaryColor, accentColor, headerText, footerText, googleReviewUrl, showGoogleReview: true, showWarranty: showWarranty === 'on', showLoyalty: showLoyalty === 'on', showWalletSave: showWalletSave === 'on' },
+        theme: { ...existingTheme, layoutId: safeLayoutId, logoUrl, displayName, location, primaryColor, accentColor, headerText, footerText, googleReviewUrl, showGoogleReview: true, showWarranty: showWarranty === 'on', showLoyalty: showLoyalty === 'on', showWalletSave: showWalletSave === 'on', instagramUrl: safeInstagramUrl, facebookUrl: safeFacebookUrl, tiktokUrl: safeTiktokUrl, xUrl: safeXUrl, youtubeUrl: safeYoutubeUrl, linkedinUrl: safeLinkedinUrl },
         saved: false,
         error: 'Enter a valid Google review link (should start with https:// and be a Google URL).',
       });
@@ -196,6 +216,12 @@ router.post('/dashboard/settings/receipt', requireAuth, handleLogoUpload, async 
       showWarranty: showWarranty === 'on',
       showLoyalty: showLoyalty === 'on',
       showWalletSave: showWalletSave === 'on',
+      instagramUrl: safeInstagramUrl,
+      facebookUrl: safeFacebookUrl,
+      tiktokUrl: safeTiktokUrl,
+      xUrl: safeXUrl,
+      youtubeUrl: safeYoutubeUrl,
+      linkedinUrl: safeLinkedinUrl,
     },
     create: {
       merchantId: req.session.merchantId,
@@ -212,12 +238,31 @@ router.post('/dashboard/settings/receipt', requireAuth, handleLogoUpload, async 
       showWarranty: showWarranty === 'on',
       showLoyalty: showLoyalty === 'on',
       showWalletSave: showWalletSave === 'on',
+      instagramUrl: safeInstagramUrl,
+      facebookUrl: safeFacebookUrl,
+      tiktokUrl: safeTiktokUrl,
+      xUrl: safeXUrl,
+      youtubeUrl: safeYoutubeUrl,
+      linkedinUrl: safeLinkedinUrl,
     },
   });
 
   const theme = await prisma.receiptTheme.findUnique({ where: { merchantId: req.session.merchantId } });
   res.render('theme-settings', { merchant, theme, saved: true, error: null });
 });
+
+// Social links render as an href straight on the receipt page -- reject
+// anything that isn't a real http(s) URL (e.g. a stray "javascript:" value)
+// rather than trust user input directly in an anchor tag.
+function sanitizeUrl(url) {
+  if (!url) return null;
+  try {
+    const parsed = new URL(url.trim());
+    return parsed.protocol === 'https:' || parsed.protocol === 'http:' ? parsed.toString() : null;
+  } catch {
+    return null;
+  }
+}
 
 // Basic sanity check — must be a real URL and reasonably likely to be a Google link.
 // Not exhaustive (Google review links can come from several valid domains/formats),

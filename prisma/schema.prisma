@@ -152,6 +152,15 @@ model ReceiptTheme {
   showLoyalty      Boolean @default(false)
   showWalletSave   Boolean @default(true)
 
+  // Social links shown as clickable icons on receipts -- each is optional,
+  // and its icon only renders if a URL is set.
+  instagramUrl String?
+  facebookUrl  String?
+  tiktokUrl    String?
+  xUrl         String?
+  youtubeUrl   String?
+  linkedinUrl  String?
+
   updatedAt DateTime @updatedAt
 }
 

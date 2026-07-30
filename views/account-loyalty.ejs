@@ -82,7 +82,8 @@
               <% if (card.punches >= 5) { %>
                 Card full — redeem for <%= offerText %>!
               <% } else { %>
-                <%= card.punches %>/5 punches — collect all 5 for <%= offerText %>!
+                <% var punchesLeft = 5 - card.punches; %>
+                You're <%= punchesLeft %> punch<%= punchesLeft === 1 ? '' : 'es' %> away from claiming <%= offerText %>!
               <% } %>
             </div>
             <% if (card.punches >= 5) { %>

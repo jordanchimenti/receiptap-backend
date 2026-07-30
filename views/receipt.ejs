@@ -180,7 +180,7 @@
       <% var loyaltyOfferText = loyaltyProgram.offerType === 'PERCENT' ? (loyaltyProgram.offerValue + '% off') : ('$' + (loyaltyProgram.offerValue / 100).toFixed(2) + ' off'); %>
       <div class="loyalty-card" id="loyalty-card" <% if (loyaltyCard) { %>data-card-id="<%= loyaltyCard.id %>"<% } %>>
         <% if (!loyaltyCard) { %>
-          <div class="loyalty-title">🎁 Loyalty Rewards</div>
+          <div class="loyalty-title">🎁 Join our Loyalty Program</div>
           <div class="loyalty-sub">Collect 5 punches and get <%= loyaltyOfferText %> your next order!</div>
           <button type="button" class="action-button" style="background:var(--accent); border:none; cursor:pointer;" onclick="handleSaveClick('loyalty-join')">Join Now</button>
         <% } else if (loyaltyCard.redemptionStatus === 'CONFIRMED') { %>
@@ -208,7 +208,8 @@
             <% if (loyaltyCard.punches >= 5) { %>
               Card full — redeem for <%= loyaltyOfferText %>!
             <% } else { %>
-              <%= loyaltyCard.punches %>/5 punches — collect all 5 for <%= loyaltyOfferText %>!
+              <% var punchesLeft = 5 - loyaltyCard.punches; %>
+              You're <%= punchesLeft %> punch<%= punchesLeft === 1 ? '' : 'es' %> away from claiming <%= loyaltyOfferText %>!
             <% } %>
           </div>
           <% if (loyaltyCard.punches >= 5) { %>

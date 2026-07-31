@@ -14,6 +14,11 @@ router.get('/receipt/:transactionId', async (req, res) => {
     return res.status(404).send('Receipt not found');
   }
 
+  // The merchant-copy view is for the merchant's own records only -- anyone
+  // else requesting ?copy=merchant just silently gets the normal customer
+  // copy instead of the flag being honored.
+  const isMerchantCopy = req.query.copy === 'merchant' && req.session.merchantId === transaction.merchantId;
+
   // Everything below only depends on transaction.merchantId (already known)
   // or the customer's session -- nothing here depends on anything else in
   // this batch, so run them as one parallel round trip instead of four
@@ -23,14 +28,13 @@ router.get('/receipt/:transactionId', async (req, res) => {
   const [theme, merchant, loyaltyProgram, loyaltyCard] = await Promise.all([
     prisma.receiptTheme.findUnique({ where: { merchantId: transaction.merchantId } }),
     prisma.merchant.findUnique({ where: { id: transaction.merchantId } }),
-    prisma.loyaltyProgram.findUnique({ where: { merchantId: transaction.merchantId } }),
-    // Only look up a card if we actually recognize this browser as a customer --
-    // an anonymous visitor gets the "join" card, not someone else's progress.
-    req.session.customerId
-      ? prisma.loyaltyCard.findUnique({
+    // The merchant copy never shows the loyalty card, so skip both lookups.
+    isMerchantCopy ? null : prisma.loyaltyProgram.findUnique({ where: { merchantId: transaction.merchantId } }),
+    isMerchantCopy || !req.session.customerId
+      ? null
+      : prisma.loyaltyCard.findUnique({
           where: { merchantId_customerId: { merchantId: transaction.merchantId, customerId: req.session.customerId } },
-        })
-      : null,
+        }),
   ]);
 
   // Fall back to sane defaults if a merchant hasn't customized anything yet
@@ -53,6 +57,7 @@ router.get('/receipt/:transactionId', async (req, res) => {
     alreadySignedUp: Boolean(req.session.customerId),
     loyaltyProgram,
     loyaltyCard,
+    isMerchantCopy,
     transaction: {
       ...transaction,
       lineItems: transaction.lineItems, // already JSON from Prisma

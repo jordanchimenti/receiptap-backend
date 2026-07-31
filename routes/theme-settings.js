@@ -185,6 +185,7 @@ router.get('/dashboard/settings/receipt/preview/:layoutId', requireAuth, async (
     googleClientId: '', // no need to render a live Google button inside a preview thumbnail
     loyaltyProgram: previewLoyaltyProgram,
     loyaltyCard: previewLoyaltyCard,
+    isMerchantCopy: false,
     transaction: {
       id: 'preview',
       date: 'Jul 18, 2026, 2:45 PM',

@@ -121,18 +121,35 @@ router.get('/dashboard/receipts-hub', requireAuth, async (req, res) => {
     }),
   ]);
 
+  // Merchant Receipts = this business's own copy of every sale it made
+  // (for its records -- same transaction as the Customer Receipts tab, just
+  // a merchant-facing copy), PLUS anything this business itself bought at
+  // another ReceipTap merchant.
+  const merchantReceipts = [
+    ...issued.map((t) => ({
+      ...t,
+      total: (t.total / 100).toFixed(2),
+      date: t.createdAt.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }),
+      kind: 'own-sale',
+    })),
+    ...received.map((t) => ({
+      ...t,
+      total: (t.total / 100).toFixed(2),
+      date: t.createdAt.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }),
+      soldByName: t.merchant.businessName,
+      kind: 'purchased',
+    })),
+  ]
+    .sort((a, b) => b.createdAt - a.createdAt)
+    .slice(0, pageSize);
+
   res.render('receipts-hub', {
     customerReceipts: issued.map((t) => ({
       ...t,
       total: (t.total / 100).toFixed(2),
       date: t.createdAt.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }),
     })),
-    merchantReceipts: received.map((t) => ({
-      ...t,
-      total: (t.total / 100).toFixed(2),
-      date: t.createdAt.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }),
-      soldByName: t.merchant.businessName,
-    })),
+    merchantReceipts,
     filters: { from: from || '', to: to || '' },
     activeTab: req.query.tab === 'merchant' ? 'merchant' : 'customer',
   });

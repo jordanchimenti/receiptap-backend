@@ -156,13 +156,15 @@
   <%- include('receipt-layouts/' + (theme.layoutId || 'classic'), { merchant, theme, transaction, isPreview: typeof isPreview !== 'undefined' ? isPreview : false }) %>
 
   <div class="actions" style="max-width:420px; margin: 10px auto 0;">
+    <% if (!isMerchantCopy) { %>
     <button class="action-button" style="border:none; cursor:pointer;" onclick="handleSaveClick('photo')">
       Save to Photos
     </button>
     <button class="action-button save-receipt-btn" style="background:#111; border:none; cursor:pointer;" onclick="handleSaveClick('pdf')">
       Save as PDF
     </button>
-    <% if (theme.showGoogleReview && theme.googleReviewUrl) { %>
+    <% } %>
+    <% if (!isMerchantCopy && theme.showGoogleReview && theme.googleReviewUrl) { %>
       <a class="google-review-card" href="<%= theme.googleReviewUrl %>">
         <svg class="google-g" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
           <path fill="#4285F4" d="M45.12 24.5c0-1.56-.14-3.06-.4-4.5H24v8.51h11.84c-.51 2.75-2.06 5.08-4.39 6.64v5.52h7.11c4.16-3.83 6.56-9.47 6.56-16.17z"/>
@@ -176,7 +178,7 @@
         </div>
       </a>
     <% } %>
-    <% if (typeof loyaltyProgram !== 'undefined' && loyaltyProgram && loyaltyProgram.enabled) { %>
+    <% if (!isMerchantCopy && typeof loyaltyProgram !== 'undefined' && loyaltyProgram && loyaltyProgram.enabled) { %>
       <% var loyaltyOfferText = loyaltyProgram.offerType === 'PERCENT' ? (loyaltyProgram.offerValue + '% off') : ('$' + (loyaltyProgram.offerValue / 100).toFixed(2) + ' off'); %>
       <div class="loyalty-card" id="loyalty-card" <% if (loyaltyCard) { %>data-card-id="<%= loyaltyCard.id %>"<% } %>>
         <% if (!loyaltyCard) { %>
@@ -218,7 +220,7 @@
         <% } %>
       </div>
     <% } %>
-    <% if (theme.instagramUrl || theme.facebookUrl || theme.tiktokUrl || theme.xUrl || theme.youtubeUrl || theme.linkedinUrl) { %>
+    <% if (!isMerchantCopy && (theme.instagramUrl || theme.facebookUrl || theme.tiktokUrl || theme.xUrl || theme.youtubeUrl || theme.linkedinUrl)) { %>
       <div class="social-links">
         <% if (theme.instagramUrl) { %>
           <a class="social-link" href="<%= theme.instagramUrl %>" target="_blank" rel="noopener noreferrer" aria-label="Instagram">
@@ -252,12 +254,19 @@
         <% } %>
       </div>
     <% } %>
-    <% if (theme.showWarranty) { %>
+    <% if (!isMerchantCopy && theme.showWarranty) { %>
       <a class="action-button" style="background:#555;" href="/receipt/<%= transaction.id %>/warranty">Register Warranty</a>
     <% } %>
     <% if (theme.footerText) { %>
       <div class="footer-text"><%= theme.footerText %></div>
     <% } %>
+    <div class="footer-text" style="font-weight:600; margin-top: <%= theme.footerText ? '4px' : '20px' %>;">
+      <% if (isMerchantCopy) { %>
+        Merchant Copy — for business records only
+      <% } else { %>
+        Customer Copy — please retain for your records
+      <% } %>
+    </div>
   </div>
 
   <!-- Email-gate modal: shown before the receipt can be saved as PDF/Files -->

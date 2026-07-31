@@ -63,4 +63,11 @@
   <% if (transaction.paymentMethod) { %>
     <div class="meta" style="margin-top:12px;"><%= transaction.paymentMethod %></div>
   <% } %>
+  <div class="meta" style="font-weight:600; margin-top:8px;">
+    <% if (typeof isMerchantCopy !== 'undefined' && isMerchantCopy) { %>
+      Merchant Copy — for business records only
+    <% } else { %>
+      Customer Copy — please retain for your records
+    <% } %>
+  </div>
 </div>

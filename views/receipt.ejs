@@ -153,7 +153,7 @@
   </style>
 </head>
 <body>
-  <%- include('receipt-layouts/' + (theme.layoutId || 'classic'), { merchant, theme, transaction, isPreview: typeof isPreview !== 'undefined' ? isPreview : false }) %>
+  <%- include('receipt-layouts/' + (theme.layoutId || 'classic'), { merchant, theme, transaction, isPreview: typeof isPreview !== 'undefined' ? isPreview : false, isMerchantCopy }) %>
 
   <div class="actions" style="max-width:420px; margin: 10px auto 0;">
     <% if (!isMerchantCopy) { %>
@@ -260,13 +260,6 @@
     <% if (theme.footerText) { %>
       <div class="footer-text"><%= theme.footerText %></div>
     <% } %>
-    <div class="footer-text" style="font-weight:600; margin-top: <%= theme.footerText ? '4px' : '20px' %>;">
-      <% if (isMerchantCopy) { %>
-        Merchant Copy — for business records only
-      <% } else { %>
-        Customer Copy — please retain for your records
-      <% } %>
-    </div>
   </div>
 
   <!-- Email-gate modal: shown before the receipt can be saved as PDF/Files -->

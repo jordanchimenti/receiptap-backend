@@ -81,5 +81,12 @@
     <% if (transaction.paymentMethod) { %>
       <div class="payment-pill"><%= transaction.paymentMethod %></div>
     <% } %>
+    <div style="font-size:12px; font-weight:600; color:#666; margin-top:12px;">
+      <% if (typeof isMerchantCopy !== 'undefined' && isMerchantCopy) { %>
+        Merchant Copy — for business records only
+      <% } else { %>
+        Customer Copy — please retain for your records
+      <% } %>
+    </div>
   </div>
 </div>

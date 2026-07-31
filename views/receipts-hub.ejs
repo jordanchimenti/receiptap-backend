@@ -100,11 +100,12 @@
       <div class="empty">No merchant records yet.</div>
     <% } else { %>
       <table>
-        <thead><tr><th>Date</th><th>Details</th><th class="total-col">Total</th><th></th></tr></thead>
+        <thead><tr><th>Date</th><th>Transaction ID</th><th>Details</th><th class="total-col">Total</th><th></th></tr></thead>
         <tbody>
           <% merchantReceipts.forEach(function(t) { %>
             <tr>
               <td><%= t.date %></td>
+              <td><%= t.id %></td>
               <td><%= t.kind === 'own-sale' ? 'Your sale (merchant copy)' : 'Purchased from ' + t.soldByName %></td>
               <td class="total-col">$<%= t.total %></td>
               <td><a class="view-btn" href="/receipt/<%= t.id %><%= t.kind === 'own-sale' ? '?copy=merchant' : '' %>" target="_blank" rel="noopener noreferrer">View</a></td>

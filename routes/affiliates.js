@@ -58,7 +58,7 @@ function requireAffiliateAuth(req, res, next) {
 }
 
 // Resolves the current affiliate regardless of which session type is
-// present -- a merchant browsing their own "Referrals" page, or a regular
+// present -- a merchant browsing their own "Partner Program" page, or a regular
 // affiliate logged into their own portal. Lazily creates the MERCHANT-type
 // affiliate row the first time a merchant visits, since every merchant is
 // eligible without a separate signup step.
@@ -175,7 +175,27 @@ router.post('/affiliate/signup', async (req, res) => {
   try {
     const existing = await prisma.affiliate.findUnique({ where: { email } });
     if (existing) {
-      return res.render('affiliate-signup', { error: 'An account with this email already exists', rate: REGULAR_AFFILIATE_RATE });
+      // Don't dead-end on a duplicate email -- log them into the existing
+      // account instead. Still verify the password rather than trusting
+      // whatever was typed, so this can't be used to take over someone
+      // else's account just by knowing their email.
+      if (existing.passwordHash) {
+        const matches = await bcrypt.compare(password, existing.passwordHash);
+        if (!matches) {
+          return res.render('affiliate-signup', {
+            error: 'An account with this email already exists. Enter its password to continue, or log in instead.',
+            rate: REGULAR_AFFILIATE_RATE,
+          });
+        }
+      } else {
+        // No password set yet -- e.g. a merchant's affiliate account, which
+        // is auto-created without one. This attempt sets it now.
+        const passwordHash = await bcrypt.hash(password, 10);
+        await prisma.affiliate.update({ where: { id: existing.id }, data: { passwordHash } });
+      }
+
+      req.session.affiliateId = existing.id;
+      return res.redirect('/affiliate/dashboard');
     }
 
     const passwordHash = await bcrypt.hash(password, 10);

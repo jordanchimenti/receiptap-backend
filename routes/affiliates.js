@@ -240,6 +240,10 @@ router.get('/affiliate/dashboard', requireAffiliateAuth, async (req, res) => {
   res.render('affiliate-dashboard', {
     ...view,
     portalType: 'regular',
+    // The account itself can be either type (e.g. a merchant who signed up
+    // here with their merchant email lands on their existing MERCHANT-type
+    // account) -- label the page after the real program, not just the route.
+    programName: affiliate.type === 'MERCHANT' ? 'Merchant Partner Program' : 'Affiliate Partner Program',
     affiliateName: affiliate.name,
     referralUrl: `${req.protocol}://${req.get('host')}/signup?ref=${view.referralCode}`,
     connectError: req.query.connect_error === '1',

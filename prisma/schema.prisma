@@ -45,6 +45,14 @@ model Merchant {
   receiptTheme      ReceiptTheme?
   loyaltyProgram    LoyaltyProgram?
   loyaltyCards      LoyaltyCard[]
+
+  // Affiliate program -- set if this merchant signed up via someone's
+  // referral link. A merchant can ALSO be an affiliate themselves (their own
+  // "Refer & Earn" page reuses this same merchant login) via ownAffiliateAccount.
+  referredByAffiliateId String?
+  referredByAffiliate   Affiliate?   @relation("ReferredMerchants", fields: [referredByAffiliateId], references: [id])
+  ownAffiliateAccount   Affiliate?   @relation("AffiliateOwnMerchant")
+  commissionsGenerated  Commission[]
 }
 
 enum SubscriptionStatus {
@@ -205,6 +213,71 @@ model LoyaltyCard {
 
   @@unique([merchantId, customerId])
   @@index([redemptionCode])
+}
+
+// ---------------------------------------------------------------------------
+// Affiliate — refers new merchants to ReceipTap and earns a recurring
+// commission on their subscription. Two kinds, same table:
+//   MERCHANT — an existing ReceipTap merchant referring others. They use
+//     their normal merchant login (no separate password) via
+//     Merchant.ownAffiliateAccount; earns 20% while their OWN subscription
+//     is active, and stops earning new commissions (without losing past
+//     ones) if it lapses.
+//   REGULAR — a standalone affiliate (e.g. future sales team) with their own
+//     signup/login, not tied to any Merchant account; flat 15%.
+// ---------------------------------------------------------------------------
+model Affiliate {
+  id           String        @id @default(cuid())
+  name         String
+  email        String        @unique
+  passwordHash String? // only set for REGULAR -- MERCHANT type authenticates via their existing merchant session
+  type         AffiliateType @default(REGULAR)
+  referralCode String        @unique // used as ?ref=CODE on the merchant signup link
+
+  merchantId String?   @unique // set only when type = MERCHANT
+  merchant   Merchant? @relation("AffiliateOwnMerchant", fields: [merchantId], references: [id])
+
+  // Stripe Connect Express account -- required before any payout can be sent
+  stripeConnectAccountId String?  @unique
+  stripeConnectOnboarded Boolean  @default(false)
+
+  createdAt DateTime @default(now())
+
+  referredMerchants Merchant[]   @relation("ReferredMerchants")
+  commissions       Commission[]
+}
+
+enum AffiliateType {
+  MERCHANT
+  REGULAR
+}
+
+// ---------------------------------------------------------------------------
+// Commission — one payout-eligible amount, generated from one successful
+// Stripe invoice payment on a referred merchant's subscription.
+// ---------------------------------------------------------------------------
+model Commission {
+  id String @id @default(cuid())
+
+  affiliateId String
+  affiliate   Affiliate @relation(fields: [affiliateId], references: [id])
+  merchantId  String
+  merchant    Merchant  @relation(fields: [merchantId], references: [id])
+
+  stripeInvoiceId  String            @unique // idempotency: one commission per invoice paid
+  amountCents      Int
+  rate             Int // the % applied at the time (15 or 20) -- kept for audit even if rates change later
+  status           CommissionStatus  @default(PENDING)
+  stripeTransferId String?
+
+  createdAt DateTime  @default(now())
+  paidAt    DateTime?
+}
+
+enum CommissionStatus {
+  PENDING
+  PAID
+  FAILED
 }
 
 // ---------------------------------------------------------------------------

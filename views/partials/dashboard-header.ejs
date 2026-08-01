@@ -1,7 +1,7 @@
 <!-- views/partials/dashboard-header.ejs
      The merchant app rail. Included at the top of every dashboard page.
      Optional local: activeNav — 'overview' | 'receipts' | 'pucks' | 'analytics'
-     | 'customers' | 'emails' | 'loyalty' | 'pos' | 'settings' | 'account' | 'billing'
+     | 'customers' | 'emails' | 'loyalty' | 'referrals' | 'pos' | 'settings' | 'account' | 'billing'
      Renders only the rail, no per-page data required, so the older pages keep
      working untouched. Pages with merchant data render their own .topbar. -->
 <link rel="stylesheet" href="/css/receiptap.css" />
@@ -62,6 +62,10 @@
   <a href="/dashboard/billing" class="<%= on('billing') %>">
     <svg viewBox="0 0 24 24"><rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="M2.5 10h19"/></svg>
     Billing
+  </a>
+  <a href="/dashboard/referrals" class="<%= on('referrals') %>">
+    <svg viewBox="0 0 24 24"><circle cx="8" cy="9" r="3"/><path d="M2.5 20c0-3 2.5-5.5 5.5-5.5s5.5 2.5 5.5 5.5"/><path d="M16 4.5c1.7.4 3 2 3 3.8s-1.3 3.4-3 3.8M18.5 14.3c1.8.6 3 2.3 3 4.2"/></svg>
+    Referrals
   </a>
 
   <div class="rail-spacer"></div>

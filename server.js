@@ -84,6 +84,7 @@ app.use(require('./routes/email-capture'));         // email/Google capture gate
 app.use(require('./routes/customer-account'));    // consumer wallet: /account/*
 app.use(require('./routes/loyalty'));               // punch cards: join/earn/redeem, /account/loyalty, /dashboard/loyalty/redeem
 app.use(require('./routes/billing'));               // ReceipTap's own subscription billing (Stripe)
+app.use(require('./routes/affiliates'));             // referral program: /dashboard/referrals (merchant-affiliates), /affiliate/* (regular affiliates)
 app.use(require('./routes/admin'));
 
 // Root: marketing landing page for visitors, dashboard for logged-in merchants

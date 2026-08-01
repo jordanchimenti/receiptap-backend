@@ -1,0 +1,171 @@
+<!-- views/affiliate-dashboard.ejs -->
+<!-- Shared by both affiliate types: `portalType` is 'merchant' (embedded in
+     the merchant dashboard rail, reusing their merchant login) or 'regular'
+     (a standalone affiliate account with its own simple header). -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Referrals - ReceipTap</title>
+  <% if (portalType === 'regular') { %><link rel="stylesheet" href="/css/receiptap.css" /><% } %>
+  <style>
+    h1 { font-size: 22px; margin-bottom: 4px; }
+    .standalone-shell { max-width: 640px; margin: 0 auto; padding: 24px 16px 48px; }
+    .standalone-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+    .standalone-logo { height: 32px; }
+    .logout-btn { background: none; border: 1px solid #ddd; border-radius: 6px; padding: 6px 12px; font-size: 12.5px; color: #666; cursor: pointer; }
+
+    .referral-card {
+      background: #f9fafb; border-radius: 10px; padding: 20px; margin-top: 18px;
+    }
+    .referral-link-row { display: flex; gap: 8px; margin-top: 8px; }
+    .referral-link-row input {
+      flex: 1; padding: 10px 12px; border: 1px solid #ddd; border-radius: 6px;
+      font-size: 13px; font-family: ui-monospace, monospace; background: #fff;
+    }
+    .copy-btn { padding: 10px 16px; border: none; border-radius: 6px; background: #2563eb; color: #fff; font-weight: 600; font-size: 13px; cursor: pointer; }
+
+    .rate-banner {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 18px; border-radius: 10px; margin-top: 16px; font-size: 14px;
+    }
+    .rate-banner.eligible { background: #ecfdf5; color: #047857; }
+    .rate-banner.paused { background: #fef2f2; color: #dc2626; }
+    .rate-value { font-size: 20px; font-weight: 700; }
+
+    .stats-row { display: flex; gap: 16px; margin-top: 20px; }
+    .stat-box { flex: 1; background: #f9fafb; border-radius: 10px; padding: 16px; text-align: center; }
+    .stat-num { font-size: 22px; font-weight: 700; }
+    .stat-label { font-size: 12px; color: #888; margin-top: 2px; }
+
+    h2 { font-size: 15px; margin-top: 28px; margin-bottom: 8px; color: #555; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid #eee; font-size: 14px; }
+    th { color: #888; font-weight: 500; font-size: 12px; text-transform: uppercase; }
+    .empty { text-align: center; color: #888; margin-top: 20px; font-size: 13.5px; }
+    .status-pill { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 600; }
+    .status-pill.active, .status-pill.paid { background: #ecfdf5; color: #047857; }
+    .status-pill.pending { background: #fffbeb; color: #b45309; }
+    .status-pill.other { background: #f4f4f5; color: #666; }
+  </style>
+</head>
+<body>
+  <% if (portalType === 'merchant') { %>
+    <%- include('partials/dashboard-header', { activeNav: 'referrals' }) %>
+    <div class="topbar">
+      <div>
+        <h1>Referrals</h1>
+        <p class="sub">Refer other businesses to ReceipTap and earn a recurring commission.</p>
+      </div>
+    </div>
+    <div class="app-body">
+  <% } else { %>
+    <div class="standalone-shell">
+      <div class="standalone-header">
+        <img class="standalone-logo" src="/images/receiptap-logo.png" alt="ReceipTap" />
+        <form method="POST" action="/affiliate/logout">
+          <button type="submit" class="logout-btn">Log out</button>
+        </form>
+      </div>
+      <div class="eyebrow">Affiliate portal</div>
+      <h1>Welcome, <%= affiliateName %></h1>
+  <% } %>
+
+  <div class="referral-card">
+    <strong>Your referral link</strong>
+    <div class="referral-link-row">
+      <input type="text" id="referral-url" value="<%= referralUrl %>" readonly />
+      <button type="button" class="copy-btn" onclick="copyReferralLink()">Copy</button>
+    </div>
+  </div>
+
+  <% if (portalType === 'merchant') { %>
+    <div class="rate-banner <%= isEligible ? 'eligible' : 'paused' %>">
+      <div>
+        <div class="rate-value"><%= rate %>% commission</div>
+        <div>
+          <% if (isEligible) { %>
+            Your subscription is active — you're earning on every referral.
+          <% } else { %>
+            Your ReceipTap subscription isn't active right now, so new commissions are paused. Resubscribe to start earning again — nothing you've already earned is affected.
+          <% } %>
+        </div>
+      </div>
+    </div>
+  <% } else { %>
+    <div class="rate-banner eligible">
+      <div>
+        <div class="rate-value"><%= rate %>% commission</div>
+        <div>On every payment your referred merchants make, for as long as they stay subscribed.</div>
+      </div>
+    </div>
+  <% } %>
+
+  <div class="stats-row">
+    <div class="stat-box">
+      <div class="stat-num"><%= referredMerchants.length %></div>
+      <div class="stat-label">Referred merchants</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-num">$<%= pendingTotal %></div>
+      <div class="stat-label">Pending</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-num">$<%= paidTotal %></div>
+      <div class="stat-label">Paid out</div>
+    </div>
+  </div>
+
+  <h2>Referred Merchants</h2>
+  <% if (referredMerchants.length === 0) { %>
+    <div class="empty">No referrals yet — share your link to get started.</div>
+  <% } else { %>
+    <table>
+      <thead><tr><th>Business</th><th>Status</th><th>Joined</th></tr></thead>
+      <tbody>
+        <% referredMerchants.forEach(function(m) { %>
+          <tr>
+            <td><%= m.businessName %></td>
+            <td><span class="status-pill <%= m.subscriptionStatus === 'ACTIVE' ? 'active' : 'other' %>"><%= m.subscriptionStatus %></span></td>
+            <td><%= m.joinedAt %></td>
+          </tr>
+        <% }); %>
+      </tbody>
+    </table>
+  <% } %>
+
+  <h2>Commissions</h2>
+  <% if (commissions.length === 0) { %>
+    <div class="empty">No commissions yet — these appear automatically once a referred merchant makes a payment.</div>
+  <% } else { %>
+    <table>
+      <thead><tr><th>Date</th><th>Rate</th><th class="total-col">Amount</th><th>Status</th></tr></thead>
+      <tbody>
+        <% commissions.forEach(function(c) { %>
+          <tr>
+            <td><%= c.date %></td>
+            <td><%= c.rate %>%</td>
+            <td>$<%= c.amount %></td>
+            <td><span class="status-pill <%= c.status === 'PAID' ? 'paid' : (c.status === 'PENDING' ? 'pending' : 'other') %>"><%= c.status %></span></td>
+          </tr>
+        <% }); %>
+      </tbody>
+    </table>
+  <% } %>
+
+  <% if (portalType === 'merchant') { %>
+    </div>
+  <% } else { %>
+    </div>
+  <% } %>
+
+  <script>
+    function copyReferralLink() {
+      const input = document.getElementById('referral-url');
+      input.select();
+      navigator.clipboard.writeText(input.value).catch(() => document.execCommand('copy'));
+    }
+  </script>
+</body>
+</html>

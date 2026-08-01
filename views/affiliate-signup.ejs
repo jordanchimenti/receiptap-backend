@@ -1,32 +1,27 @@
-<!-- views/signup.ejs -->
+<!-- views/affiliate-signup.ejs -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Sign Up - ReceipTap</title>
+  <title>Become an Affiliate - ReceipTap</title>
   <link rel="stylesheet" href="/css/receiptap.css" />
 </head>
 <body>
   <div class="centered-shell">
     <div class="auth-card">
       <img src="/images/receiptap-logo.png" alt="ReceipTap" style="height: 60px; margin-bottom: 20px;" />
-      <h1 style="font-size: 22px; margin-bottom: 6px;">Create your ReceipTap account</h1>
+      <h1 style="font-size: 22px; margin-bottom: 6px;">Become a ReceipTap Affiliate</h1>
       <p style="font-size: 13.5px; color: var(--ink-soft); margin: 8px 0 24px; line-height: 1.5;">
-        One account per business. You'll connect your POS next.
+        Earn 15% of every merchant you refer, for as long as they stay subscribed.
       </p>
 
       <% if (error) { %><div class="error-box"><%= error %></div><% } %>
 
-      <form method="POST" action="/signup">
-        <input type="hidden" name="refCode" value="<%= typeof refCode !== 'undefined' ? refCode : '' %>" />
+      <form method="POST" action="/affiliate/signup">
         <div class="field">
-          <label for="ownerName">Your name</label>
-          <input type="text" id="ownerName" name="ownerName" required autofocus />
-        </div>
-        <div class="field">
-          <label for="businessName">Business name</label>
-          <input type="text" id="businessName" name="businessName" required />
+          <label for="name">Your name</label>
+          <input type="text" id="name" name="name" required autofocus />
         </div>
         <div class="field">
           <label for="email">Email</label>
@@ -36,11 +31,14 @@
           <label for="password">Password</label>
           <input type="password" id="password" name="password" required minlength="8" />
         </div>
-        <button type="submit" class="btn btn-primary">Create account</button>
+        <button type="submit" class="btn btn-primary">Create affiliate account</button>
       </form>
 
       <p style="font-size: 13px; color: var(--ink-soft); margin-top: 20px; text-align: center;">
-        Already have an account? <a href="/login" style="color: var(--teal-deep); font-weight: 600; text-decoration: none;">Log in</a>
+        Already an affiliate? <a href="/affiliate/login" style="color: var(--teal-deep); font-weight: 600; text-decoration: none;">Log in</a>
+      </p>
+      <p style="font-size: 12px; color: var(--ink-soft); margin-top: 8px; text-align: center;">
+        A ReceipTap merchant? <a href="/login" style="color: var(--teal-deep); font-weight: 600; text-decoration: none;">Log in to your merchant account</a> instead — your referral link lives under "Referrals" in your dashboard.
       </p>
     </div>
   </div>

@@ -7,13 +7,13 @@
 //     own signup/login, flat 15%, not tied to a Merchant account.
 //
 // Phase 1: accounts, referral codes/links, and referred-merchant tracking.
-// Phase 2 (this file now includes it): Stripe Connect onboarding, so an
-// affiliate can actually receive a payout once one exists.
-// Phase 3 (not yet built): commission calculation on each successful
-// referred-merchant payment, and the actual transfer via
-// stripeService.payAffiliateCommission -- needs a real Stripe billing
-// webhook wired up first (the route exists in routes/billing.js but isn't
-// receiving events yet).
+// Phase 2: Stripe Connect onboarding, so an affiliate can actually receive
+// a payout once one exists.
+// Phase 3 (this file now includes it): commission calculation lives in
+// services/stripeService.js, triggered by the real invoice.payment_succeeded
+// webhook event (routes/billing.js). This file's role is just paying out
+// any commissions that piled up PENDING before the affiliate finished
+// connecting Stripe -- see /affiliate/connect-stripe/return below.
 
 const express = require('express');
 const router = express.Router();
@@ -24,10 +24,9 @@ const {
   createAffiliateConnectAccount,
   createAffiliateOnboardingLink,
   getAffiliateConnectStatus,
+  payPendingCommissionsForAffiliate,
 } = require('../services/stripeService');
-
-const MERCHANT_AFFILIATE_RATE = 20;
-const REGULAR_AFFILIATE_RATE = 15;
+const { MERCHANT_AFFILIATE_RATE, REGULAR_AFFILIATE_RATE } = require('../services/affiliateRates');
 
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no 0/O/1/I -- easy to read off/type
 function generateReferralCode() {
@@ -261,6 +260,11 @@ router.get('/affiliate/connect-stripe/return', async (req, res) => {
       where: { id: affiliate.id },
       data: { stripeConnectOnboarded: status.payoutsEnabled },
     });
+    // Flush anything that accrued PENDING while this affiliate had no
+    // payout account connected yet.
+    if (status.payoutsEnabled) {
+      await payPendingCommissionsForAffiliate(affiliate.id);
+    }
   } catch (err) {
     console.error('Could not confirm Stripe Connect status:', err.message);
   }

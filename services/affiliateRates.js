@@ -1,0 +1,7 @@
+// services/affiliateRates.js
+// Shared by routes/affiliates.js (dashboard display) and services/stripeService.js
+// (commission calculation on payment) -- one place so the two rates can't drift apart.
+const MERCHANT_AFFILIATE_RATE = 20; // merchant referring another merchant, while their own subscription is ACTIVE
+const REGULAR_AFFILIATE_RATE = 15; // standalone affiliate (future sales team), no eligibility condition
+
+module.exports = { MERCHANT_AFFILIATE_RATE, REGULAR_AFFILIATE_RATE };

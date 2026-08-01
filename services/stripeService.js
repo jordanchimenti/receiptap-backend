@@ -1,5 +1,6 @@
 const Stripe = require('stripe');
 const prisma = require('../lib/prisma');
+const { MERCHANT_AFFILIATE_RATE, REGULAR_AFFILIATE_RATE } = require('./affiliateRates');
 
 const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2024-06-20' })
@@ -139,6 +140,83 @@ async function payAffiliateCommission(stripeConnectAccountId, amountCents, commi
   });
 }
 
+/** Attempts a real transfer for one commission and records the outcome.
+ * Safe to call speculatively -- a Stripe error (e.g. insufficient platform
+ * balance) just leaves the commission FAILED for manual follow-up rather
+ * than throwing out of the webhook handler. */
+async function tryPayCommission(commission, affiliate) {
+  try {
+    const transfer = await payAffiliateCommission(
+      affiliate.stripeConnectAccountId,
+      commission.amountCents,
+      commission.id
+    );
+    await prisma.commission.update({
+      where: { id: commission.id },
+      data: { status: 'PAID', stripeTransferId: transfer.id, paidAt: new Date() },
+    });
+  } catch (err) {
+    console.error(`Failed to pay affiliate commission ${commission.id}:`, err.message);
+    await prisma.commission.update({ where: { id: commission.id }, data: { status: 'FAILED' } });
+  }
+}
+
+/** Records (and, if possible, immediately pays) the commission owed on a
+ * referred merchant's successful payment. Idempotent on stripeInvoiceId --
+ * Stripe can and does redeliver the same webhook event more than once. */
+async function recordAffiliateCommission(invoice) {
+  if (!invoice.amount_paid || invoice.amount_paid <= 0) return; // e.g. a $0 trial-start invoice
+
+  const merchant = await prisma.merchant.findFirst({ where: { stripeCustomerId: invoice.customer } });
+  if (!merchant || !merchant.referredByAffiliateId) return; // not a referred merchant
+
+  const existing = await prisma.commission.findUnique({ where: { stripeInvoiceId: invoice.id } });
+  if (existing) return;
+
+  const affiliate = await prisma.affiliate.findUnique({
+    where: { id: merchant.referredByAffiliateId },
+    include: { merchant: true }, // the affiliate's OWN merchant account, if type MERCHANT
+  });
+  if (!affiliate) return;
+
+  const rate = affiliate.type === 'MERCHANT' ? MERCHANT_AFFILIATE_RATE : REGULAR_AFFILIATE_RATE;
+
+  // Merchant-affiliates only accrue new commissions while their own
+  // subscription is active -- commissions already earned are unaffected,
+  // this only blocks new ones from being created while lapsed.
+  if (affiliate.type === 'MERCHANT' && affiliate.merchant?.subscriptionStatus !== 'ACTIVE') return;
+
+  const amountCents = Math.round(invoice.amount_paid * (rate / 100));
+
+  const commission = await prisma.commission.create({
+    data: {
+      affiliateId: affiliate.id,
+      merchantId: merchant.id,
+      stripeInvoiceId: invoice.id,
+      amountCents,
+      rate,
+      status: 'PENDING',
+    },
+  });
+
+  if (affiliate.stripeConnectOnboarded && affiliate.stripeConnectAccountId) {
+    await tryPayCommission(commission, affiliate);
+  }
+}
+
+/** Pays out every PENDING commission for an affiliate -- called once they
+ * finish Stripe Connect onboarding, to flush anything that accrued while
+ * they had no payout account to send it to. */
+async function payPendingCommissionsForAffiliate(affiliateId) {
+  const affiliate = await prisma.affiliate.findUnique({ where: { id: affiliateId } });
+  if (!affiliate?.stripeConnectOnboarded || !affiliate.stripeConnectAccountId) return;
+
+  const pending = await prisma.commission.findMany({ where: { affiliateId, status: 'PENDING' } });
+  for (const commission of pending) {
+    await tryPayCommission(commission, affiliate);
+  }
+}
+
 /**
  * Handles incoming Stripe webhook events. Keeps the local subscriptionStatus
  * in sync so the rest of the app never has to call Stripe directly to check
@@ -170,6 +248,10 @@ async function handleWebhookEvent(event) {
         where: { stripeCustomerId: invoice.customer },
         data: { subscriptionStatus: 'PAST_DUE' },
       });
+      break;
+    }
+    case 'invoice.payment_succeeded': {
+      await recordAffiliateCommission(event.data.object);
       break;
     }
     default:
@@ -210,4 +292,5 @@ module.exports = {
   createAffiliateOnboardingLink,
   getAffiliateConnectStatus,
   payAffiliateCommission,
+  payPendingCommissionsForAffiliate,
 };

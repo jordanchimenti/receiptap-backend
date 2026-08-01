@@ -6,16 +6,25 @@
 //   REGULAR  — a standalone affiliate (e.g. future sales team) with their
 //     own signup/login, flat 15%, not tied to a Merchant account.
 //
-// Phase 1 (this file): accounts, referral codes/links, and referred-merchant
-// tracking. Commission calculation and Stripe Connect payouts come later --
-// this only creates the Affiliate/Commission rows and relationships so
-// referrals are tracked correctly from day one.
+// Phase 1: accounts, referral codes/links, and referred-merchant tracking.
+// Phase 2 (this file now includes it): Stripe Connect onboarding, so an
+// affiliate can actually receive a payout once one exists.
+// Phase 3 (not yet built): commission calculation on each successful
+// referred-merchant payment, and the actual transfer via
+// stripeService.payAffiliateCommission -- needs a real Stripe billing
+// webhook wired up first (the route exists in routes/billing.js but isn't
+// receiving events yet).
 
 const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
 const bcrypt = require('bcrypt');
 const prisma = require('../lib/prisma');
+const {
+  createAffiliateConnectAccount,
+  createAffiliateOnboardingLink,
+  getAffiliateConnectStatus,
+} = require('../services/stripeService');
 
 const MERCHANT_AFFILIATE_RATE = 20;
 const REGULAR_AFFILIATE_RATE = 15;
@@ -47,6 +56,34 @@ function requireAffiliateAuth(req, res, next) {
     return res.redirect(`/affiliate/login?redirect=${encodeURIComponent(req.originalUrl)}`);
   }
   next();
+}
+
+// Resolves the current affiliate regardless of which session type is
+// present -- a merchant browsing their own "Referrals" page, or a regular
+// affiliate logged into their own portal. Lazily creates the MERCHANT-type
+// affiliate row the first time a merchant visits, since every merchant is
+// eligible without a separate signup step.
+async function getCurrentAffiliate(req) {
+  if (req.session?.affiliateId) {
+    return prisma.affiliate.findUnique({ where: { id: req.session.affiliateId } });
+  }
+  if (req.session?.merchantId) {
+    let affiliate = await prisma.affiliate.findUnique({ where: { merchantId: req.session.merchantId } });
+    if (!affiliate) {
+      const merchant = await prisma.merchant.findUnique({ where: { id: req.session.merchantId } });
+      affiliate = await prisma.affiliate.create({
+        data: {
+          name: merchant.ownerName || merchant.businessName,
+          email: merchant.email,
+          type: 'MERCHANT',
+          merchantId: merchant.id,
+          referralCode: await uniqueReferralCode(),
+        },
+      });
+    }
+    return affiliate;
+  }
+  return null;
 }
 
 // Shared shape for both dashboards -- fetches referred merchants + commissions,
@@ -102,26 +139,13 @@ async function buildAffiliateView(affiliate) {
 
 // --- Merchant-affiliate: reuses the existing merchant session ---------------
 router.get('/dashboard/referrals', requireMerchantAuth, async (req, res) => {
-  let affiliate = await prisma.affiliate.findUnique({ where: { merchantId: req.session.merchantId } });
-
-  if (!affiliate) {
-    const merchant = await prisma.merchant.findUnique({ where: { id: req.session.merchantId } });
-    affiliate = await prisma.affiliate.create({
-      data: {
-        name: merchant.ownerName || merchant.businessName,
-        email: merchant.email,
-        type: 'MERCHANT',
-        merchantId: merchant.id,
-        referralCode: await uniqueReferralCode(),
-      },
-    });
-  }
-
+  const affiliate = await getCurrentAffiliate(req);
   const view = await buildAffiliateView(affiliate);
   res.render('affiliate-dashboard', {
     ...view,
     portalType: 'merchant',
     referralUrl: `${req.protocol}://${req.get('host')}/signup?ref=${view.referralCode}`,
+    connectError: req.query.connect_error === '1',
   });
 });
 
@@ -189,7 +213,59 @@ router.get('/affiliate/dashboard', requireAffiliateAuth, async (req, res) => {
     portalType: 'regular',
     affiliateName: affiliate.name,
     referralUrl: `${req.protocol}://${req.get('host')}/signup?ref=${view.referralCode}`,
+    connectError: req.query.connect_error === '1',
   });
+});
+
+// --- Stripe Connect onboarding (shared by both affiliate types) -----------
+// The affiliate never enters bank/ID details into this app -- they're sent
+// to a Stripe-hosted page that collects that directly, and Stripe redirects
+// back here afterward. Works for whichever session type is present.
+
+function dashboardPathFor(affiliate) {
+  return affiliate.type === 'MERCHANT' ? '/dashboard/referrals' : '/affiliate/dashboard';
+}
+
+router.get('/affiliate/connect-stripe/start', async (req, res) => {
+  const affiliate = await getCurrentAffiliate(req);
+  if (!affiliate) return res.redirect('/login');
+
+  try {
+    let accountId = affiliate.stripeConnectAccountId;
+    if (!accountId) {
+      const account = await createAffiliateConnectAccount(affiliate);
+      accountId = account.id;
+      await prisma.affiliate.update({ where: { id: affiliate.id }, data: { stripeConnectAccountId: accountId } });
+    }
+
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    const url = await createAffiliateOnboardingLink(
+      accountId,
+      `${baseUrl}/affiliate/connect-stripe/start`, // Stripe sends them back here if the link expires mid-flow
+      `${baseUrl}/affiliate/connect-stripe/return`
+    );
+    res.redirect(url);
+  } catch (err) {
+    console.error('Stripe Connect onboarding failed to start:', err.message);
+    res.redirect(`${dashboardPathFor(affiliate)}?connect_error=1`);
+  }
+});
+
+router.get('/affiliate/connect-stripe/return', async (req, res) => {
+  const affiliate = await getCurrentAffiliate(req);
+  if (!affiliate || !affiliate.stripeConnectAccountId) return res.redirect('/login');
+
+  try {
+    const status = await getAffiliateConnectStatus(affiliate.stripeConnectAccountId);
+    await prisma.affiliate.update({
+      where: { id: affiliate.id },
+      data: { stripeConnectOnboarded: status.payoutsEnabled },
+    });
+  } catch (err) {
+    console.error('Could not confirm Stripe Connect status:', err.message);
+  }
+
+  res.redirect(dashboardPathFor(affiliate));
 });
 
 module.exports = router;

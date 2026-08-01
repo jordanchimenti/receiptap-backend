@@ -102,6 +102,28 @@
     </div>
   <% } %>
 
+  <% if (typeof connectError !== 'undefined' && connectError) { %>
+    <div class="rate-banner paused" style="margin-top:12px;">
+      <div>Couldn't start Stripe onboarding — please try again in a moment.</div>
+    </div>
+  <% } %>
+
+  <div class="referral-card" style="margin-top:16px;">
+    <% if (stripeConnectOnboarded) { %>
+      <strong>✅ Payouts connected</strong>
+      <div style="font-size:13px; color:#666; margin-top:4px;">
+        Commissions will be sent directly to your bank account via Stripe.
+        <a href="/affiliate/connect-stripe/start" style="color:#2563eb; font-weight:600;">Update details</a>
+      </div>
+    <% } else { %>
+      <strong>Connect a payout account</strong>
+      <div style="font-size:13px; color:#666; margin:4px 0 10px;">
+        You'll need to connect a bank account with Stripe before any commission can be paid out. Stripe collects your details directly — this app never sees them.
+      </div>
+      <a href="/affiliate/connect-stripe/start" class="copy-btn" style="display:inline-block; text-decoration:none;">Connect with Stripe</a>
+    <% } %>
+  </div>
+
   <div class="stats-row">
     <div class="stat-box">
       <div class="stat-num"><%= referredMerchants.length %></div>

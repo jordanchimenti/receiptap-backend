@@ -88,6 +88,57 @@ async function resumeSubscription(subscriptionId) {
   return stripe.subscriptions.update(subscriptionId, { cancel_at_period_end: false });
 }
 
+// --- Affiliate payouts (Stripe Connect) -------------------------------------
+// Requires Stripe Connect to be enabled on the platform account (a one-time
+// agreement accepted in the Stripe Dashboard) -- account creation below will
+// fail with a clear Stripe error if it isn't.
+
+/** Creates the Express account an affiliate's payouts will go to. Only
+ * called once per affiliate -- the id is saved and reused after this. */
+async function createAffiliateConnectAccount(affiliate) {
+  if (!stripe) throw new Error('Stripe is not configured yet (missing STRIPE_SECRET_KEY).');
+  return stripe.accounts.create({
+    type: 'express',
+    email: affiliate.email,
+    business_type: 'individual',
+    capabilities: { transfers: { requested: true } },
+  });
+}
+
+/** A one-time-use hosted link where the affiliate enters their own bank/ID
+ * details directly with Stripe -- this app never sees or stores that data. */
+async function createAffiliateOnboardingLink(stripeConnectAccountId, refreshUrl, returnUrl) {
+  if (!stripe) throw new Error('Stripe is not configured yet (missing STRIPE_SECRET_KEY).');
+  const link = await stripe.accountLinks.create({
+    account: stripeConnectAccountId,
+    refresh_url: refreshUrl,
+    return_url: returnUrl,
+    type: 'account_onboarding',
+  });
+  return link.url;
+}
+
+/** Whether Stripe has actually finished verifying this account and will let
+ * money be sent to it -- onboarding can be "submitted" but still pending
+ * Stripe's own review, so payoutsEnabled is the real signal to check. */
+async function getAffiliateConnectStatus(stripeConnectAccountId) {
+  if (!stripe) throw new Error('Stripe is not configured yet (missing STRIPE_SECRET_KEY).');
+  const account = await stripe.accounts.retrieve(stripeConnectAccountId);
+  return { payoutsEnabled: Boolean(account.payouts_enabled), detailsSubmitted: Boolean(account.details_submitted) };
+}
+
+/** Sends a commission amount to an already-onboarded affiliate. Called from
+ * Phase 3's payment-succeeded handler, not directly by any route yet. */
+async function payAffiliateCommission(stripeConnectAccountId, amountCents, commissionId) {
+  if (!stripe) throw new Error('Stripe is not configured yet (missing STRIPE_SECRET_KEY).');
+  return stripe.transfers.create({
+    amount: amountCents,
+    currency: 'usd',
+    destination: stripeConnectAccountId,
+    metadata: { commissionId },
+  });
+}
+
 /**
  * Handles incoming Stripe webhook events. Keeps the local subscriptionStatus
  * in sync so the rest of the app never has to call Stripe directly to check
@@ -155,4 +206,8 @@ module.exports = {
   applyRetentionDiscount,
   cancelSubscriptionAtPeriodEnd,
   resumeSubscription,
+  createAffiliateConnectAccount,
+  createAffiliateOnboardingLink,
+  getAffiliateConnectStatus,
+  payAffiliateCommission,
 };

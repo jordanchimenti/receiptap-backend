@@ -140,11 +140,17 @@ async function buildAffiliateView(affiliate) {
 router.get('/dashboard/referrals', requireMerchantAuth, async (req, res) => {
   const affiliate = await getCurrentAffiliate(req);
   const view = await buildAffiliateView(affiliate);
+  const baseUrl = `${req.protocol}://${req.get('host')}`;
   res.render('affiliate-dashboard', {
     ...view,
     portalType: 'merchant',
-    referralUrl: `${req.protocol}://${req.get('host')}/signup?ref=${view.referralCode}`,
+    referralUrl: `${baseUrl}/signup?ref=${view.referralCode}`,
     connectError: req.query.connect_error === '1',
+    // The separate Affiliate Partner Program (standalone sales-team
+    // affiliates) -- shown here as an awareness/invite block only. A
+    // merchant doesn't earn anything from this; it's just a link to pass on.
+    affiliateProgramRate: REGULAR_AFFILIATE_RATE,
+    affiliateSignupUrl: `${baseUrl}/affiliate/signup`,
   });
 });
 

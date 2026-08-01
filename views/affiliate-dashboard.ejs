@@ -124,6 +124,19 @@
     <% } %>
   </div>
 
+  <% if (portalType === 'merchant') { %>
+    <div class="referral-card" style="margin-top:16px;">
+      <strong>Affiliate Partner Program</strong>
+      <div style="font-size:13px; color:#666; margin:4px 0 10px;">
+        Know someone who'd be a great partner for ReceipTap — not a merchant themselves, but well-connected to businesses that could be? Send them this link to join as a standalone affiliate and earn <%= affiliateProgramRate %>% commission on every merchant they refer. This is a separate program from yours above.
+      </div>
+      <div class="referral-link-row">
+        <input type="text" id="affiliate-signup-url" value="<%= affiliateSignupUrl %>" readonly />
+        <button type="button" class="copy-btn" onclick="copyAffiliateSignupLink()">Copy</button>
+      </div>
+    </div>
+  <% } %>
+
   <div class="stats-row">
     <div class="stat-box">
       <div class="stat-num"><%= referredMerchants.length %></div>
@@ -185,6 +198,11 @@
   <script>
     function copyReferralLink() {
       const input = document.getElementById('referral-url');
+      input.select();
+      navigator.clipboard.writeText(input.value).catch(() => document.execCommand('copy'));
+    }
+    function copyAffiliateSignupLink() {
+      const input = document.getElementById('affiliate-signup-url');
       input.select();
       navigator.clipboard.writeText(input.value).catch(() => document.execCommand('copy'));
     }

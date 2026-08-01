@@ -1,10 +1,10 @@
 // routes/affiliates.js
 // The referral/commission program. Two kinds of affiliate share one table:
-//   MERCHANT — an existing merchant referring others, 20% while their own
+//   MERCHANT — an existing merchant referring others, 10% while their own
 //     subscription is ACTIVE. No separate login -- reuses their merchant
 //     session via Merchant.ownAffiliateAccount.
 //   REGULAR  — a standalone affiliate (e.g. future sales team) with their
-//     own signup/login, flat 15%, not tied to a Merchant account.
+//     own signup/login, flat 20%, not tied to a Merchant account.
 //
 // Phase 1: accounts, referral codes/links, and referred-merchant tracking.
 // Phase 2: Stripe Connect onboarding, so an affiliate can actually receive
@@ -150,7 +150,7 @@ router.get('/dashboard/referrals', requireMerchantAuth, async (req, res) => {
 
 // --- Regular affiliate: standalone signup/login --------------------------
 
-router.get('/affiliate/signup', (req, res) => res.render('affiliate-signup', { error: null }));
+router.get('/affiliate/signup', (req, res) => res.render('affiliate-signup', { error: null, rate: REGULAR_AFFILIATE_RATE }));
 router.get('/affiliate/login', (req, res) => res.render('affiliate-login', {
   error: null,
   redirect: req.query.redirect || '/affiliate/dashboard',
@@ -159,13 +159,13 @@ router.get('/affiliate/login', (req, res) => res.render('affiliate-login', {
 router.post('/affiliate/signup', async (req, res) => {
   const { name, email, password } = req.body;
   if (!name || !email || !password) {
-    return res.render('affiliate-signup', { error: 'All fields are required' });
+    return res.render('affiliate-signup', { error: 'All fields are required', rate: REGULAR_AFFILIATE_RATE });
   }
 
   try {
     const existing = await prisma.affiliate.findUnique({ where: { email } });
     if (existing) {
-      return res.render('affiliate-signup', { error: 'An account with this email already exists' });
+      return res.render('affiliate-signup', { error: 'An account with this email already exists', rate: REGULAR_AFFILIATE_RATE });
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
@@ -177,7 +177,7 @@ router.post('/affiliate/signup', async (req, res) => {
     res.redirect('/affiliate/dashboard');
   } catch (err) {
     console.error('Affiliate signup failed:', err);
-    res.render('affiliate-signup', { error: 'Something went wrong on our end — please try again in a moment.' });
+    res.render('affiliate-signup', { error: 'Something went wrong on our end — please try again in a moment.', rate: REGULAR_AFFILIATE_RATE });
   }
 });
 

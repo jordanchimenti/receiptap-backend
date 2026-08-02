@@ -11,25 +11,43 @@
   <link rel="stylesheet" href="/css/receiptap.css" />
 </head>
 <body>
-  <div style="background: var(--paper-raised); border-bottom: 1px solid var(--line); padding: 12px 16px; text-align: center;">
-    <span style="font-size: 13px; color: var(--ink-soft);">Powered by ReceipTap. Business owner? Get digital receipts for your business for <strong>FREE</strong>.</span>
-    <a href="/signup" class="btn btn-primary" style="display: inline-block; width: auto; margin-left: 10px; padding: 6px 14px; font-size: 13px;">Get Now</a>
-  </div>
-  <div class="centered-shell">
-    <div class="auth-card">
-      <% if (logoUrl) { %>
-        <img src="<%= logoUrl %>" alt="<%= businessName %>" style="height: 54px; margin-bottom: 18px; border-radius: 8px;" />
-      <% } else { %>
-        <img src="/images/receiptap-logo.png" alt="ReceipTap" style="height: 54px; margin-bottom: 18px;" />
-      <% } %>
-      <h1 style="font-size: 20px; margin-bottom: 6px;">Thanks for visiting <%= businessName %>!</h1>
-      <p style="font-size: 13.5px; color: var(--ink-soft); margin: 8px 0 4px; line-height: 1.5;">
-        There's no receipt waiting for this tap right now.
+  <div style="min-height: 100vh; display: flex; flex-direction: column;">
+
+    <!-- Top: merchant acquisition pitch -->
+    <div style="text-align: center; padding: 20px 16px 16px;">
+      <p style="font-size: 14px; color: var(--ink); margin: 0 0 2px; line-height: 1.4;">
+        Interested in digital receipts for your business?
       </p>
-      <p style="font-size: 13.5px; color: var(--ink-soft); margin: 0; line-height: 1.5;">
-        If you just paid, ask your cashier to tap it for you within a couple minutes of ringing up your sale.
+      <p style="font-size: 14px; font-weight: 600; color: var(--ink); margin: 0 0 10px; line-height: 1.4;">
+        Try ReceipTap <span style="color: var(--teal);">FREE</span>
       </p>
+      <a href="/signup" class="btn btn-primary" style="display: inline-block; width: auto; padding: 8px 22px; font-size: 13.5px;">Try FREE</a>
     </div>
+
+    <!-- Middle: the actual "no receipt waiting" message -->
+    <div style="flex: 1; display: flex; align-items: center; justify-content: center; padding: 20px;">
+      <div class="auth-card">
+        <% if (logoUrl) { %>
+          <img src="<%= logoUrl %>" alt="<%= businessName %>" style="height: 54px; margin-bottom: 18px; border-radius: 8px;" />
+        <% } else { %>
+          <img src="/images/receiptap-logo.png" alt="ReceipTap" style="height: 54px; margin-bottom: 18px;" />
+        <% } %>
+        <h1 style="font-size: 20px; margin-bottom: 6px;">Thanks for visiting <%= businessName %>!</h1>
+        <p style="font-size: 13.5px; color: var(--ink-soft); margin: 8px 0 4px; line-height: 1.5;">
+          There's no receipt waiting for this tap right now.
+        </p>
+        <p style="font-size: 13.5px; color: var(--ink-soft); margin: 0; line-height: 1.5;">
+          If you just paid, ask your cashier to tap it for you within a couple minutes of ringing up your sale.
+        </p>
+      </div>
+    </div>
+
+    <!-- Bottom: powered-by mark -->
+    <div style="text-align: center; padding: 16px;">
+      <span style="font-size: 12px; color: var(--ink-soft); vertical-align: middle;">Powered by</span>
+      <img src="/images/receiptap-logo.png" alt="ReceipTap" style="height: 16px; vertical-align: middle; margin-left: 5px;" />
+    </div>
+
   </div>
 </body>
 </html>

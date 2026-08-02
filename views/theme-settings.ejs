@@ -159,6 +159,14 @@
         <span style="font-size:13px; color:#555;">their next order</span>
       </div>
       <div class="hint">Example: "10" with "% off" gives customers 10% off once they've collected all 5 punches.</div>
+
+      <label>Redemption code</label>
+      <input type="text" name="loyaltyRedemptionCode" id="loyaltyRedemptionCode" value="<%= loyalty.redemptionCode %>" maxlength="40" style="max-width:220px;" placeholder="e.g. REWARD5" />
+      <div class="hint">
+        Once a customer fills all 5 punches, they redeem it themselves by typing in this code —
+        tell your staff what it is. Change it any time; the new code takes effect immediately.
+      </div>
+
       <div class="toggle-row">
         <input type="checkbox" id="loyaltyEnabled" name="loyaltyEnabled" <%= loyalty.enabled ? 'checked' : '' %> />
         <label for="loyaltyEnabled">Show the loyalty punch card on receipts</label>

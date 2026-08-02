@@ -82,7 +82,7 @@ app.use(require('./routes/theme-settings'));       // /dashboard/settings/receip
 app.use(require('./routes/account-settings'));    // /dashboard/settings/account (business info, password, POS disconnect, deactivate)
 app.use(require('./routes/email-capture'));         // email/Google capture gate before receipt save, merchant email list
 app.use(require('./routes/customer-account'));    // consumer wallet: /account/*
-app.use(require('./routes/loyalty'));               // punch cards: join/earn/redeem, /account/loyalty, /dashboard/loyalty/redeem
+app.use(require('./routes/loyalty'));               // punch cards: join/earn/self-serve redeem, /account/loyalty
 app.use(require('./routes/billing'));               // ReceipTap's own subscription billing (Stripe)
 app.use(require('./routes/affiliates'));             // referral program: /dashboard/referrals (merchant-affiliates), /affiliate/* (regular affiliates)
 app.use(require('./routes/admin'));

@@ -28,17 +28,35 @@
       box-sizing: border-box;
     }
     .punch-hole.filled { border-style: solid; border-color: var(--teal); background: var(--teal); }
-    .loyalty-code { font-size: 32px; font-weight: 700; letter-spacing: 6px; margin: 10px 0; font-family: var(--font-mono); }
     .loyalty-btn {
       display: inline-block; margin-top: 12px; padding: 10px 18px; border-radius: 8px;
       border: none; font-weight: 600; font-size: 13.5px; cursor: pointer;
     }
-    .signature-pad {
-      width: 100%; max-width: 360px; height: 150px; border: 1px solid var(--line);
-      border-radius: 8px; margin-top: 10px; touch-action: none; background: #fff; box-sizing: border-box;
-    }
     .loyalty-error { color: var(--danger); font-size: 12px; margin-top: 6px; min-height: 14px; }
     .empty-state { text-align: center; color: var(--ink-soft); font-size: 13.5px; margin-top: 60px; }
+
+    /* --- Redemption modal --- */
+    .modal-overlay {
+      display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+      align-items: center; justify-content: center; z-index: 100; padding: 16px;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal-box {
+      background: var(--paper-raised); border-radius: 12px; padding: 24px;
+      max-width: 340px; width: 100%; box-sizing: border-box; text-align: center;
+    }
+    .modal-title { font-size: 17px; font-weight: 700; margin-bottom: 4px; }
+    .modal-subtitle { font-size: 13px; color: var(--ink-soft); margin-bottom: 14px; }
+    .modal-box input[type=text] {
+      width: 100%; padding: 10px; border: 1px solid var(--line); border-radius: 8px;
+      box-sizing: border-box; font-size: 14px; margin-bottom: 10px; text-align: center;
+      letter-spacing: 2px; font-weight: 600;
+    }
+    .modal-box button.primary {
+      width: 100%; padding: 11px; background: var(--teal); color: #fff;
+      border: none; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 14px;
+    }
+    .modal-close { text-align: center; margin-top: 14px; font-size: 12px; color: var(--ink-soft); cursor: pointer; }
   </style>
 </head>
 <body>
@@ -59,129 +77,87 @@
         <div class="loyalty-card" data-card-id="<%= card.id %>">
           <div class="loyalty-merchant"><%= card.merchantName %></div>
 
-          <% if (card.redemptionStatus === 'CONFIRMED') { %>
-            <div class="loyalty-sub">Your merchant confirmed your <%= offerText %> reward — sign below to finish.</div>
-            <canvas id="signature-pad-<%= card.id %>" class="signature-pad" width="360" height="150"></canvas>
-            <div style="display:flex; gap:8px; margin-top:10px; justify-content:center;">
-              <button type="button" class="loyalty-btn" style="background:#999; color:#fff;" onclick="clearSignature('<%= card.id %>')">Clear</button>
-              <button type="button" class="loyalty-btn" style="background:var(--teal); color:#fff;" onclick="submitSignature('<%= card.id %>')">Submit Signature</button>
-            </div>
-            <div class="loyalty-error" id="signature-error-<%= card.id %>"></div>
-          <% } else if (card.redemptionStatus === 'PENDING') { %>
-            <div class="loyalty-sub">Show this code to your cashier:</div>
-            <div class="loyalty-code"><%= card.redemptionCode %></div>
-            <div class="loyalty-sub loyalty-waiting-text">Waiting for the merchant to confirm...</div>
-            <button type="button" class="loyalty-btn" style="background:#999; color:#fff;" onclick="cancelRedeem('<%= card.id %>')">Cancel</button>
-          <% } else { %>
-            <div class="punch-row">
-              <% for (var p = 1; p <= 5; p++) { %>
-                <div class="punch-hole <%= p <= card.punches ? 'filled' : '' %>"><%= p <= card.punches ? '✓' : '' %></div>
-              <% } %>
-            </div>
-            <div class="loyalty-sub">
-              <% if (card.punches >= 5) { %>
-                Card full — redeem for <%= offerText %>!
-              <% } else { %>
-                <% var punchesLeft = 5 - card.punches; %>
-                You're <%= punchesLeft %> punch<%= punchesLeft === 1 ? '' : 'es' %> away from claiming <%= offerText %>!
-              <% } %>
-            </div>
-            <% if (card.punches >= 5) { %>
-              <button type="button" class="loyalty-btn" style="background:var(--teal); color:#fff;" onclick="useReward('<%= card.id %>')">Use Reward</button>
+          <div class="punch-row">
+            <% for (var p = 1; p <= 5; p++) { %>
+              <div class="punch-hole <%= p <= card.punches ? 'filled' : '' %>"><%= p <= card.punches ? '✓' : '' %></div>
             <% } %>
+          </div>
+          <div class="loyalty-sub">
+            <% if (card.punches >= 5) { %>
+              Card full — redeem for <%= offerText %>!
+            <% } else { %>
+              <% var punchesLeft = 5 - card.punches; %>
+              You're <%= punchesLeft %> punch<%= punchesLeft === 1 ? '' : 'es' %> away from claiming <%= offerText %>!
+            <% } %>
+          </div>
+          <% if (card.punches >= 5) { %>
+            <button type="button" class="loyalty-btn" style="background:var(--teal); color:#fff;" onclick="openLoyaltyModal('<%= card.id %>')">Redeem Reward</button>
           <% } %>
         </div>
       <% }); %>
     <% } %>
   </div>
 
+  <!-- Redemption modal: shared by every card, retargeted per card on open -->
+  <div class="modal-overlay" id="loyalty-modal">
+    <div class="modal-box">
+      <div class="modal-title">🎉 Your card is full!</div>
+      <div class="modal-subtitle">Redeem your reward now, or save it for later.</div>
+
+      <div id="loyalty-choice-step">
+        <button class="primary" onclick="startLoyaltyRedeem()">Redeem</button>
+        <button class="primary" style="background:#999; margin-top:8px;" onclick="closeLoyaltyModal()">Save</button>
+      </div>
+
+      <div id="loyalty-code-step" style="display:none;">
+        <div class="modal-subtitle">Ask your cashier for the redemption code and enter it below.</div>
+        <div class="loyalty-error" id="loyalty-modal-error"></div>
+        <input type="text" id="loyalty-code-input" placeholder="Code" autocomplete="off" />
+        <button class="primary" onclick="submitLoyaltyCode()">Submit</button>
+      </div>
+
+      <div class="modal-close" onclick="closeLoyaltyModal()">Close</div>
+    </div>
+  </div>
+
   <script>
-    async function useReward(cardId) {
-      const res = await fetch(`/loyalty/${cardId}/use-reward`, { method: 'POST' });
-      if (res.ok) location.reload();
+    let activeLoyaltyCardId = null;
+
+    function openLoyaltyModal(cardId) {
+      activeLoyaltyCardId = cardId;
+      document.getElementById('loyalty-choice-step').style.display = 'block';
+      document.getElementById('loyalty-code-step').style.display = 'none';
+      document.getElementById('loyalty-modal-error').textContent = '';
+      document.getElementById('loyalty-modal').classList.add('open');
     }
-    async function cancelRedeem(cardId) {
-      const res = await fetch(`/loyalty/${cardId}/cancel-redeem`, { method: 'POST' });
-      if (res.ok) location.reload();
+    function closeLoyaltyModal() {
+      document.getElementById('loyalty-modal').classList.remove('open');
+      activeLoyaltyCardId = null;
     }
-
-    // Poll every card currently showing a redemption code -- once the
-    // merchant confirms (or the customer canceled from another tab), reload.
-    document.querySelectorAll('.loyalty-waiting-text').forEach((el) => {
-      const cardId = el.closest('[data-card-id]').dataset.cardId;
-      const interval = setInterval(async () => {
-        try {
-          const res = await fetch(`/loyalty/${cardId}/status`);
-          if (!res.ok) return;
-          const data = await res.json();
-          if (data.redemptionStatus !== 'PENDING') {
-            clearInterval(interval);
-            location.reload();
-          }
-        } catch (e) {
-          // transient network hiccup -- just try again on the next tick
-        }
-      }, 3000);
-    });
-
-    // --- Signature pads: one per card currently awaiting a signature --------
-    const pads = {}; // cardId -> { canvas, ctx, hasSignature }
-    document.querySelectorAll('[id^="signature-pad-"]').forEach((canvas) => {
-      const cardId = canvas.id.replace('signature-pad-', '');
-      const ctx = canvas.getContext('2d');
-      ctx.lineWidth = 2.5;
-      ctx.lineCap = 'round';
-      ctx.strokeStyle = '#111';
-      const state = { canvas, ctx, hasSignature: false };
-      pads[cardId] = state;
-
-      let drawing = false;
-      const pos = (e) => {
-        const rect = canvas.getBoundingClientRect();
-        const point = e.touches ? e.touches[0] : e;
-        return {
-          x: (point.clientX - rect.left) * (canvas.width / rect.width),
-          y: (point.clientY - rect.top) * (canvas.height / rect.height),
-        };
-      };
-      const start = (e) => { drawing = true; state.hasSignature = true; const p = pos(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); };
-      const move = (e) => { if (!drawing) return; e.preventDefault(); const p = pos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); };
-      const end = () => { drawing = false; };
-
-      canvas.addEventListener('mousedown', start);
-      canvas.addEventListener('mousemove', move);
-      window.addEventListener('mouseup', end);
-      canvas.addEventListener('touchstart', start);
-      canvas.addEventListener('touchmove', move);
-      window.addEventListener('touchend', end);
-    });
-
-    function clearSignature(cardId) {
-      const state = pads[cardId];
-      if (!state) return;
-      state.ctx.clearRect(0, 0, state.canvas.width, state.canvas.height);
-      state.hasSignature = false;
+    function startLoyaltyRedeem() {
+      document.getElementById('loyalty-choice-step').style.display = 'none';
+      document.getElementById('loyalty-code-step').style.display = 'block';
+      document.getElementById('loyalty-code-input').focus();
     }
 
-    async function submitSignature(cardId) {
-      const state = pads[cardId];
-      const errorEl = document.getElementById(`signature-error-${cardId}`);
-      if (!state || !state.hasSignature) {
-        errorEl.textContent = 'Please sign above first.';
-        return;
-      }
-      const res = await fetch(`/loyalty/${cardId}/sign`, {
+    async function submitLoyaltyCode() {
+      const errorEl = document.getElementById('loyalty-modal-error');
+      const code = document.getElementById('loyalty-code-input').value;
+      errorEl.textContent = '';
+
+      const res = await fetch(`/loyalty/${activeLoyaltyCardId}/redeem`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ signatureDataUrl: state.canvas.toDataURL('image/png') }),
+        body: JSON.stringify({ code }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         errorEl.textContent = data.error || 'Something went wrong -- please try again.';
         return;
       }
-      const cardEl = state.canvas.closest('.loyalty-card');
+      const cardEl = document.querySelector(`[data-card-id="${activeLoyaltyCardId}"]`);
       cardEl.innerHTML = '<div class="loyalty-merchant">🎉 Reward redeemed!</div><div class="loyalty-sub">Thanks for being a loyal customer.</div>';
+      closeLoyaltyModal();
       setTimeout(() => location.reload(), 1800);
     }
   </script>

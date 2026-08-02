@@ -15,7 +15,7 @@ function requireAuth(req, res, next) {
   next();
 }
 
-const DEFAULT_LOYALTY = { enabled: false, offerType: 'PERCENT', offerValue: 10 };
+const DEFAULT_LOYALTY = { enabled: false, offerType: 'PERCENT', offerValue: 10, redemptionCode: 'REWARD' };
 
 // LoyaltyProgram.offerValue is stored in cents for AMOUNT offers (consistent
 // with how money is stored everywhere else) but merchants enter/see dollars.
@@ -176,7 +176,7 @@ router.get('/dashboard/settings/receipt/preview/:layoutId', requireAuth, async (
   // visual, not just the empty "Join Now" state -- only shown while enabled,
   // matching exactly how the real receipt page decides whether to render it.
   const previewLoyaltyCard = previewLoyaltyProgram.enabled
-    ? { id: 'preview', punches: 2, redemptionStatus: 'NONE', redemptionCode: null }
+    ? { id: 'preview', punches: 2 }
     : null;
 
   res.render('receipt', {
@@ -211,7 +211,7 @@ router.post('/dashboard/settings/receipt', requireAuth, handleLogoUpload, async 
     layoutId, primaryColor, accentColor, headerText, footerText, displayName, location,
     googleReviewUrl, showGoogleReview, showWarranty, showWalletSave,
     instagramUrl, facebookUrl, tiktokUrl, xUrl, youtubeUrl, linkedinUrl,
-    loyaltyEnabled, loyaltyOfferType, loyaltyOfferValue,
+    loyaltyEnabled, loyaltyOfferType, loyaltyOfferValue, loyaltyRedemptionCode,
   } = req.body;
 
   const safeInstagramUrl = sanitizeUrl(instagramUrl);
@@ -229,10 +229,16 @@ router.post('/dashboard/settings/receipt', requireAuth, handleLogoUpload, async 
     ? Math.round(safeOfferValueDisplay * 100)
     : Math.min(100, Math.round(safeOfferValueDisplay));
 
-  const [existingTheme, merchant] = await Promise.all([
+  const [existingTheme, merchant, existingLoyaltyProgram] = await Promise.all([
     prisma.receiptTheme.findUnique({ where: { merchantId: req.session.merchantId } }),
     prisma.merchant.findUnique({ where: { id: req.session.merchantId } }),
+    prisma.loyaltyProgram.findUnique({ where: { merchantId: req.session.merchantId } }),
   ]);
+
+  // An empty submission shouldn't wipe out a working code -- fall back to
+  // whatever was already saved, then a sane default for a brand-new program.
+  const trimmedRedemptionCode = (loyaltyRedemptionCode || '').trim();
+  const safeRedemptionCode = trimmedRedemptionCode || existingLoyaltyProgram?.redemptionCode || 'REWARD';
 
   // A new upload wins; otherwise keep whatever was already saved -- a file
   // input never re-submits its old value, so leaving this alone would
@@ -249,7 +255,7 @@ router.post('/dashboard/settings/receipt', requireAuth, handleLogoUpload, async 
       return res.render('theme-settings', {
         merchant,
         theme: { ...existingTheme, layoutId: safeLayoutId, logoUrl, displayName, location, primaryColor, accentColor, headerText, footerText, googleReviewUrl, showGoogleReview: true, showWarranty: showWarranty === 'on', showWalletSave: showWalletSave === 'on', instagramUrl: safeInstagramUrl, facebookUrl: safeFacebookUrl, tiktokUrl: safeTiktokUrl, xUrl: safeXUrl, youtubeUrl: safeYoutubeUrl, linkedinUrl: safeLinkedinUrl },
-        loyalty: { enabled: loyaltyEnabled === 'on', offerType: safeOfferType, offerValue: safeOfferValueDisplay },
+        loyalty: { enabled: loyaltyEnabled === 'on', offerType: safeOfferType, offerValue: safeOfferValueDisplay, redemptionCode: safeRedemptionCode },
         saved: false,
         error: 'Enter a valid Google review link (should start with https:// and be a Google URL).',
       });
@@ -303,8 +309,8 @@ router.post('/dashboard/settings/receipt', requireAuth, handleLogoUpload, async 
     }),
     prisma.loyaltyProgram.upsert({
       where: { merchantId: req.session.merchantId },
-      update: { enabled: loyaltyEnabled === 'on', offerType: safeOfferType, offerValue: safeOfferValueStored },
-      create: { merchantId: req.session.merchantId, enabled: loyaltyEnabled === 'on', offerType: safeOfferType, offerValue: safeOfferValueStored },
+      update: { enabled: loyaltyEnabled === 'on', offerType: safeOfferType, offerValue: safeOfferValueStored, redemptionCode: safeRedemptionCode },
+      create: { merchantId: req.session.merchantId, enabled: loyaltyEnabled === 'on', offerType: safeOfferType, offerValue: safeOfferValueStored, redemptionCode: safeRedemptionCode },
     }),
   ]);
 

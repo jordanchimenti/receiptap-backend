@@ -57,30 +57,37 @@ function requireAffiliateAuth(req, res, next) {
   next();
 }
 
+// Every merchant is eligible for the Merchant Partner Program without a
+// separate signup step -- this lazily creates their MERCHANT-type affiliate
+// row (and referral code) the first time it's needed, whether that's them
+// visiting their own dashboard or turning on the receipt banner in Settings.
+// Exported so other routes (theme-settings.js) can reuse it.
+async function ensureMerchantAffiliate(merchantId) {
+  let affiliate = await prisma.affiliate.findUnique({ where: { merchantId } });
+  if (!affiliate) {
+    const merchant = await prisma.merchant.findUnique({ where: { id: merchantId } });
+    affiliate = await prisma.affiliate.create({
+      data: {
+        name: merchant.ownerName || merchant.businessName,
+        email: merchant.email,
+        type: 'MERCHANT',
+        merchantId: merchant.id,
+        referralCode: await uniqueReferralCode(),
+      },
+    });
+  }
+  return affiliate;
+}
+
 // Resolves the current affiliate regardless of which session type is
-// present -- a merchant browsing their own "Partner Program" page, or a regular
-// affiliate logged into their own portal. Lazily creates the MERCHANT-type
-// affiliate row the first time a merchant visits, since every merchant is
-// eligible without a separate signup step.
+// present -- a merchant browsing their own "Partner Program" page, or a
+// regular affiliate logged into their own portal.
 async function getCurrentAffiliate(req) {
   if (req.session?.affiliateId) {
     return prisma.affiliate.findUnique({ where: { id: req.session.affiliateId } });
   }
   if (req.session?.merchantId) {
-    let affiliate = await prisma.affiliate.findUnique({ where: { merchantId: req.session.merchantId } });
-    if (!affiliate) {
-      const merchant = await prisma.merchant.findUnique({ where: { id: req.session.merchantId } });
-      affiliate = await prisma.affiliate.create({
-        data: {
-          name: merchant.ownerName || merchant.businessName,
-          email: merchant.email,
-          type: 'MERCHANT',
-          merchantId: merchant.id,
-          referralCode: await uniqueReferralCode(),
-        },
-      });
-    }
-    return affiliate;
+    return ensureMerchantAffiliate(req.session.merchantId);
   }
   return null;
 }
@@ -307,3 +314,4 @@ router.get('/affiliate/connect-stripe/return', async (req, res) => {
 });
 
 module.exports = router;
+module.exports.ensureMerchantAffiliate = ensureMerchantAffiliate;

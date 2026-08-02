@@ -161,6 +161,10 @@ model ReceiptTheme {
   showWarranty     Boolean @default(false)
   showWalletSave   Boolean @default(true)
 
+  // Promotes ReceipTap to other business owners at the top of this
+  // merchant's receipts, using their own Partner Program referral link.
+  showPartnerProgram Boolean @default(false)
+
   // Social links shown as clickable icons on receipts -- each is optional,
   // and its icon only renders if a URL is set.
   instagramUrl String?

@@ -25,7 +25,7 @@ router.get('/receipt/:transactionId', async (req, res) => {
   // sequential ones. This is the page a customer waits on right after
   // paying, so shaving off that latency matters more here than almost
   // anywhere else in the app.
-  const [theme, merchant, loyaltyProgram, loyaltyCard] = await Promise.all([
+  const [theme, merchant, loyaltyProgram, loyaltyCard, partnerAffiliate] = await Promise.all([
     prisma.receiptTheme.findUnique({ where: { merchantId: transaction.merchantId } }),
     prisma.merchant.findUnique({ where: { id: transaction.merchantId } }),
     // The merchant copy never shows the loyalty card, so skip both lookups.
@@ -35,6 +35,9 @@ router.get('/receipt/:transactionId', async (req, res) => {
       : prisma.loyaltyCard.findUnique({
           where: { merchantId_customerId: { merchantId: transaction.merchantId, customerId: req.session.customerId } },
         }),
+    // Read-only lookup -- the affiliate row is created when the merchant
+    // turns the banner on in Settings, not lazily here on a customer's load.
+    isMerchantCopy ? null : prisma.affiliate.findUnique({ where: { merchantId: transaction.merchantId } }),
   ]);
 
   // Fall back to sane defaults if a merchant hasn't customized anything yet
@@ -48,7 +51,12 @@ router.get('/receipt/:transactionId', async (req, res) => {
     showGoogleReview: false,
     showWarranty: false,
     showWalletSave: true,
+    showPartnerProgram: false,
   };
+
+  const partnerReferralUrl = !isMerchantCopy && safeTheme.showPartnerProgram && partnerAffiliate
+    ? `${req.protocol}://${req.get('host')}/signup?ref=${partnerAffiliate.referralCode}`
+    : null;
 
   res.render('receipt', {
     merchant,
@@ -57,6 +65,7 @@ router.get('/receipt/:transactionId', async (req, res) => {
     alreadySignedUp: Boolean(req.session.customerId),
     loyaltyProgram,
     loyaltyCard,
+    partnerReferralUrl,
     isMerchantCopy,
     transaction: {
       ...transaction,

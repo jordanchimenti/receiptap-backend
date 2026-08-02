@@ -173,6 +173,19 @@
       </div>
     </div>
 
+    <div class="google-section">
+      <h2 style="margin-top:0;">🤝 Partner Program</h2>
+      <div class="hint">
+        Promote ReceipTap to other business owners right on your receipts. If someone signs up
+        through your link, you earn a recurring commission on their subscription — see your
+        <a href="/dashboard/referrals" target="_blank">Partner Program dashboard</a> for details.
+      </div>
+      <div class="toggle-row">
+        <input type="checkbox" id="showPartnerProgram" name="showPartnerProgram" <%= theme.showPartnerProgram ? 'checked' : '' %> />
+        <label for="showPartnerProgram">Show a "Business owner? Try ReceipTap FREE" banner at the top of receipts</label>
+      </div>
+    </div>
+
     <h2>Social Media Links</h2>
     <div class="hint" style="margin-bottom: 10px;">
       Add your social profiles and customers will see clickable icons on their receipt. Leave any blank to hide that icon.
@@ -271,6 +284,7 @@
         googleReviewUrl: val('googleReviewUrl'),
         showGoogleReview: checked('showGoogleReview'),
         showWarranty: checked('showWarranty'),
+        showPartnerProgram: checked('showPartnerProgram'),
         instagramUrl: val('instagramUrl'),
         facebookUrl: val('facebookUrl'),
         tiktokUrl: val('tiktokUrl'),
@@ -324,7 +338,7 @@
         refreshTimer = setTimeout(refreshPreviews, 400); // debounce so it doesn't refresh on every keystroke
       });
     });
-    ['showGoogleReview', 'showWarranty', 'loyaltyEnabled'].forEach(id => {
+    ['showGoogleReview', 'showWarranty', 'loyaltyEnabled', 'showPartnerProgram'].forEach(id => {
       document.getElementById(id).addEventListener('change', refreshPreviews);
     });
     document.getElementById('loyaltyOfferType').addEventListener('change', refreshPreviews);

@@ -9,6 +9,7 @@ const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
 const prisma = require('../lib/prisma');
+const { ensureMerchantAffiliate } = require('./affiliates');
 
 function requireAuth(req, res, next) {
   if (!req.session?.merchantId) return res.redirect('/login');
@@ -72,7 +73,7 @@ function handleLogoUpload(req, res, next) {
 
     res.status(400).render('theme-settings', {
       merchant,
-      theme: theme || { layoutId: 'classic', primaryColor: '#111111', accentColor: '#2563eb', showWalletSave: true },
+      theme: theme || { layoutId: 'classic', primaryColor: '#111111', accentColor: '#2563eb', showWalletSave: true, showPartnerProgram: false },
       loyalty: loyaltyForDisplay(loyalty),
       saved: false,
       error: message,
@@ -102,6 +103,7 @@ router.get('/dashboard/settings/receipt', requireAuth, async (req, res) => {
       googleReviewUrl: '',
       showWarranty: false,
       showWalletSave: true,
+      showPartnerProgram: false,
       instagramUrl: '',
       facebookUrl: '',
       tiktokUrl: '',
@@ -120,10 +122,11 @@ router.get('/dashboard/settings/receipt', requireAuth, async (req, res) => {
 // exact same receipt.ejs shell + layout partials real customers see, so the
 // preview can never drift out of sync with the real thing.
 router.get('/dashboard/settings/receipt/preview/:layoutId', requireAuth, async (req, res) => {
-  const [merchant, savedTheme, savedLoyaltyProgram] = await Promise.all([
+  const [merchant, savedTheme, savedLoyaltyProgram, existingAffiliate] = await Promise.all([
     prisma.merchant.findUnique({ where: { id: req.session.merchantId } }),
     prisma.receiptTheme.findUnique({ where: { merchantId: req.session.merchantId } }),
     prisma.loyaltyProgram.findUnique({ where: { merchantId: req.session.merchantId } }),
+    prisma.affiliate.findUnique({ where: { merchantId: req.session.merchantId } }),
   ]);
 
   // Query params reflect the merchant's live, unsaved edits (sent by the
@@ -145,6 +148,7 @@ router.get('/dashboard/settings/receipt/preview/:layoutId', requireAuth, async (
     showGoogleReview: bool(req.query.showGoogleReview, Boolean(savedTheme && savedTheme.showGoogleReview)),
     showWarranty: bool(req.query.showWarranty, Boolean(savedTheme && savedTheme.showWarranty)),
     showWalletSave: bool(req.query.showWalletSave, savedTheme ? Boolean(savedTheme.showWalletSave) : true),
+    showPartnerProgram: bool(req.query.showPartnerProgram, Boolean(savedTheme && savedTheme.showPartnerProgram)),
     instagramUrl: req.query.instagramUrl || (savedTheme && savedTheme.instagramUrl) || '',
     facebookUrl: req.query.facebookUrl || (savedTheme && savedTheme.facebookUrl) || '',
     tiktokUrl: req.query.tiktokUrl || (savedTheme && savedTheme.tiktokUrl) || '',
@@ -179,12 +183,20 @@ router.get('/dashboard/settings/receipt/preview/:layoutId', requireAuth, async (
     ? { id: 'preview', punches: 2 }
     : null;
 
+  // The merchant may not have a referral code yet (only created once they
+  // actually save the toggle on) -- show a placeholder link in that case so
+  // the preview still renders, without implying it's live yet.
+  const previewPartnerReferralUrl = previewTheme.showPartnerProgram
+    ? `${req.protocol}://${req.get('host')}/signup?ref=${existingAffiliate ? existingAffiliate.referralCode : 'PREVIEW'}`
+    : null;
+
   res.render('receipt', {
     merchant,
     theme: previewTheme,
     googleClientId: '', // no need to render a live Google button inside a preview thumbnail
     loyaltyProgram: previewLoyaltyProgram,
     loyaltyCard: previewLoyaltyCard,
+    partnerReferralUrl: previewPartnerReferralUrl,
     isMerchantCopy: false,
     transaction: {
       id: 'preview',
@@ -209,7 +221,7 @@ router.get('/dashboard/settings/receipt/preview/:layoutId', requireAuth, async (
 router.post('/dashboard/settings/receipt', requireAuth, handleLogoUpload, async (req, res) => {
   const {
     layoutId, primaryColor, accentColor, headerText, footerText, displayName, location,
-    googleReviewUrl, showGoogleReview, showWarranty, showWalletSave,
+    googleReviewUrl, showGoogleReview, showWarranty, showWalletSave, showPartnerProgram,
     instagramUrl, facebookUrl, tiktokUrl, xUrl, youtubeUrl, linkedinUrl,
     loyaltyEnabled, loyaltyOfferType, loyaltyOfferValue, loyaltyRedemptionCode,
   } = req.body;
@@ -240,6 +252,12 @@ router.post('/dashboard/settings/receipt', requireAuth, handleLogoUpload, async 
   const trimmedRedemptionCode = (loyaltyRedemptionCode || '').trim();
   const safeRedemptionCode = trimmedRedemptionCode || existingLoyaltyProgram?.redemptionCode || 'REWARD';
 
+  // Turning the banner on needs a referral code to link to -- every merchant
+  // is eligible, this just creates the row the first time it's actually used.
+  if (showPartnerProgram === 'on') {
+    await ensureMerchantAffiliate(req.session.merchantId);
+  }
+
   // A new upload wins; otherwise keep whatever was already saved -- a file
   // input never re-submits its old value, so leaving this alone would
   // silently wipe the logo on every save.
@@ -254,7 +272,7 @@ router.post('/dashboard/settings/receipt', requireAuth, handleLogoUpload, async 
     if (!googleReviewUrl || !isValidGoogleReviewUrl(googleReviewUrl)) {
       return res.render('theme-settings', {
         merchant,
-        theme: { ...existingTheme, layoutId: safeLayoutId, logoUrl, displayName, location, primaryColor, accentColor, headerText, footerText, googleReviewUrl, showGoogleReview: true, showWarranty: showWarranty === 'on', showWalletSave: showWalletSave === 'on', instagramUrl: safeInstagramUrl, facebookUrl: safeFacebookUrl, tiktokUrl: safeTiktokUrl, xUrl: safeXUrl, youtubeUrl: safeYoutubeUrl, linkedinUrl: safeLinkedinUrl },
+        theme: { ...existingTheme, layoutId: safeLayoutId, logoUrl, displayName, location, primaryColor, accentColor, headerText, footerText, googleReviewUrl, showGoogleReview: true, showWarranty: showWarranty === 'on', showWalletSave: showWalletSave === 'on', showPartnerProgram: showPartnerProgram === 'on', instagramUrl: safeInstagramUrl, facebookUrl: safeFacebookUrl, tiktokUrl: safeTiktokUrl, xUrl: safeXUrl, youtubeUrl: safeYoutubeUrl, linkedinUrl: safeLinkedinUrl },
         loyalty: { enabled: loyaltyEnabled === 'on', offerType: safeOfferType, offerValue: safeOfferValueDisplay, redemptionCode: safeRedemptionCode },
         saved: false,
         error: 'Enter a valid Google review link (should start with https:// and be a Google URL).',
@@ -278,6 +296,7 @@ router.post('/dashboard/settings/receipt', requireAuth, handleLogoUpload, async 
         showGoogleReview: showGoogleReview === 'on',
         showWarranty: showWarranty === 'on',
         showWalletSave: showWalletSave === 'on',
+        showPartnerProgram: showPartnerProgram === 'on',
         instagramUrl: safeInstagramUrl,
         facebookUrl: safeFacebookUrl,
         tiktokUrl: safeTiktokUrl,
@@ -299,6 +318,7 @@ router.post('/dashboard/settings/receipt', requireAuth, handleLogoUpload, async 
         showGoogleReview: showGoogleReview === 'on',
         showWarranty: showWarranty === 'on',
         showWalletSave: showWalletSave === 'on',
+        showPartnerProgram: showPartnerProgram === 'on',
         instagramUrl: safeInstagramUrl,
         facebookUrl: safeFacebookUrl,
         tiktokUrl: safeTiktokUrl,

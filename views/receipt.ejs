@@ -138,15 +138,42 @@
     .modal-error { color: #dc2626; font-size: 12px; margin-bottom: 8px; display: none; }
     .modal-close { text-align: center; margin-top: 14px; font-size: 12px; color: #999; cursor: pointer; }
 
+    .partner-banner {
+      text-align: center;
+      background: #fff;
+      border-bottom: 1px solid #e5e5e5;
+      padding: 10px 16px;
+      font-size: 12.5px;
+      color: #555;
+      margin: -24px -16px 16px;
+    }
+    .partner-banner a {
+      display: inline-block;
+      margin-left: 8px;
+      padding: 5px 14px;
+      border-radius: 6px;
+      background: var(--accent);
+      color: #fff;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 12px;
+    }
+
     /* --- Print styling, so "Save as PDF" via the browser print dialog looks clean --- */
     @media print {
       body { background: #fff; padding: 0; }
       .layout-classic, .layout-modern, .layout-minimal { box-shadow: none; max-width: 100%; }
-      .actions, .google-review-card, .modal-overlay { display: none !important; }
+      .actions, .google-review-card, .modal-overlay, .partner-banner { display: none !important; }
     }
   </style>
 </head>
 <body>
+  <% if (!isMerchantCopy && typeof partnerReferralUrl !== 'undefined' && partnerReferralUrl) { %>
+    <div class="partner-banner">
+      Business owner? <%= merchant.businessName %> uses ReceipTap for digital receipts.
+      <a href="<%= partnerReferralUrl %>">Try FREE</a>
+    </div>
+  <% } %>
   <%- include('receipt-layouts/' + (theme.layoutId || 'classic'), { merchant, theme, transaction, isPreview: typeof isPreview !== 'undefined' ? isPreview : false, isMerchantCopy }) %>
 
   <div class="actions" style="max-width:420px; margin: 10px auto 0;">

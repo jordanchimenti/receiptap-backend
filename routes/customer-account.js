@@ -7,11 +7,15 @@
 const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcrypt');
+const crypto = require('crypto');
 const { OAuth2Client } = require('google-auth-library');
 const { categorizeTransaction } = require('../services/categorize-receipt');
 const { incrementLoyaltyPunch } = require('./loyalty');
+const { sendPasswordResetEmail } = require('../services/emailService');
 const prisma = require('../lib/prisma');
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+
+const RESET_TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hour
 
 function categorizeInBackground(transaction, merchantName) {
   categorizeTransaction({ merchantName, lineItems: transaction.lineItems })
@@ -108,6 +112,67 @@ router.post('/account/google', async (req, res) => {
 
   req.session.customerId = customer.id;
   res.json({ success: true });
+});
+
+// --- "Forgot password?" flow -------------------------------------------------
+
+router.get('/account/forgot-password', (req, res) => res.render('account-forgot-password', { error: null, sent: false }));
+
+router.post('/account/forgot-password', async (req, res) => {
+  const { email } = req.body;
+
+  try {
+    const customer = email ? await prisma.customer.findUnique({ where: { email: email.toLowerCase() } }) : null;
+
+    // Always render the same success state whether or not the email has an
+    // account -- otherwise this becomes a way to check who's a customer.
+    if (customer) {
+      const resetToken = crypto.randomBytes(32).toString('hex');
+      await prisma.customer.update({
+        where: { id: customer.id },
+        data: { resetToken, resetTokenExpiresAt: new Date(Date.now() + RESET_TOKEN_TTL_MS) },
+      });
+
+      const resetUrl = `${req.protocol}://${req.get('host')}/account/reset-password/${resetToken}`;
+      await sendPasswordResetEmail({ email: customer.email, name: customer.name }, resetUrl);
+    }
+
+    res.render('account-forgot-password', { error: null, sent: true });
+  } catch (err) {
+    console.error('Forgot-password request failed:', err);
+    res.render('account-forgot-password', { error: 'Something went wrong on our end — please try again in a moment.', sent: false });
+  }
+});
+
+router.get('/account/reset-password/:token', async (req, res) => {
+  const customer = await prisma.customer.findUnique({ where: { resetToken: req.params.token } });
+  const valid = Boolean(customer && customer.resetTokenExpiresAt > new Date());
+  res.render('account-reset-password', { token: req.params.token, valid, error: null });
+});
+
+router.post('/account/reset-password/:token', async (req, res) => {
+  const { password, confirmPassword } = req.body;
+  const customer = await prisma.customer.findUnique({ where: { resetToken: req.params.token } });
+  const valid = Boolean(customer && customer.resetTokenExpiresAt > new Date());
+
+  if (!valid) {
+    return res.render('account-reset-password', { token: req.params.token, valid: false, error: null });
+  }
+  if (!password || password.length < 8) {
+    return res.render('account-reset-password', { token: req.params.token, valid: true, error: 'Password must be at least 8 characters.' });
+  }
+  if (password !== confirmPassword) {
+    return res.render('account-reset-password', { token: req.params.token, valid: true, error: 'Passwords do not match.' });
+  }
+
+  const passwordHash = await bcrypt.hash(password, 10);
+  await prisma.customer.update({
+    where: { id: customer.id },
+    data: { passwordHash, resetToken: null, resetTokenExpiresAt: null },
+  });
+
+  req.session.customerId = customer.id;
+  res.redirect('/account/receipts');
 });
 
 // --- Claiming a receipt into the wallet ------------------------------------

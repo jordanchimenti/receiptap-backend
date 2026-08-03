@@ -158,7 +158,7 @@ router.post('/forgot-password', async (req, res) => {
       });
 
       const resetUrl = `${req.protocol}://${req.get('host')}/reset-password/${resetToken}`;
-      await sendPasswordResetEmail(merchant, resetUrl);
+      await sendPasswordResetEmail({ email: merchant.email, name: merchant.ownerName || merchant.businessName }, resetUrl);
     }
 
     res.render('forgot-password', { error: null, sent: true });

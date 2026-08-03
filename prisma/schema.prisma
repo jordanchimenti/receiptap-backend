@@ -302,6 +302,11 @@ model Customer {
   name         String?
   createdAt    DateTime      @default(now())
 
+  // "Forgot password?" flow -- token is single-use (cleared on success) and
+  // expires 1 hour after being issued, whichever comes first.
+  resetToken          String?   @unique
+  resetTokenExpiresAt DateTime?
+
   transactions Transaction[]
   loyaltyCards LoyaltyCard[]
 }

@@ -129,7 +129,7 @@ function isValidEmail(email) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
-const LAPSED_THRESHOLD_DAYS = 60; // no visit in 60+ days = win-back candidate, regardless of past visit count
+const LAPSED_THRESHOLD_DAYS = 30; // no visit in 30+ days = win-back candidate, regardless of past visit count
 
 // --- Merchant-facing: the emails this collects for THAT merchant -----------
 // Segments customers for email marketing:

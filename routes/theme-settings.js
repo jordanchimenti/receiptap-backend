@@ -10,6 +10,7 @@ const fs = require('fs');
 const multer = require('multer');
 const prisma = require('../lib/prisma');
 const { ensureMerchantAffiliate } = require('./affiliates');
+const { MERCHANT_AFFILIATE_RATE } = require('../services/affiliateRates');
 
 function requireAuth(req, res, next) {
   if (!req.session?.merchantId) return res.redirect('/login');
@@ -75,6 +76,7 @@ function handleLogoUpload(req, res, next) {
       merchant,
       theme: theme || { layoutId: 'classic', primaryColor: '#111111', accentColor: '#2563eb', showWalletSave: true, showPartnerProgram: false },
       loyalty: loyaltyForDisplay(loyalty),
+      merchantAffiliateRate: MERCHANT_AFFILIATE_RATE,
       saved: false,
       error: message,
     });
@@ -112,6 +114,7 @@ router.get('/dashboard/settings/receipt', requireAuth, async (req, res) => {
       linkedinUrl: '',
     },
     loyalty: loyaltyForDisplay(loyalty),
+    merchantAffiliateRate: MERCHANT_AFFILIATE_RATE,
     saved: false,
     error: null,
   });
@@ -274,6 +277,7 @@ router.post('/dashboard/settings/receipt', requireAuth, handleLogoUpload, async 
         merchant,
         theme: { ...existingTheme, layoutId: safeLayoutId, logoUrl, displayName, location, primaryColor, accentColor, headerText, footerText, googleReviewUrl, showGoogleReview: true, showWarranty: showWarranty === 'on', showWalletSave: showWalletSave === 'on', showPartnerProgram: showPartnerProgram === 'on', instagramUrl: safeInstagramUrl, facebookUrl: safeFacebookUrl, tiktokUrl: safeTiktokUrl, xUrl: safeXUrl, youtubeUrl: safeYoutubeUrl, linkedinUrl: safeLinkedinUrl },
         loyalty: { enabled: loyaltyEnabled === 'on', offerType: safeOfferType, offerValue: safeOfferValueDisplay, redemptionCode: safeRedemptionCode },
+        merchantAffiliateRate: MERCHANT_AFFILIATE_RATE,
         saved: false,
         error: 'Enter a valid Google review link (should start with https:// and be a Google URL).',
       });
@@ -338,7 +342,7 @@ router.post('/dashboard/settings/receipt', requireAuth, handleLogoUpload, async 
     prisma.receiptTheme.findUnique({ where: { merchantId: req.session.merchantId } }),
     prisma.loyaltyProgram.findUnique({ where: { merchantId: req.session.merchantId } }),
   ]);
-  res.render('theme-settings', { merchant, theme, loyalty: loyaltyForDisplay(loyalty), saved: true, error: null });
+  res.render('theme-settings', { merchant, theme, loyalty: loyaltyForDisplay(loyalty), merchantAffiliateRate: MERCHANT_AFFILIATE_RATE, saved: true, error: null });
 });
 
 // Social links render as an href straight on the receipt page -- reject

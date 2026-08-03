@@ -23,6 +23,11 @@ model Merchant {
   createdAt    DateTime @default(now())
   isActive     Boolean  @default(true) // false once a merchant deactivates their own account
 
+  // "Forgot password?" flow -- token is single-use (cleared on success) and
+  // expires 1 hour after being issued, whichever comes first.
+  resetToken          String?   @unique
+  resetTokenExpiresAt DateTime?
+
   // Square OAuth
   squareMerchantId  String? @unique
   squareAccessToken String?

@@ -6,29 +6,37 @@ const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcrypt');
 const crypto = require('crypto');
+const { OAuth2Client } = require('google-auth-library');
 const prisma = require('../lib/prisma');
 const { sendPasswordResetEmail } = require('../services/emailService');
 
+const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+
 const RESET_TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hour
 
-router.get('/signup', (req, res) => res.render('signup', { error: null, refCode: req.query.ref || '' }));
+router.get('/signup', (req, res) => res.render('signup', {
+  error: null,
+  refCode: req.query.ref || '',
+  googleClientId: process.env.GOOGLE_CLIENT_ID || '',
+}));
 router.get('/login', (req, res) => res.render('login', {
   error: null,
   deactivated: req.query.deactivated === '1',
   redirect: req.query.redirect || '/dashboard/receipts-hub',
+  googleClientId: process.env.GOOGLE_CLIENT_ID || '',
 }));
 
 router.post('/signup', async (req, res) => {
   const { ownerName, businessName, email, password, refCode } = req.body;
 
   if (!ownerName || !businessName || !email || !password) {
-    return res.render('signup', { error: 'All fields are required', refCode: refCode || '' });
+    return res.render('signup', { error: 'All fields are required', refCode: refCode || '', googleClientId: process.env.GOOGLE_CLIENT_ID || '' });
   }
 
   try {
     const existing = await prisma.merchant.findUnique({ where: { email } });
     if (existing) {
-      return res.render('signup', { error: 'An account with this email already exists', refCode: refCode || '' });
+      return res.render('signup', { error: 'An account with this email already exists', refCode: refCode || '', googleClientId: process.env.GOOGLE_CLIENT_ID || '' });
     }
 
     // Referral is best-effort -- an invalid/expired code shouldn't block signup,
@@ -46,33 +54,90 @@ router.post('/signup', async (req, res) => {
     res.redirect('/dashboard/receipts-hub');
   } catch (err) {
     console.error('Signup failed:', err);
-    res.render('signup', { error: 'Something went wrong on our end — please try again in a moment.', refCode: refCode || '' });
+    res.render('signup', { error: 'Something went wrong on our end — please try again in a moment.', refCode: refCode || '', googleClientId: process.env.GOOGLE_CLIENT_ID || '' });
   }
 });
 
 router.post('/login', async (req, res) => {
   const { email, password } = req.body;
   const redirect = req.body.redirect || '/dashboard/receipts-hub';
+  const googleClientId = process.env.GOOGLE_CLIENT_ID || '';
 
   try {
     const merchant = await prisma.merchant.findUnique({ where: { email } });
-    if (!merchant || !(await bcrypt.compare(password, merchant.passwordHash))) {
-      return res.render('login', { error: 'Invalid email or password', redirect });
+    if (!merchant || !merchant.passwordHash || !(await bcrypt.compare(password, merchant.passwordHash))) {
+      return res.render('login', { error: 'Invalid email or password', redirect, googleClientId });
     }
     if (!merchant.isActive) {
-      return res.render('login', { error: 'This account has been deactivated.', redirect });
+      return res.render('login', { error: 'This account has been deactivated.', redirect, googleClientId });
     }
 
     req.session.merchantId = merchant.id;
     res.redirect(redirect);
   } catch (err) {
     console.error('Login failed:', err);
-    res.render('login', { error: 'Something went wrong on our end — please try again in a moment.', redirect });
+    res.render('login', { error: 'Something went wrong on our end — please try again in a moment.', redirect, googleClientId });
   }
 });
 
 router.post('/logout', (req, res) => {
   req.session.destroy(() => res.redirect('/login'));
+});
+
+// --- Sign in with Google (doubles as signup — one step for both) ------------
+// Used by both the login page and the signup page: if the Google account's
+// email doesn't have a Merchant record yet, one is created automatically.
+// Business/owner name aren't knowable from Google alone, so a new account
+// gets an editable placeholder business name -- same tradeoff already made
+// for the equivalent customer-facing flow in routes/customer-account.js.
+router.post('/merchant/google', async (req, res) => {
+  const { credential, refCode } = req.body;
+  if (!credential) return res.status(400).json({ error: 'Missing Google credential' });
+
+  let payload;
+  try {
+    const ticket = await googleClient.verifyIdToken({
+      idToken: credential,
+      audience: process.env.GOOGLE_CLIENT_ID,
+    });
+    payload = ticket.getPayload();
+  } catch (err) {
+    return res.status(401).json({ error: 'Could not verify Google sign-in' });
+  }
+
+  if (!payload.email) return res.status(400).json({ error: 'Google account has no email' });
+  const email = payload.email.toLowerCase();
+
+  try {
+    let merchant = await prisma.merchant.findUnique({ where: { email } });
+
+    if (merchant) {
+      if (!merchant.isActive) return res.status(403).json({ error: 'This account has been deactivated.' });
+      if (!merchant.googleId) {
+        merchant = await prisma.merchant.update({ where: { id: merchant.id }, data: { googleId: payload.sub } });
+      }
+    } else {
+      const referrer = refCode
+        ? await prisma.affiliate.findUnique({ where: { referralCode: refCode.trim().toUpperCase() } })
+        : null;
+
+      merchant = await prisma.merchant.create({
+        data: {
+          email,
+          googleId: payload.sub,
+          ownerName: payload.name || null,
+          businessName: payload.given_name ? `${payload.given_name}'s Business` : 'My Business',
+          referredByAffiliateId: referrer?.id || null,
+        },
+      });
+    }
+
+    req.session.merchantId = merchant.id;
+    res.json({ success: true, redirect: '/dashboard/receipts-hub' });
+  } catch (err) {
+    console.error('Google sign-in failed:', err);
+    res.status(500).json({ error: 'Something went wrong on our end — please try again in a moment.' });
+  }
 });
 
 router.get('/forgot-password', (req, res) => res.render('forgot-password', { error: null, sent: false }));

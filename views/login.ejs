@@ -16,9 +16,18 @@
         Manage your receipts, POS connections, and locations.
       </p>
 
-      <% if (error) { %><div class="error-box"><%= error %></div><% } %>
+      <div class="error-box" id="error-box" style="<%= error ? '' : 'display: none;' %>"><%= error %></div>
       <% if (typeof deactivated !== 'undefined' && deactivated) { %>
         <div class="error-box" style="color: var(--ink-soft); background: var(--paper);">Your account has been deactivated. Contact support if this was a mistake.</div>
+      <% } %>
+
+      <% if (googleClientId) { %>
+        <div id="google-signin-btn" style="display: flex; justify-content: center; margin-bottom: 14px;"></div>
+        <div style="display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--ink-soft); margin: 14px 0;">
+          <span style="flex: 1; height: 1px; background: var(--line);"></span>
+          or
+          <span style="flex: 1; height: 1px; background: var(--line);"></span>
+        </div>
       <% } %>
 
       <form method="POST" action="/login">
@@ -43,5 +52,39 @@
       </p>
     </div>
   </div>
+
+  <% if (googleClientId) { %>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script>
+      async function handleGoogleSignIn(response) {
+        const res = await fetch('/merchant/google', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ credential: response.credential }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          const el = document.getElementById('error-box');
+          el.textContent = data.error || 'Google sign-in failed.';
+          el.style.display = 'block';
+          return;
+        }
+        window.location.href = data.redirect;
+      }
+
+      window.onload = function () {
+        if (window.google && window.google.accounts) {
+          google.accounts.id.initialize({
+            client_id: '<%= googleClientId %>',
+            callback: handleGoogleSignIn,
+          });
+          google.accounts.id.renderButton(
+            document.getElementById('google-signin-btn'),
+            { theme: 'outline', size: 'large', width: 280 }
+          );
+        }
+      };
+    </script>
+  <% } %>
 </body>
 </html>

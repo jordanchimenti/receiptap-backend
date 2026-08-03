@@ -19,7 +19,8 @@ model Merchant {
   ownerName    String? // the person's own name, e.g. "Welcome back, Jordan" -- distinct from businessName
   profilePhotoUrl String? // the person's own avatar photo, shown top-right in the dashboard rail
   email        String   @unique
-  passwordHash String
+  passwordHash String? // null for accounts created via "Sign in with Google" that never set a password
+  googleId     String?  @unique // set if they signed in with Google instead of email/password
   createdAt    DateTime @default(now())
   isActive     Boolean  @default(true) // false once a merchant deactivates their own account
 

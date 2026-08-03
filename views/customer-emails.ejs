@@ -23,6 +23,7 @@
     .segment-repeat { background: #ecfdf5; color: #047857; }
     .segment-lapsed { background: #fffbeb; color: #92400e; }
     .empty { text-align: center; color: #888; margin-top: 30px; font-size: 14px; }
+    .segment-hint { background: #f9fafb; border-radius: 8px; padding: 12px 14px; font-size: 13px; color: #666; margin-top: 20px; }
   </style>
 </head>
 <body>
@@ -62,6 +63,11 @@
         <% }); %>
       </tbody>
     </table>
+    <div class="segment-hint">
+      <strong>New</strong> = one visit so far, hasn't returned yet — good for a welcome or "come back" nudge.
+      <strong>Repeat</strong> = 2+ visits, still active — good for loyalty or upsell offers.
+      <strong>Lapsed</strong> = hasn't visited in 60+ days, regardless of past visit count — good for a win-back campaign.
+    </div>
   <% } %>
 
   </div>

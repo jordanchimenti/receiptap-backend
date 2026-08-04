@@ -32,7 +32,7 @@ router.get('/demo/receipt', async (req, res) => {
     footerText: null, showWarranty: false, showWalletSave: true,
     ...savedTheme,
     logoUrl: null,
-    displayName: 'Your Business',
+    displayName: 'Your Business Name',
     showPartnerProgram: true,
     showGoogleReview: true,
     googleReviewUrl: savedTheme?.googleReviewUrl || 'https://g.page/r/example-placeholder/review',

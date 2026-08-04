@@ -59,7 +59,7 @@ app.use(ownerFlag);
 app.use(require('./routes/auth'));           // signup / login / logout
 app.use(require('./routes/pucks'));          // /r/:puckId tap routing, /claim/:puckId
 app.use(require('./routes/receipt'));        // /receipt/:transactionId
-app.use(require('./routes/webhooks'));       // /webhooks/pos/square
+app.use(require('./routes/webhooks'));       // /webhooks/pos/square, /webhooks/pos/clover
 
 // Subscription gate: every /dashboard/* page requires a valid subscription,
 // EXCEPT /dashboard/billing itself (blocked merchants need it to re-subscribe)
@@ -73,6 +73,7 @@ app.use('/dashboard', (req, res, next) => {
 });
 
 app.use(require('./routes/oauth-square'));   // /oauth/square/connect + callback, /dashboard/pos-setup
+app.use(require('./routes/oauth-clover'));   // /oauth/clover/connect + callback, /dashboard/pos-setup/assign-clover
 app.use(require('./routes/merchant-dashboard'));  // /dashboard/receipts, /dashboard/receipts-hub
 app.use(require('./routes/merchant-expenses'));   // /dashboard/expenses, save-expense
 app.use(require('./routes/repeat-customers'));      // /dashboard/repeat-customers, AI-recognized repeat customer analytics + CSV export

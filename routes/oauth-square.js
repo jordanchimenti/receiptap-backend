@@ -67,12 +67,18 @@ router.get('/oauth/square/callback', requireAuth, async (req, res) => {
   res.redirect('/dashboard/pos-setup');
 });
 
-// Step 3 (immediately after connecting): fetch their locations automatically
+// Step 3 (immediately after connecting): fetch their locations automatically.
+// Also renders Clover's connection state -- a Clover merchant IS a single
+// location (no picker needed there), so this just needs to know if it's
+// connected at all, not fetch anything further.
 router.get('/dashboard/pos-setup', requireAuth, async (req, res) => {
   const merchant = await prisma.merchant.findUnique({ where: { id: req.session.merchantId } });
+  const pucks = await prisma.puck.findMany({ where: { merchantId: merchant.id } });
+  const cloverConnected = Boolean(merchant.cloverAccessToken);
+  const cloverMerchantId = merchant.cloverMerchantId;
 
   if (!merchant.squareAccessToken) {
-    return res.render('pos-setup', { connected: false, locations: [], pucks: [] });
+    return res.render('pos-setup', { connected: false, locations: [], pucks, cloverConnected, cloverMerchantId });
   }
 
   const locResponse = await fetch(`${SQUARE_BASE_URL}/v2/locations`, {
@@ -80,9 +86,7 @@ router.get('/dashboard/pos-setup', requireAuth, async (req, res) => {
   });
   const { locations } = await locResponse.json();
 
-  const pucks = await prisma.puck.findMany({ where: { merchantId: merchant.id } });
-
-  res.render('pos-setup', { connected: true, locations: locations || [], pucks });
+  res.render('pos-setup', { connected: true, locations: locations || [], pucks, cloverConnected, cloverMerchantId });
 });
 
 // Assign a puck to a specific Square location/register

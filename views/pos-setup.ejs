@@ -22,6 +22,7 @@
 
   <div class="app-body">
 
+  <h2 style="margin-top:0;">Square</h2>
   <% if (!connected) { %>
     <p>Connect your Square account so ReceipTap can automatically generate receipts from your sales.</p>
     <a class="connect-btn" href="/oauth/square/connect">Connect Square</a>
@@ -42,6 +43,25 @@
     <% }); %>
   <% } %>
 
+  <h2>Clover</h2>
+  <% if (!cloverConnected) { %>
+    <p>Connect your Clover account so ReceipTap can automatically generate receipts from your sales.</p>
+    <a class="connect-btn" href="/oauth/clover/connect">Connect Clover</a>
+  <% } else { %>
+    <div class="connected-badge">✅ Clover Connected</div>
+    <p>A Clover connection is one store, so just assign a puck to it:</p>
+
+    <div class="location-row">
+      <div><strong>Register</strong></div>
+      <select onchange="assignCloverPuck(this.value)">
+        <option value="">Select a puck...</option>
+        <% pucks.forEach(function(p) { %>
+          <option value="<%= p.id %>" <%= p.posLocationId === cloverMerchantId ? 'selected' : '' %>><%= p.id %></option>
+        <% }); %>
+      </select>
+    </div>
+  <% } %>
+
   </div>
 
   <script>
@@ -53,6 +73,16 @@
         body: JSON.stringify({ puckId, locationId }),
       });
       alert('Puck assigned to this register.');
+    }
+
+    async function assignCloverPuck(puckId) {
+      if (!puckId) return;
+      await fetch('/dashboard/pos-setup/assign-clover', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ puckId }),
+      });
+      alert('Puck assigned to your Clover store.');
     }
   </script>
 </body>

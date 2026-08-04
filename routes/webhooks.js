@@ -8,6 +8,7 @@ const crypto = require('crypto');
 const router = express.Router();
 const prisma = require('../lib/prisma');
 const { fetchOrder } = require('../services/squareService');
+const { fetchOrder: fetchCloverOrder, getValidAccessToken: getValidCloverAccessToken } = require('../services/cloverService');
 
 const CLAIM_WINDOW_MS = 3 * 60 * 1000; // how long a puck shows the live receipt before reverting
 
@@ -122,6 +123,123 @@ function verifySquareSignature(req) {
   const expected = Buffer.from(expectedSignature);
   if (provided.length !== expected.length) return false;
   return crypto.timingSafeEqual(provided, expected);
+}
+
+// ---------------------------------------------------------------------------
+// Clover: registered once in the Developer Dashboard (not created via an API
+// call like Square's subscription), so this endpoint has to also handle the
+// one-time verification handshake Clover does when the URL is first saved.
+// Ongoing notifications carry no order data -- just which merchant and which
+// object changed -- so every event means "go fetch the real thing."
+// ---------------------------------------------------------------------------
+router.post('/webhooks/pos/clover', async (req, res) => {
+  const body = req.body;
+
+  // One-time handshake: Clover POSTs this the moment the webhook URL is
+  // saved in the Developer Dashboard. Log it -- the founder copies it back
+  // into the dashboard's Webhooks section to confirm ownership of this URL.
+  if (body.verificationCode) {
+    console.log(`[clover webhook] Verification code (paste into Developer Dashboard > Webhooks): ${body.verificationCode}`);
+    return res.sendStatus(200);
+  }
+
+  if (!verifyCloverAuth(req)) return res.sendStatus(401);
+
+  try {
+    const merchantEvents = body.merchants || {};
+    for (const [cloverMerchantId, events] of Object.entries(merchantEvents)) {
+      for (const event of events) {
+        // Only orders represent a sale -- object IDs are prefixed with their
+        // type ("O:" orders, "P:" payments, "I:" inventory, ...).
+        if (!event.objectId || !event.objectId.startsWith('O:')) continue;
+        await handleCloverOrderEvent(cloverMerchantId, event.objectId.slice(2));
+      }
+    }
+    res.sendStatus(200);
+  } catch (err) {
+    console.error('Error processing Clover webhook:', err);
+    res.sendStatus(500); // tells Clover to retry
+  }
+});
+
+async function handleCloverOrderEvent(cloverMerchantId, orderId) {
+  const merchant = await prisma.merchant.findFirst({ where: { cloverMerchantId } });
+  if (!merchant) return; // event from a Clover account we don't recognize
+
+  const accessToken = await getValidCloverAccessToken(merchant);
+  const order = await fetchCloverOrder(accessToken, cloverMerchantId, orderId);
+
+  // OPEN | PAID | REFUNDED | CREDITED | PARTIALLY_PAID | PARTIALLY_REFUNDED --
+  // only a fully completed sale should generate a receipt. An order can fire
+  // several CREATE/UPDATE events while it's being built up before payment;
+  // this re-checks the live order rather than trusting the event type.
+  if (order.paymentState !== 'PAID') return;
+
+  // Clover retries webhook delivery -- if this order is already saved, stop.
+  const existing = await prisma.transaction.findUnique({ where: { id: order.id } });
+  if (existing) return;
+
+  // Best-effort field mapping -- Clover line items don't carry an explicit
+  // quantity the way Square's do (a "3x Coffee" sale is 3 separate line item
+  // elements, not one with quantity: 3), so each element maps to one line at
+  // quantity 1 unless unitQty (scaled items, e.g. deli-by-weight) says
+  // otherwise. Verify this against a real sandbox sale before fully trusting it.
+  const lineItemElements = order.lineItems?.elements || [];
+  const lineItems = lineItemElements.map((li) => {
+    const quantity = li.unitQty ? Math.max(1, Math.round(li.unitQty / 1000)) : 1;
+    return {
+      name: li.name,
+      quantity,
+      unitPrice: quantity > 1 ? Math.round(li.price / quantity) : li.price,
+      total: li.price,
+    };
+  });
+
+  const paymentElements = order.payments?.elements || [];
+  const cardTransaction = paymentElements[0]?.cardTransaction;
+  const paymentMethod = cardTransaction
+    ? `${cardTransaction.cardType || 'Card'} ••••${cardTransaction.last4 || ''}`
+    : null;
+
+  const transaction = await prisma.transaction.create({
+    data: {
+      id: order.id,
+      merchantId: merchant.id,
+      posProvider: 'clover',
+      posLocationId: cloverMerchantId, // a Clover merchant IS the location
+      posDeviceId: null,
+      lineItems,
+      subtotal: order.total, // tax isn't broken out on the order object -- see comment above
+      tax: 0,
+      total: order.total,
+      paymentMethod,
+    },
+  });
+
+  // A Clover connection is a single location -- no device-level lanes to
+  // disambiguate between, unlike Square's multi-register handling.
+  const puck = await prisma.puck.findFirst({
+    where: { merchantId: merchant.id, posLocationId: cloverMerchantId, posDeviceId: null },
+  });
+  if (puck) {
+    await prisma.puck.update({
+      where: { id: puck.id },
+      data: {
+        currentTransactionId: transaction.id,
+        transactionExpiresAt: new Date(Date.now() + CLAIM_WINDOW_MS),
+      },
+    });
+  }
+}
+
+// Clover's X-Clover-Auth header carries a value shown in the Developer
+// Dashboard's Webhooks section once configured -- set CLOVER_WEBHOOK_AUTH_TOKEN
+// to that value to enable verification. Left unset, requests aren't rejected
+// (verification is best-effort until that value is confirmed and configured).
+function verifyCloverAuth(req) {
+  const expected = process.env.CLOVER_WEBHOOK_AUTH_TOKEN;
+  if (!expected) return true;
+  return req.headers['x-clover-auth'] === expected;
 }
 
 module.exports = router;

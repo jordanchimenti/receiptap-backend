@@ -14,15 +14,15 @@ datasource db {
 // Merchant — a business using ReceipTap
 // ---------------------------------------------------------------------------
 model Merchant {
-  id           String   @id @default(cuid())
-  businessName String
-  ownerName    String? // the person's own name, e.g. "Welcome back, Jordan" -- distinct from businessName
+  id              String   @id @default(cuid())
+  businessName    String
+  ownerName       String? // the person's own name, e.g. "Welcome back, Jordan" -- distinct from businessName
   profilePhotoUrl String? // the person's own avatar photo, shown top-right in the dashboard rail
-  email        String   @unique
-  passwordHash String? // null for accounts created via "Sign in with Google" that never set a password
-  googleId     String?  @unique // set if they signed in with Google instead of email/password
-  createdAt    DateTime @default(now())
-  isActive     Boolean  @default(true) // false once a merchant deactivates their own account
+  email           String   @unique
+  passwordHash    String? // null for accounts created via "Sign in with Google" that never set a password
+  googleId        String?  @unique // set if they signed in with Google instead of email/password
+  createdAt       DateTime @default(now())
+  isActive        Boolean  @default(true) // false once a merchant deactivates their own account
 
   // "Forgot password?" flow -- token is single-use (cleared on success) and
   // expires 1 hour after being issued, whichever comes first.
@@ -34,8 +34,17 @@ model Merchant {
   squareAccessToken String?
 
   // Shopify OAuth (POS / storefront)
-  shopifyShopDomain   String? @unique
-  shopifyAccessToken  String?
+  shopifyShopDomain  String? @unique
+  shopifyAccessToken String?
+
+  // Clover OAuth. Unlike Square/Shopify, Clover's access token expires
+  // (v2/OAuth flow, 30 min) -- cloverAccessTokenExpiresAt lets
+  // services/cloverService.js know when to use cloverRefreshToken to get
+  // a new one before making an API call.
+  cloverMerchantId           String?   @unique
+  cloverAccessToken          String?
+  cloverRefreshToken         String?
+  cloverAccessTokenExpiresAt DateTime?
 
   // Billing — ReceipTap's own subscription (merchant pays ReceipTap monthly).
   // Trial lives in Stripe: card collected at checkout, 30-day trial, then
@@ -46,8 +55,8 @@ model Merchant {
   trialEndsAt          DateTime?
 
   pucks             Puck[]
-  issuedReceipts    Transaction[]  @relation("IssuedReceipts")
-  collectedExpenses Transaction[]  @relation("CollectedExpenses")
+  issuedReceipts    Transaction[]   @relation("IssuedReceipts")
+  collectedExpenses Transaction[]   @relation("CollectedExpenses")
   receiptTheme      ReceiptTheme?
   loyaltyProgram    LoyaltyProgram?
   loyaltyCards      LoyaltyCard[]
@@ -73,22 +82,22 @@ enum SubscriptionStatus {
 // Puck — a physical NFC device
 // ---------------------------------------------------------------------------
 model Puck {
-  id        String     @id // short unique ID, e.g. "K7mP2xQ9wZ" — encoded on the NFC chip as /r/{id}
-  claimCode String     @unique // 6-char code printed on the insert card
+  id        String @id // short unique ID, e.g. "K7mP2xQ9wZ" — encoded on the NFC chip as /r/{id}
+  claimCode String @unique // 6-char code printed on the insert card
 
-  status    PuckStatus @default(UNCLAIMED)
-  source    PuckSource @default(BATCH) // BATCH = scripts/generate-batch.js hardware order, ADMIN = one-off /admin/pucks button
+  status PuckStatus @default(UNCLAIMED)
+  source PuckSource @default(BATCH) // BATCH = scripts/generate-batch.js hardware order, ADMIN = one-off /admin/pucks button
 
   merchantId    String?
   merchant      Merchant? @relation(fields: [merchantId], references: [id])
-  posLocationId String?   // which Square location this puck belongs to
-  posDeviceId   String?   // which SPECIFIC register/terminal within that location — needed when a store has 2+ lanes
+  posLocationId String? // which POS location this puck belongs to (Square location, Clover merchant, ...)
+  posDeviceId   String? // which SPECIFIC register/terminal within that location — needed when a store has 2+ lanes
 
   currentTransactionId String?
   transactionExpiresAt DateTime?
 
-  createdAt  DateTime  @default(now())
-  claimedAt  DateTime?
+  createdAt DateTime  @default(now())
+  claimedAt DateTime?
 
   @@index([merchantId])
   @@index([claimCode])
@@ -108,18 +117,18 @@ enum PuckSource {
 // Transaction — one sale, saved from a POS webhook
 // ---------------------------------------------------------------------------
 model Transaction {
-  id            String   @id // reuse the POS's own transaction ID
-  merchantId    String   // who ISSUED the receipt (the seller)
-  merchant      Merchant @relation("IssuedReceipts", fields: [merchantId], references: [id])
+  id         String   @id // reuse the POS's own transaction ID
+  merchantId String // who ISSUED the receipt (the seller)
+  merchant   Merchant @relation("IssuedReceipts", fields: [merchantId], references: [id])
 
-  posProvider   String   // "square" | "shopify" | "clover" | "toast" | ...
+  posProvider   String // "square" | "shopify" | "clover" | "toast" | ...
   posLocationId String?
-  posDeviceId   String?  // which specific register/terminal rang this up, if Square provided one
+  posDeviceId   String? // which specific register/terminal rang this up, if the POS provided one
 
-  lineItems     Json     // [{ name, quantity, unitPrice, total }]
-  subtotal      Int      // cents
-  tax           Int      // cents
-  total         Int      // cents
+  lineItems     Json // [{ name, quantity, unitPrice, total }]
+  subtotal      Int // cents
+  tax           Int // cents
+  total         Int // cents
   paymentMethod String?
 
   // Consumer wallet — set only if a customer explicitly claims this receipt
@@ -128,10 +137,10 @@ model Transaction {
 
   // AI categorization — populated after a customer/merchant saves this receipt.
   // Null until categorized; categorization is best-effort and never blocks the save.
-  aiCategory       String?  // e.g. "Food & Drink", "Office Supplies", "Hardware & Tools"
-  aiTaxDeductible  Boolean?
-  aiReasoning      String?  // short human-readable explanation, shown as a tooltip
-  aiCategorizedAt  DateTime?
+  aiCategory      String? // e.g. "Food & Drink", "Office Supplies", "Hardware & Tools"
+  aiTaxDeductible Boolean?
+  aiReasoning     String? // short human-readable explanation, shown as a tooltip
+  aiCategorizedAt DateTime?
 
   // Merchant expense tracking — set only if a DIFFERENT merchant claims this
   // as a purchase they made (buying from another ReceipTap merchant)
@@ -193,7 +202,7 @@ model LoyaltyProgram {
   enabled Boolean @default(false)
 
   offerType  String @default("PERCENT") // "PERCENT" | "AMOUNT"
-  offerValue Int    @default(10)        // percent (1-100) if PERCENT, cents if AMOUNT
+  offerValue Int    @default(10) // percent (1-100) if PERCENT, cents if AMOUNT
 
   // Static, merchant-editable code customers type into their own phone to
   // redeem a full punch card themselves -- no merchant dashboard step.
@@ -249,8 +258,8 @@ model Affiliate {
   merchant   Merchant? @relation("AffiliateOwnMerchant", fields: [merchantId], references: [id])
 
   // Stripe Connect Express account -- required before any payout can be sent
-  stripeConnectAccountId String?  @unique
-  stripeConnectOnboarded Boolean  @default(false)
+  stripeConnectAccountId String? @unique
+  stripeConnectOnboarded Boolean @default(false)
 
   createdAt DateTime @default(now())
 
@@ -275,10 +284,10 @@ model Commission {
   merchantId  String
   merchant    Merchant  @relation(fields: [merchantId], references: [id])
 
-  stripeInvoiceId  String            @unique // idempotency: one commission per invoice paid
+  stripeInvoiceId  String           @unique // idempotency: one commission per invoice paid
   amountCents      Int
   rate             Int // the % applied at the time (15 or 20) -- kept for audit even if rates change later
-  status           CommissionStatus  @default(PENDING)
+  status           CommissionStatus @default(PENDING)
   stripeTransferId String?
 
   createdAt DateTime  @default(now())
@@ -295,12 +304,12 @@ enum CommissionStatus {
 // Customer — a consumer with a personal receipt wallet across ALL merchants
 // ---------------------------------------------------------------------------
 model Customer {
-  id           String        @id @default(cuid())
-  email        String        @unique
+  id           String   @id @default(cuid())
+  email        String   @unique
   passwordHash String?
-  googleId     String?       @unique // set if they signed in with Google instead of email
+  googleId     String?  @unique // set if they signed in with Google instead of email
   name         String?
-  createdAt    DateTime      @default(now())
+  createdAt    DateTime @default(now())
 
   // "Forgot password?" flow -- token is single-use (cleared on success) and
   // expires 1 hour after being issued, whichever comes first.

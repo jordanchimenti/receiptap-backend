@@ -50,7 +50,6 @@ router.get('/demo/receipt', async (req, res) => {
     loyaltyCard: { id: 'demo', punches: 3 }, // mid-progress, not full -- a full card auto-opens a redemption modal, which would hijack the scroll tour
     partnerReferralUrl,
     isMerchantCopy: false,
-    isDemo: true,
     transaction: {
       id: 'demo', orderNumber: 'demo',
       lineItems: [

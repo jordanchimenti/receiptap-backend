@@ -22,40 +22,50 @@
       position: sticky; top: 0; z-index: 50; background: var(--paper);
       border-bottom: 1px solid transparent; transition: box-shadow 0.2s ease, border-color 0.2s ease, background 0.2s ease;
     }
-    .nav.scrolled { border-bottom-color: var(--line); background: rgba(250,248,243,0.92); backdrop-filter: blur(6px); }
+    .nav.scrolled { border-bottom-color: var(--line); background: rgba(250,248,243,0.94); backdrop-filter: blur(6px); }
     .nav img { height: 40px; }
     .nav-links { display: flex; align-items: center; gap: 18px; }
     .nav-links a { font-size: 14px; font-weight: 500; text-decoration: none; color: var(--ink-soft); }
     .nav-cta { background: var(--teal); color: #fff !important; padding: 9px 16px; border-radius: 8px; font-weight: 600; }
 
-    .hero { display: flex; align-items: center; gap: 6vw; padding: 6vh 6vw 10vh; max-width: 1200px; margin: 0 auto; }
-    .hero-copy { flex: 1.15; }
+    /* ---------- Hero: dark, full-bleed, floating product card ---------- */
+    .hero-dark {
+      background: var(--ink);
+      background-image: radial-gradient(circle, rgba(255,255,255,0.07) 1px, transparent 1.4px);
+      background-size: 24px 24px;
+      position: relative; overflow: hidden;
+    }
+    .hero-inner {
+      display: flex; align-items: center; gap: 6vw; padding: 9vh 6vw 11vh;
+      max-width: 1200px; margin: 0 auto; position: relative; z-index: 1;
+    }
+    .hero-copy { flex: 1.1; }
     .hero-visual { flex: 1; display: flex; justify-content: center; }
-    .hero h1 { font-size: clamp(30px, 4.4vw, 52px); line-height: 1.08; letter-spacing: -0.02em; margin-bottom: 18px; }
-    .hero h1 em { font-style: normal; color: var(--teal); }
-    .hero-sub { font-size: 16.5px; color: var(--ink-soft); line-height: 1.55; max-width: 460px; margin-bottom: 26px; }
+    .hero-dark h1 {
+      font-size: clamp(32px, 4.6vw, 56px); line-height: 1.06; letter-spacing: -0.02em;
+      margin-bottom: 20px; color: var(--paper);
+    }
+    .hero-dark h1 em { font-style: normal; color: var(--teal); }
+    .hero-dark .hero-sub {
+      font-size: 17px; color: rgba(250,248,243,0.72); line-height: 1.6; max-width: 460px; margin-bottom: 30px;
+    }
     .cta-main {
       display: inline-block; background: var(--teal); color: #fff; font-size: 16px; font-weight: 700;
       padding: 15px 28px; border-radius: 10px; text-decoration: none;
     }
     .cta-main:hover { background: var(--teal-deep); }
-    .cta-fine { font-size: 12.5px; color: var(--ink-soft); margin-top: 10px; }
-    .pos-badges { margin-top: 26px; font-size: 13px; color: var(--ink-soft); }
-    .pos-badges strong { color: var(--ink); }
+    .cta-fine-dark { font-size: 12.5px; color: rgba(250,248,243,0.5); margin-top: 12px; }
 
-    /* Signature: receipt printing out of the puck */
-    .hero-visual { position: relative; }
-    .hero-visual::before {
-      content: ''; position: absolute; left: 50%; top: 44%; transform: translate(-50%, -50%);
-      width: 360px; height: 360px; border-radius: 50%;
-      background: radial-gradient(circle, var(--teal-wash) 0%, transparent 68%);
-      opacity: 0.8; z-index: 0;
+    .device-card {
+      background: var(--paper); border-radius: 22px; padding: 30px 26px 24px;
+      box-shadow: 0 40px 80px -20px rgba(0,0,0,0.55), 0 0 0 1px rgba(255,255,255,0.05);
+      position: relative; z-index: 1;
     }
-    .puck-scene { width: 300px; position: relative; z-index: 1; }
+    .puck-scene { width: 260px; }
     .puck {
-      width: 130px; height: 46px; margin: 0 auto; border-radius: 60px;
+      width: 128px; height: 46px; margin: 0 auto; border-radius: 60px;
       background: var(--ink); position: relative; z-index: 2;
-      box-shadow: 0 10px 24px rgba(28,27,25,0.22);
+      box-shadow: 0 10px 24px rgba(28,27,25,0.28);
     }
     .puck::after {
       content: '⌁'; color: var(--teal); font-size: 20px; position: absolute;
@@ -72,9 +82,9 @@
       62% { opacity: 0.85; }
       82%, 100% { opacity: 0; transform: translate(-50%, -50%) scale(3.4); }
     }
-    .receipt-slot { height: 296px; overflow: hidden; display: flex; justify-content: center; margin-top: -8px; }
+    .receipt-slot { height: 270px; overflow: hidden; display: flex; justify-content: center; margin-top: -8px; }
     .receipt-strip {
-      width: 220px; background: var(--paper-raised); border: 1px solid var(--line);
+      width: 208px; background: var(--paper-raised); border: 1px solid var(--line);
       border-top: none; border-radius: 0 0 12px 12px; padding: 16px 18px 14px;
       font-family: var(--font-mono); font-size: 12px; line-height: 1.9; color: var(--ink);
       animation: printout 3.6s cubic-bezier(0.22, 1, 0.36, 1) infinite;
@@ -96,85 +106,118 @@
       .tap-ring { animation: none; opacity: 0; }
     }
 
-    .section { padding: 64px 6vw; max-width: 1080px; margin: 0 auto; }
+    /* ---------- Trust strip ---------- */
+    .trust-strip { padding: 20px 6vw; border-bottom: 1px solid var(--line); }
+    .trust-inner {
+      max-width: 1000px; margin: 0 auto; display: flex; flex-wrap: wrap; justify-content: center;
+      gap: 10px 30px; font-size: 13px; font-weight: 500; color: var(--ink-soft);
+    }
+    .trust-inner span::before { content: '✓ '; color: var(--teal); font-weight: 700; }
+
+    .section { padding: 88px 6vw; max-width: 1100px; margin: 0 auto; }
     .section-eyebrow { font-size: 12px; font-weight: 700; color: var(--teal-deep); text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 8px; }
     .section h2 { font-size: clamp(24px, 3vw, 34px); letter-spacing: -0.015em; margin-bottom: 14px; }
     .section-lead { font-size: 15.5px; color: var(--ink-soft); line-height: 1.6; max-width: 560px; }
 
-    .problem-band { background: var(--paper-raised); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
-    .problem-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px; margin-top: 34px; }
-    .problem-grid .p-num { font-family: var(--font-mono); font-size: 26px; font-weight: 600; color: var(--teal); }
-    .problem-grid h3 { font-size: 16px; margin: 8px 0 6px; }
-    .problem-grid p { font-size: 13.5px; color: var(--ink-soft); line-height: 1.55; margin: 0; }
-
-    .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; margin-top: 36px; }
-    .step {
-      background: var(--paper-raised); border: 1px solid var(--line); border-radius: 16px; padding: 24px;
+    /* ---------- Problem: editorial rows, not boxed cards ---------- */
+    .problem-rows { margin-top: 40px; }
+    .problem-row {
+      display: flex; align-items: center; gap: 44px; padding: 34px 0;
+      border-top: 1px solid var(--line);
     }
-    .step .s-num {
-      width: 30px; height: 30px; border-radius: 50%; background: var(--teal); color: #fff;
-      font-weight: 700; font-size: 14px; display: flex; align-items: center; justify-content: center; margin-bottom: 14px;
+    .problem-row:last-child { border-bottom: 1px solid var(--line); }
+    .problem-row .p-num {
+      font-family: var(--font-display); font-size: clamp(46px, 6.4vw, 80px); font-weight: 700;
+      color: var(--teal); line-height: 1; flex: 0 0 auto; min-width: 150px;
     }
-    .step h3 { font-size: 16px; margin-bottom: 6px; }
-    .step p { font-size: 13.5px; color: var(--ink-soft); line-height: 1.55; margin: 0; }
+    .problem-row h3 { font-size: 18px; margin: 0 0 6px; }
+    .problem-row p { font-size: 14px; color: var(--ink-soft); line-height: 1.6; max-width: 520px; margin: 0; }
 
-    .split { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; margin-top: 36px; }
-    .split-card { background: var(--paper-raised); border: 1px solid var(--line); border-radius: 16px; padding: 28px; }
-    .split-card h3 { font-size: 17px; margin-bottom: 16px; }
-    .split-card ul { list-style: none; margin: 0; padding: 0; }
-    .split-card li { font-size: 14px; line-height: 1.5; padding: 9px 0 9px 26px; position: relative; }
-    .split-card li::before { content: '✓'; position: absolute; left: 0; color: var(--teal); font-weight: 700; }
-    .split-card li strong { font-weight: 600; }
-    .split-card li span { color: var(--ink-soft); }
+    /* ---------- How it works: horizontal timeline ---------- */
+    .how-band { background: var(--paper-raised); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+    .timeline { display: flex; gap: 28px; margin-top: 48px; position: relative; }
+    .timeline::before { content: ''; position: absolute; left: 0; right: 0; top: 20px; height: 2px; background: var(--line); }
+    .tl-step { flex: 1; position: relative; }
+    .tl-num {
+      width: 40px; height: 40px; border-radius: 50%; background: var(--teal); color: #fff;
+      display: flex; align-items: center; justify-content: center; font-weight: 700;
+      font-family: var(--font-display); margin-bottom: 20px; box-shadow: 0 0 0 6px var(--paper-raised);
+      position: relative; z-index: 1;
+    }
+    .tl-step h3 { font-size: 16.5px; margin-bottom: 8px; }
+    .tl-step p { font-size: 13.5px; color: var(--ink-soft); line-height: 1.6; margin: 0; }
+
+    /* ---------- Showcase: bento grid ---------- */
+    .bento { display: grid; grid-template-columns: repeat(6, 1fr); gap: 18px; margin-top: 40px; }
+    .bento-tile { background: var(--paper-raised); border: 1px solid var(--line); border-radius: 18px; padding: 26px; }
+    .bento-tile.large { grid-column: span 3; }
+    .bento-tile.small { grid-column: span 2; }
+    .bento-tile.large h3 { font-size: 18.5px; margin: 16px 0 8px; }
+    .bento-tile.large p { font-size: 14px; color: var(--ink-soft); line-height: 1.6; margin: 0; }
+    .bt-eyebrow {
+      font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+      color: var(--teal-deep); margin-bottom: 10px;
+    }
+    .bento-tile.small h3 { font-size: 15.5px; margin-bottom: 6px; }
+    .bento-tile.small p { font-size: 13px; color: var(--ink-soft); line-height: 1.55; margin: 0; }
 
     .mini-mockup {
       background: var(--paper); border: 1px solid var(--line); border-radius: 12px;
-      padding: 14px 16px; margin-bottom: 22px; font-family: var(--font-mono); font-size: 12.5px;
+      padding: 14px 16px; font-family: var(--font-mono); font-size: 12.5px;
     }
-    .mockup-label {
-      font-family: var(--font-body); font-size: 10.5px; font-weight: 700; text-transform: uppercase;
-      letter-spacing: 0.06em; color: var(--ink-soft); margin-bottom: 8px;
-    }
+    .mockup-label { font-family: var(--font-body); font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-soft); margin-bottom: 8px; }
     .mockup-row { display: flex; justify-content: space-between; align-items: center; padding: 5px 0; color: var(--ink); }
     .mockup-row + .mockup-row { border-top: 1px dashed var(--line); }
-    .mockup-row .tag {
-      font-family: var(--font-body); font-size: 10px; font-weight: 700; color: var(--teal-deep);
-      background: var(--teal-wash); padding: 2px 8px; border-radius: 999px;
-    }
+    .mockup-row .tag { font-family: var(--font-body); font-size: 10px; font-weight: 700; color: var(--teal-deep); background: var(--teal-wash); padding: 2px 8px; border-radius: 999px; }
     .mockup-row .tag.new { color: #8A6D00; background: #FBF0D0; }
     .mockup-chips { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
-    .chip {
-      font-family: var(--font-body); font-size: 10.5px; font-weight: 600; color: var(--teal-deep);
-      background: var(--teal-wash); padding: 3px 10px; border-radius: 999px;
-    }
+    .chip { font-family: var(--font-body); font-size: 10.5px; font-weight: 600; color: var(--teal-deep); background: var(--teal-wash); padding: 3px 10px; border-radius: 999px; }
 
-    .pricing-card {
-      max-width: 430px; margin: 36px auto 0; background: var(--paper-raised);
-      border: 2px solid var(--teal); border-radius: 20px; padding: 34px 32px; text-align: center;
+    /* ---------- Pricing: two-tone card ---------- */
+    .price-card2 {
+      max-width: 440px; margin: 40px auto 0; border-radius: 22px; overflow: hidden;
+      border: 1px solid var(--line); box-shadow: 0 24px 60px -24px rgba(28,27,25,0.3);
     }
-    .price { font-family: var(--font-mono); font-size: 44px; font-weight: 600; }
-    .price small { font-size: 15px; color: var(--ink-soft); font-family: var(--font-body); }
-    .pricing-card ul { list-style: none; padding: 0; margin: 20px 0 24px; text-align: left; }
-    .pricing-card li { font-size: 13.5px; padding: 7px 0 7px 24px; position: relative; }
-    .pricing-card li::before { content: '✓'; position: absolute; left: 0; color: var(--teal); font-weight: 700; }
+    .pc-top { background: var(--ink); color: var(--paper); padding: 34px 32px 28px; text-align: center; }
+    .pc-top .price { font-family: var(--font-display); font-size: 46px; font-weight: 700; }
+    .pc-top .price small { font-size: 15px; color: rgba(250,248,243,0.62); font-weight: 400; font-family: var(--font-body); }
+    .pc-top .pc-sub { font-size: 13px; color: rgba(250,248,243,0.62); margin-top: 6px; }
+    .pc-bottom { background: var(--paper-raised); padding: 28px 32px 32px; text-align: left; }
+    .pc-bottom ul { list-style: none; padding: 0; margin: 0 0 22px; }
+    .pc-bottom li { font-size: 13.5px; padding: 7px 0 7px 24px; position: relative; }
+    .pc-bottom li::before { content: '✓'; position: absolute; left: 0; color: var(--teal); font-weight: 700; }
+    .cta-fine { font-size: 12.5px; color: var(--ink-soft); margin-top: 10px; text-align: center; }
 
-    .faq-item { border-bottom: 1px solid var(--line); padding: 4px 0; }
+    /* ---------- FAQ: two columns ---------- */
+    .faq-grid { column-count: 2; column-gap: 48px; margin-top: 26px; }
+    .faq-item { border-bottom: 1px solid var(--line); padding: 4px 0; break-inside: avoid; }
     .faq-item summary { font-size: 15px; font-weight: 600; padding: 14px 0; cursor: pointer; list-style: none; }
     .faq-item summary::after { content: '+'; float: right; color: var(--teal); font-weight: 700; }
     .faq-item[open] summary::after { content: '–'; }
     .faq-item p { font-size: 14px; color: var(--ink-soft); line-height: 1.6; margin: 0 0 16px; }
 
-    .final-band { background: var(--ink); text-align: center; padding: 72px 6vw; }
+    /* ---------- Final CTA: dark bookend ---------- */
+    .final-band {
+      background: var(--ink);
+      background-image: radial-gradient(circle, rgba(255,255,255,0.07) 1px, transparent 1.4px);
+      background-size: 24px 24px;
+      text-align: center; padding: 96px 6vw;
+    }
     .final-band h2 { color: var(--paper); font-size: clamp(24px, 3vw, 34px); margin-bottom: 12px; }
     .final-band p { color: #B7B4AC; font-size: 15px; margin-bottom: 26px; }
 
     footer { padding: 28px 6vw; display: flex; justify-content: space-between; align-items: center; font-size: 12.5px; color: var(--ink-soft); }
 
     @media (max-width: 860px) {
-      .hero { flex-direction: column; padding-top: 3vh; }
-      .problem-grid, .steps, .split { grid-template-columns: 1fr; }
+      .hero-inner { flex-direction: column; padding-top: 5vh; }
       .hero-visual { order: -1; }
       .puck-scene { transform: scale(0.9); }
+      .problem-row { flex-direction: column; align-items: flex-start; gap: 12px; }
+      .timeline { flex-direction: column; gap: 28px; }
+      .timeline::before { display: none; }
+      .bento { grid-template-columns: 1fr; }
+      .bento-tile.large, .bento-tile.small { grid-column: auto; }
+      .faq-grid { column-count: 1; }
     }
   </style>
 </head>
@@ -189,52 +232,68 @@
     </div>
   </nav>
 
-  <header class="hero">
-    <div class="hero-copy">
-      <h1>The receipt goes to their phone.<br /><em>The relationship</em> goes to you.</h1>
-      <p class="hero-sub">
-        ReceipTap replaces paper receipts with a tap. Your customers get every receipt on
-        their phone — and you get their email, a Google review funnel, and repeat-customer
-        analytics from sales you were already making.
-      </p>
-      <a class="cta-main" href="/signup">Start your 30-day free trial</a>
-      <div class="cta-fine">$49.99 USD/month after trial · cancel anytime before it ends and pay nothing</div>
-      <div class="pos-badges">Works with <strong>Square</strong> — no new register, no new workflow.</div>
-    </div>
-    <div class="hero-visual">
-      <div class="puck-scene">
-        <div class="puck"><span class="tap-ring"></span></div>
-        <div class="receipt-slot">
-          <div class="receipt-strip">
-            <div style="text-align:center; font-weight:700;">TIP TOP TINT</div>
-            <div class="rrow"><span>Ceramic tint — 2 dr</span><span>380.00</span></div>
-            <div class="rrow"><span>Windshield strip</span><span>60.00</span></div>
-            <div class="rrow"><span>HST 13%</span><span>57.20</span></div>
-            <div class="rrow rtotal"><span>TOTAL</span><span>497.20</span></div>
-            <div class="rsaved">✓ Saved to phone</div>
+  <header class="hero-dark">
+    <div class="hero-inner">
+      <div class="hero-copy">
+        <h1>The receipt goes to their phone.<br /><em>The relationship</em> goes to you.</h1>
+        <p class="hero-sub">
+          ReceipTap replaces paper receipts with a tap. Your customers get every receipt on
+          their phone — and you get their email, a Google review funnel, and repeat-customer
+          analytics from sales you were already making.
+        </p>
+        <a class="cta-main" href="/signup">Start your 30-day free trial</a>
+        <div class="cta-fine-dark">$49.99 USD/month after trial · cancel anytime before it ends and pay nothing</div>
+      </div>
+      <div class="hero-visual">
+        <div class="device-card">
+          <div class="puck-scene">
+            <div class="puck"><span class="tap-ring"></span></div>
+            <div class="receipt-slot">
+              <div class="receipt-strip">
+                <div style="text-align:center; font-weight:700;">TIP TOP TINT</div>
+                <div class="rrow"><span>Ceramic tint — 2 dr</span><span>380.00</span></div>
+                <div class="rrow"><span>Windshield strip</span><span>60.00</span></div>
+                <div class="rrow"><span>HST 13%</span><span>57.20</span></div>
+                <div class="rrow rtotal"><span>TOTAL</span><span>497.20</span></div>
+                <div class="rsaved">✓ Saved to phone</div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
     </div>
   </header>
 
-  <section class="section problem-band" style="max-width: none;">
-    <div style="max-width: 1080px; margin: 0 auto;">
-      <div class="section-eyebrow">The problem with paper</div>
-      <h2>Every paper receipt is a dead end.</h2>
-      <div class="problem-grid">
+  <div class="trust-strip">
+    <div class="trust-inner">
+      <span>No app for customers</span>
+      <span>Works with Square</span>
+      <span>Live in an afternoon</span>
+      <span>Cancel anytime during trial</span>
+    </div>
+  </div>
+
+  <section class="section">
+    <div class="section-eyebrow">The problem with paper</div>
+    <h2>Every paper receipt is a dead end.</h2>
+    <div class="problem-rows">
+      <div class="problem-row">
+        <div class="p-num">90%</div>
         <div>
-          <div class="p-num">90%</div>
           <h3>Thrown away or lost</h3>
           <p>Most paper receipts are in the trash — or a pocket — within a day. When your customer needs it for a return or warranty, it's gone.</p>
         </div>
+      </div>
+      <div class="problem-row">
+        <div class="p-num">$0</div>
         <div>
-          <div class="p-num">$0</div>
           <h3>Nothing comes back to you</h3>
           <p>A paper receipt tells you nothing about who bought, whether they've been in before, or how to reach them again. The sale ends at the register.</p>
         </div>
+      </div>
+      <div class="problem-row">
+        <div class="p-num">∞</div>
         <div>
-          <div class="p-num">∞</div>
           <h3>Endless thermal paper</h3>
           <p>Rolls, jams, replacements, and BPA-coated paper nobody wants to touch. A cost with no upside, forever.</p>
         </div>
@@ -242,50 +301,46 @@
     </div>
   </section>
 
-  <section class="section">
-    <div class="section-eyebrow">How it works</div>
-    <h2>Live in an afternoon. No new hardware at the register.</h2>
-    <div class="steps">
-      <div class="step">
-        <div class="s-num">1</div>
-        <h3>Connect your POS</h3>
-        <p>Link your Square account in a couple of clicks. Sales start flowing into ReceipTap automatically — nothing changes about how you ring people up.</p>
-      </div>
-      <div class="step">
-        <div class="s-num">2</div>
-        <h3>Put the puck on your counter</h3>
-        <p>The ReceipTap puck sits next to your register. No wiring into your till, no software to install on it.</p>
-      </div>
-      <div class="step">
-        <div class="s-num">3</div>
-        <h3>Customers tap. That's it.</h3>
-        <p>After paying, they tap their phone on the puck and their receipt appears — no app to download, no account required to receive it.</p>
+  <section class="how-band">
+    <div class="section">
+      <div class="section-eyebrow">How it works</div>
+      <h2>Live in an afternoon. No new hardware at the register.</h2>
+      <div class="timeline">
+        <div class="tl-step">
+          <div class="tl-num">1</div>
+          <h3>Connect your POS</h3>
+          <p>Link your Square account in a couple of clicks. Sales start flowing into ReceipTap automatically — nothing changes about how you ring people up.</p>
+        </div>
+        <div class="tl-step">
+          <div class="tl-num">2</div>
+          <h3>Put the puck on your counter</h3>
+          <p>The ReceipTap puck sits next to your register. No wiring into your till, no software to install on it.</p>
+        </div>
+        <div class="tl-step">
+          <div class="tl-num">3</div>
+          <h3>Customers tap. That's it.</h3>
+          <p>After paying, they tap their phone on the puck and their receipt appears — no app to download, no account required to receive it.</p>
+        </div>
       </div>
     </div>
   </section>
 
-  <section class="section" style="padding-top: 0;">
-    <div class="section-eyebrow">Two-sided value</div>
-    <h2>Good for your business. Genuinely useful for your customers.</h2>
+  <section class="section">
+    <div class="section-eyebrow">See it in action</div>
+    <h2>Real tools for a real sale.</h2>
     <p class="section-lead">Most receipt tools serve one side. ReceipTap only works because both sides want it.</p>
-    <div class="split">
-      <div class="split-card">
-        <h3>For your business</h3>
+    <div class="bento">
+      <div class="bento-tile large">
         <div class="mini-mockup">
           <div class="mockup-label">Repeat Customers</div>
           <div class="mockup-row"><span>Maria T.</span><span class="tag">6th visit</span></div>
           <div class="mockup-row"><span>James K.</span><span class="tag new">New</span></div>
           <div class="mockup-row"><span>Aisha R.</span><span class="tag">3rd visit</span></div>
         </div>
-        <ul>
-          <li><strong>Customer emails, captured at checkout</strong> — <span>build a real list from people who already bought.</span></li>
-          <li><strong>Google review funnel</strong> — <span>the receipt screen asks happy customers to leave a review, right at the moment of purchase.</span></li>
-          <li><strong>Repeat-customer analytics</strong> — <span>see who comes back, how often, and what your regulars actually spend.</span></li>
-          <li><strong>Branded receipts</strong> — <span>your logo, your colors, your review link — not a generic printout.</span></li>
-        </ul>
+        <h3>Every regular, tracked automatically</h3>
+        <p>See who comes back, how often, and what your regulars actually spend — all from sales you were already making.</p>
       </div>
-      <div class="split-card">
-        <h3>For their customers</h3>
+      <div class="bento-tile large">
         <div class="mini-mockup">
           <div class="mockup-chips">
             <span class="chip">Food & Drink</span>
@@ -295,41 +350,54 @@
           <div class="mockup-row"><span>Tip Top Tint</span><span>$497.20</span></div>
           <div class="mockup-row"><span>Green Leaf Café</span><span>$12.40</span></div>
         </div>
-        <ul>
-          <li><strong>Every receipt in one wallet</strong> — <span>searchable by store and date when they need a return or warranty claim.</span></li>
-          <li><strong>AI-organized spending</strong> — <span>receipts are categorized automatically, with possible tax deductions flagged.</span></li>
-          <li><strong>Nothing to install</strong> — <span>tap, receive, done. A wallet account is optional, not required.</span></li>
-          <li><strong>PDF anytime</strong> — <span>a proper receipt document on demand, for expense reports and bookkeeping.</span></li>
-        </ul>
+        <h3>Every receipt in one wallet</h3>
+        <p>Searchable by store and date, categorized automatically by AI — ready for a return, a warranty claim, or tax season. Nothing to install; a PDF is one tap away.</p>
+      </div>
+      <div class="bento-tile small">
+        <div class="bt-eyebrow">At checkout</div>
+        <h3>Email capture</h3>
+        <p>Build a real customer list from people who already bought — no extra step at the register.</p>
+      </div>
+      <div class="bento-tile small">
+        <div class="bt-eyebrow">Reviews</div>
+        <h3>Google review funnel</h3>
+        <p>The receipt screen asks happy customers to leave a review, right at the moment of purchase.</p>
+      </div>
+      <div class="bento-tile small">
+        <div class="bt-eyebrow">Branding</div>
+        <h3>Branded receipts</h3>
+        <p>Your logo, your colors, your review link — not a generic printout.</p>
       </div>
     </div>
   </section>
 
-  <section class="section" id="pricing">
-    <div style="text-align: center;">
-      <div class="section-eyebrow">Pricing</div>
-      <h2>One plan. Everything included.</h2>
-    </div>
-    <div class="pricing-card">
-      <div class="price">$49.99<small> USD / month</small></div>
-      <div style="font-size: 13px; color: var(--ink-soft); margin-top: 4px;">per location · 30-day free trial</div>
-      <ul>
-        <li>Unlimited digital receipts</li>
-        <li>Square POS integration</li>
-        <li>Email capture + Google review funnel</li>
-        <li>Repeat-customer & revenue analytics</li>
-        <li>AI receipt categorization for your customers</li>
-        <li>Cancel anytime — trial ends, no charge</li>
-      </ul>
-      <a class="cta-main" href="/signup" style="width: 100%; box-sizing: border-box;">Start 30-day free trial</a>
-      <div class="cta-fine">Card required to start · charged only when the trial ends</div>
+  <section class="section" id="pricing" style="text-align: center;">
+    <div class="section-eyebrow">Pricing</div>
+    <h2>One plan. Everything included.</h2>
+    <div class="price-card2">
+      <div class="pc-top">
+        <div class="price">$49.99<small> USD / month</small></div>
+        <div class="pc-sub">per location · 30-day free trial</div>
+      </div>
+      <div class="pc-bottom">
+        <ul>
+          <li>Unlimited digital receipts</li>
+          <li>Square POS integration</li>
+          <li>Email capture + Google review funnel</li>
+          <li>Repeat-customer & revenue analytics</li>
+          <li>AI receipt categorization for your customers</li>
+          <li>Cancel anytime — trial ends, no charge</li>
+        </ul>
+        <a class="cta-main" href="/signup" style="width: 100%; box-sizing: border-box;">Start 30-day free trial</a>
+        <div class="cta-fine">Card required to start · charged only when the trial ends</div>
+      </div>
     </div>
   </section>
 
-  <section class="section" style="max-width: 720px;">
+  <section class="section" style="max-width: 900px;">
     <div class="section-eyebrow">Questions</div>
     <h2>What store owners ask us</h2>
-    <div style="margin-top: 22px;">
+    <div class="faq-grid">
       <details class="faq-item">
         <summary>Do my customers need to download an app?</summary>
         <p>No. They tap the puck and the receipt opens on their phone instantly. Creating a wallet account (to keep all their receipts in one place) is optional.</p>

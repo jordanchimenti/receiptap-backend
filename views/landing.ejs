@@ -18,12 +18,12 @@
     body { height: auto; min-height: 100%; }
 
     .nav {
-      display: flex; align-items: center; justify-content: space-between; padding: 18px 6vw;
+      display: flex; flex-direction: row; align-items: center; justify-content: space-between; padding: 18px 6vw;
       position: sticky; top: 0; z-index: 50; background: var(--paper);
       border-bottom: 1px solid transparent; transition: box-shadow 0.2s ease, border-color 0.2s ease, background 0.2s ease;
     }
     .nav.scrolled { border-bottom-color: var(--line); background: rgba(250,248,243,0.94); backdrop-filter: blur(6px); }
-    .nav img { height: 40px; }
+    .nav img { height: 80px; }
     .nav-links { display: flex; align-items: center; gap: 18px; }
     .nav-links a { font-size: 14px; font-weight: 500; text-decoration: none; color: var(--ink-soft); }
     .nav-cta { background: var(--teal); color: #fff !important; padding: 9px 16px; border-radius: 8px; font-weight: 600; }

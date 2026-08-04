@@ -38,7 +38,7 @@
   <% if (theme.logoUrl) { %>
     <img class="merchant-logo" src="<%= theme.logoUrl %>" alt="<%= merchant.businessName %>" />
   <% } else if (typeof isPreview !== 'undefined' && isPreview) { %>
-    <div class="logo-placeholder">Custom Logo</div>
+    <div class="logo-placeholder"><%= typeof logoPlaceholderText !== 'undefined' ? logoPlaceholderText : 'Custom Logo' %></div>
   <% } %>
   <div class="business-name"><%= theme.displayName || merchant.businessName %></div>
   <% if (theme.location) { %>

@@ -22,13 +22,17 @@ router.get('/demo/receipt', async (req, res) => {
 
   // Everything below is display-only for this tour -- it never writes to
   // the merchant's real saved theme, it just turns on every optional
-  // section for the demo render.
+  // section for the demo render. Logo and business name are intentionally
+  // genericized (not the founder's real ones) so this reads as "here's what
+  // yours could look like," not "here's ReceipTap's own receipt."
   const theme = {
     layoutId: 'classic',
-    logoUrl: null, primaryColor: '#111111', accentColor: '#2563eb',
+    primaryColor: '#111111', accentColor: '#2563eb',
     location: null, phone: null, gstHstNumber: null, taxLabel: 'Tax', returnPolicy: null, headerText: null,
     footerText: null, showWarranty: false, showWalletSave: true,
     ...savedTheme,
+    logoUrl: null,
+    displayName: 'Your Business',
     showPartnerProgram: true,
     showGoogleReview: true,
     googleReviewUrl: savedTheme?.googleReviewUrl || 'https://g.page/r/example-placeholder/review',
@@ -44,6 +48,8 @@ router.get('/demo/receipt', async (req, res) => {
   res.render('receipt', {
     merchant,
     theme,
+    isPreview: true, // shows the "Your custom logo" placeholder box instead of a real image
+    logoPlaceholderText: 'Your custom logo',
     googleClientId: process.env.GOOGLE_CLIENT_ID || '',
     alreadySignedUp: false,
     loyaltyProgram: loyaltyProgram || { enabled: true, offerType: 'PERCENT', offerValue: 10 },

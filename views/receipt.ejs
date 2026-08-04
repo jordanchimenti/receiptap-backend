@@ -173,7 +173,7 @@
       <a href="<%= partnerReferralUrl %>">Try ReceipTap FREE</a>
     </div>
   <% } %>
-  <%- include('receipt-layouts/' + (theme.layoutId || 'classic'), { merchant, theme, transaction, isPreview: typeof isPreview !== 'undefined' ? isPreview : false, isMerchantCopy }) %>
+  <%- include('receipt-layouts/' + (theme.layoutId || 'classic'), { merchant, theme, transaction, isPreview: typeof isPreview !== 'undefined' ? isPreview : false, isMerchantCopy, logoPlaceholderText: typeof logoPlaceholderText !== 'undefined' ? logoPlaceholderText : undefined }) %>
 
   <div class="actions" style="max-width:420px; margin: 10px auto 0;">
     <button class="action-button" style="border:none; cursor:pointer;" onclick="handleSaveClick('photo')">

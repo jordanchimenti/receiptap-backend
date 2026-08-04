@@ -14,9 +14,20 @@ const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 const RESET_TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hour
 
+// Lets a link into signup (e.g. the landing page's receipt demo) choose
+// where a brand-new account lands, without opening a generic redirect --
+// only relative /dashboard/* paths are honored, anything else falls back
+// to the normal post-signup destination.
+function safeNextPath(next) {
+  return typeof next === 'string' && /^\/dashboard\/[a-zA-Z0-9\-_/]*$/.test(next)
+    ? next
+    : '/dashboard/receipts-hub';
+}
+
 router.get('/signup', (req, res) => res.render('signup', {
   error: null,
   refCode: req.query.ref || '',
+  next: req.query.next || '',
   googleClientId: process.env.GOOGLE_CLIENT_ID || '',
 }));
 router.get('/login', (req, res) => res.render('login', {
@@ -27,16 +38,16 @@ router.get('/login', (req, res) => res.render('login', {
 }));
 
 router.post('/signup', async (req, res) => {
-  const { ownerName, businessName, email, password, refCode } = req.body;
+  const { ownerName, businessName, email, password, refCode, next } = req.body;
 
   if (!ownerName || !businessName || !email || !password) {
-    return res.render('signup', { error: 'All fields are required', refCode: refCode || '', googleClientId: process.env.GOOGLE_CLIENT_ID || '' });
+    return res.render('signup', { error: 'All fields are required', refCode: refCode || '', next: next || '', googleClientId: process.env.GOOGLE_CLIENT_ID || '' });
   }
 
   try {
     const existing = await prisma.merchant.findUnique({ where: { email } });
     if (existing) {
-      return res.render('signup', { error: 'An account with this email already exists', refCode: refCode || '', googleClientId: process.env.GOOGLE_CLIENT_ID || '' });
+      return res.render('signup', { error: 'An account with this email already exists', refCode: refCode || '', next: next || '', googleClientId: process.env.GOOGLE_CLIENT_ID || '' });
     }
 
     // Referral is best-effort -- an invalid/expired code shouldn't block signup,
@@ -51,10 +62,10 @@ router.post('/signup', async (req, res) => {
     });
 
     req.session.merchantId = merchant.id;
-    res.redirect('/dashboard/receipts-hub');
+    res.redirect(safeNextPath(next));
   } catch (err) {
     console.error('Signup failed:', err);
-    res.render('signup', { error: 'Something went wrong on our end — please try again in a moment.', refCode: refCode || '', googleClientId: process.env.GOOGLE_CLIENT_ID || '' });
+    res.render('signup', { error: 'Something went wrong on our end — please try again in a moment.', refCode: refCode || '', next: next || '', googleClientId: process.env.GOOGLE_CLIENT_ID || '' });
   }
 });
 
@@ -91,7 +102,7 @@ router.post('/logout', (req, res) => {
 // gets an editable placeholder business name -- same tradeoff already made
 // for the equivalent customer-facing flow in routes/customer-account.js.
 router.post('/merchant/google', async (req, res) => {
-  const { credential, refCode } = req.body;
+  const { credential, refCode, next } = req.body;
   if (!credential) return res.status(400).json({ error: 'Missing Google credential' });
 
   let payload;
@@ -133,7 +144,7 @@ router.post('/merchant/google', async (req, res) => {
     }
 
     req.session.merchantId = merchant.id;
-    res.json({ success: true, redirect: '/dashboard/receipts-hub' });
+    res.json({ success: true, redirect: safeNextPath(next) });
   } catch (err) {
     console.error('Google sign-in failed:', err);
     res.status(500).json({ error: 'Something went wrong on our end — please try again in a moment.' });

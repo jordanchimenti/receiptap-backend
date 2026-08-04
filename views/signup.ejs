@@ -29,6 +29,7 @@
 
       <form method="POST" action="/signup">
         <input type="hidden" name="refCode" value="<%= typeof refCode !== 'undefined' ? refCode : '' %>" />
+        <input type="hidden" name="next" value="<%= typeof next !== 'undefined' ? next : '' %>" />
         <div class="field">
           <label for="ownerName">Your name</label>
           <input type="text" id="ownerName" name="ownerName" required autofocus />
@@ -58,12 +59,13 @@
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script>
       const REF_CODE = '<%= typeof refCode !== 'undefined' ? refCode : '' %>';
+      const NEXT_PATH = '<%= typeof next !== 'undefined' ? next : '' %>';
 
       async function handleGoogleSignIn(response) {
         const res = await fetch('/merchant/google', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ credential: response.credential, refCode: REF_CODE }),
+          body: JSON.stringify({ credential: response.credential, refCode: REF_CODE, next: NEXT_PATH }),
         });
         const data = await res.json();
         if (!res.ok) {

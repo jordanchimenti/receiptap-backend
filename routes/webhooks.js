@@ -58,6 +58,10 @@ router.post('/webhooks/pos/square', async (req, res) => {
         posLocationId: locationId,
         posDeviceId: deviceId,
         orderNumber: payment.order_id || null,
+        // The receipt should show when the sale actually happened at the
+        // register, not whenever this webhook happened to get processed --
+        // those can differ under retry/latency. Square reports this directly.
+        createdAt: new Date(payment.created_at),
         lineItems,
         // Already net of any discount -- Square's total_money/total_tax_money
         // are computed post-discount, so discountTotal below is shown on the
@@ -214,6 +218,15 @@ async function handleCloverOrderEvent(cloverMerchantId, orderId) {
     return sum + lineDiscounts;
   }, 0);
 
+  // Clover doesn't expose a total_tax_money-equivalent on the order the way
+  // Square does, so tax is inferred rather than reported directly: subtotal
+  // is the real sum of line item prices, and tax is whatever's left once
+  // that (minus discount) is subtracted from the order's real total. Still
+  // best-effort -- confirm against a real sandbox sale -- but strictly more
+  // accurate than the flat "tax: 0" this used to hardcode for every order.
+  const lineItemsSubtotal = lineItemElements.reduce((sum, li) => sum + (li.price || 0), 0);
+  const inferredTax = Math.max(0, order.total - lineItemsSubtotal + discountTotal);
+
   const transaction = await prisma.transaction.create({
     data: {
       id: order.id,
@@ -222,9 +235,12 @@ async function handleCloverOrderEvent(cloverMerchantId, orderId) {
       posLocationId: cloverMerchantId, // a Clover merchant IS the location
       posDeviceId: null,
       orderNumber: order.id,
+      // Same reasoning as the Square handler -- createdTime is when Clover
+      // recorded the sale, not whenever this webhook got processed.
+      createdAt: new Date(order.createdTime),
       lineItems,
-      subtotal: order.total, // tax isn't broken out on the order object -- see comment above
-      tax: 0,
+      subtotal: lineItemsSubtotal,
+      tax: inferredTax,
       discountTotal,
       total: order.total,
       paymentMethod,

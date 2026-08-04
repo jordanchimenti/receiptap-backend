@@ -73,9 +73,9 @@
   <% } %>
   <div class="totals-row"><span><%= (theme.taxLabel || 'Tax').toUpperCase() %></span><span>$<%= transaction.tax %></span></div>
   <div class="totals-row total"><span>TOTAL</span><span>$<%= transaction.total %></span></div>
-  <% if (transaction.paymentMethod) { %>
-    <div class="meta-center"><%= transaction.paymentMethod %></div>
-  <% } %>
+  <div class="meta-center">
+    <%= transaction.paymentMethod ? transaction.paymentMethod + ' — PAID' : 'PAID' %>
+  </div>
   <% if (theme.gstHstNumber) { %>
     <div class="meta-center">GST/HST #<%= theme.gstHstNumber %></div>
   <% } %>

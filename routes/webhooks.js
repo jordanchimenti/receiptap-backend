@@ -57,9 +57,14 @@ router.post('/webhooks/pos/square', async (req, res) => {
         posProvider: 'square',
         posLocationId: locationId,
         posDeviceId: deviceId,
+        orderNumber: payment.order_id || null,
         lineItems,
+        // Already net of any discount -- Square's total_money/total_tax_money
+        // are computed post-discount, so discountTotal below is shown on the
+        // receipt as an informational line, not subtracted a second time.
         subtotal: Number(order.total_money?.amount || 0) - Number(order.total_tax_money?.amount || 0),
         tax: Number(order.total_tax_money?.amount || 0),
+        discountTotal: Number(order.total_discount_money?.amount || 0),
         total: Number(order.total_money?.amount || payment.total_money?.amount || 0),
         paymentMethod: payment.card_details?.card
           ? `${payment.card_details.card.card_brand} ••••${payment.card_details.card.last_4}`
@@ -201,6 +206,14 @@ async function handleCloverOrderEvent(cloverMerchantId, orderId) {
     ? `${cardTransaction.cardType || 'Card'} ••••${cardTransaction.last4 || ''}`
     : null;
 
+  // Best-effort -- each line item can carry its own `discounts` array;
+  // exact field names haven't been verified against a real sandbox order yet
+  // (see the mapping note above), so this defaults to 0 rather than guessing wrong.
+  const discountTotal = lineItemElements.reduce((sum, li) => {
+    const lineDiscounts = (li.discounts || []).reduce((s, d) => s + (d.amount || 0), 0);
+    return sum + lineDiscounts;
+  }, 0);
+
   const transaction = await prisma.transaction.create({
     data: {
       id: order.id,
@@ -208,9 +221,11 @@ async function handleCloverOrderEvent(cloverMerchantId, orderId) {
       posProvider: 'clover',
       posLocationId: cloverMerchantId, // a Clover merchant IS the location
       posDeviceId: null,
+      orderNumber: order.id,
       lineItems,
       subtotal: order.total, // tax isn't broken out on the order object -- see comment above
       tax: 0,
+      discountTotal,
       total: order.total,
       paymentMethod,
     },

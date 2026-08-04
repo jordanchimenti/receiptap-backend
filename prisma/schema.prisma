@@ -124,10 +124,12 @@ model Transaction {
   posProvider   String // "square" | "shopify" | "clover" | "toast" | ...
   posLocationId String?
   posDeviceId   String? // which specific register/terminal rang this up, if the POS provided one
+  orderNumber   String? // the POS's own order identifier -- distinct from `id` (the payment ID) where the two differ
 
   lineItems     Json // [{ name, quantity, unitPrice, total }]
   subtotal      Int // cents
   tax           Int // cents
+  discountTotal Int     @default(0) // cents, order-level discount already reflected in subtotal/total
   total         Int // cents
   paymentMethod String?
 
@@ -165,11 +167,20 @@ model ReceiptTheme {
   logoUrl      String?
   displayName  String? // shown on receipts instead of Merchant.businessName, if set -- lets a merchant show a nicer/different name to customers without renaming their actual account
   location     String? // free-text address/location line, shown on receipts if set -- e.g. "123 Main St, Springfield" -- not tied to any Location model, just display text
+  phone        String?
   primaryColor String  @default("#111111")
   accentColor  String  @default("#2563eb")
 
   headerText String?
   footerText String?
+
+  // Receipt compliance -- gstHstNumber is what lets a Canadian customer claim
+  // an input tax credit (CRA requires it on receipts for purchases $30+).
+  // taxLabel is customizable since "Tax" isn't always accurate: a merchant
+  // might charge GST/HST alone, or GST/HST + a provincial tax like PST/QST.
+  gstHstNumber String?
+  taxLabel     String  @default("Tax")
+  returnPolicy String?
 
   showGoogleReview Boolean @default(false)
   googleReviewUrl  String?

@@ -44,23 +44,43 @@
   <% if (theme.location) { %>
     <div class="location"><%= theme.location %></div>
   <% } %>
+  <% if (theme.phone) { %>
+    <div class="location"><%= theme.phone %></div>
+  <% } %>
   <div class="meta"><%= transaction.date %></div>
+  <div class="meta">
+    RCPT #<%= transaction.id %><% if (transaction.orderNumber && transaction.orderNumber !== transaction.id) { %> / ORDER #<%= transaction.orderNumber %><% } %>
+  </div>
   <% if (theme.headerText) { %>
     <div class="header-text"><%= theme.headerText %></div>
   <% } %>
   <hr class="dashes" />
   <% transaction.lineItems.forEach(function(item) { %>
     <div class="item-line">
-      <span class="name"><%= item.quantity %>x <%= item.name %></span>
+      <span class="name">
+        <%= item.quantity %>x <%= item.name %>
+        <% if (item.unitPrice !== undefined && item.quantity > 1) { %>
+          <br /><span style="font-size:10.5px; color:#999;">&nbsp;&nbsp;@ $<%= (item.unitPrice / 100).toFixed(2) %></span>
+        <% } %>
+      </span>
       <span>$<%= (item.total / 100).toFixed(2) %></span>
     </div>
   <% }); %>
   <hr class="dashes" />
   <div class="totals-row"><span>SUBTOTAL</span><span>$<%= transaction.subtotal %></span></div>
-  <div class="totals-row"><span>TAX</span><span>$<%= transaction.tax %></span></div>
+  <% if (transaction.discount && parseFloat(transaction.discount) > 0) { %>
+    <div class="totals-row"><span>DISCOUNT</span><span>-$<%= transaction.discount %></span></div>
+  <% } %>
+  <div class="totals-row"><span><%= (theme.taxLabel || 'Tax').toUpperCase() %></span><span>$<%= transaction.tax %></span></div>
   <div class="totals-row total"><span>TOTAL</span><span>$<%= transaction.total %></span></div>
   <% if (transaction.paymentMethod) { %>
     <div class="meta-center"><%= transaction.paymentMethod %></div>
+  <% } %>
+  <% if (theme.gstHstNumber) { %>
+    <div class="meta-center">GST/HST #<%= theme.gstHstNumber %></div>
+  <% } %>
+  <% if (theme.returnPolicy) { %>
+    <div class="meta-center" style="margin-top:6px;"><%= theme.returnPolicy %></div>
   <% } %>
   <div class="meta-center" style="font-weight:700; margin-top:6px;">
     <% if (typeof isMerchantCopy !== 'undefined' && isMerchantCopy) { %>

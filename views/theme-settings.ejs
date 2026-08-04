@@ -118,11 +118,34 @@
     <input type="text" name="location" value="<%= theme.location || '' %>" placeholder="123 Main St, Springfield" />
     <div class="hint">Shown on receipts under your business name. Leave blank to not show a location.</div>
 
+    <label>Business phone</label>
+    <input type="text" name="phone" value="<%= theme.phone || '' %>" placeholder="(555) 123-4567" />
+    <div class="hint">Shown on receipts under your address. Leave blank to not show a phone number.</div>
+
     <label>Header message</label>
     <input type="text" name="headerText" value="<%= theme.headerText || '' %>" placeholder="Thanks for shopping with us!" />
 
     <label>Footer message</label>
     <input type="text" name="footerText" value="<%= theme.footerText || '' %>" placeholder="Returns accepted within 14 days." />
+
+    <div class="google-section">
+      <h2 style="margin-top:0;">🍁 Tax &amp; Compliance</h2>
+
+      <label>GST/HST number</label>
+      <input type="text" name="gstHstNumber" value="<%= theme.gstHstNumber || '' %>" placeholder="123456789 RT0001" />
+      <div class="hint">
+        Required on receipts for purchases of $30 or more if you want customers to be able to claim
+        an input tax credit. Leave blank if you're not GST/HST registered.
+      </div>
+
+      <label>Tax label</label>
+      <input type="text" name="taxLabel" value="<%= theme.taxLabel || 'Tax' %>" placeholder="GST/HST" style="max-width:220px;" />
+      <div class="hint">What the tax line on your receipt is called — e.g. "GST/HST" or "GST/HST + PST".</div>
+
+      <label>Return/refund policy</label>
+      <input type="text" name="returnPolicy" value="<%= theme.returnPolicy || '' %>" placeholder="Returns accepted within 30 days with receipt." />
+      <div class="hint">Shown on receipts as your return policy, separate from the general footer message above.</div>
+    </div>
 
     <div class="google-section">
       <h2 style="margin-top:0;">
@@ -284,6 +307,10 @@
         footerText: val('footerText'),
         displayName: val('displayName'),
         location: val('location'),
+        phone: val('phone'),
+        gstHstNumber: val('gstHstNumber'),
+        taxLabel: val('taxLabel'),
+        returnPolicy: val('returnPolicy'),
         googleReviewUrl: val('googleReviewUrl'),
         showGoogleReview: checked('showGoogleReview'),
         showWarranty: checked('showWarranty'),
@@ -335,7 +362,7 @@
     }
 
     let refreshTimer;
-    ['primaryColor', 'accentColor', 'headerText', 'footerText', 'displayName', 'location', 'googleReviewUrl', 'instagramUrl', 'facebookUrl', 'tiktokUrl', 'xUrl', 'youtubeUrl', 'linkedinUrl', 'loyaltyOfferValue'].forEach(name => {
+    ['primaryColor', 'accentColor', 'headerText', 'footerText', 'displayName', 'location', 'phone', 'gstHstNumber', 'taxLabel', 'returnPolicy', 'googleReviewUrl', 'instagramUrl', 'facebookUrl', 'tiktokUrl', 'xUrl', 'youtubeUrl', 'linkedinUrl', 'loyaltyOfferValue'].forEach(name => {
       document.querySelector(`[name=${name}]`).addEventListener('input', () => {
         clearTimeout(refreshTimer);
         refreshTimer = setTimeout(refreshPreviews, 400); // debounce so it doesn't refresh on every keystroke

@@ -48,6 +48,11 @@ router.get('/receipt/:transactionId', async (req, res) => {
     accentColor: '#2563eb',
     headerText: `Thanks for shopping at ${merchant.businessName}!`,
     footerText: null,
+    location: null,
+    phone: null,
+    gstHstNumber: null,
+    taxLabel: 'Tax',
+    returnPolicy: null,
     showGoogleReview: false,
     showWarranty: false,
     showWalletSave: true,
@@ -72,6 +77,7 @@ router.get('/receipt/:transactionId', async (req, res) => {
       lineItems: transaction.lineItems, // already JSON from Prisma
       subtotal: (transaction.subtotal / 100).toFixed(2),
       tax: (transaction.tax / 100).toFixed(2),
+      discount: (transaction.discountTotal / 100).toFixed(2),
       total: (transaction.total / 100).toFixed(2),
       date: transaction.createdAt.toLocaleString('en-US', {
         dateStyle: 'medium',

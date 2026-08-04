@@ -58,7 +58,13 @@
     <% if (theme.location) { %>
       <div class="location"><%= theme.location %></div>
     <% } %>
+    <% if (theme.phone) { %>
+      <div class="location"><%= theme.phone %></div>
+    <% } %>
     <div class="meta-light"><%= transaction.date %></div>
+    <div class="meta-light">
+      Receipt #<%= transaction.id %><% if (transaction.orderNumber && transaction.orderNumber !== transaction.id) { %> &middot; Order #<%= transaction.orderNumber %><% } %>
+    </div>
     <% if (theme.headerText) { %>
       <div class="header-text"><%= theme.headerText %></div>
     <% } %>
@@ -68,18 +74,29 @@
       <div class="item-row">
         <div>
           <div class="item-name"><%= item.name %></div>
-          <div class="item-qty">Qty <%= item.quantity %></div>
+          <div class="item-qty">
+            Qty <%= item.quantity %><% if (item.unitPrice !== undefined && item.quantity > 1) { %> &middot; $<%= (item.unitPrice / 100).toFixed(2) %> each<% } %>
+          </div>
         </div>
         <div>$<%= (item.total / 100).toFixed(2) %></div>
       </div>
     <% }); %>
     <div class="totals-block">
       <div class="totals-row"><span>Subtotal</span><span>$<%= transaction.subtotal %></span></div>
-      <div class="totals-row"><span>Tax</span><span>$<%= transaction.tax %></span></div>
+      <% if (transaction.discount && parseFloat(transaction.discount) > 0) { %>
+        <div class="totals-row"><span>Discount</span><span>-$<%= transaction.discount %></span></div>
+      <% } %>
+      <div class="totals-row"><span><%= theme.taxLabel || 'Tax' %></span><span>$<%= transaction.tax %></span></div>
       <div class="total-big"><span class="label">Total</span><span class="amount">$<%= transaction.total %></span></div>
     </div>
     <% if (transaction.paymentMethod) { %>
       <div class="payment-pill"><%= transaction.paymentMethod %></div>
+    <% } %>
+    <% if (theme.gstHstNumber) { %>
+      <div style="font-size:12px; color:#888; margin-top:8px;">GST/HST #<%= theme.gstHstNumber %></div>
+    <% } %>
+    <% if (theme.returnPolicy) { %>
+      <div style="font-size:12px; color:#888; margin-top:6px;"><%= theme.returnPolicy %></div>
     <% } %>
     <div style="font-size:12px; font-weight:600; color:#666; margin-top:12px;">
       <% if (typeof isMerchantCopy !== 'undefined' && isMerchantCopy) { %>

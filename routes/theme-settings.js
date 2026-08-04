@@ -74,7 +74,7 @@ function handleLogoUpload(req, res, next) {
 
     res.status(400).render('theme-settings', {
       merchant,
-      theme: theme || { layoutId: 'classic', primaryColor: '#111111', accentColor: '#2563eb', showWalletSave: true, showPartnerProgram: false },
+      theme: theme || { layoutId: 'classic', primaryColor: '#111111', accentColor: '#2563eb', showWalletSave: true, showPartnerProgram: false, taxLabel: 'Tax' },
       loyalty: loyaltyForDisplay(loyalty),
       merchantAffiliateRate: MERCHANT_AFFILIATE_RATE,
       saved: false,
@@ -97,10 +97,14 @@ router.get('/dashboard/settings/receipt', requireAuth, async (req, res) => {
       logoUrl: '',
       displayName: '',
       location: '',
+      phone: '',
       primaryColor: '#111111',
       accentColor: '#2563eb',
       headerText: '',
       footerText: '',
+      gstHstNumber: '',
+      taxLabel: 'Tax',
+      returnPolicy: '',
       showGoogleReview: false,
       googleReviewUrl: '',
       showWarranty: false,
@@ -147,6 +151,10 @@ router.get('/dashboard/settings/receipt/preview/:layoutId', requireAuth, async (
     logoUrl: req.query.logoUrl || (savedTheme && savedTheme.logoUrl) || null,
     displayName: req.query.displayName || (savedTheme && savedTheme.displayName) || '',
     location: req.query.location || (savedTheme && savedTheme.location) || '',
+    phone: req.query.phone || (savedTheme && savedTheme.phone) || '',
+    gstHstNumber: req.query.gstHstNumber || (savedTheme && savedTheme.gstHstNumber) || '',
+    taxLabel: req.query.taxLabel || (savedTheme && savedTheme.taxLabel) || 'Tax',
+    returnPolicy: req.query.returnPolicy || (savedTheme && savedTheme.returnPolicy) || '',
     googleReviewUrl: req.query.googleReviewUrl || (savedTheme && savedTheme.googleReviewUrl) || '',
     showGoogleReview: bool(req.query.showGoogleReview, Boolean(savedTheme && savedTheme.showGoogleReview)),
     showWarranty: bool(req.query.showWarranty, Boolean(savedTheme && savedTheme.showWarranty)),
@@ -203,13 +211,15 @@ router.get('/dashboard/settings/receipt/preview/:layoutId', requireAuth, async (
     isMerchantCopy: false,
     transaction: {
       id: 'preview',
+      orderNumber: 'PREVIEW-0001',
       date: 'Jul 18, 2026, 2:45 PM',
       lineItems: [
-        { name: 'Sample Item', quantity: 2, total: 900 },
-        { name: 'Another Item', quantity: 1, total: 450 },
+        { name: 'Sample Item', quantity: 2, unitPrice: 450, total: 900 },
+        { name: 'Another Item', quantity: 1, unitPrice: 450, total: 450 },
       ],
       subtotal: '13.50',
       tax: '1.76',
+      discount: '0.00',
       total: '15.26',
       paymentMethod: 'Visa ••••4242',
     },
@@ -223,11 +233,17 @@ router.get('/dashboard/settings/receipt/preview/:layoutId', requireAuth, async (
 
 router.post('/dashboard/settings/receipt', requireAuth, handleLogoUpload, async (req, res) => {
   const {
-    layoutId, primaryColor, accentColor, headerText, footerText, displayName, location,
+    layoutId, primaryColor, accentColor, headerText, footerText, displayName, location, phone,
+    gstHstNumber, taxLabel, returnPolicy,
     googleReviewUrl, showGoogleReview, showWarranty, showWalletSave, showPartnerProgram,
     instagramUrl, facebookUrl, tiktokUrl, xUrl, youtubeUrl, linkedinUrl,
     loyaltyEnabled, loyaltyOfferType, loyaltyOfferValue, loyaltyRedemptionCode,
   } = req.body;
+
+  // "Tax" is a safe default, but an empty submission still shouldn't wipe out
+  // a merchant-chosen label like "GST/HST" -- same fallback pattern as the
+  // loyalty redemption code below.
+  const safeTaxLabel = (taxLabel || '').trim() || 'Tax';
 
   const safeInstagramUrl = sanitizeUrl(instagramUrl);
   const safeFacebookUrl = sanitizeUrl(facebookUrl);
@@ -275,7 +291,7 @@ router.post('/dashboard/settings/receipt', requireAuth, handleLogoUpload, async 
     if (!googleReviewUrl || !isValidGoogleReviewUrl(googleReviewUrl)) {
       return res.render('theme-settings', {
         merchant,
-        theme: { ...existingTheme, layoutId: safeLayoutId, logoUrl, displayName, location, primaryColor, accentColor, headerText, footerText, googleReviewUrl, showGoogleReview: true, showWarranty: showWarranty === 'on', showWalletSave: showWalletSave === 'on', showPartnerProgram: showPartnerProgram === 'on', instagramUrl: safeInstagramUrl, facebookUrl: safeFacebookUrl, tiktokUrl: safeTiktokUrl, xUrl: safeXUrl, youtubeUrl: safeYoutubeUrl, linkedinUrl: safeLinkedinUrl },
+        theme: { ...existingTheme, layoutId: safeLayoutId, logoUrl, displayName, location, phone, gstHstNumber, taxLabel: safeTaxLabel, returnPolicy, primaryColor, accentColor, headerText, footerText, googleReviewUrl, showGoogleReview: true, showWarranty: showWarranty === 'on', showWalletSave: showWalletSave === 'on', showPartnerProgram: showPartnerProgram === 'on', instagramUrl: safeInstagramUrl, facebookUrl: safeFacebookUrl, tiktokUrl: safeTiktokUrl, xUrl: safeXUrl, youtubeUrl: safeYoutubeUrl, linkedinUrl: safeLinkedinUrl },
         loyalty: { enabled: loyaltyEnabled === 'on', offerType: safeOfferType, offerValue: safeOfferValueDisplay, redemptionCode: safeRedemptionCode },
         merchantAffiliateRate: MERCHANT_AFFILIATE_RATE,
         saved: false,
@@ -292,10 +308,14 @@ router.post('/dashboard/settings/receipt', requireAuth, handleLogoUpload, async 
         logoUrl,
         displayName: displayName || null,
         location: location || null,
+        phone: phone || null,
         primaryColor: primaryColor || '#111111',
         accentColor: accentColor || '#2563eb',
         headerText: headerText || null,
         footerText: footerText || null,
+        gstHstNumber: gstHstNumber || null,
+        taxLabel: safeTaxLabel,
+        returnPolicy: returnPolicy || null,
         googleReviewUrl: googleReviewUrl || null,
         showGoogleReview: showGoogleReview === 'on',
         showWarranty: showWarranty === 'on',
@@ -314,10 +334,14 @@ router.post('/dashboard/settings/receipt', requireAuth, handleLogoUpload, async 
         logoUrl,
         displayName: displayName || null,
         location: location || null,
+        phone: phone || null,
         primaryColor: primaryColor || '#111111',
         accentColor: accentColor || '#2563eb',
         headerText: headerText || null,
         footerText: footerText || null,
+        gstHstNumber: gstHstNumber || null,
+        taxLabel: safeTaxLabel,
+        returnPolicy: returnPolicy || null,
         googleReviewUrl: googleReviewUrl || null,
         showGoogleReview: showGoogleReview === 'on',
         showWarranty: showWarranty === 'on',

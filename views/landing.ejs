@@ -153,6 +153,17 @@
     .mockup-chips { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
     .chip { font-family: var(--font-body); font-size: 10.5px; font-weight: 600; color: var(--teal-deep); background: var(--teal-wash); padding: 3px 10px; border-radius: 999px; }
 
+    /* ---------- Full-experience phone showcase ---------- */
+    .phone-frame {
+      width: 300px; margin: 44px auto 0; background: var(--ink); border-radius: 40px;
+      padding: 14px; box-shadow: 0 30px 70px -24px rgba(28,27,25,0.4); position: relative;
+    }
+    .phone-notch {
+      position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
+      width: 90px; height: 18px; background: var(--ink); border-radius: 0 0 14px 14px; z-index: 2;
+    }
+    .phone-screen { width: 100%; height: 580px; border: none; border-radius: 26px; display: block; overflow: hidden; }
+
     /* ---------- Pricing: two-tone card ---------- */
     .price-card2 {
       max-width: 440px; margin: 40px auto 0; border-radius: 22px; overflow: hidden;
@@ -342,6 +353,20 @@
     </div>
   </section>
 
+  <section class="section" style="text-align: center;">
+    <div class="section-eyebrow">The full experience</div>
+    <h2>One receipt page. Everything included.</h2>
+    <p class="section-lead" style="margin: 0 auto;">
+      This is the real page, not a mockup — the partner program banner, the receipt itself,
+      the save buttons, the Google review card, the loyalty punch card, and social links, all
+      in one scroll.
+    </p>
+    <div class="phone-frame">
+      <div class="phone-notch"></div>
+      <iframe id="demo-iframe" class="phone-screen" src="/demo/receipt" title="ReceipTap receipt demo" scrolling="no"></iframe>
+    </div>
+  </section>
+
   <section class="section" id="pricing" style="text-align: center;">
     <div class="section-eyebrow">Pricing</div>
     <h2>One plan. Everything included.</h2>
@@ -408,6 +433,62 @@
     window.addEventListener('scroll', () => {
       nav.classList.toggle('scrolled', window.scrollY > 8);
     }, { passive: true });
+  </script>
+
+  <script>
+    // Slowly auto-scrolls the demo receipt iframe from top to bottom and
+    // back, so a visitor sees the partner banner, the receipt, the save
+    // buttons, the Google review card, the loyalty card, and social links
+    // in one pass without having to scroll it themselves.
+    (function () {
+      const iframe = document.getElementById('demo-iframe');
+      if (!iframe || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+      // setInterval, not requestAnimationFrame -- rAF is tied to the paint
+      // cycle and browsers can suspend it much more aggressively (some
+      // background/inactive-tab situations stop it outright), where a timer
+      // keeps ticking. This is a decorative background animation, not
+      // something that needs to be frame-perfect.
+      let intervalId = null;
+
+      function startTour() {
+        if (intervalId) return;
+        const win = iframe.contentWindow;
+        const doc = iframe.contentDocument;
+        if (!win || !doc || !doc.body) return;
+
+        const distance = doc.body.scrollHeight - iframe.clientHeight;
+        if (distance <= 0) return;
+
+        const scrollMs = 16000;
+        const holdMs = 2200;
+        const cycleMs = scrollMs + holdMs;
+        let startTime = Date.now();
+
+        intervalId = setInterval(() => {
+          const elapsed = (Date.now() - startTime) % cycleMs;
+          if (elapsed <= scrollMs) {
+            win.scrollTo(0, distance * (elapsed / scrollMs));
+          } else {
+            win.scrollTo(0, distance);
+          }
+          if (Date.now() - startTime >= cycleMs) startTime = Date.now();
+        }, 60);
+      }
+
+      function stopTour() {
+        if (intervalId) clearInterval(intervalId);
+        intervalId = null;
+      }
+
+      iframe.addEventListener('load', () => setTimeout(startTour, 400));
+
+      if ('IntersectionObserver' in window) {
+        new IntersectionObserver((entries) => {
+          entries.forEach((entry) => (entry.isIntersecting ? startTour() : stopTour()));
+        }, { threshold: 0.3 }).observe(iframe);
+      }
+    })();
   </script>
 
 </body>

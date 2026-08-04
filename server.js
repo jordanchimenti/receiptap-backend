@@ -88,6 +88,7 @@ app.use(require('./routes/loyalty'));               // punch cards: join/earn/se
 app.use(require('./routes/billing'));               // ReceipTap's own subscription billing (Stripe)
 app.use(require('./routes/affiliates'));             // referral program: /dashboard/referrals (merchant-affiliates), /affiliate/* (regular affiliates)
 app.use(require('./routes/admin'));
+app.use(require('./routes/demo'));                    // /demo/receipt -- landing page's auto-scroll showcase
 
 // Root: marketing landing page for visitors, dashboard for logged-in merchants
 app.get('/', async (req, res) => {

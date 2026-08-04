@@ -5,10 +5,24 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>ReceipTap — Tap-to-receive digital receipts for your store</title>
-  <meta name="description" content="Replace paper receipts with a tap. Customers get their receipt on their phone; you get their email, a Google review funnel, and repeat-customer analytics. Works with Square & Shopify." />
+  <meta name="description" content="Replace paper receipts with a tap. Customers get their receipt on their phone; you get their email, a Google review funnel, and repeat-customer analytics. Works with Square, with more POS integrations on the way." />
+  <meta property="og:title" content="ReceipTap — Tap-to-receive digital receipts for your store" />
+  <meta property="og:description" content="The receipt goes to their phone. The relationship goes to you. Email capture, a Google review funnel, and repeat-customer analytics from sales you're already making." />
+  <meta property="og:type" content="website" />
+  <meta property="og:image" content="/images/receiptap-logo.png" />
   <link rel="stylesheet" href="/css/receiptap.css" />
   <style>
-    .nav { display: flex; align-items: center; justify-content: space-between; padding: 18px 6vw; }
+    /* receiptap.css sets html/body height:100% for the dashboard's sidebar layout --
+       that caps body at viewport height on this page too, which breaks position:sticky
+       for anything that scrolls past it (its containing block never grows). */
+    body { height: auto; min-height: 100%; }
+
+    .nav {
+      display: flex; align-items: center; justify-content: space-between; padding: 18px 6vw;
+      position: sticky; top: 0; z-index: 50; background: var(--paper);
+      border-bottom: 1px solid transparent; transition: box-shadow 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+    }
+    .nav.scrolled { border-bottom-color: var(--line); background: rgba(250,248,243,0.92); backdrop-filter: blur(6px); }
     .nav img { height: 40px; }
     .nav-links { display: flex; align-items: center; gap: 18px; }
     .nav-links a { font-size: 14px; font-weight: 500; text-decoration: none; color: var(--ink-soft); }
@@ -30,7 +44,14 @@
     .pos-badges strong { color: var(--ink); }
 
     /* Signature: receipt printing out of the puck */
-    .puck-scene { width: 300px; }
+    .hero-visual { position: relative; }
+    .hero-visual::before {
+      content: ''; position: absolute; left: 50%; top: 44%; transform: translate(-50%, -50%);
+      width: 360px; height: 360px; border-radius: 50%;
+      background: radial-gradient(circle, var(--teal-wash) 0%, transparent 68%);
+      opacity: 0.8; z-index: 0;
+    }
+    .puck-scene { width: 300px; position: relative; z-index: 1; }
     .puck {
       width: 130px; height: 46px; margin: 0 auto; border-radius: 60px;
       background: var(--ink); position: relative; z-index: 2;
@@ -106,6 +127,27 @@
     .split-card li strong { font-weight: 600; }
     .split-card li span { color: var(--ink-soft); }
 
+    .mini-mockup {
+      background: var(--paper); border: 1px solid var(--line); border-radius: 12px;
+      padding: 14px 16px; margin-bottom: 22px; font-family: var(--font-mono); font-size: 12.5px;
+    }
+    .mockup-label {
+      font-family: var(--font-body); font-size: 10.5px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.06em; color: var(--ink-soft); margin-bottom: 8px;
+    }
+    .mockup-row { display: flex; justify-content: space-between; align-items: center; padding: 5px 0; color: var(--ink); }
+    .mockup-row + .mockup-row { border-top: 1px dashed var(--line); }
+    .mockup-row .tag {
+      font-family: var(--font-body); font-size: 10px; font-weight: 700; color: var(--teal-deep);
+      background: var(--teal-wash); padding: 2px 8px; border-radius: 999px;
+    }
+    .mockup-row .tag.new { color: #8A6D00; background: #FBF0D0; }
+    .mockup-chips { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
+    .chip {
+      font-family: var(--font-body); font-size: 10.5px; font-weight: 600; color: var(--teal-deep);
+      background: var(--teal-wash); padding: 3px 10px; border-radius: 999px;
+    }
+
     .pricing-card {
       max-width: 430px; margin: 36px auto 0; background: var(--paper-raised);
       border: 2px solid var(--teal); border-radius: 20px; padding: 34px 32px; text-align: center;
@@ -157,7 +199,7 @@
       </p>
       <a class="cta-main" href="/signup">Start your 30-day free trial</a>
       <div class="cta-fine">$49.99 USD/month after trial · cancel anytime before it ends and pay nothing</div>
-      <div class="pos-badges">Works with <strong>Square</strong> and <strong>Shopify POS</strong> — no new register, no new workflow.</div>
+      <div class="pos-badges">Works with <strong>Square</strong> — no new register, no new workflow.</div>
     </div>
     <div class="hero-visual">
       <div class="puck-scene">
@@ -207,7 +249,7 @@
       <div class="step">
         <div class="s-num">1</div>
         <h3>Connect your POS</h3>
-        <p>Link your Square or Shopify account in a couple of clicks. Sales start flowing into ReceipTap automatically — nothing changes about how you ring people up.</p>
+        <p>Link your Square account in a couple of clicks. Sales start flowing into ReceipTap automatically — nothing changes about how you ring people up.</p>
       </div>
       <div class="step">
         <div class="s-num">2</div>
@@ -229,6 +271,12 @@
     <div class="split">
       <div class="split-card">
         <h3>For your business</h3>
+        <div class="mini-mockup">
+          <div class="mockup-label">Repeat Customers</div>
+          <div class="mockup-row"><span>Maria T.</span><span class="tag">6th visit</span></div>
+          <div class="mockup-row"><span>James K.</span><span class="tag new">New</span></div>
+          <div class="mockup-row"><span>Aisha R.</span><span class="tag">3rd visit</span></div>
+        </div>
         <ul>
           <li><strong>Customer emails, captured at checkout</strong> — <span>build a real list from people who already bought.</span></li>
           <li><strong>Google review funnel</strong> — <span>the receipt screen asks happy customers to leave a review, right at the moment of purchase.</span></li>
@@ -238,6 +286,15 @@
       </div>
       <div class="split-card">
         <h3>For their customers</h3>
+        <div class="mini-mockup">
+          <div class="mockup-chips">
+            <span class="chip">Food & Drink</span>
+            <span class="chip">Auto</span>
+            <span class="chip">Retail</span>
+          </div>
+          <div class="mockup-row"><span>Tip Top Tint</span><span>$497.20</span></div>
+          <div class="mockup-row"><span>Green Leaf Café</span><span>$12.40</span></div>
+        </div>
         <ul>
           <li><strong>Every receipt in one wallet</strong> — <span>searchable by store and date when they need a return or warranty claim.</span></li>
           <li><strong>AI-organized spending</strong> — <span>receipts are categorized automatically, with possible tax deductions flagged.</span></li>
@@ -258,7 +315,7 @@
       <div style="font-size: 13px; color: var(--ink-soft); margin-top: 4px;">per location · 30-day free trial</div>
       <ul>
         <li>Unlimited digital receipts</li>
-        <li>Square & Shopify POS integration</li>
+        <li>Square POS integration</li>
         <li>Email capture + Google review funnel</li>
         <li>Repeat-customer & revenue analytics</li>
         <li>AI receipt categorization for your customers</li>
@@ -279,7 +336,7 @@
       </details>
       <details class="faq-item">
         <summary>Which POS systems does it work with?</summary>
-        <p>Square and Shopify POS today, with more integrations on the roadmap. If you use something else, tell us — it directly shapes what we build next.</p>
+        <p>Square today. Clover support is built and rolling out soon. If you use something else, tell us — it directly shapes what we build next.</p>
       </details>
       <details class="faq-item">
         <summary>Does it change how I ring up sales?</summary>
@@ -306,6 +363,13 @@
     <span>© 2026 ReceipTap</span>
     <span><a href="/login" style="color: inherit;">Merchant log in</a> · <a href="/account/login" style="color: inherit;">Customer wallet</a></span>
   </footer>
+
+  <script>
+    const nav = document.querySelector('.nav');
+    window.addEventListener('scroll', () => {
+      nav.classList.toggle('scrolled', window.scrollY > 8);
+    }, { passive: true });
+  </script>
 
 </body>
 </html>

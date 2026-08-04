@@ -161,9 +161,11 @@ async function tryPayCommission(commission, affiliate) {
   }
 }
 
-/** Records (and, if possible, immediately pays) the commission owed on a
- * referred merchant's successful payment. Idempotent on stripeInvoiceId --
- * Stripe can and does redeliver the same webhook event more than once. */
+/** Records the commission owed on a referred merchant's successful payment.
+ * Idempotent on stripeInvoiceId -- Stripe can and does redeliver the same
+ * webhook event more than once. Doesn't pay it out immediately -- commissions
+ * sit PENDING and go out in a batch on the affiliate's own payout schedule
+ * (see runScheduledPayouts), same as everything else that accrues. */
 async function recordAffiliateCommission(invoice) {
   if (!invoice.amount_paid || invoice.amount_paid <= 0) return; // e.g. a $0 trial-start invoice
 
@@ -188,7 +190,7 @@ async function recordAffiliateCommission(invoice) {
 
   const amountCents = Math.round(invoice.amount_paid * (rate / 100));
 
-  const commission = await prisma.commission.create({
+  await prisma.commission.create({
     data: {
       affiliateId: affiliate.id,
       merchantId: merchant.id,
@@ -198,15 +200,12 @@ async function recordAffiliateCommission(invoice) {
       status: 'PENDING',
     },
   });
-
-  if (affiliate.stripeConnectOnboarded && affiliate.stripeConnectAccountId) {
-    await tryPayCommission(commission, affiliate);
-  }
 }
 
-/** Pays out every PENDING commission for an affiliate -- called once they
- * finish Stripe Connect onboarding, to flush anything that accrued while
- * they had no payout account to send it to. */
+/** Pays out every PENDING commission for an affiliate right now, outside the
+ * normal schedule -- called once they finish Stripe Connect onboarding, to
+ * flush anything that accrued while they had no payout account to send it
+ * to. Counts as their first payout cycle, so the schedule resets from here. */
 async function payPendingCommissionsForAffiliate(affiliateId) {
   const affiliate = await prisma.affiliate.findUnique({ where: { id: affiliateId } });
   if (!affiliate?.stripeConnectOnboarded || !affiliate.stripeConnectAccountId) return;
@@ -214,6 +213,41 @@ async function payPendingCommissionsForAffiliate(affiliateId) {
   const pending = await prisma.commission.findMany({ where: { affiliateId, status: 'PENDING' } });
   for (const commission of pending) {
     await tryPayCommission(commission, affiliate);
+  }
+  if (pending.length > 0) {
+    await prisma.affiliate.update({ where: { id: affiliateId }, data: { lastPayoutAt: new Date() } });
+  }
+}
+
+const WEEKLY_MS = 7 * 24 * 60 * 60 * 1000;
+const MONTHLY_MS = 30 * 24 * 60 * 60 * 1000;
+
+/** Runs on an interval (see server.js) and pays out every onboarded
+ * affiliate whose chosen cadence -- weekly or monthly -- is due, batching up
+ * whatever commissions have accumulated as PENDING since their last payout.
+ * An affiliate with nothing owed yet just gets skipped this round rather
+ * than having their clock reset, so the next check still catches them as
+ * soon as something's actually there to pay. */
+async function runScheduledPayouts() {
+  if (!stripe) return;
+
+  const affiliates = await prisma.affiliate.findMany({
+    where: { stripeConnectOnboarded: true, stripeConnectAccountId: { not: null } },
+  });
+
+  const now = Date.now();
+  for (const affiliate of affiliates) {
+    const intervalMs = affiliate.payoutFrequency === 'MONTHLY' ? MONTHLY_MS : WEEKLY_MS;
+    const due = !affiliate.lastPayoutAt || now - affiliate.lastPayoutAt.getTime() >= intervalMs;
+    if (!due) continue;
+
+    const pending = await prisma.commission.findMany({ where: { affiliateId: affiliate.id, status: 'PENDING' } });
+    if (pending.length === 0) continue;
+
+    for (const commission of pending) {
+      await tryPayCommission(commission, affiliate);
+    }
+    await prisma.affiliate.update({ where: { id: affiliate.id }, data: { lastPayoutAt: new Date() } });
   }
 }
 
@@ -293,4 +327,5 @@ module.exports = {
   getAffiliateConnectStatus,
   payAffiliateCommission,
   payPendingCommissionsForAffiliate,
+  runScheduledPayouts,
 };

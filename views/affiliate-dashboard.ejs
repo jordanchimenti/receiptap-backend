@@ -124,6 +124,19 @@
     <% } %>
   </div>
 
+  <div class="referral-card" style="margin-top:16px;">
+    <strong>Payout schedule</strong>
+    <div style="font-size:13px; color:#666; margin:4px 0 10px;">
+      Commissions accumulate as they come in and get paid out together on this schedule, rather than one at a time.
+    </div>
+    <form method="POST" action="/affiliate/payout-frequency">
+      <select name="payoutFrequency" onchange="this.form.submit()" style="padding:9px 12px; border:1px solid #ddd; border-radius:6px; font-size:13.5px;">
+        <option value="WEEKLY" <%= payoutFrequency === 'WEEKLY' ? 'selected' : '' %>>Weekly</option>
+        <option value="MONTHLY" <%= payoutFrequency === 'MONTHLY' ? 'selected' : '' %>>Monthly</option>
+      </select>
+    </form>
+  </div>
+
   <div class="stats-row">
     <div class="stat-box">
       <div class="stat-num"><%= referredMerchants.length %></div>

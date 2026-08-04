@@ -261,6 +261,12 @@ model Affiliate {
   stripeConnectAccountId String? @unique
   stripeConnectOnboarded Boolean @default(false)
 
+  // Commissions accumulate as PENDING and get paid out in a batch on this
+  // cadence, rather than instantly per commission -- lastPayoutAt is when
+  // that last ran, so the scheduler knows when the next one is due.
+  payoutFrequency String    @default("WEEKLY") // "WEEKLY" | "MONTHLY"
+  lastPayoutAt    DateTime?
+
   createdAt DateTime @default(now())
 
   referredMerchants Merchant[]   @relation("ReferredMerchants")

@@ -97,6 +97,16 @@ app.get('/experience', (req, res) => {
   res.render('experience');
 });
 
+// Affiliate payouts: commissions accumulate as PENDING and go out in a batch
+// on each affiliate's own weekly/monthly schedule, not instantly per
+// commission. A 6-hour interval is plenty -- runScheduledPayouts only acts
+// on affiliates whose cadence (checked in days) has actually come due.
+const { runScheduledPayouts } = require('./services/stripeService');
+const PAYOUT_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
+setInterval(() => {
+  runScheduledPayouts().catch((err) => console.error('Scheduled affiliate payout run failed:', err));
+}, PAYOUT_CHECK_INTERVAL_MS);
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`ReceipTap backend running on http://localhost:${PORT}`);

@@ -127,6 +127,7 @@ async function buildAffiliateView(affiliate) {
     isEligible,
     ownSubscriptionStatus: ownMerchant?.subscriptionStatus || null,
     stripeConnectOnboarded: affiliate.stripeConnectOnboarded,
+    payoutFrequency: affiliate.payoutFrequency,
     referredMerchants: referredMerchants.map((m) => ({
       businessName: m.businessName,
       subscriptionStatus: m.subscriptionStatus,
@@ -257,14 +258,27 @@ router.get('/affiliate/dashboard', requireAffiliateAuth, async (req, res) => {
   });
 });
 
+function dashboardPathFor(affiliate) {
+  return affiliate.type === 'MERCHANT' ? '/dashboard/referrals' : '/affiliate/dashboard';
+}
+
+// How often accumulated commissions get paid out -- doesn't trigger anything
+// itself, just changes what runScheduledPayouts (services/stripeService.js)
+// picks up on its next check.
+router.post('/affiliate/payout-frequency', async (req, res) => {
+  const affiliate = await getCurrentAffiliate(req);
+  if (!affiliate) return res.redirect('/login');
+
+  const safeFrequency = req.body.payoutFrequency === 'MONTHLY' ? 'MONTHLY' : 'WEEKLY';
+  await prisma.affiliate.update({ where: { id: affiliate.id }, data: { payoutFrequency: safeFrequency } });
+
+  res.redirect(dashboardPathFor(affiliate));
+});
+
 // --- Stripe Connect onboarding (shared by both affiliate types) -----------
 // The affiliate never enters bank/ID details into this app -- they're sent
 // to a Stripe-hosted page that collects that directly, and Stripe redirects
 // back here afterward. Works for whichever session type is present.
-
-function dashboardPathFor(affiliate) {
-  return affiliate.type === 'MERCHANT' ? '/dashboard/referrals' : '/affiliate/dashboard';
-}
 
 router.get('/affiliate/connect-stripe/start', async (req, res) => {
   const affiliate = await getCurrentAffiliate(req);

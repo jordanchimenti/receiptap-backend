@@ -5,7 +5,6 @@ require('dotenv').config();
 const express = require('express');
 const session = require('express-session');
 const path = require('path');
-const prisma = require('./lib/prisma');
 
 const app = express();
 
@@ -91,35 +90,9 @@ app.use(require('./routes/admin'));
 app.use(require('./routes/demo'));                    // /demo/receipt -- landing page's auto-scroll showcase
 
 // Root: marketing landing page for visitors, dashboard for logged-in merchants
-app.get('/', async (req, res) => {
+app.get('/', (req, res) => {
   if (req.session?.merchantId) return res.redirect('/dashboard/receipts-hub');
-
-  // The hero shows a real rendered receipt (not a mockup) using the founder's
-  // own merchant account, so what visitors see is the actual product, not an
-  // illustration of it. Falls back to sane defaults if that account is ever
-  // renamed or removed, so the marketing page never depends on it existing.
-  const demoMerchant = await prisma.merchant.findUnique({ where: { email: 'jordanchimenti98@gmail.com' } });
-  const demoTheme = demoMerchant
-    ? await prisma.receiptTheme.findUnique({ where: { merchantId: demoMerchant.id } })
-    : null;
-
-  res.render('landing', {
-    demoMerchant: demoMerchant || { businessName: 'ReceipTap' },
-    demoTheme: demoTheme || {
-      layoutId: 'classic', logoUrl: null, primaryColor: '#111111', accentColor: '#056BFE',
-      location: null, phone: null, gstHstNumber: null, taxLabel: 'Tax', returnPolicy: null, headerText: null,
-    },
-    demoTransaction: {
-      id: 'demo', orderNumber: 'demo',
-      lineItems: [
-        { name: 'Iced Coffee', quantity: 1, unitPrice: 550, total: 550 },
-        { name: 'Blueberry Muffin', quantity: 1, unitPrice: 425, total: 425 },
-      ],
-      subtotal: '9.75', tax: '1.27', discount: '0.00', total: '11.02',
-      paymentMethod: 'Visa ••••4242',
-      date: new Date().toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }),
-    },
-  });
+  res.render('landing');
 });// 3D scroll experience — brand showcase page
 app.get('/experience', (req, res) => {
   res.render('experience');

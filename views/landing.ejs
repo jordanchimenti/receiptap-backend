@@ -448,15 +448,18 @@
         const distance = doc.body.scrollHeight - iframe.clientHeight;
         if (distance <= 0) return;
 
-        const scrollMs = 16000;
-        const holdMs = 2200;
-        const cycleMs = scrollMs + holdMs;
+        const startHoldMs = 1800; // pause at the top before scrolling begins
+        const scrollMs = 10000;
+        const endHoldMs = 2200;
+        const cycleMs = startHoldMs + scrollMs + endHoldMs;
         let startTime = Date.now();
 
         intervalId = setInterval(() => {
           const elapsed = (Date.now() - startTime) % cycleMs;
-          if (elapsed <= scrollMs) {
-            win.scrollTo(0, distance * (elapsed / scrollMs));
+          if (elapsed <= startHoldMs) {
+            win.scrollTo(0, 0);
+          } else if (elapsed <= startHoldMs + scrollMs) {
+            win.scrollTo(0, distance * ((elapsed - startHoldMs) / scrollMs));
           } else {
             win.scrollTo(0, distance);
           }

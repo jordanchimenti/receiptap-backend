@@ -1,0 +1,275 @@
+<!-- views/partials/legal-privacy-content.ejs -->
+<!-- The real Privacy Policy body. Included by views/legal-document.ejs only
+     when documentType === 'PRIVACY' -- Terms/DPA still render the plain
+     "coming soon" stub. Every [[REVIEW: ...]] marker below is also
+     collected in docs/LEGAL_REVIEW_NOTES.md -- if you resolve one here,
+     resolve it there too. -->
+<style>
+  .privacy-doc { max-width: 720px; margin: 0 auto; padding: 28px 20px 80px; }
+  .privacy-doc .logo-row { text-align: center; margin-bottom: 20px; }
+  .privacy-doc .logo-row img { height: 40px; }
+  .privacy-doc h1 { font-size: 24px; letter-spacing: -0.01em; margin: 0 0 6px; text-align: center; }
+  .privacy-doc .meta { text-align: center; font-size: 12.5px; color: var(--ink-soft); margin-bottom: 28px; }
+  .privacy-doc .intro { font-size: 15px; line-height: 1.6; color: var(--ink); margin-bottom: 22px; }
+  .privacy-doc .jump-nav {
+    display: flex; flex-direction: column; gap: 8px; background: var(--paper-raised);
+    border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; margin-bottom: 32px;
+  }
+  .privacy-doc .jump-nav a {
+    font-size: 14.5px; font-weight: 600; color: var(--teal-deep); text-decoration: none;
+  }
+  .privacy-doc section { margin-bottom: 40px; }
+  .privacy-doc .section-banner {
+    font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--teal-deep); background: var(--teal-wash); display: inline-block;
+    padding: 4px 10px; border-radius: 999px; margin-bottom: 10px;
+  }
+  .privacy-doc h2 { font-size: 20px; margin: 0 0 14px; letter-spacing: -0.01em; }
+  .privacy-doc h3 { font-size: 15.5px; margin: 22px 0 8px; }
+  .privacy-doc p { font-size: 14.5px; line-height: 1.65; color: var(--ink); margin: 0 0 14px; }
+  .privacy-doc ul { margin: 0 0 14px; padding-left: 20px; }
+  .privacy-doc li { font-size: 14.5px; line-height: 1.65; color: var(--ink); margin-bottom: 6px; }
+  .privacy-doc .review {
+    display: inline; background: #FBF0D0; color: #7A5B00; padding: 1px 4px;
+    border-radius: 4px; font-size: 13.5px; font-weight: 600;
+  }
+  .privacy-doc hr { border: none; border-top: 1px solid var(--line); margin: 36px 0; }
+  .privacy-doc .contact-box {
+    background: var(--paper-raised); border: 1px solid var(--line); border-radius: 12px;
+    padding: 16px 18px; font-size: 14px; line-height: 1.6;
+  }
+  .privacy-doc .back-top { font-size: 13px; }
+</style>
+
+<div class="privacy-doc">
+  <div class="logo-row"><img src="/images/receiptap-logo.png" alt="ReceipTap" /></div>
+  <h1>ReceipTap Privacy Policy</h1>
+  <p class="meta">Version <%= doc.version %> &middot; last updated <%= doc.lastUpdated %></p>
+
+  <p class="intro">
+    ReceipTap is the technology behind the NFC tap that gives you a digital
+    receipt instead of a paper one. This page explains what happens to
+    personal information depending on how you use ReceipTap — as a shopper
+    who tapped a receipt, or as a business using ReceipTap at your
+    register. It's published by <strong><%= entity.legalName %></strong>
+    (<%= entity.registeredAddress || '<span class="review">[[REVIEW: address pending]]</span>' %>),
+    and is governed by the laws of <%= entity.governingLaw %>.
+  </p>
+
+  <div class="jump-nav">
+    <a href="#shopper">I got a receipt from a business →</a>
+    <a href="#merchant">I run a business using ReceipTap →</a>
+  </div>
+
+  <!-- =================== SHOPPER SECTION (first, per instruction) =================== -->
+  <section id="shopper">
+    <div class="section-banner">For shoppers</div>
+    <h2>If you got a receipt from a business</h2>
+
+    <p>
+      Tapping your phone on a ReceipTap puck and viewing your receipt doesn't
+      require an account and doesn't collect anything about you personally —
+      the receipt just displays. This section only applies once you choose to
+      <strong>save</strong> a receipt, by entering your email or signing in
+      with Google.
+    </p>
+
+    <h3>What we collect, and why</h3>
+    <ul>
+      <li><strong>Your email address</strong> — only if you choose to save a receipt. This is how we know which receipts are yours.</li>
+      <li><strong>Your name</strong> — only if you save a receipt by signing in with Google (we get it from your Google account). If you save with just an email, we don't ask for a name.</li>
+      <li><strong>The receipts you save</strong> — which business, what you bought, how much, and when — so we can show them to you in one place and let you search or export them later.</li>
+      <li><strong>The IP address your device connects from</strong> — only at the moment you tap a consent checkbox (like agreeing to receive marketing emails from a business). This is kept as proof of that specific choice, not to track you.</li>
+    </ul>
+    <p>
+      We use this to build your receipt wallet, automatically sort your
+      purchases into spending categories, and let you download a copy
+      whenever you need one — for a return, a warranty claim, or your own
+      records.
+    </p>
+
+    <h3>The business gets your email too</h3>
+    <p>
+      When you save a receipt, the business you bought from receives your
+      email address as well. They collected it through ReceipTap, but once
+      they have it, it's theirs to use — not ours. Whether they email you
+      about sales, loyalty offers, or anything else is their decision, and
+      following the law when they do is their responsibility (see the
+      business section below for what we require of them). If you'd rather a
+      specific business not have your email, contact them directly, or see
+      "How to unsubscribe" below.
+    </p>
+
+    <h3>AI category suggestions</h3>
+    <p>
+      To sort a purchase into a spending category (like "Food &amp; Drink"
+      or "Office Supplies") and flag whether it might be tax-deductible, we
+      send the business's name and a short list of what you bought — just
+      item names and how many of each, like "2x Coffee, 1x Muffin" — to
+      Anthropic, an AI company that provides this feature for us.
+    </p>
+    <p>
+      We do <strong>not</strong> send Anthropic your name, your email, the
+      price of anything you bought, or the total amount — only the business
+      name and that item list.
+    </p>
+
+    <h3>How long we keep your data</h3>
+    <p>
+      Our policy is to keep your saved receipts, and your account itself, for
+      <strong><%= retention.SHOPPER_RECEIPT_MONTHS %> months</strong>, and
+      then delete them.
+      <span class="review">[[REVIEW: automatic deletion on this schedule is built into our systems but has not been switched on in production as of the date above — confirm live status before publishing this page, or adjust this paragraph to describe how deletion requests are being handled manually in the meantime.]]</span>
+    </p>
+
+    <h3>Getting a copy, deleting your data, or unsubscribing</h3>
+    <ul>
+      <li><strong>Get a copy:</strong> log into your wallet and export your receipts anytime.</li>
+      <li>
+        <strong>Delete your data:</strong> ask the business directly (they
+        can look you up by email and remove your data from their own
+        records), or email us at <%= entity.contactEmail %> and we'll help.
+        <span class="review">[[REVIEW: today a business can delete your data with them specifically through their own dashboard; a single request to erase your data everywhere across every business you've used ReceipTap at is handled by us by hand, not yet through a self-serve page.]]</span>
+      </li>
+      <li>
+        <strong>Unsubscribe from marketing:</strong>
+        <span class="review">[[REVIEW: ReceipTap itself does not send marketing email today, so there is no unsubscribe link to give here. If a business emails you directly, use their own unsubscribe process. To stop a business from re-adding your email after you've asked them to delete it, email <%= entity.contactEmail %> and we'll record that.]]</span>
+      </li>
+    </ul>
+
+    <h3>Where your data is stored</h3>
+    <p>
+      Your ReceipTap data is stored in Canada. A few features briefly send
+      part of it outside Canada: Google, to confirm your identity if you
+      sign in with Google; Anthropic, for the category suggestion described
+      above (using only the business name and item list, never your name,
+      email, prices, or total); and Resend, if you ever request a
+      password-reset email from us.
+      <span class="review">[[REVIEW: the region our own application server (Railway) runs in could not be confirmed from our codebase as of this policy's last-updated date — confirm and update this paragraph once known.]]</span>
+    </p>
+
+    <p class="back-top"><a href="#shopper">↑ Back to top</a></p>
+  </section>
+
+  <hr />
+
+  <!-- =================== MERCHANT SECTION =================== -->
+  <section id="merchant">
+    <div class="section-banner">For businesses</div>
+    <h2>If you're a business using ReceipTap</h2>
+
+    <h3>Account data we hold</h3>
+    <p>
+      We hold your business name, your own name, your email, your login
+      (a securely hashed password, or a linked Google account), your
+      uploaded logo and receipt design choices, and the connection details
+      for the point-of-sale system you connect (Square or Clover) — never
+      your customers' card numbers, which don't pass through our systems.
+    </p>
+
+    <h3>Billing</h3>
+    <p>
+      Your payment details are held by Stripe, our payment processor — they
+      never reach our own servers. We keep Stripe's own reference IDs for
+      your account and subscription so we can manage your billing with you.
+    </p>
+
+    <h3>Our role for your customers' data</h3>
+    <p>
+      When your customers tap and save a receipt, <strong>you</strong>
+      decide why their email is being collected and what happens with it —
+      that's your call, not ours. ReceipTap acts as a processor: we handle
+      that data on your instructions, as your service provider, not as the
+      party deciding its purpose. Our
+      <a href="/legal/dpa">Data Processing Agreement</a> covers this
+      relationship in detail.
+      <span class="review">[[REVIEW: the DPA page itself has no content yet — same "coming soon" status as Terms of Service. Should be written before this policy is treated as final.]]</span>
+    </p>
+
+    <h3>Your responsibilities</h3>
+    <p>
+      You're responsible for having a lawful reason to email the customers
+      whose addresses you collect through ReceipTap, and — if you plan to
+      send them promotional or marketing messages — for getting their
+      express consent, as required by Canada's Anti-Spam Legislation
+      (CASL). ReceipTap's tap-screen checkbox is built to capture and
+      record that choice accurately, but making sure you only market to
+      customers who said yes, and honoring anyone who said no, is your
+      responsibility, not ours.
+    </p>
+
+    <h3>Subprocessors</h3>
+    <p>We use the following subprocessors to run ReceipTap:</p>
+    <ul>
+      <li><strong>Supabase</strong> — our database, hosted in Canada</li>
+      <li><strong>Stripe</strong> — payment processing, for your subscription and for affiliate payouts</li>
+      <li><strong>Anthropic</strong> — the AI category-suggestion feature described above</li>
+      <li><strong>Google</strong> — sign-in verification only (not the "Rate us on Google" link, which is just a URL you provide, not a data integration)</li>
+      <li><strong>Square, Clover</strong> — whichever point-of-sale system you connect</li>
+      <li><strong>Resend</strong> — password-reset emails</li>
+    </ul>
+    <p>
+      <span class="review">[[REVIEW: "Shopify" appears as a leftover option in some account settings from earlier development — it is not a working integration today, and no data is sent to or received from Shopify. Remove that leftover option from the product before or alongside publishing this policy, or note its non-functional status here.]]</span>
+    </p>
+
+    <h3>If you close your account</h3>
+    <p>
+      Our policy is to keep your business data for
+      <strong><%= retention.DEACTIVATED_MERCHANT_PURGE_DAYS %> days</strong>
+      after you close your account, in case you want to come back or need
+      help with something, and then remove or de-identify it.
+      <span class="review">[[REVIEW: same operational-status note as the shopper section — automatic deletion on this schedule is built but not yet switched on in production; confirm before publishing.]]</span>
+      Records proving you accepted our Terms, Privacy Policy, and Data
+      Processing Agreement are the one exception — we keep those
+      permanently, even after your account is closed, since they're our own
+      compliance record and not something we're able to delete on request.
+    </p>
+
+    <p class="back-top"><a href="#merchant">↑ Back to top</a></p>
+  </section>
+
+  <hr />
+
+  <!-- =================== SHARED =================== -->
+  <section id="shared">
+    <h2>Cookies and local storage</h2>
+    <p>
+      ReceipTap sets one cookie: a session cookie that keeps you logged in
+      (to your wallet, if you're a shopper, or your dashboard, if you're a
+      business). It's marked secure in production and expires after 30
+      days. We don't set any advertising, tracking, or analytics cookies,
+      and we don't use your browser's local storage to store anything about
+      you.
+    </p>
+    <p>
+      If you sign in with Google, Google's own sign-in button may set its
+      own cookies as part of that — governed by Google's policies, not
+      ours. If you're a business and we send you to Stripe to manage
+      billing, the same is true of any cookies Stripe's own site sets while
+      you're there.
+    </p>
+
+    <h2>If something goes wrong</h2>
+    <p>
+      If a data breach happens that puts your personal information at
+      risk, we will notify the people affected and any privacy regulator we
+      are required to notify, as required by Canadian law.
+      <span class="review">[[REVIEW: confirm the specific notification timeline/thresholds required under PIPEDA and any applicable provincial law before publishing.]]</span>
+    </p>
+
+    <h2>Changes to this policy</h2>
+    <p>
+      When we change this policy, we'll update the "last updated" date at
+      the top of this page.
+      <span class="review">[[REVIEW: no mechanism exists today to email every shopper or merchant about a policy change (ReceipTap doesn't send marketing/bulk email). Decide how material changes will be announced — e.g. a dashboard banner — before publishing.]]</span>
+    </p>
+
+    <h2>Contact us</h2>
+    <div class="contact-box">
+      <%= entity.contactRole %><br />
+      <%= entity.legalName %><br />
+      <%= entity.registeredAddress || '[[REVIEW: address pending]]' %><br />
+      <a href="mailto:<%= entity.contactEmail %>"><%= entity.contactEmail %></a>
+    </div>
+  </section>
+</div>

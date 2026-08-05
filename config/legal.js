@@ -16,12 +16,12 @@
 
 const LEGAL_DOCUMENTS = {
   TERMS: {
-    version: '2026-08-05.1',
+    version: '2026-08-05.2',
     lastUpdated: '2026-08-05',
     label: 'Terms of Service',
   },
   PRIVACY: {
-    version: '2026-08-05.1',
+    version: '2026-08-05.2',
     lastUpdated: '2026-08-05',
     label: 'Privacy Policy',
   },

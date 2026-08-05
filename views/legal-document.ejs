@@ -1,5 +1,9 @@
 <!-- views/legal-document.ejs -->
-<!-- Stub only -- no policy text. Label/version come from config/legal.js. -->
+<!-- DPA still has no real text, so it falls through to the "coming soon"
+     stub below. Privacy and Terms have real content now, rendered from
+     partials/legal-privacy-content.ejs and partials/legal-terms-content.ejs
+     -- see routes/legal.js for the `documentType`/`entity`/`retention`
+     locals both depend on. -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -9,17 +13,23 @@
   <link rel="stylesheet" href="/css/receiptap.css" />
 </head>
 <body>
-  <div class="centered-shell">
-    <div class="auth-card">
-      <img src="/images/receiptap-logo.png" alt="ReceipTap" style="height: 48px; margin-bottom: 20px;" />
-      <h1 style="font-size: 22px; margin-bottom: 6px;"><%= doc.label %></h1>
-      <p style="font-size: 13.5px; color: var(--ink-soft); line-height: 1.5; margin: 8px 0 4px;">
-        This page is coming soon.
-      </p>
-      <p style="font-size: 12px; color: var(--ink-soft);">
-        Version <%= doc.version %> &middot; last updated <%= doc.lastUpdated %>
-      </p>
+  <% if (documentType === 'PRIVACY') { %>
+    <%- include('partials/legal-privacy-content', { doc, entity, retention }) %>
+  <% } else if (documentType === 'TERMS') { %>
+    <%- include('partials/legal-terms-content', { doc, entity, retention }) %>
+  <% } else { %>
+    <div class="centered-shell">
+      <div class="auth-card">
+        <img src="/images/receiptap-logo.png" alt="ReceipTap" style="height: 48px; margin-bottom: 20px;" />
+        <h1 style="font-size: 22px; margin-bottom: 6px;"><%= doc.label %></h1>
+        <p style="font-size: 13.5px; color: var(--ink-soft); line-height: 1.5; margin: 8px 0 4px;">
+          This page is coming soon.
+        </p>
+        <p style="font-size: 12px; color: var(--ink-soft);">
+          Version <%= doc.version %> &middot; last updated <%= doc.lastUpdated %>
+        </p>
+      </div>
     </div>
-  </div>
+  <% } %>
 </body>
 </html>

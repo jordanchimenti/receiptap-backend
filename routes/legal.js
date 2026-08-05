@@ -8,6 +8,7 @@
 const express = require('express');
 const router = express.Router();
 const { LEGAL_DOCUMENTS } = require('../config/legal');
+const RETENTION = require('../config/retention');
 const { recordLegalAcceptances } = require('../services/legalAcceptanceService');
 const { safeNextPath } = require('../lib/safeRedirect');
 
@@ -45,10 +46,30 @@ router.post('/legal/reaccept', requireAuth, async (req, res) => {
 
 const SLUG_TO_TYPE = { terms: 'TERMS', privacy: 'PRIVACY', dpa: 'DPA' };
 
+// Entity facts shared by every legal document (Privacy, Terms, DPA) -- kept
+// here rather than in config/legal.js, since that file is versioning
+// metadata, not legal content, and there's exactly one legal entity for all
+// three documents to share. Single source of truth: any document that needs
+// the entity name/address/contact/governing law reads it from here rather
+// than re-entering it. [[REVIEW: registered address not provided as of this writing]]
+const ENTITY = {
+  legalName: 'J.A.C. GLOBAL APPROACH LTD.',
+  registeredAddress: null, // renders as [[REVIEW: address pending]]
+  contactRole: 'Privacy Officer',
+  contactEmail: 'privacy@receiptap.com',
+  governingLaw: 'Ontario, Canada',
+};
+
 router.get('/legal/:slug', (req, res) => {
   const documentType = SLUG_TO_TYPE[req.params.slug];
   if (!documentType) return res.status(404).send('Not found');
-  res.render('legal-document', { doc: LEGAL_DOCUMENTS[documentType] });
+
+  res.render('legal-document', {
+    doc: LEGAL_DOCUMENTS[documentType],
+    documentType,
+    entity: ENTITY,
+    retention: RETENTION,
+  });
 });
 
 module.exports = router;

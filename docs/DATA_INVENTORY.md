@@ -233,16 +233,25 @@ patterns.
    worth naming: the platform owner can see every shopper's email and shopping
    pattern across every merchant, not just their own.
 
-8. **IP addresses and user-agents: confirmed NOT collected by application
-   code.** Grepped for `req.ip`, `x-forwarded-for`, and user-agent reads —
-   none found anywhere in `routes/`, `middleware/`, or `services/`, despite
-   `app.set('trust proxy', 1)` being configured in `server.js` (that line is
-   for correctly reading HTTPS/secure-cookie state behind Railway's proxy,
-   not for capturing IPs). This is a finding, not a gap in the sense of
-   "should be fixed" — noted because the task's personal-data definition
-   explicitly listed IP addresses, and the honest answer is the app doesn't
-   collect them. Railway's own infrastructure-level request logs are outside
-   this codebase's visibility and not something this document can speak to.
+8. **IP addresses ARE collected — this section previously said otherwise
+   and was wrong.** Corrected after re-verifying directly against current
+   code rather than trusting the earlier claim below it. `req.ip` is read
+   and stored in two places: `services/legalAcceptanceService.js` line 13
+   (`const ipAddress = req.ip || null;`, written onto every
+   `LegalAcceptance` row — a merchant accepting Terms/Privacy/DPA) and
+   `services/shopperConsentService.js` line 21 (same pattern, written onto
+   every `ShopperConsent` row — a shopper's transactional/marketing consent
+   at the tap screen). Both are append-only audit records of a specific
+   consent event, not a general tracking log — no other route reads
+   `req.ip`, `x-forwarded-for`, or a user-agent string anywhere in
+   `routes/`, `middleware/`, or `services/`. `app.set('trust proxy', 1)` in
+   `server.js` is unrelated (it's for correctly reading HTTPS/secure-cookie
+   state behind Railway's proxy). Since `LEGAL_ACCEPTANCE_RETENTION_MONTHS`
+   and `EMAIL_SUPPRESSION_RETENTION_MONTHS` are both `Infinity`
+   (`config/retention.js`), these IP addresses are retained indefinitely
+   along with the rest of the consent record. This should be disclosed in
+   the Privacy Policy's "what we collect" section — see
+   `docs/LEGAL_REVIEW_NOTES.md`.
 
 9. **`Affiliate` (type `REGULAR`) doesn't fit the MERCHANT/SHOPPER
    taxonomy** this task asked for — see the note in Section 1. Flagged

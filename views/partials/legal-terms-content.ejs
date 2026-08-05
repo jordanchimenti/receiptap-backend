@@ -1,0 +1,424 @@
+<!-- views/partials/legal-terms-content.ejs -->
+<!-- The real Terms of Service body. Included by views/legal-document.ejs only
+     when documentType === 'TERMS' -- DPA still renders the plain
+     "coming soon" stub. Every [[REVIEW: ...]] marker below is also
+     collected in docs/LEGAL_REVIEW_NOTES.md -- if you resolve one here,
+     resolve it there too.
+
+     PLAN-AGNOSTIC BY DESIGN: no dollar figure, trial length, or plan name
+     is written anywhere in this file. Those live in Stripe and on the
+     checkout screen (see views/billing.ejs) and are described here only as
+     "the amount/length shown to you at signup" -- so adding a second plan
+     or changing the trial length later never requires touching this
+     document. See docs/LEGAL_REVIEW_NOTES.md for why the checkout screen
+     itself doesn't yet show all of that plainly enough. -->
+<style>
+  .terms-doc { max-width: 720px; margin: 0 auto; padding: 28px 20px 80px; }
+  .terms-doc .logo-row { text-align: center; margin-bottom: 20px; }
+  .terms-doc .logo-row img { height: 40px; }
+  .terms-doc h1 { font-size: 24px; letter-spacing: -0.01em; margin: 0 0 6px; text-align: center; }
+  .terms-doc .meta { text-align: center; font-size: 12.5px; color: var(--ink-soft); margin-bottom: 28px; }
+  .terms-doc .intro { font-size: 15px; line-height: 1.6; color: var(--ink); margin-bottom: 22px; }
+  .terms-doc .jump-nav {
+    display: flex; flex-direction: column; gap: 6px; background: var(--paper-raised);
+    border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; margin-bottom: 32px;
+  }
+  .terms-doc .jump-nav .jump-label { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-soft); margin-bottom: 4px; }
+  .terms-doc .jump-nav a {
+    font-size: 14px; font-weight: 600; color: var(--teal-deep); text-decoration: none;
+  }
+  .terms-doc section { margin-bottom: 34px; }
+  .terms-doc .section-banner {
+    font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--teal-deep); background: var(--teal-wash); display: inline-block;
+    padding: 4px 10px; border-radius: 999px; margin-bottom: 10px;
+  }
+  .terms-doc h2 { font-size: 19px; margin: 0 0 14px; letter-spacing: -0.01em; }
+  .terms-doc h3 { font-size: 15px; margin: 20px 0 8px; }
+  .terms-doc p { font-size: 14.5px; line-height: 1.65; color: var(--ink); margin: 0 0 14px; }
+  .terms-doc ul { margin: 0 0 14px; padding-left: 20px; }
+  .terms-doc li { font-size: 14.5px; line-height: 1.65; color: var(--ink); margin-bottom: 6px; }
+  .terms-doc .review {
+    display: inline; background: #FBF0D0; color: #7A5B00; padding: 1px 4px;
+    border-radius: 4px; font-size: 13.5px; font-weight: 600;
+  }
+  .terms-doc hr { border: none; border-top: 1px solid var(--line); margin: 30px 0; }
+  .terms-doc .contact-box {
+    background: var(--paper-raised); border: 1px solid var(--line); border-radius: 12px;
+    padding: 16px 18px; font-size: 14px; line-height: 1.6;
+  }
+  .terms-doc .back-top { font-size: 13px; }
+</style>
+
+<div class="terms-doc">
+  <div class="logo-row"><img src="/images/receiptap-logo.png" alt="ReceipTap" /></div>
+  <h1>ReceipTap Terms of Service</h1>
+  <p class="meta">Version <%= doc.version %> &middot; last updated <%= doc.lastUpdated %></p>
+
+  <p class="intro">
+    These Terms are between <strong><%= entity.legalName %></strong>
+    (<%= entity.registeredAddress || '<span class="review">[[REVIEW: address pending]]</span>' %>)
+    and the business that creates a ReceipTap account ("you," "the
+    business"). They're written for businesses, not for the individual
+    shoppers who tap a puck to get a receipt — shoppers are covered by our
+    <a href="/legal/privacy">Privacy Policy</a> instead. By creating a
+    ReceipTap account, you agree to these Terms.
+  </p>
+
+  <div class="jump-nav">
+    <div class="jump-label">Jump to</div>
+    <a href="#who">Who this is for</a>
+    <a href="#account">Your account</a>
+    <a href="#billing">Subscription and billing</a>
+    <a href="#refunds">Refunds</a>
+    <a href="#data-obligations">Your data obligations</a>
+    <a href="#acceptable-use">Acceptable use</a>
+    <a href="#pos">POS integrations</a>
+    <a href="#hardware">Hardware (NFC pucks)</a>
+    <a href="#availability">Service availability</a>
+    <a href="#privacy">Data and privacy</a>
+    <a href="#termination">Termination</a>
+    <a href="#liability">Limitation of liability</a>
+    <a href="#changes">Changes to these Terms</a>
+    <a href="#law">Governing law</a>
+  </div>
+
+  <!-- =================== WHO THIS IS FOR =================== -->
+  <section id="who">
+    <h2>Who this is for</h2>
+    <p>
+      ReceipTap is a service for businesses. It gives a business a physical
+      NFC puck to place near their register, so their customers can tap
+      their phone after paying and get a digital receipt instead of a paper
+      one — along with email capture, a Google review prompt, and
+      repeat-customer reporting for the business.
+    </p>
+    <p>
+      You may only create a ReceipTap account on behalf of a business, not
+      for personal or household use. You must be at least 18 years old and
+      authorized to agree to these Terms on that business's behalf — for
+      example, as its owner, an officer, or someone the business has given
+      that authority to.
+    </p>
+    <p class="back-top"><a href="#who">↑ Back to top</a></p>
+  </section>
+
+  <hr />
+
+  <!-- =================== YOUR ACCOUNT =================== -->
+  <section id="account">
+    <h2>Your account</h2>
+    <p>
+      The information you give us at signup — your business name, your
+      email, your own name — needs to be accurate, and kept accurate. If
+      something changes (your business closes, changes hands, or changes
+      its name), update it in your account or let us know.
+    </p>
+    <p>
+      You're responsible for everything that happens under your account,
+      including actions taken by anyone you give access to — staff at your
+      register, a manager, a bookkeeper, anyone you've shared a login or
+      device access with. Keep your login credentials to yourself, and tell
+      us right away if you think someone's gotten into your account without
+      permission.
+    </p>
+    <p class="back-top"><a href="#account">↑ Back to top</a></p>
+  </section>
+
+  <hr />
+
+  <!-- =================== SUBSCRIPTION AND BILLING =================== -->
+  <section id="billing">
+    <div class="section-banner">The important part</div>
+    <h2>Subscription and billing</h2>
+
+    <p>
+      ReceipTap runs on a paid subscription. Here's exactly how that works.
+    </p>
+
+    <h3>Starting a free trial</h3>
+    <p>
+      Starting a free trial requires a valid payment method up front. The
+      trial length, the price, how often you're billed, and which plan
+      you're on are exactly what's shown to you on the signup screen before
+      you enter your card — and afterward, in your account and on every
+      Stripe receipt. We don't repeat those specific numbers here, because
+      they can change without needing a new version of these Terms; what
+      doesn't change is that you'll always see them plainly before you pay
+      anything.
+    </p>
+    <p>
+      If you cancel before your trial ends, you will not be charged
+      anything.
+    </p>
+
+    <h3>Automatic renewal</h3>
+    <p>
+      Once your trial ends, your subscription renews automatically, on the
+      billing interval shown to you at signup, until you cancel. Each
+      renewal is charged to the payment method on file.
+    </p>
+
+    <h3>If we offer more than one plan</h3>
+    <p>
+      These Terms apply the same way no matter which ReceipTap plan you're
+      on. Your specific plan is whichever one you selected at signup, or
+      later switched to. If you change plans, how the switch takes effect —
+      immediately or at your next renewal — and how any price difference
+      for time already paid is credited or charged, is shown to you at the
+      time you make the change.
+    </p>
+    <p>
+      <span class="review">[[REVIEW: our billing system currently supports exactly one plan — there's no upgrade/downgrade flow or proration logic built yet. The paragraph above describes the intended behavior once more plans exist; confirm the actual mechanics (immediate vs. next-renewal, how proration is calculated) before a second plan is ever offered, and make sure the code matches what this paragraph promises.]]</span>
+    </p>
+
+    <h3>Currency and international cards</h3>
+    <p>
+      Subscription prices are charged in US dollars. If your card is issued
+      outside the US, your bank may convert the charge to your local
+      currency and may charge a foreign transaction fee — that's between
+      you and your card issuer, not something we control or receive any
+      part of.
+    </p>
+
+    <h3>Taxes</h3>
+    <p>
+      <span class="review">[[REVIEW: whether the price shown to you at signup includes or excludes applicable sales tax has not been decided, and our billing system doesn't currently calculate or add tax to a subscription charge. This needs a real answer — and, if tax needs to be added, real Stripe Tax configuration — before this section can say something accurate.]]</span>
+    </p>
+
+    <h3>Price changes</h3>
+    <p>
+      If we raise the price on your specific plan, we'll email you at least
+      30 days before the new price takes effect, and you can cancel any
+      time before then to avoid it. Introducing a new plan or a different
+      price for new customers doesn't change what you pay on your existing
+      plan — that only changes if we give you that 30-day notice.
+    </p>
+    <p>
+      <span class="review">[[REVIEW: this app has no bulk/automated email sender today (Resend is only ever used for password resets — see the same gap noted in the Privacy Policy's "Changes to this policy" section). A price-increase notice would currently have to be sent by hand. Build the actual notification mechanism before this commitment is relied on, or decide on an interim manual process and document it here.]]</span>
+    </p>
+
+    <h3>How to cancel</h3>
+    <p>
+      Cancel any time from the Billing page in your dashboard, which opens
+      Stripe's secure Customer Portal for you to confirm — no need to
+      contact us, and no phone call required.
+    </p>
+    <p class="back-top"><a href="#billing">↑ Back to top</a></p>
+  </section>
+
+  <hr />
+
+  <!-- =================== REFUNDS =================== -->
+  <section id="refunds">
+    <h2>Refunds</h2>
+    <p>
+      <span class="review">[[REVIEW: no refund policy has been decided, and no refund logic exists in our billing system today — a refund would currently have to be issued by hand, one at a time, directly in Stripe. Decide the actual policy (none, prorated, discretionary, etc.) and replace this paragraph with it. Until then, if you believe you were charged in error, contact us at <%= entity.contactEmail %> and we'll look at it individually.]]</span>
+    </p>
+    <p class="back-top"><a href="#refunds">↑ Back to top</a></p>
+  </section>
+
+  <hr />
+
+  <!-- =================== MERCHANT DATA OBLIGATIONS =================== -->
+  <section id="data-obligations">
+    <div class="section-banner">Your responsibility</div>
+    <h2>Your data obligations</h2>
+    <p>
+      When a customer taps a puck and saves their receipt, ReceipTap
+      delivers them that one transactional receipt on your behalf — that
+      part is on us. Everything beyond that is on you.
+    </p>
+    <p>
+      You're responsible for having a lawful basis to use the email
+      addresses ReceipTap collects for you, and — if you want to send a
+      customer anything beyond their receipt, like a promotion, a
+      newsletter, or a loyalty offer — for getting their express consent
+      first, as required by Canada's Anti-Spam Legislation (CASL) or the
+      equivalent law where your customer is (such as CAN-SPAM in the US).
+      ReceipTap's tap-screen consent checkbox is built to capture and
+      record that choice accurately, but deciding who to market to, and
+      honoring anyone who said no or later unsubscribes, is your
+      responsibility, not ours.
+    </p>
+    <p>
+      You agree to compensate us (this is sometimes called
+      "indemnifying") if a claim, fine, or legal action comes against us
+      because of how you used a customer's data — for example, if you
+      email someone who never consented to it.
+    </p>
+    <p class="back-top"><a href="#data-obligations">↑ Back to top</a></p>
+  </section>
+
+  <hr />
+
+  <!-- =================== ACCEPTABLE USE =================== -->
+  <section id="acceptable-use">
+    <h2>Acceptable use</h2>
+    <p>You agree not to:</p>
+    <ul>
+      <li>Put unlawful, deceptive, or infringing content on a receipt customers see through ReceipTap</li>
+      <li>Collect a customer's email under false pretenses — for example, implying it's required to get a receipt when it isn't, or misrepresenting what you'll use it for</li>
+      <li>Resell, rent out, or sublicense ReceipTap's service to anyone else</li>
+      <li>Try to access another business's data, account, or dashboard</li>
+      <li>Try to get around any usage limit we've put in place</li>
+    </ul>
+    <p class="back-top"><a href="#acceptable-use">↑ Back to top</a></p>
+  </section>
+
+  <hr />
+
+  <!-- =================== POS INTEGRATIONS =================== -->
+  <section id="pos">
+    <h2>Connecting your point-of-sale system</h2>
+    <p>
+      If you connect a point-of-sale system (like Square or Clover) to
+      ReceipTap, you're authorizing us to access it — through that
+      provider's own connection process — to the extent needed to detect
+      your sales and generate receipts.
+    </p>
+    <p>
+      That connection depends on APIs run by Square, Clover, and any other
+      point-of-sale provider we integrate with — systems we don't control.
+      If one of them goes down, changes how their API works, or cuts off
+      access, your receipts may be affected, and that's not something we
+      can guarantee against.
+    </p>
+    <p class="back-top"><a href="#pos">↑ Back to top</a></p>
+  </section>
+
+  <hr />
+
+  <!-- =================== HARDWARE =================== -->
+  <section id="hardware">
+    <h2>Hardware (NFC pucks)</h2>
+    <p>
+      We provide one or more NFC pucks for you to place near your
+      register. Each puck is passive — it has no battery and no radio of
+      its own — and is linked to your account through a claim code, then
+      assigned to a specific register at your business.
+    </p>
+    <ul>
+      <li><span class="review">[[REVIEW: whether ownership of a puck transfers to the business, or stays ReceipTap property for the life of the subscription, hasn't been decided. Add it here once it is.]]</span></li>
+      <li><span class="review">[[REVIEW: what happens to a puck when a subscription is canceled — keep it, return it, or something else — hasn't been decided.]]</span></li>
+      <li><span class="review">[[REVIEW: replacement terms for a lost or damaged puck — whether it's free, chargeable, and at what cost — haven't been decided.]]</span></li>
+      <li><span class="review">[[REVIEW: shipping terms — who pays, expected delivery time, whether we ship internationally — haven't been decided.]]</span></li>
+    </ul>
+    <p class="back-top"><a href="#hardware">↑ Back to top</a></p>
+  </section>
+
+  <hr />
+
+  <!-- =================== SERVICE AVAILABILITY =================== -->
+  <section id="availability">
+    <h2>Service availability</h2>
+    <p>
+      ReceipTap is an actively developed, early-stage service. We work to
+      keep it running reliably, but we don't currently guarantee any
+      specific uptime or availability, and the service may be unavailable
+      from time to time — for maintenance, an issue on our end, or an issue
+      with a third-party service we depend on.
+    </p>
+    <p class="back-top"><a href="#availability">↑ Back to top</a></p>
+  </section>
+
+  <hr />
+
+  <!-- =================== DATA AND PRIVACY =================== -->
+  <section id="privacy">
+    <h2>Data and privacy</h2>
+    <p>
+      How we handle personal information — yours and your customers' — is
+      covered in full in our <a href="/legal/privacy">Privacy Policy</a>,
+      and our role as a processor of your customers' data is covered in our
+      <a href="/legal/dpa">Data Processing Agreement</a>. We won't repeat
+      that here; both apply to your use of ReceipTap alongside these Terms.
+    </p>
+    <p class="back-top"><a href="#privacy">↑ Back to top</a></p>
+  </section>
+
+  <hr />
+
+  <!-- =================== TERMINATION =================== -->
+  <section id="termination">
+    <h2>Termination</h2>
+    <p>
+      You can close your account at any time from your dashboard. We may
+      suspend or end your account if you breach these Terms, or if payment
+      fails and isn't resolved — we'll give you notice and a chance to fix
+      it first, except where we reasonably believe waiting would cause harm
+      (for example, a security issue).
+    </p>
+    <p>
+      Simply canceling your subscription doesn't delete anything — your
+      account and data stay exactly as they are, you just lose access to
+      the dashboard once your paid period ends. Closing your account
+      entirely is a separate, deliberate step, and it's what starts the
+      clock: our policy is to keep your business data for
+      <strong><%= retention.DEACTIVATED_MERCHANT_PURGE_DAYS %> days</strong>
+      afterward, in case you want to come back, and then delete your sales
+      records, your customers' consent records, your loyalty program data,
+      and your receipt design — and anonymize what's left of your account.
+      <span class="review">[[REVIEW: same operational-status note as the Privacy Policy — automatic deletion on this schedule is built but not yet switched on in production (RETENTION_PURGE_ENABLED is unset). Confirm live status before this is relied on.]]</span>
+      Records proving you accepted our Terms, Privacy Policy, and Data
+      Processing Agreement are the one exception — we keep those
+      permanently, as our own compliance record, even after your account is
+      closed.
+    </p>
+    <p class="back-top"><a href="#termination">↑ Back to top</a></p>
+  </section>
+
+  <hr />
+
+  <!-- =================== LIMITATION OF LIABILITY =================== -->
+  <section id="liability">
+    <h2>Limitation of liability</h2>
+    <p>
+      To the extent the law allows it, neither of us is responsible to the
+      other for indirect, incidental, or consequential damages — things
+      like lost profits or lost data — arising from these Terms or your use
+      of ReceipTap.
+    </p>
+    <p>
+      To the extent the law allows it, our total liability to you for any
+      claim relating to ReceipTap is capped at the total subscription fees
+      you paid us in the 12 months before the claim arose.
+    </p>
+    <p class="back-top"><a href="#liability">↑ Back to top</a></p>
+  </section>
+
+  <hr />
+
+  <!-- =================== CHANGES TO THESE TERMS =================== -->
+  <section id="changes">
+    <h2>Changes to these Terms</h2>
+    <p>
+      When we make a real change to these Terms, we publish the new version
+      here and update the "last updated" date at the top. If you have an
+      account, the next time you visit your dashboard after a real change,
+      you'll be asked to review and accept the new version before
+      continuing — this happens automatically, it isn't something we do by
+      hand.
+    </p>
+    <p class="back-top"><a href="#changes">↑ Back to top</a></p>
+  </section>
+
+  <hr />
+
+  <!-- =================== GOVERNING LAW =================== -->
+  <section id="law">
+    <h2>Governing law</h2>
+    <p>
+      These Terms are governed by the laws of <%= entity.governingLaw %>,
+      and any dispute arising from them will be handled by the courts
+      there.
+    </p>
+
+    <h2>Contact us</h2>
+    <div class="contact-box">
+      <%= entity.legalName %><br />
+      <%= entity.registeredAddress || '[[REVIEW: address pending]]' %><br />
+      <a href="mailto:<%= entity.contactEmail %>"><%= entity.contactEmail %></a>
+    </div>
+  </section>
+</div>

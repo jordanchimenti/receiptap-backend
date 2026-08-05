@@ -9,6 +9,7 @@
 const express = require('express');
 const router = express.Router();
 const prisma = require('../lib/prisma');
+const { SHOPPER_CONSENT } = require('../config/legal');
 
 router.get('/demo/receipt', async (req, res) => {
   const merchant = await prisma.merchant.findUnique({ where: { email: 'jordanchimenti98@gmail.com' } });
@@ -56,6 +57,7 @@ router.get('/demo/receipt', async (req, res) => {
     loyaltyCard: { id: 'demo', punches: 3 }, // mid-progress, not full -- a full card auto-opens a redemption modal, which would hijack the scroll tour
     partnerReferralUrl,
     isMerchantCopy: false,
+    shopperConsentText: SHOPPER_CONSENT,
     transaction: {
       id: 'demo', orderNumber: 'demo',
       lineItems: [

@@ -57,6 +57,7 @@ app.use(
 const { ownerFlag } = require('./middleware/ownerFlag');
 app.use(ownerFlag);
 app.use(require('./routes/auth'));           // signup / login / logout
+app.use(require('./routes/legal'));          // /legal/terms, /legal/privacy, /legal/dpa -- stub pages linked from signup
 app.use(require('./routes/pucks'));          // /r/:puckId tap routing, /claim/:puckId
 app.use(require('./routes/receipt'));        // /receipt/:transactionId
 app.use(require('./routes/webhooks'));       // /webhooks/pos/square, /webhooks/pos/clover
@@ -70,6 +71,17 @@ app.use('/dashboard', (req, res, next) => {
   if (req.path.startsWith('/billing')) return next(); // billing page always reachable
   if (!req.session?.merchantId) return next();        // let each route's own requireAuth redirect to login
   return requireActiveSubscription(req, res, next);
+});
+
+// Legal re-acceptance gate: runs after the subscription gate (a merchant who
+// can't pay shouldn't be stopped on a legal screen before they can even
+// reach billing), same /billing exception, same ordering constraint as
+// ownerFlag above -- mounted after it, per CLAUDE.md's mount-order gotcha.
+const { requireCurrentLegalAcceptance } = require('./middleware/legalReacceptance');
+app.use('/dashboard', (req, res, next) => {
+  if (req.path.startsWith('/billing')) return next();
+  if (!req.session?.merchantId) return next();
+  return requireCurrentLegalAcceptance(req, res, next);
 });
 
 app.use(require('./routes/oauth-square'));   // /oauth/square/connect + callback, /dashboard/pos-setup

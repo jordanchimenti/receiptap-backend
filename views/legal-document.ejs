@@ -1,0 +1,25 @@
+<!-- views/legal-document.ejs -->
+<!-- Stub only -- no policy text. Label/version come from config/legal.js. -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title><%= doc.label %> - ReceipTap</title>
+  <link rel="stylesheet" href="/css/receiptap.css" />
+</head>
+<body>
+  <div class="centered-shell">
+    <div class="auth-card">
+      <img src="/images/receiptap-logo.png" alt="ReceipTap" style="height: 48px; margin-bottom: 20px;" />
+      <h1 style="font-size: 22px; margin-bottom: 6px;"><%= doc.label %></h1>
+      <p style="font-size: 13.5px; color: var(--ink-soft); line-height: 1.5; margin: 8px 0 4px;">
+        This page is coming soon.
+      </p>
+      <p style="font-size: 12px; color: var(--ink-soft);">
+        Version <%= doc.version %> &middot; last updated <%= doc.lastUpdated %>
+      </p>
+    </div>
+  </div>
+</body>
+</html>

@@ -4,6 +4,7 @@
 const express = require('express');
 const router = express.Router();
 const prisma = require('../lib/prisma');
+const { SHOPPER_CONSENT } = require('../config/legal');
 
 router.get('/receipt/:transactionId', async (req, res) => {
   const transaction = await prisma.transaction.findUnique({
@@ -72,6 +73,7 @@ router.get('/receipt/:transactionId', async (req, res) => {
     loyaltyCard,
     partnerReferralUrl,
     isMerchantCopy,
+    shopperConsentText: SHOPPER_CONSENT,
     transaction: {
       ...transaction,
       lineItems: transaction.lineItems, // already JSON from Prisma

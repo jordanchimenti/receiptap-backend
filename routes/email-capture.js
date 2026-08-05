@@ -10,6 +10,7 @@ const router = express.Router();
 const { OAuth2Client } = require('google-auth-library');
 const { categorizeTransaction } = require('../services/categorize-receipt');
 const { incrementLoyaltyPunch } = require('./loyalty');
+const { recordShopperConsent } = require('../services/shopperConsentService');
 const prisma = require('../lib/prisma');
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
@@ -42,7 +43,7 @@ function requireMerchantAuth(req, res, next) {
 // --- Plain email capture (no password — this is a quick capture gate, ---
 // --- not a full account signup. Upgrading to a real login is optional. ---
 router.post('/receipt/:transactionId/capture-email', async (req, res) => {
-  const { email } = req.body;
+  const { email, marketingOptIn } = req.body;
   if (!email || !isValidEmail(email)) {
     return res.status(400).json({ error: 'Enter a valid email address' });
   }
@@ -67,6 +68,7 @@ router.post('/receipt/:transactionId/capture-email', async (req, res) => {
     data: { customerId: customer.id },
   });
   await incrementLoyaltyPunch(transaction.merchantId, customer.id);
+  await recordShopperConsent(transaction.id, marketingOptIn, req);
 
   // Kick off AI categorization — doesn't block this response
   if (!transaction.aiCategorizedAt) {
@@ -82,7 +84,7 @@ router.post('/receipt/:transactionId/capture-email', async (req, res) => {
 // server-side and pull the email out — never trust an email the client
 // claims directly, only what Google's signed token confirms.
 router.post('/receipt/:transactionId/capture-email-google', async (req, res) => {
-  const { credential } = req.body;
+  const { credential, marketingOptIn } = req.body;
   if (!credential) return res.status(400).json({ error: 'Missing Google credential' });
 
   let payload;
@@ -116,6 +118,7 @@ router.post('/receipt/:transactionId/capture-email-google', async (req, res) => 
     data: { customerId: customer.id },
   });
   await incrementLoyaltyPunch(transaction.merchantId, customer.id);
+  await recordShopperConsent(transaction.id, marketingOptIn, req);
 
   if (!transaction.aiCategorizedAt) {
     categorizeInBackground(transaction, transaction.merchant.businessName);

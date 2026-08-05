@@ -7,6 +7,7 @@
 const ejs = require('ejs');
 const path = require('path');
 const { chromium } = require('playwright');
+const { SHOPPER_CONSENT } = require('../config/legal');
 
 const VIEWS_DIR = path.join(__dirname, '..', 'views');
 
@@ -27,6 +28,8 @@ async function renderReceiptHTML(transaction, merchant, theme) {
       merchant,
       theme: theme || { layoutId: 'classic', primaryColor: '#111111', accentColor: '#2563eb', showWalletSave: false },
       googleClientId: '', // no need for a live Google button inside a static PDF
+      isMerchantCopy: true, // a merchant's own saved PDF -- referenced unguarded elsewhere in receipt.ejs; was missing here before this change (see PDF export bug note)
+      shopperConsentText: SHOPPER_CONSENT,
       transaction: formatTransactionForTemplate(transaction),
     },
     { views: [VIEWS_DIR] }

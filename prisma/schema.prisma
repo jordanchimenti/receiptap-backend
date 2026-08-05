@@ -55,11 +55,12 @@ model Merchant {
   trialEndsAt          DateTime?
 
   pucks             Puck[]
-  issuedReceipts    Transaction[]   @relation("IssuedReceipts")
-  collectedExpenses Transaction[]   @relation("CollectedExpenses")
+  issuedReceipts    Transaction[]     @relation("IssuedReceipts")
+  collectedExpenses Transaction[]     @relation("CollectedExpenses")
   receiptTheme      ReceiptTheme?
   loyaltyProgram    LoyaltyProgram?
   loyaltyCards      LoyaltyCard[]
+  legalAcceptances  LegalAcceptance[]
 
   // Affiliate program -- set if this merchant signed up via someone's
   // referral link. A merchant can ALSO be an affiliate themselves (their own
@@ -150,6 +151,8 @@ model Transaction {
   collectedByMerchant   Merchant? @relation("CollectedExpenses", fields: [collectedByMerchantId], references: [id])
 
   createdAt DateTime @default(now())
+
+  shopperConsents ShopperConsent[]
 
   @@index([merchantId])
   @@index([customerId])
@@ -335,4 +338,60 @@ model Customer {
 
   transactions Transaction[]
   loyaltyCards LoyaltyCard[]
+}
+
+// ---------------------------------------------------------------------------
+// LegalAcceptance — one row per legal document a merchant has accepted.
+// APPEND-ONLY: never update a row. A merchant re-accepting a newer version
+// (see the re-acceptance interstitial in middleware/) creates a NEW row
+// rather than overwriting the old one, so the full acceptance history for
+// every version is preserved. "Which version is current" is never asked of
+// this table -- it's read from config/legal.js, the single source of truth.
+// ---------------------------------------------------------------------------
+model LegalAcceptance {
+  id         String   @id @default(cuid())
+  merchantId String
+  merchant   Merchant @relation(fields: [merchantId], references: [id])
+
+  documentType LegalDocumentType
+  version      String // e.g. "2026-08-05.1" -- matches config/legal.js at the moment this row was written
+
+  acceptedAt DateTime @default(now())
+  ipAddress  String?
+  userAgent  String?
+
+  @@index([merchantId, documentType])
+}
+
+enum LegalDocumentType {
+  TERMS
+  PRIVACY
+  DPA
+}
+
+// ---------------------------------------------------------------------------
+// ShopperConsent — one row per consent decision shown on the tap screen's
+// email-capture step. APPEND-ONLY: never update a row. Logs BOTH grants and
+// declines -- a shopper leaving the marketing checkbox unticked still gets a
+// row (granted: false), not silence, so "we asked and they said no" is
+// provable the same way "we asked and they said yes" is.
+// ---------------------------------------------------------------------------
+model ShopperConsent {
+  id        String      @id @default(cuid())
+  receiptId String
+  receipt   Transaction @relation(fields: [receiptId], references: [id])
+
+  consentType        ConsentType
+  granted            Boolean
+  consentTextVersion String // which exact wording (config/legal.js) was shown at the moment of this decision
+
+  createdAt DateTime @default(now())
+  ipAddress String?
+
+  @@index([receiptId])
+}
+
+enum ConsentType {
+  TRANSACTIONAL
+  MARKETING
 }

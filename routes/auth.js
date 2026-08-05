@@ -9,20 +9,12 @@ const crypto = require('crypto');
 const { OAuth2Client } = require('google-auth-library');
 const prisma = require('../lib/prisma');
 const { sendPasswordResetEmail } = require('../services/emailService');
+const { recordLegalAcceptances } = require('../services/legalAcceptanceService');
+const { safeNextPath } = require('../lib/safeRedirect');
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 const RESET_TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hour
-
-// Lets a link into signup (e.g. the landing page's receipt demo) choose
-// where a brand-new account lands, without opening a generic redirect --
-// only relative /dashboard/* paths are honored, anything else falls back
-// to the normal post-signup destination.
-function safeNextPath(next) {
-  return typeof next === 'string' && /^\/dashboard\/[a-zA-Z0-9\-_/]*$/.test(next)
-    ? next
-    : '/dashboard/receipts-hub';
-}
 
 router.get('/signup', (req, res) => res.render('signup', {
   error: null,
@@ -38,10 +30,15 @@ router.get('/login', (req, res) => res.render('login', {
 }));
 
 router.post('/signup', async (req, res) => {
-  const { ownerName, businessName, email, password, refCode, next } = req.body;
+  const { ownerName, businessName, email, password, refCode, next, acceptTerms, acceptPrivacy, acceptDpa } = req.body;
 
   if (!ownerName || !businessName || !email || !password) {
     return res.render('signup', { error: 'All fields are required', refCode: refCode || '', next: next || '', googleClientId: process.env.GOOGLE_CLIENT_ID || '' });
+  }
+  // Client-side "required" on the checkboxes is UX only -- this is the real
+  // gate. A request with any of the three missing never creates an account.
+  if (!acceptTerms || !acceptPrivacy || !acceptDpa) {
+    return res.render('signup', { error: 'You must accept the Terms of Service, Privacy Policy, and Data Processing Agreement to create an account.', refCode: refCode || '', next: next || '', googleClientId: process.env.GOOGLE_CLIENT_ID || '' });
   }
 
   try {
@@ -60,6 +57,7 @@ router.post('/signup', async (req, res) => {
     const merchant = await prisma.merchant.create({
       data: { ownerName, businessName, email, passwordHash, referredByAffiliateId: referrer?.id || null },
     });
+    await recordLegalAcceptances(merchant.id, req);
 
     req.session.merchantId = merchant.id;
     res.redirect(safeNextPath(next));
@@ -102,7 +100,7 @@ router.post('/logout', (req, res) => {
 // gets an editable placeholder business name -- same tradeoff already made
 // for the equivalent customer-facing flow in routes/customer-account.js.
 router.post('/merchant/google', async (req, res) => {
-  const { credential, refCode, next } = req.body;
+  const { credential, refCode, next, acceptTerms, acceptPrivacy, acceptDpa } = req.body;
   if (!credential) return res.status(400).json({ error: 'Missing Google credential' });
 
   let payload;
@@ -128,6 +126,13 @@ router.post('/merchant/google', async (req, res) => {
         merchant = await prisma.merchant.update({ where: { id: merchant.id }, data: { googleId: payload.sub } });
       }
     } else {
+      // New account -- same consent requirement as the plain signup form
+      // (views/signup.ejs checks this client-side too, but that can always
+      // be bypassed, so it's enforced here independently).
+      if (!acceptTerms || !acceptPrivacy || !acceptDpa) {
+        return res.status(400).json({ error: 'Please accept the Terms of Service, Privacy Policy, and Data Processing Agreement first.' });
+      }
+
       const referrer = refCode
         ? await prisma.affiliate.findUnique({ where: { referralCode: refCode.trim().toUpperCase() } })
         : null;
@@ -141,6 +146,7 @@ router.post('/merchant/google', async (req, res) => {
           referredByAffiliateId: referrer?.id || null,
         },
       });
+      await recordLegalAcceptances(merchant.id, req);
     }
 
     req.session.merchantId = merchant.id;

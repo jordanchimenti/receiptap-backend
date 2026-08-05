@@ -11,6 +11,7 @@ const multer = require('multer');
 const prisma = require('../lib/prisma');
 const { ensureMerchantAffiliate } = require('./affiliates');
 const { MERCHANT_AFFILIATE_RATE } = require('../services/affiliateRates');
+const { SHOPPER_CONSENT } = require('../config/legal');
 
 function requireAuth(req, res, next) {
   if (!req.session?.merchantId) return res.redirect('/login');
@@ -209,6 +210,7 @@ router.get('/dashboard/settings/receipt/preview/:layoutId', requireAuth, async (
     loyaltyCard: previewLoyaltyCard,
     partnerReferralUrl: previewPartnerReferralUrl,
     isMerchantCopy: false,
+    shopperConsentText: SHOPPER_CONSENT,
     transaction: {
       id: 'preview',
       orderNumber: 'PREVIEW-0001',

@@ -1,0 +1,56 @@
+<!-- views/legal-reaccept.ejs -->
+<!-- Shown when middleware/legalReacceptance.js finds a stale acceptance.
+     No policy text -- just the same three-checkbox pattern as signup. -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Updated Terms - ReceipTap</title>
+  <link rel="stylesheet" href="/css/receiptap.css" />
+</head>
+<body>
+  <div class="centered-shell">
+    <div class="auth-card">
+      <img src="/images/receiptap-logo.png" alt="ReceipTap" style="height: 48px; margin-bottom: 20px;" />
+      <h1 style="font-size: 22px; margin-bottom: 6px;">Our terms have been updated</h1>
+      <p style="font-size: 13.5px; color: var(--ink-soft); margin: 8px 0 24px; line-height: 1.5;">
+        Please review and accept the updated documents below to keep using your dashboard.
+      </p>
+
+      <div class="error-box" id="error-box" style="<%= error ? '' : 'display: none;' %>"><%= error %></div>
+
+      <form method="POST" action="/legal/reaccept">
+        <input type="hidden" name="next" value="<%= next %>" />
+
+        <div style="display:flex; flex-direction:column; gap:8px; margin-bottom:18px;">
+          <div style="display:flex; align-items:flex-start; gap:8px;">
+            <input type="checkbox" id="acceptTerms" name="acceptTerms" required style="margin-top:2px;" />
+            <label for="acceptTerms" style="font-size:13px; color:var(--ink-soft); line-height:1.4; font-weight:400;">
+              I agree to the <a href="/legal/terms" target="_blank" rel="noopener" style="color:var(--teal-deep); font-weight:600; text-decoration:none;">Terms of Service</a> (v<%= documents.TERMS.version %>)
+            </label>
+          </div>
+          <div style="display:flex; align-items:flex-start; gap:8px;">
+            <input type="checkbox" id="acceptPrivacy" name="acceptPrivacy" required style="margin-top:2px;" />
+            <label for="acceptPrivacy" style="font-size:13px; color:var(--ink-soft); line-height:1.4; font-weight:400;">
+              I agree to the <a href="/legal/privacy" target="_blank" rel="noopener" style="color:var(--teal-deep); font-weight:600; text-decoration:none;">Privacy Policy</a> (v<%= documents.PRIVACY.version %>)
+            </label>
+          </div>
+          <div style="display:flex; align-items:flex-start; gap:8px;">
+            <input type="checkbox" id="acceptDpa" name="acceptDpa" required style="margin-top:2px;" />
+            <label for="acceptDpa" style="font-size:13px; color:var(--ink-soft); line-height:1.4; font-weight:400;">
+              I agree to the <a href="/legal/dpa" target="_blank" rel="noopener" style="color:var(--teal-deep); font-weight:600; text-decoration:none;">Data Processing Agreement</a> (v<%= documents.DPA.version %>)
+            </label>
+          </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary">Continue to dashboard</button>
+      </form>
+
+      <form method="POST" action="/logout" style="margin-top: 20px; text-align: center;">
+        <button type="submit" style="background:none; border:none; padding:0; font-size:13px; color:var(--teal-deep); font-weight:600; cursor:pointer;">Log out instead</button>
+      </form>
+    </div>
+  </div>
+</body>
+</html>

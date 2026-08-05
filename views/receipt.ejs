@@ -124,6 +124,10 @@
     }
     .modal-title { font-size: 17px; font-weight: 700; margin-bottom: 4px; }
     .modal-subtitle { font-size: 13px; color: #666; margin-bottom: 18px; }
+    .consent-transactional { font-size: 11.5px; color: #999; margin: -12px 0 16px; line-height: 1.4; }
+    .consent-marketing-row { display: flex; align-items: flex-start; gap: 8px; margin: 2px 0 12px; text-align: left; }
+    .consent-marketing-row input[type=checkbox] { margin-top: 2px; flex-shrink: 0; }
+    .consent-marketing-row label { font-size: 12px; color: #666; line-height: 1.4; }
     #google-signin-btn { display: flex; justify-content: center; margin-bottom: 14px; }
     .modal-divider { display: flex; align-items: center; gap: 10px; font-size: 12px; color: #999; margin: 14px 0; }
     .modal-divider::before, .modal-divider::after { content: ''; flex: 1; height: 1px; background: #eee; }
@@ -271,6 +275,7 @@
     <div class="modal-box">
       <div class="modal-title">Save Your Receipt</div>
       <div class="modal-subtitle">Save this receipt and we'll automatically organize it by spending category and flag possible tax deductions — free, powered by AI.</div>
+      <div class="consent-transactional"><%= shopperConsentText.transactionalText %></div>
 
       <div id="google-signin-btn"></div>
 
@@ -278,6 +283,12 @@
 
       <div class="modal-error" id="modal-error"></div>
       <input type="email" id="modal-email-input" placeholder="you@example.com" />
+
+      <div class="consent-marketing-row">
+        <input type="checkbox" id="marketing-opt-in" />
+        <label for="marketing-opt-in"><%= shopperConsentText.marketingLabel %></label>
+      </div>
+
       <button class="primary" onclick="submitEmailCapture()">Continue</button>
 
       <div class="modal-close" onclick="closeSaveModal()">Cancel</div>
@@ -442,6 +453,13 @@
       runAction(pendingAction);
     }
 
+    // Read once per submit, not cached -- the checkbox is a single shared
+    // control for both the email and Google paths below, so whichever one
+    // the shopper actually uses picks up its current state at click time.
+    function marketingOptIn() {
+      return document.getElementById('marketing-opt-in').checked;
+    }
+
     async function submitEmailCapture() {
       const email = document.getElementById('modal-email-input').value.trim();
       if (!email) { showModalError('Enter your email to continue.'); return; }
@@ -449,7 +467,7 @@
       const res = await fetch(`/receipt/${TRANSACTION_ID}/capture-email`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email, marketingOptIn: marketingOptIn() }),
       });
       const data = await res.json();
       if (!res.ok) { showModalError(data.error || 'Something went wrong.'); return; }
@@ -461,7 +479,7 @@
       const res = await fetch(`/receipt/${TRANSACTION_ID}/capture-email-google`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ credential: response.credential }),
+        body: JSON.stringify({ credential: response.credential, marketingOptIn: marketingOptIn() }),
       });
       const data = await res.json();
       if (!res.ok) { showModalError(data.error || 'Google sign-in failed.'); return; }

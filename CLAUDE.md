@@ -20,11 +20,14 @@ Solo founder, first-time coder. Explain in plain language, one step at a time.
 ## Layout
 
 - `server.js` — mounts everything. Order matters, see Gotchas.
-- `routes/` — auth, pucks, receipt, webhooks, oauth-square, merchant-dashboard,
-  merchant-expenses, repeat-customers, analytics, pdf-export, theme-settings,
-  email-capture, customer-account, billing, admin
-- `middleware/` — subscriptionGate, requireAdmin, ownerFlag
-- `services/` — categorize-receipt, generate-receipt-pdf, stripeService
+- `routes/` — auth, legal, pucks, receipt, webhooks, oauth-square,
+  merchant-dashboard, merchant-expenses, repeat-customers, analytics,
+  pdf-export, theme-settings, email-capture, customer-account, billing, admin
+- `middleware/` — subscriptionGate, requireAdmin, ownerFlag, legalReacceptance
+- `services/` — categorize-receipt, generate-receipt-pdf, stripeService,
+  legalAcceptanceService, shopperConsentService
+- `config/legal.js` — single source of truth for legal-document and
+  consent-string versions. See Conventions.
 - `views/` — EJS pages; `views/partials/dashboard-header.ejs` is the merchant
   sidebar included by every dashboard page
 - `public/css/receiptap.css` — the whole design system, one file
@@ -41,6 +44,18 @@ Solo founder, first-time coder. Explain in plain language, one step at a time.
   Brand blue is `#056BFE`, sampled from the logo.
 - Never invent data for the UI. If a number can't be computed from real rows,
   don't display it.
+- `config/legal.js` is the only place legal-document and consent-string
+  versions live. Any change to the wording of a legal document (once
+  written) or the tap-screen consent strings (`SHOPPER_CONSENT` in that
+  file) **requires bumping that item's version string in the same commit**.
+  `LegalAcceptance`/`ShopperConsent` rows record whatever version was live
+  at the moment someone agreed — silently editing wording without bumping
+  the version breaks the ability to prove what a specific row's text
+  actually said.
+- `LegalAcceptance` and `ShopperConsent` are **append-only**. Never call
+  `.update()` on an existing row in either table — a new acceptance or
+  consent decision always inserts a new row, never overwrites the last one.
+  That's what makes them an audit trail instead of a settings table.
 
 ## Built and working
 
@@ -56,20 +71,32 @@ Solo founder, first-time coder. Explain in plain language, one step at a time.
 - Subscription gate on `/dashboard/*` (billing page stays reachable)
 - Owner-only `/admin` view, gated by `ADMIN_EMAILS` in `.env`
 - Landing page at `/`
+- Legal consent capture: three-checkbox signup gate (Terms/Privacy/DPA)
+  writing `LegalAcceptance` rows; a re-acceptance interstitial that redirects
+  a merchant to `/legal/reaccept` if `config/legal.js` has a newer version
+  than what they last accepted; tap-screen shopper consent (a plain
+  transactional notice + a separate, unchecked-by-default marketing opt-in)
+  writing `ShopperConsent` rows, logging declines the same way as grants
 
 ## Gotchas that have bitten us
 
 - **Mount order in `server.js`.** `ownerFlag` must be mounted before the
   dashboard routes or `isOwner` arrives too late to render. Admin routes are
-  mounted after billing.
+  mounted after billing. The legal re-acceptance gate follows the same
+  `/dashboard`-with-a-`/billing`-exception pattern as the subscription gate,
+  mounted right after it — a merchant who can't pay shouldn't be stopped on
+  a legal screen before they can even reach billing to fix that.
 - **Postgres enums.** You cannot `ALTER TYPE ... ADD VALUE` and then use that
   value as a `DEFAULT` in the same migration. Split it into two migrations.
 - **Supabase connection.** Use the session pooler host, not the direct db host.
   The direct host fails to connect.
 - **Stripe init.** Guard with `process.env.STRIPE_SECRET_KEY ? new Stripe(...)
   : null` — an empty key throws at startup and takes the whole server down.
-- **Prisma client.** This project has no `lib/prisma`. Each file does its own
-  `const { PrismaClient } = require('@prisma/client')`.
+- **Prisma client.** Every file shares one client via `require('../lib/prisma')`
+  (or `./lib/prisma` from `server.js`). Don't create a separate
+  `new PrismaClient()` anywhere — each instance opens its own connection pool,
+  and enough of them exhausts Supabase's session-pooler limit and crashes the
+  whole process, not just one request.
 - **Passive NFC.** The puck has no power and no radio. It can never report
   "online" or "offline". Any device-status UI must be about setup state
   (linked / pairing / needs linking), never connectivity.
@@ -86,6 +113,11 @@ Solo founder, first-time coder. Explain in plain language, one step at a time.
   rail: receipts-hub, analytics, repeat-customers, customer-emails,
   merchant-receipts, pos-setup, theme-settings, merchant-expenses.
 - Not deployed. Not in version control. Both worth doing early.
+- `/legal/terms`, `/legal/privacy`, `/legal/dpa` are stub "coming soon" pages
+  with no actual policy text yet — the checkboxes and acceptance-logging
+  infrastructure are real and working, the documents themselves aren't
+  written. Remember to bump the version in `config/legal.js` when they are
+  (see Conventions).
 
 ## Working style
 

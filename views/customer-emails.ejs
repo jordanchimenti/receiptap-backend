@@ -24,6 +24,23 @@
     .segment-lapsed { background: #fffbeb; color: #92400e; }
     .empty { text-align: center; color: #888; margin-top: 30px; font-size: 14px; }
     .segment-hint { background: #f9fafb; border-radius: 8px; padding: 12px 14px; font-size: 13px; color: #666; margin-top: 20px; }
+
+    .lookup-card { background: #f9fafb; border: 1px solid #eee; border-radius: 10px; padding: 18px 20px; margin-top: 4px; }
+    .lookup-card h2 { font-size: 15px; margin: 0 0 4px; }
+    .lookup-hint { font-size: 13px; color: #666; margin: 0 0 14px; }
+    .lookup-form { display: flex; gap: 8px; }
+    .lookup-form input[type=email] {
+      flex: 1; max-width: 320px; padding: 9px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px;
+    }
+    .btn-lookup, .btn-delete {
+      padding: 9px 16px; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;
+    }
+    .btn-lookup { background: #111; color: #fff; }
+    .btn-delete { background: #dc2626; color: #fff; }
+    .lookup-success { background: #ecfdf5; color: #047857; border-radius: 8px; padding: 10px 14px; font-size: 13.5px; margin-bottom: 14px; }
+    .lookup-empty { font-size: 13.5px; color: #666; margin-top: 14px; }
+    .lookup-preview { margin-top: 14px; font-size: 13.5px; color: #333; }
+    .lookup-preview ul { margin: 8px 0 14px; padding-left: 20px; line-height: 1.6; }
   </style>
 </head>
 <body>
@@ -37,6 +54,43 @@
   </div>
 
   <div class="app-body">
+
+  <div class="lookup-card">
+    <h2>Shopper Data Request</h2>
+    <p class="lookup-hint">If a shopper asks you to delete their data, look them up by email to see what exists, then remove it.</p>
+
+    <% if (deleted) { %>
+      <div class="lookup-success">Done — that shopper's data has been removed from your business.</div>
+    <% } %>
+
+    <form method="GET" action="/dashboard/customer-emails" class="lookup-form">
+      <input type="email" name="lookupEmail" placeholder="shopper@example.com" value="<%= lookupEmail %>" required />
+      <button type="submit" class="btn-lookup">Look Up</button>
+    </form>
+
+    <% if (lookupResult) { %>
+      <% if (!lookupResult.found) { %>
+        <div class="lookup-empty">No account found for <strong><%= lookupEmail %></strong>.</div>
+      <% } else if (lookupResult.details.Transaction_unlinked === 0 && lookupResult.details.ShopperConsent === 0 && lookupResult.details.LoyaltyCard === 0) { %>
+        <div class="lookup-empty">There's an account for <strong><%= lookupEmail %></strong>, but no data on file for them at your business.</div>
+      <% } else { %>
+        <div class="lookup-preview">
+          <p>Deleting <strong><%= lookupEmail %></strong> at your business will:</p>
+          <ul>
+            <li>Remove them as the named customer on <%= lookupResult.details.Transaction_unlinked %> receipt<%= lookupResult.details.Transaction_unlinked === 1 ? '' : 's' %> (the sale itself stays in your records, just without their name attached)</li>
+            <li>Delete <%= lookupResult.details.ShopperConsent %> consent record<%= lookupResult.details.ShopperConsent === 1 ? '' : 's' %></li>
+            <% if (lookupResult.details.LoyaltyCard > 0) { %>
+              <li>Delete their loyalty punch card</li>
+            <% } %>
+          </ul>
+          <form method="POST" action="/dashboard/customer-emails/delete" class="delete-confirm-form" data-confirm-email="<%= lookupEmail %>">
+            <input type="hidden" name="email" value="<%= lookupEmail %>" />
+            <button type="submit" class="btn-delete">Delete This Shopper's Data</button>
+          </form>
+        </div>
+      <% } %>
+    <% } %>
+  </div>
 
   <a class="export-link" href="/dashboard/customer-emails/export<%= activeFilter !== 'all' ? '?segment=' + activeFilter : '' %>">Export CSV<%= activeFilter !== 'all' ? ' (' + activeFilter + ')' : '' %></a>
 
@@ -71,5 +125,20 @@
   <% } %>
 
   </div>
+
+  <script>
+    // Reads the email from a data attribute rather than interpolating it
+    // into an inline onsubmit string -- keeps this immune to whatever
+    // characters happen to be in the address (quotes, etc.) rather than
+    // relying on escaping a server-rendered value inside a JS literal.
+    document.querySelectorAll('.delete-confirm-form').forEach(function (form) {
+      form.addEventListener('submit', function (e) {
+        var email = form.getAttribute('data-confirm-email');
+        if (!confirm('Delete all data for ' + email + ' at your business? This can\'t be undone.')) {
+          e.preventDefault();
+        }
+      });
+    });
+  </script>
 </body>
 </html>

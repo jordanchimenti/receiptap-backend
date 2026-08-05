@@ -14,15 +14,17 @@ datasource db {
 // Merchant — a business using ReceipTap
 // ---------------------------------------------------------------------------
 model Merchant {
-  id              String   @id @default(cuid())
+  id              String    @id @default(cuid())
   businessName    String
   ownerName       String? // the person's own name, e.g. "Welcome back, Jordan" -- distinct from businessName
   profilePhotoUrl String? // the person's own avatar photo, shown top-right in the dashboard rail
-  email           String   @unique
+  email           String    @unique
   passwordHash    String? // null for accounts created via "Sign in with Google" that never set a password
-  googleId        String?  @unique // set if they signed in with Google instead of email/password
-  createdAt       DateTime @default(now())
-  isActive        Boolean  @default(true) // false once a merchant deactivates their own account
+  googleId        String?   @unique // set if they signed in with Google instead of email/password
+  createdAt       DateTime  @default(now())
+  isActive        Boolean   @default(true) // false once a merchant deactivates their own account
+  deactivatedAt   DateTime? // when isActive went false -- services/dataRetentionService.js needs this to compute the DEACTIVATED_MERCHANT_PURGE_DAYS window; there is no reactivation flow anywhere in the app, so this is never cleared once set
+  dataPurgedAt    DateTime? // set once purgeDeactivatedMerchants() has scrubbed this merchant -- prevents reprocessing an already-purged row on every future run
 
   // "Forgot password?" flow -- token is single-use (cleared on success) and
   // expires 1 hour after being issued, whichever comes first.
@@ -54,13 +56,15 @@ model Merchant {
   subscriptionStatus   SubscriptionStatus @default(INCOMPLETE)
   trialEndsAt          DateTime?
 
-  pucks             Puck[]
-  issuedReceipts    Transaction[]     @relation("IssuedReceipts")
-  collectedExpenses Transaction[]     @relation("CollectedExpenses")
-  receiptTheme      ReceiptTheme?
-  loyaltyProgram    LoyaltyProgram?
-  loyaltyCards      LoyaltyCard[]
-  legalAcceptances  LegalAcceptance[]
+  pucks              Puck[]
+  issuedReceipts     Transaction[]      @relation("IssuedReceipts")
+  collectedExpenses  Transaction[]      @relation("CollectedExpenses")
+  receiptTheme       ReceiptTheme?
+  loyaltyProgram     LoyaltyProgram?
+  loyaltyCards       LoyaltyCard[]
+  legalAcceptances   LegalAcceptance[]
+  purgeLogsInitiated PurgeLog[]
+  emailSuppressions  EmailSuppression[]
 
   // Affiliate program -- set if this merchant signed up via someone's
   // referral link. A merchant can ALSO be an affiliate themselves (their own
@@ -394,4 +398,61 @@ model ShopperConsent {
 enum ConsentType {
   TRANSACTIONAL
   MARKETING
+}
+
+// ---------------------------------------------------------------------------
+// PurgeLog — one row per retention-purge run, scheduled or merchant-
+// triggered. This is the evidence that the retention policy in
+// config/retention.js is actually enforced, not just documented -- what
+// ran, how many rows (with a per-table breakdown in `details`), when, and
+// whether it errored partway through. APPEND-ONLY, same as
+// LegalAcceptance/ShopperConsent: never update a row after it's written.
+// ---------------------------------------------------------------------------
+model PurgeLog {
+  id          String  @id @default(cuid())
+  jobName     String // "purgeExpiredReceipts" | "purgeDeactivatedMerchants" | "deleteShopperByEmail" | "deleteShopperEverywhere"
+  dryRun      Boolean @default(true)
+  rowsDeleted Int     @default(0)
+  details     Json? // per-table breakdown, e.g. { "Transaction": 120, "ShopperConsent": 240 }
+  error       String? // set if the run failed partway through
+
+  // Set only for a merchant-triggered deletion (the dashboard action in
+  // Part E); null for the scheduled system job, which acts on no one's
+  // behalf but the retention policy itself.
+  initiatedByMerchantId String?
+  initiatedByMerchant   Merchant? @relation(fields: [initiatedByMerchantId], references: [id])
+
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+
+  @@index([jobName])
+}
+
+// ---------------------------------------------------------------------------
+// EmailSuppression — one row per (email, merchant) a shopper has opted out
+// of marketing from, or requested deleted. Deliberately survives
+// purgeExpiredReceipts/purgeDeactivatedMerchants/deleteShopperByEmail --
+// EMAIL_SUPPRESSION_RETENTION_MONTHS in config/retention.js is Infinity for
+// exactly this row, on purpose: if it aged out and got purged like
+// everything else, a shopper who unsubscribed could tap another receipt
+// from the same merchant later and get silently re-enrolled in marketing,
+// which defeats the entire point of a suppression list.
+//
+// `emailHash`, not `email` -- a plaintext table of "people who don't want
+// marketing" is itself a marketing-relevant list of real addresses, which
+// is exactly the kind of thing this model exists to prevent accumulating.
+// Hashed the same normalized way on write and on check (see
+// services/emailSuppressionService.js `hashEmail`), so a lookup is an exact
+// hash match, never a decryption.
+// ---------------------------------------------------------------------------
+model EmailSuppression {
+  id         String   @id @default(cuid())
+  emailHash  String // sha256 of the lowercased, trimmed email -- see services/emailSuppressionService.js
+  merchantId String // scoped per-merchant, matching how ShopperConsent MARKETING consent is itself per-merchant, not global
+  merchant   Merchant @relation(fields: [merchantId], references: [id])
+
+  suppressedAt DateTime @default(now())
+  reason       String // e.g. "unsubscribed" | "deletion_requested"
+
+  @@index([emailHash, merchantId])
 }

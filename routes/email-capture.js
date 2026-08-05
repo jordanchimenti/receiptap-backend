@@ -11,6 +11,7 @@ const { OAuth2Client } = require('google-auth-library');
 const { categorizeTransaction } = require('../services/categorize-receipt');
 const { incrementLoyaltyPunch } = require('./loyalty');
 const { recordShopperConsent } = require('../services/shopperConsentService');
+const { deleteShopperByEmail } = require('../services/dataRetentionService');
 const prisma = require('../lib/prisma');
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
@@ -68,7 +69,7 @@ router.post('/receipt/:transactionId/capture-email', async (req, res) => {
     data: { customerId: customer.id },
   });
   await incrementLoyaltyPunch(transaction.merchantId, customer.id);
-  await recordShopperConsent(transaction.id, marketingOptIn, req);
+  await recordShopperConsent({ receiptId: transaction.id, merchantId: transaction.merchantId, email, marketingGranted: marketingOptIn }, req);
 
   // Kick off AI categorization — doesn't block this response
   if (!transaction.aiCategorizedAt) {
@@ -118,7 +119,7 @@ router.post('/receipt/:transactionId/capture-email-google', async (req, res) => 
     data: { customerId: customer.id },
   });
   await incrementLoyaltyPunch(transaction.merchantId, customer.id);
-  await recordShopperConsent(transaction.id, marketingOptIn, req);
+  await recordShopperConsent({ receiptId: transaction.id, merchantId: transaction.merchantId, email, marketingGranted: marketingOptIn }, req);
 
   if (!transaction.aiCategorizedAt) {
     categorizeInBackground(transaction, transaction.merchant.businessName);
@@ -177,6 +178,14 @@ router.get('/dashboard/customer-emails', requireMerchantAuth, async (req, res) =
   const filter = ['new', 'repeat', 'lapsed'].includes(req.query.segment) ? req.query.segment : 'all';
   const filtered = filter === 'all' ? allCustomers : allCustomers.filter((c) => c.segment === filter);
 
+  // Shopper data-request lookup -- a merchant checking what a specific
+  // deletion request would actually remove, before confirming it. Always a
+  // dry run: this route never deletes anything itself, only previews.
+  const lookupEmail = typeof req.query.lookupEmail === 'string' ? req.query.lookupEmail.trim() : '';
+  const lookupResult = lookupEmail
+    ? await deleteShopperByEmail(lookupEmail, req.session.merchantId, { dryRun: true })
+    : null;
+
   res.render('customer-emails', {
     emails: filtered.map((c) => ({
       ...c,
@@ -190,7 +199,22 @@ router.get('/dashboard/customer-emails', requireMerchantAuth, async (req, res) =
       lapsed: allCustomers.filter((c) => c.segment === 'lapsed').length,
     },
     activeFilter: filter,
+    lookupEmail,
+    lookupResult,
+    deleted: req.query.deleted === '1',
   });
+});
+
+// Confirms and executes what the lookup above only previewed. Deliberately
+// separate from the GET route -- a lookup is a read, this is the
+// irreversible action, and it should only ever happen from an explicit
+// form POST, never as a side effect of loading a page.
+router.post('/dashboard/customer-emails/delete', requireMerchantAuth, async (req, res) => {
+  const email = typeof req.body.email === 'string' ? req.body.email.trim() : '';
+  if (!email) return res.redirect('/dashboard/customer-emails');
+
+  await deleteShopperByEmail(email, req.session.merchantId, { dryRun: false });
+  res.redirect('/dashboard/customer-emails?deleted=1');
 });
 
 router.get('/dashboard/customer-emails/export', requireMerchantAuth, async (req, res) => {

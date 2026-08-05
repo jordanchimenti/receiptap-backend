@@ -120,6 +120,54 @@ setInterval(() => {
   runScheduledPayouts().catch((err) => console.error('Scheduled affiliate payout run failed:', err));
 }, PAYOUT_CHECK_INTERVAL_MS);
 
+// Retention purge: enforces config/retention.js daily. No Railway cron
+// service is configured for this app (single `node server.js` process, no
+// railway.json/Procfile) -- same interval-on-boot approach as the payout
+// scheduler above, not a real distributed cron. See CLAUDE.md for the
+// tradeoff this implies if the app is ever scaled to multiple instances.
+//
+// RETENTION_PURGE_ENABLED gates LIVE deletion. Unset (or anything other
+// than the literal string "true") keeps every run in dry-run mode
+// regardless of dataRetentionService's own default -- there is no way to
+// go live except by explicitly setting this in the environment.
+const { purgeExpiredReceipts, purgeDeactivatedMerchants } = require('./services/dataRetentionService');
+const RETENTION_PURGE_ENABLED = process.env.RETENTION_PURGE_ENABLED === 'true';
+const RETENTION_PURGE_INTERVAL_MS = 24 * 60 * 60 * 1000; // daily
+const RETENTION_PURGE_BOOT_DELAY_MS = 60 * 1000; // let the app finish starting up first
+
+// In-memory only -- sufficient because this runs as a single process, not
+// a real lock against another instance also running this same job. Guards
+// against the (currently impossible, but cheap to guard anyway) case of a
+// run still in progress when the next interval tick fires.
+let retentionPurgeRunning = false;
+
+async function runRetentionPurge() {
+  if (retentionPurgeRunning) {
+    console.warn('[retention] previous purge run still in progress -- skipping this tick');
+    return;
+  }
+  retentionPurgeRunning = true;
+  try {
+    const dryRun = !RETENTION_PURGE_ENABLED;
+    console.log(`[retention] starting daily purge run (dryRun: ${dryRun})`);
+    const receipts = await purgeExpiredReceipts({ dryRun });
+    const merchants = await purgeDeactivatedMerchants({ dryRun });
+    console.log('[retention] purgeExpiredReceipts:', JSON.stringify(receipts.details), receipts.error || '');
+    console.log('[retention] purgeDeactivatedMerchants:', JSON.stringify(merchants.details), merchants.error || '');
+  } catch (err) {
+    console.error('[retention] daily purge run failed:', err);
+  } finally {
+    retentionPurgeRunning = false;
+  }
+}
+
+setTimeout(() => {
+  runRetentionPurge().catch((err) => console.error('[retention] unexpected error:', err));
+  setInterval(() => {
+    runRetentionPurge().catch((err) => console.error('[retention] unexpected error:', err));
+  }, RETENTION_PURGE_INTERVAL_MS);
+}, RETENTION_PURGE_BOOT_DELAY_MS);
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`ReceipTap backend running on http://localhost:${PORT}`);

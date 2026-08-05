@@ -92,8 +92,11 @@ router.post('/dashboard/settings/account/disconnect-pos', requireAuth, async (re
 });
 
 // POST /dashboard/settings/account/deactivate — cancels billing, blocks
-// future logins, but keeps historical receipts/transactions intact (real
-// data other merchants' customers may still have in their own wallets).
+// future logins. Data isn't touched immediately (a mistaken deactivation
+// should be reversible without having already lost anything), but sets
+// deactivatedAt so services/dataRetentionService.js's purgeDeactivatedMerchants()
+// knows when the DEACTIVATED_MERCHANT_PURGE_DAYS grace window (config/retention.js)
+// started -- after which this merchant's data is actually purged for real.
 router.post('/dashboard/settings/account/deactivate', requireAuth, async (req, res) => {
   const merchant = await prisma.merchant.findUnique({ where: { id: req.session.merchantId } });
 
@@ -107,7 +110,7 @@ router.post('/dashboard/settings/account/deactivate', requireAuth, async (req, r
 
   await prisma.merchant.update({
     where: { id: merchant.id },
-    data: { isActive: false, subscriptionStatus: 'CANCELED' },
+    data: { isActive: false, deactivatedAt: new Date(), subscriptionStatus: 'CANCELED' },
   });
 
   req.session.destroy(() => {

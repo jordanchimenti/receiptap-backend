@@ -55,6 +55,15 @@ Solo founder, first-time coder. Explain in plain language, one step at a time.
   at the moment someone agreed — silently editing wording without bumping
   the version breaks the ability to prove what a specific row's text
   actually said.
+- The Data Processing Agreement is incorporated **by reference** into the
+  Terms of Service (`views/partials/legal-terms-content.ejs`, "Data and
+  privacy" section) — a merchant's single signup checkbox covers agreeing
+  to both, plus having read the Privacy Policy. Incorporation by reference
+  means a pointer, not a merge: DPA content stays on its own page and is
+  versioned completely independently of `TERMS.version`. In particular,
+  **adding, replacing, or dropping a subprocessor bumps `DPA.version`
+  only** — it does not require a `TERMS.version` bump, since the Terms'
+  own wording didn't change, only what the incorporated DPA says did.
 - `LegalAcceptance` and `ShopperConsent` are **append-only**. Never call
   `.update()` on an existing row in either table — a new acceptance or
   consent decision always inserts a new row, never overwrites the last one.
@@ -91,12 +100,20 @@ Solo founder, first-time coder. Explain in plain language, one step at a time.
 - Subscription gate on `/dashboard/*` (billing page stays reachable)
 - Owner-only `/admin` view, gated by `ADMIN_EMAILS` in `.env`
 - Landing page at `/`
-- Legal consent capture: three-checkbox signup gate (Terms/Privacy/DPA)
-  writing `LegalAcceptance` rows; a re-acceptance interstitial that redirects
-  a merchant to `/legal/reaccept` if `config/legal.js` has a newer version
-  than what they last accepted; tap-screen shopper consent (a plain
-  transactional notice + a separate, unchecked-by-default marketing opt-in)
-  writing `ShopperConsent` rows, logging declines the same way as grants
+- Legal consent capture: ONE checkbox at signup ("I agree to the Terms of
+  Service, which include the Data Processing Agreement, and I have read
+  the Privacy Policy") still writes THREE `LegalAcceptance` rows
+  (TERMS/PRIVACY/DPA) — see Conventions for why. A re-acceptance
+  interstitial redirects a merchant to `/legal/reaccept` if
+  `config/legal.js` has a newer version of *any* of the three than what
+  they last accepted, names only the document(s) that actually changed,
+  and on submit writes a fresh row only for those — a merchant whose
+  TERMS/PRIVACY are still current isn't re-stamped just because DPA moved
+  (`services/legalAcceptanceService.js`'s `getStaleDocumentTypes()` is the
+  shared source of truth for "what's actually behind" here). Tap-screen
+  shopper consent (a plain transactional notice + a separate,
+  unchecked-by-default marketing opt-in) writing `ShopperConsent` rows,
+  logging declines the same way as grants
 - Data retention infrastructure: `config/retention.js` defines every window;
   `services/dataRetentionService.js` purges expired receipts and idle
   shopper accounts, purges deactivated merchants past their grace period

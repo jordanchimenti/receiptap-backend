@@ -8,7 +8,7 @@ not a replacement for reading the page.
 Covers: **Privacy Policy** (`/legal/privacy`, rendered from
 `views/partials/legal-privacy-content.ejs`, version `2026-08-05.2`) and
 **Terms of Service** (`/legal/terms`, rendered from
-`views/partials/legal-terms-content.ejs`, version `2026-08-05.2`).
+`views/partials/legal-terms-content.ejs`, version `2026-08-05.3`).
 
 The Data Processing Agreement (`/legal/dpa`) has no drafted content yet —
 it still renders the "coming soon" stub, so there is nothing to review on
@@ -321,6 +321,37 @@ schedule today.
 **Needed:** same as the Privacy Policy's equivalent note — either turn on
 live purging so the stated policy matches reality, or have a lawyer
 confirm stating it as a forward-looking commitment is acceptable.
+
+---
+
+## 20. Some merchants may need a separately signed DPA, not just the click-through
+
+**Where:** not an inline `[[REVIEW]]` marker on any page — a process note,
+since the click-through DPA (incorporated by reference into the Terms as of
+`TERMS.version` `2026-08-05.3`, see item 6 above and the "Data Processing
+Agreement" subsection of `views/partials/legal-terms-content.ejs`) is a
+one-size-fits-all mechanism, and not every prospective customer will accept
+that as-is.
+
+**Issue:** some merchants — healthcare providers, financial-services
+businesses, and larger companies going through their own procurement or
+vendor-security review — routinely require a DPA to be separately
+negotiated and signed (or at least countersigned) before they'll agree to
+use a vendor, rather than accepting a click-through version bundled into a
+Terms-of-Service checkbox. There's no code path for this today: signup
+only supports the single-checkbox flow from Part B of this task, which
+records agreement to the click-through DPA and nothing else.
+
+**Needed:** treat the click-through DPA as the **default** path for
+everyone, and the countersigned-PDF DPA as an **exception path** for
+accounts that ask for one — handled manually (a real negotiated document,
+signed outside this app) rather than by building signup-flow support for
+it now. Worth deciding, before it comes up with a real prospective
+customer: who at the business fields that request, what the fallback
+document looks like, and whether a merchant with a separately-signed DPA
+should still have their `LegalAcceptance` DPA row written (documenting
+that the click-through was superseded) or handled entirely outside this
+table.
 
 ---
 

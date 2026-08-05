@@ -49,21 +49,9 @@
 
         <div style="display:flex; flex-direction:column; gap:8px; margin: 14px 0 18px;">
           <div style="display:flex; align-items:flex-start; gap:8px;">
-            <input type="checkbox" id="acceptTerms" name="acceptTerms" required style="margin-top:2px;" />
-            <label for="acceptTerms" style="font-size:13px; color:var(--ink-soft); line-height:1.4; font-weight:400;">
-              I agree to the <a href="/legal/terms" target="_blank" rel="noopener" style="color:var(--teal-deep); font-weight:600; text-decoration:none;">Terms of Service</a>
-            </label>
-          </div>
-          <div style="display:flex; align-items:flex-start; gap:8px;">
-            <input type="checkbox" id="acceptPrivacy" name="acceptPrivacy" required style="margin-top:2px;" />
-            <label for="acceptPrivacy" style="font-size:13px; color:var(--ink-soft); line-height:1.4; font-weight:400;">
-              I agree to the <a href="/legal/privacy" target="_blank" rel="noopener" style="color:var(--teal-deep); font-weight:600; text-decoration:none;">Privacy Policy</a>
-            </label>
-          </div>
-          <div style="display:flex; align-items:flex-start; gap:8px;">
-            <input type="checkbox" id="acceptDpa" name="acceptDpa" required style="margin-top:2px;" />
-            <label for="acceptDpa" style="font-size:13px; color:var(--ink-soft); line-height:1.4; font-weight:400;">
-              I agree to the <a href="/legal/dpa" target="_blank" rel="noopener" style="color:var(--teal-deep); font-weight:600; text-decoration:none;">Data Processing Agreement</a>
+            <input type="checkbox" id="acceptAll" name="acceptAll" required style="margin-top:2px;" />
+            <label for="acceptAll" style="font-size:13px; color:var(--ink-soft); line-height:1.4; font-weight:400;">
+              I agree to the <a href="/legal/terms" target="_blank" rel="noopener" style="color:var(--teal-deep); font-weight:600; text-decoration:none;">Terms of Service</a>, which include the <a href="/legal/dpa" target="_blank" rel="noopener" style="color:var(--teal-deep); font-weight:600; text-decoration:none;">Data Processing Agreement</a>, and I have read the <a href="/legal/privacy" target="_blank" rel="noopener" style="color:var(--teal-deep); font-weight:600; text-decoration:none;">Privacy Policy</a>.
             </label>
           </div>
         </div>
@@ -84,21 +72,19 @@
       const NEXT_PATH = '<%= typeof next !== 'undefined' ? next : '' %>';
 
       // Google's button skips our own <form> entirely (it's Google's widget,
-      // not a submit we control), so the "required" checkboxes never get a
+      // not a submit we control), so the "required" checkbox never gets a
       // chance to block it the normal browser way -- checked by hand here
       // instead. This is a convenience check only; /merchant/google enforces
       // the same rule server-side for any NEW account, since a client-side
       // check alone can always be bypassed.
       function consentChecked() {
-        return document.getElementById('acceptTerms').checked
-          && document.getElementById('acceptPrivacy').checked
-          && document.getElementById('acceptDpa').checked;
+        return document.getElementById('acceptAll').checked;
       }
 
       async function handleGoogleSignIn(response) {
         if (!consentChecked()) {
           const el = document.getElementById('error-box');
-          el.textContent = 'Please accept the Terms of Service, Privacy Policy, and Data Processing Agreement first.';
+          el.textContent = "Please agree to the Terms of Service (which include the Data Processing Agreement), and confirm you've read the Privacy Policy, first.";
           el.style.display = 'block';
           return;
         }
@@ -110,9 +96,7 @@
             credential: response.credential,
             refCode: REF_CODE,
             next: NEXT_PATH,
-            acceptTerms: true,
-            acceptPrivacy: true,
-            acceptDpa: true,
+            acceptAll: true,
           }),
         });
         const data = await res.json();

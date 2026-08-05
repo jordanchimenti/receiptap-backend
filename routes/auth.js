@@ -30,15 +30,19 @@ router.get('/login', (req, res) => res.render('login', {
 }));
 
 router.post('/signup', async (req, res) => {
-  const { ownerName, businessName, email, password, refCode, next, acceptTerms, acceptPrivacy, acceptDpa } = req.body;
+  const { ownerName, businessName, email, password, refCode, next, acceptAll } = req.body;
 
   if (!ownerName || !businessName || !email || !password) {
     return res.render('signup', { error: 'All fields are required', refCode: refCode || '', next: next || '', googleClientId: process.env.GOOGLE_CLIENT_ID || '' });
   }
-  // Client-side "required" on the checkboxes is UX only -- this is the real
-  // gate. A request with any of the three missing never creates an account.
-  if (!acceptTerms || !acceptPrivacy || !acceptDpa) {
-    return res.render('signup', { error: 'You must accept the Terms of Service, Privacy Policy, and Data Processing Agreement to create an account.', refCode: refCode || '', next: next || '', googleClientId: process.env.GOOGLE_CLIENT_ID || '' });
+  // Client-side "required" on the checkbox is UX only -- this is the real
+  // gate. A request without it never creates an account. One checkbox now
+  // covers all three documents (Terms + the DPA it incorporates by
+  // reference, plus having read the Privacy Policy) -- see
+  // recordLegalAcceptances() below for why that still means three
+  // LegalAcceptance rows, not one.
+  if (!acceptAll) {
+    return res.render('signup', { error: "You must agree to the Terms of Service (which include the Data Processing Agreement), and confirm you've read the Privacy Policy, to create an account.", refCode: refCode || '', next: next || '', googleClientId: process.env.GOOGLE_CLIENT_ID || '' });
   }
 
   try {
@@ -100,7 +104,7 @@ router.post('/logout', (req, res) => {
 // gets an editable placeholder business name -- same tradeoff already made
 // for the equivalent customer-facing flow in routes/customer-account.js.
 router.post('/merchant/google', async (req, res) => {
-  const { credential, refCode, next, acceptTerms, acceptPrivacy, acceptDpa } = req.body;
+  const { credential, refCode, next, acceptAll } = req.body;
   if (!credential) return res.status(400).json({ error: 'Missing Google credential' });
 
   let payload;
@@ -129,8 +133,8 @@ router.post('/merchant/google', async (req, res) => {
       // New account -- same consent requirement as the plain signup form
       // (views/signup.ejs checks this client-side too, but that can always
       // be bypassed, so it's enforced here independently).
-      if (!acceptTerms || !acceptPrivacy || !acceptDpa) {
-        return res.status(400).json({ error: 'Please accept the Terms of Service, Privacy Policy, and Data Processing Agreement first.' });
+      if (!acceptAll) {
+        return res.status(400).json({ error: "Please agree to the Terms of Service (which include the Data Processing Agreement), and confirm you've read the Privacy Policy, first." });
       }
 
       const referrer = refCode

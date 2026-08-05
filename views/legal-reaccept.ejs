@@ -1,6 +1,13 @@
 <!-- views/legal-reaccept.ejs -->
 <!-- Shown when middleware/legalReacceptance.js finds a stale acceptance.
-     No policy text -- just the same three-checkbox pattern as signup. -->
+     No policy text -- just the same single-checkbox pattern as signup
+     (views/signup.ejs), naming whichever document(s) actually changed
+     (changedLabel, built in routes/legal.js from getStaleDocumentTypes()).
+     The checkbox's own wording always names all three regardless of which
+     one changed -- ticking it is still acceptance of all three, same
+     reasoning as signup (see legalAcceptanceService.js). Only the
+     document(s) that were actually stale get a new LegalAcceptance row on
+     submit, though -- see routes/legal.js. -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -13,9 +20,9 @@
   <div class="centered-shell">
     <div class="auth-card">
       <img src="/images/receiptap-logo.png" alt="ReceipTap" style="height: 48px; margin-bottom: 20px;" />
-      <h1 style="font-size: 22px; margin-bottom: 6px;">Our terms have been updated</h1>
+      <h1 style="font-size: 22px; margin-bottom: 6px;">Our <%= changedLabel %> <%= changedLabel.includes(' and ') || changedLabel.includes(',') ? 'have' : 'has' %> been updated</h1>
       <p style="font-size: 13.5px; color: var(--ink-soft); margin: 8px 0 24px; line-height: 1.5;">
-        Please review and accept the updated documents below to keep using your dashboard.
+        Please review and agree below to keep using your dashboard.
       </p>
 
       <div class="error-box" id="error-box" style="<%= error ? '' : 'display: none;' %>"><%= error %></div>
@@ -25,21 +32,9 @@
 
         <div style="display:flex; flex-direction:column; gap:8px; margin-bottom:18px;">
           <div style="display:flex; align-items:flex-start; gap:8px;">
-            <input type="checkbox" id="acceptTerms" name="acceptTerms" required style="margin-top:2px;" />
-            <label for="acceptTerms" style="font-size:13px; color:var(--ink-soft); line-height:1.4; font-weight:400;">
-              I agree to the <a href="/legal/terms" target="_blank" rel="noopener" style="color:var(--teal-deep); font-weight:600; text-decoration:none;">Terms of Service</a> (v<%= documents.TERMS.version %>)
-            </label>
-          </div>
-          <div style="display:flex; align-items:flex-start; gap:8px;">
-            <input type="checkbox" id="acceptPrivacy" name="acceptPrivacy" required style="margin-top:2px;" />
-            <label for="acceptPrivacy" style="font-size:13px; color:var(--ink-soft); line-height:1.4; font-weight:400;">
-              I agree to the <a href="/legal/privacy" target="_blank" rel="noopener" style="color:var(--teal-deep); font-weight:600; text-decoration:none;">Privacy Policy</a> (v<%= documents.PRIVACY.version %>)
-            </label>
-          </div>
-          <div style="display:flex; align-items:flex-start; gap:8px;">
-            <input type="checkbox" id="acceptDpa" name="acceptDpa" required style="margin-top:2px;" />
-            <label for="acceptDpa" style="font-size:13px; color:var(--ink-soft); line-height:1.4; font-weight:400;">
-              I agree to the <a href="/legal/dpa" target="_blank" rel="noopener" style="color:var(--teal-deep); font-weight:600; text-decoration:none;">Data Processing Agreement</a> (v<%= documents.DPA.version %>)
+            <input type="checkbox" id="acceptAll" name="acceptAll" required style="margin-top:2px;" />
+            <label for="acceptAll" style="font-size:13px; color:var(--ink-soft); line-height:1.4; font-weight:400;">
+              I agree to the <a href="/legal/terms" target="_blank" rel="noopener" style="color:var(--teal-deep); font-weight:600; text-decoration:none;">Terms of Service</a> (v<%= documents.TERMS.version %>), which include the <a href="/legal/dpa" target="_blank" rel="noopener" style="color:var(--teal-deep); font-weight:600; text-decoration:none;">Data Processing Agreement</a> (v<%= documents.DPA.version %>), and I have read the <a href="/legal/privacy" target="_blank" rel="noopener" style="color:var(--teal-deep); font-weight:600; text-decoration:none;">Privacy Policy</a> (v<%= documents.PRIVACY.version %>).
             </label>
           </div>
         </div>

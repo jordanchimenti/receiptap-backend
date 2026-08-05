@@ -1,37 +1,26 @@
 // middleware/legalReacceptance.js
 // Blocks dashboard access if a merchant's most recent acceptance of any
-// legal document is behind the version currently live in config/legal.js --
-// including merchants who signed up before this feature existed and have
-// no acceptance rows at all (treated the same as "outdated", not an error).
+// legal document (TERMS/PRIVACY/DPA, checked independently) is behind the
+// version currently live in config/legal.js -- including merchants who
+// signed up before this feature existed and have no acceptance rows at
+// all (treated the same as "outdated", not an error). A version bump to
+// ANY ONE of the three is enough to redirect -- see
+// getStaleDocumentTypes() in services/legalAcceptanceService.js, the
+// shared source of truth for this check (also used by routes/legal.js to
+// render/record the interstitial itself).
 //
 // Mounted on /dashboard in server.js, same pattern as subscriptionGate.
 // Ordering: this only needs to run after ownerFlag has set res.locals for
 // the views it might render on its way to a redirect -- ownerFlag's own
 // constraint (CLAUDE.md: must be mounted before the dashboard routes) is
 // unaffected either way, since this middleware never touches res.locals.isOwner.
-const prisma = require('../lib/prisma');
-const { LEGAL_DOCUMENTS, isNewerVersion } = require('../config/legal');
+const { getStaleDocumentTypes } = require('../services/legalAcceptanceService');
 
 async function requireCurrentLegalAcceptance(req, res, next) {
   try {
-    const documentTypes = Object.keys(LEGAL_DOCUMENTS);
+    const staleTypes = await getStaleDocumentTypes(req.session.merchantId);
 
-    const latestByType = await Promise.all(
-      documentTypes.map((documentType) =>
-        prisma.legalAcceptance.findFirst({
-          where: { merchantId: req.session.merchantId, documentType },
-          orderBy: { acceptedAt: 'desc' },
-        })
-      )
-    );
-
-    const isStale = documentTypes.some((documentType, i) => {
-      const latest = latestByType[i];
-      if (!latest) return true; // no acceptance on file at all
-      return isNewerVersion(LEGAL_DOCUMENTS[documentType].version, latest.version);
-    });
-
-    if (isStale) {
+    if (staleTypes.length > 0) {
       return res.redirect(`/legal/reaccept?next=${encodeURIComponent(req.originalUrl)}`);
     }
 

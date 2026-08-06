@@ -2,9 +2,12 @@
 // A demo-tier merchant (Merchant.isDemoAccount) signed up free, with no
 // card, specifically to design their receipt before committing to a paid
 // plan -- they never have a real Stripe subscription. Restricts them to
-// exactly two things: receipt design (what they're here for) and billing
-// (their path to actually upgrade). Everything else on /dashboard redirects
-// to receipt design.
+// three things: receipt design (what they're here for), billing (their
+// path to actually upgrade), and the Merchant Partner Program (referring
+// other businesses doesn't require a paid subscription -- affiliate-
+// dashboard.ejs already shows the "not currently earning" banner on its
+// own when isEligible is false, same as any merchant whose subscription
+// isn't ACTIVE). Everything else on /dashboard redirects to receipt design.
 //
 // Mounted before subscriptionGate in server.js. requireActiveSubscription
 // (middleware/subscriptionGate.js) separately skips its own check for demo
@@ -14,7 +17,7 @@
 // other rather than fighting over the same request.
 const prisma = require('../lib/prisma');
 
-const ALLOWED_PATH_PREFIXES = ['/settings/receipt', '/billing'];
+const ALLOWED_PATH_PREFIXES = ['/settings/receipt', '/billing', '/referrals'];
 
 async function requireDemoAccess(req, res, next) {
   try {

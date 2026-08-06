@@ -136,6 +136,7 @@ async function buildAffiliateView(affiliate) {
     rate,
     isEligible,
     ownSubscriptionStatus: ownMerchant?.subscriptionStatus || null,
+    isDemoAccount: ownMerchant?.isDemoAccount || false,
     stripeConnectOnboarded: affiliate.stripeConnectOnboarded,
     payoutFrequency: affiliate.payoutFrequency,
     churnRate,

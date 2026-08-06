@@ -64,7 +64,7 @@
 </head>
 <body>
   <% if (portalType === 'merchant') { %>
-    <%- include('partials/dashboard-header', { activeNav: 'referrals' }) %>
+    <%- include('partials/dashboard-header', { activeNav: 'referrals', isDemoAccount: isDemoAccount }) %>
     <div class="topbar">
       <div>
         <h1>Merchant Partner Program</h1>

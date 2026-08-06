@@ -10,6 +10,7 @@ const express = require('express');
 const router = express.Router();
 const prisma = require('../lib/prisma');
 const { SHOPPER_CONSENT } = require('../config/legal');
+const { getBaseUrl } = require('../lib/baseUrl');
 
 router.get('/demo/receipt', async (req, res) => {
   const merchant = await prisma.merchant.findUnique({ where: { email: 'jordanchimenti98@gmail.com' } });
@@ -43,7 +44,7 @@ router.get('/demo/receipt', async (req, res) => {
   };
 
   const partnerReferralUrl = affiliate
-    ? `${req.protocol}://${req.get('host')}/signup?ref=${affiliate.referralCode}`
+    ? `${getBaseUrl(req)}/signup?ref=${affiliate.referralCode}`
     : null;
 
   res.render('receipt', {

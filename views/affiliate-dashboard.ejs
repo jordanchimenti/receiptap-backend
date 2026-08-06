@@ -48,6 +48,18 @@
     .status-pill.active, .status-pill.paid { background: #ecfdf5; color: #047857; }
     .status-pill.pending { background: #fffbeb; color: #b45309; }
     .status-pill.other { background: #f4f4f5; color: #666; }
+
+    .code-message { margin-top: 10px; font-size: 12.5px; padding: 8px 10px; border-radius: 6px; }
+    .code-message.error { background: #fef2f2; color: #dc2626; }
+    .code-message.success { background: #ecfdf5; color: #047857; }
+    .custom-code-form { margin-top: 14px; }
+    .custom-code-form label { font-size: 12px; color: #888; display: block; margin-bottom: 6px; }
+    .custom-code-row { display: flex; align-items: center; gap: 6px; }
+    .custom-code-prefix { font-size: 12.5px; color: #999; font-family: ui-monospace, monospace; white-space: nowrap; }
+    .custom-code-row input {
+      flex: 1; min-width: 0; padding: 9px 10px; border: 1px solid #ddd; border-radius: 6px;
+      font-size: 13px; font-family: ui-monospace, monospace; text-transform: uppercase;
+    }
   </style>
 </head>
 <body>
@@ -78,6 +90,26 @@
       <input type="text" id="referral-url" value="<%= referralUrl %>" readonly />
       <button type="button" class="copy-btn" onclick="copyReferralLink()">Copy</button>
     </div>
+
+    <% if (typeof codeError !== 'undefined' && codeError) { %>
+      <div class="code-message error"><%= codeError %></div>
+    <% } %>
+    <% if (typeof codeSuccess !== 'undefined' && codeSuccess) { %>
+      <div class="code-message success">Your link is updated.</div>
+    <% } %>
+
+    <form method="POST" action="/affiliate/referral-code" class="custom-code-form">
+      <label for="referralCode">Customize the code at the end of your link</label>
+      <div class="custom-code-row">
+        <span class="custom-code-prefix">/signup?ref=</span>
+        <input
+          type="text" id="referralCode" name="referralCode"
+          value="<%= referralCode %>" maxlength="20"
+          pattern="[A-Za-z0-9]{3,20}" title="Letters and numbers only, 3-20 characters"
+        />
+        <button type="submit" class="copy-btn">Save</button>
+      </div>
+    </form>
   </div>
 
   <% if (portalType === 'merchant') { %>
@@ -149,6 +181,10 @@
     <div class="stat-box">
       <div class="stat-num">$<%= paidTotal %></div>
       <div class="stat-label">Paid out</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-num"><%= churnRate !== null ? churnRate + '%' : '—' %></div>
+      <div class="stat-label">Churn rate</div>
     </div>
   </div>
 

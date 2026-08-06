@@ -5,6 +5,7 @@ const express = require('express');
 const router = express.Router();
 const prisma = require('../lib/prisma');
 const { SHOPPER_CONSENT } = require('../config/legal');
+const { getBaseUrl } = require('../lib/baseUrl');
 
 router.get('/receipt/:transactionId', async (req, res) => {
   const transaction = await prisma.transaction.findUnique({
@@ -61,7 +62,7 @@ router.get('/receipt/:transactionId', async (req, res) => {
   };
 
   const partnerReferralUrl = !isMerchantCopy && safeTheme.showPartnerProgram && partnerAffiliate
-    ? `${req.protocol}://${req.get('host')}/signup?ref=${partnerAffiliate.referralCode}`
+    ? `${getBaseUrl(req)}/signup?ref=${partnerAffiliate.referralCode}`
     : null;
 
   res.render('receipt', {

@@ -12,6 +12,7 @@ const prisma = require('../lib/prisma');
 const { ensureMerchantAffiliate } = require('./affiliates');
 const { MERCHANT_AFFILIATE_RATE } = require('../services/affiliateRates');
 const { SHOPPER_CONSENT } = require('../config/legal');
+const { getBaseUrl } = require('../lib/baseUrl');
 
 function requireAuth(req, res, next) {
   if (!req.session?.merchantId) return res.redirect('/login');
@@ -199,7 +200,7 @@ router.get('/dashboard/settings/receipt/preview/:layoutId', requireAuth, async (
   // actually save the toggle on) -- show a placeholder link in that case so
   // the preview still renders, without implying it's live yet.
   const previewPartnerReferralUrl = previewTheme.showPartnerProgram
-    ? `${req.protocol}://${req.get('host')}/signup?ref=${existingAffiliate ? existingAffiliate.referralCode : 'PREVIEW'}`
+    ? `${getBaseUrl(req)}/signup?ref=${existingAffiliate ? existingAffiliate.referralCode : 'PREVIEW'}`
     : null;
 
   res.render('receipt', {

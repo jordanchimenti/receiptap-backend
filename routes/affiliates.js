@@ -27,6 +27,7 @@ const {
   payPendingCommissionsForAffiliate,
 } = require('../services/stripeService');
 const { MERCHANT_AFFILIATE_RATE, REGULAR_AFFILIATE_RATE } = require('../services/affiliateRates');
+const { getBaseUrl } = require('../lib/baseUrl');
 
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no 0/O/1/I -- easy to read off/type
 function generateReferralCode() {
@@ -121,6 +122,15 @@ async function buildAffiliateView(affiliate) {
   const pendingCents = commissions.filter((c) => c.status === 'PENDING').reduce((sum, c) => sum + c.amountCents, 0);
   const paidCents = commissions.filter((c) => c.status === 'PAID').reduce((sum, c) => sum + c.amountCents, 0);
 
+  // Of the merchants this affiliate referred who ever actually started using
+  // ReceipTap (i.e. excluding INCOMPLETE -- someone who signed up via the
+  // link but never started a trial was never a customer to begin with, so
+  // they were never a "churn" candidate), what fraction have since canceled.
+  // null (not 0%) when there's no engaged referral yet -- 0/0 isn't a real rate.
+  const engagedMerchants = referredMerchants.filter((m) => m.subscriptionStatus !== 'INCOMPLETE');
+  const churnedCount = referredMerchants.filter((m) => m.subscriptionStatus === 'CANCELED').length;
+  const churnRate = engagedMerchants.length > 0 ? Math.round((churnedCount / engagedMerchants.length) * 100) : null;
+
   return {
     referralCode: affiliate.referralCode,
     rate,
@@ -128,6 +138,7 @@ async function buildAffiliateView(affiliate) {
     ownSubscriptionStatus: ownMerchant?.subscriptionStatus || null,
     stripeConnectOnboarded: affiliate.stripeConnectOnboarded,
     payoutFrequency: affiliate.payoutFrequency,
+    churnRate,
     referredMerchants: referredMerchants.map((m) => ({
       businessName: m.businessName,
       subscriptionStatus: m.subscriptionStatus,
@@ -151,8 +162,10 @@ router.get('/dashboard/referrals', requireMerchantAuth, async (req, res) => {
   res.render('affiliate-dashboard', {
     ...view,
     portalType: 'merchant',
-    referralUrl: `${req.protocol}://${req.get('host')}/signup?ref=${view.referralCode}`,
+    referralUrl: `${getBaseUrl(req)}/signup?ref=${view.referralCode}`,
     connectError: req.query.connect_error === '1',
+    codeError: req.query.code_error || null,
+    codeSuccess: req.query.code_success === '1',
   });
 });
 
@@ -253,8 +266,10 @@ router.get('/affiliate/dashboard', requireAffiliateAuth, async (req, res) => {
     // account) -- label the page after the real program, not just the route.
     programName: affiliate.type === 'MERCHANT' ? 'Merchant Partner Program' : 'Affiliate Partner Program',
     affiliateName: affiliate.name,
-    referralUrl: `${req.protocol}://${req.get('host')}/signup?ref=${view.referralCode}`,
+    referralUrl: `${getBaseUrl(req)}/signup?ref=${view.referralCode}`,
     connectError: req.query.connect_error === '1',
+    codeError: req.query.code_error || null,
+    codeSuccess: req.query.code_success === '1',
   });
 });
 
@@ -275,6 +290,47 @@ router.post('/affiliate/payout-frequency', async (req, res) => {
   res.redirect(dashboardPathFor(affiliate));
 });
 
+// Lets an affiliate replace their system-generated referralCode with a
+// custom one (e.g. "JORDAN20" instead of "2CM9GU6F") -- same field, same
+// uniqueness constraint, just affiliate-chosen instead of random. Normalized
+// to uppercase because routes/auth.js's signup lookup does
+// `refCode.trim().toUpperCase()` -- codes are case-insensitive everywhere
+// they're actually looked up, so storing anything but the uppercased form
+// would make two different-looking codes silently collide.
+const CUSTOM_CODE_PATTERN = /^[A-Za-z0-9]{3,20}$/;
+const RESERVED_REFERRAL_CODES = new Set(['PREVIEW']); // theme-settings.js's placeholder for an unclaimed preview link
+
+router.post('/affiliate/referral-code', async (req, res) => {
+  const affiliate = await getCurrentAffiliate(req);
+  if (!affiliate) return res.redirect('/login');
+
+  const requested = (req.body.referralCode || '').trim().toUpperCase();
+
+  if (!CUSTOM_CODE_PATTERN.test(requested)) {
+    return res.redirect(
+      `${dashboardPathFor(affiliate)}?code_error=${encodeURIComponent('Your link can only use letters and numbers, 3-20 characters.')}`
+    );
+  }
+  if (RESERVED_REFERRAL_CODES.has(requested)) {
+    return res.redirect(
+      `${dashboardPathFor(affiliate)}?code_error=${encodeURIComponent('That code is reserved -- please choose another.')}`
+    );
+  }
+  if (requested === affiliate.referralCode) {
+    return res.redirect(dashboardPathFor(affiliate)); // unchanged, nothing to do
+  }
+
+  const existing = await prisma.affiliate.findUnique({ where: { referralCode: requested } });
+  if (existing) {
+    return res.redirect(
+      `${dashboardPathFor(affiliate)}?code_error=${encodeURIComponent('That link is already taken -- please choose another.')}`
+    );
+  }
+
+  await prisma.affiliate.update({ where: { id: affiliate.id }, data: { referralCode: requested } });
+  res.redirect(`${dashboardPathFor(affiliate)}?code_success=1`);
+});
+
 // --- Stripe Connect onboarding (shared by both affiliate types) -----------
 // The affiliate never enters bank/ID details into this app -- they're sent
 // to a Stripe-hosted page that collects that directly, and Stripe redirects
@@ -292,7 +348,7 @@ router.get('/affiliate/connect-stripe/start', async (req, res) => {
       await prisma.affiliate.update({ where: { id: affiliate.id }, data: { stripeConnectAccountId: accountId } });
     }
 
-    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    const baseUrl = getBaseUrl(req);
     const url = await createAffiliateOnboardingLink(
       accountId,
       `${baseUrl}/affiliate/connect-stripe/start`, // Stripe sends them back here if the link expires mid-flow

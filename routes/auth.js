@@ -20,6 +20,7 @@ router.get('/signup', (req, res) => res.render('signup', {
   error: null,
   refCode: req.query.ref || '',
   next: req.query.next || '',
+  demo: req.query.demo === '1',
   googleClientId: process.env.GOOGLE_CLIENT_ID || '',
 }));
 router.get('/login', (req, res) => res.render('login', {
@@ -30,10 +31,11 @@ router.get('/login', (req, res) => res.render('login', {
 }));
 
 router.post('/signup', async (req, res) => {
-  const { ownerName, businessName, email, password, refCode, next, acceptAll } = req.body;
+  const { ownerName, businessName, email, password, refCode, next, demo, acceptAll } = req.body;
+  const demoFields = { refCode: refCode || '', next: next || '', demo: demo || '', googleClientId: process.env.GOOGLE_CLIENT_ID || '' };
 
   if (!ownerName || !businessName || !email || !password) {
-    return res.render('signup', { error: 'All fields are required', refCode: refCode || '', next: next || '', googleClientId: process.env.GOOGLE_CLIENT_ID || '' });
+    return res.render('signup', { error: 'All fields are required', ...demoFields });
   }
   // Client-side "required" on the checkbox is UX only -- this is the real
   // gate. A request without it never creates an account. One checkbox now
@@ -42,13 +44,13 @@ router.post('/signup', async (req, res) => {
   // recordLegalAcceptances() below for why that still means three
   // LegalAcceptance rows, not one.
   if (!acceptAll) {
-    return res.render('signup', { error: "You must agree to the Terms of Service (which include the Data Processing Agreement), and confirm you've read the Privacy Policy, to create an account.", refCode: refCode || '', next: next || '', googleClientId: process.env.GOOGLE_CLIENT_ID || '' });
+    return res.render('signup', { error: "You must agree to the Terms of Service (which include the Data Processing Agreement), and confirm you've read the Privacy Policy, to create an account.", ...demoFields });
   }
 
   try {
     const existing = await prisma.merchant.findUnique({ where: { email } });
     if (existing) {
-      return res.render('signup', { error: 'An account with this email already exists', refCode: refCode || '', next: next || '', googleClientId: process.env.GOOGLE_CLIENT_ID || '' });
+      return res.render('signup', { error: 'An account with this email already exists', ...demoFields });
     }
 
     // Referral is best-effort -- an invalid/expired code shouldn't block signup,
@@ -57,17 +59,21 @@ router.post('/signup', async (req, res) => {
       ? await prisma.affiliate.findUnique({ where: { referralCode: refCode.trim().toUpperCase() } })
       : null;
 
+    const isDemoAccount = Boolean(demo);
     const passwordHash = await bcrypt.hash(password, 10);
     const merchant = await prisma.merchant.create({
-      data: { ownerName, businessName, email, passwordHash, referredByAffiliateId: referrer?.id || null },
+      data: { ownerName, businessName, email, passwordHash, referredByAffiliateId: referrer?.id || null, isDemoAccount },
     });
     await recordLegalAcceptances(merchant.id, req);
 
     req.session.merchantId = merchant.id;
-    res.redirect(safeNextPath(next));
+    // Demo accounts always land on receipt design -- it's the only page
+    // they're allowed on (see middleware/demoAccountGate.js) -- rather than
+    // trusting `next`, which normally defaults to the full dashboard.
+    res.redirect(isDemoAccount ? '/dashboard/settings/receipt' : safeNextPath(next));
   } catch (err) {
     console.error('Signup failed:', err);
-    res.render('signup', { error: 'Something went wrong on our end — please try again in a moment.', refCode: refCode || '', next: next || '', googleClientId: process.env.GOOGLE_CLIENT_ID || '' });
+    res.render('signup', { error: 'Something went wrong on our end — please try again in a moment.', ...demoFields });
   }
 });
 
@@ -104,7 +110,7 @@ router.post('/logout', (req, res) => {
 // gets an editable placeholder business name -- same tradeoff already made
 // for the equivalent customer-facing flow in routes/customer-account.js.
 router.post('/merchant/google', async (req, res) => {
-  const { credential, refCode, next, acceptAll } = req.body;
+  const { credential, refCode, next, demo, acceptAll } = req.body;
   if (!credential) return res.status(400).json({ error: 'Missing Google credential' });
 
   let payload;
@@ -148,13 +154,19 @@ router.post('/merchant/google', async (req, res) => {
           ownerName: payload.name || null,
           businessName: payload.given_name ? `${payload.given_name}'s Business` : 'My Business',
           referredByAffiliateId: referrer?.id || null,
+          isDemoAccount: Boolean(demo),
         },
       });
       await recordLegalAcceptances(merchant.id, req);
     }
 
     req.session.merchantId = merchant.id;
-    res.json({ success: true, redirect: safeNextPath(next) });
+    // Same reasoning as the plain signup form -- a demo account always lands
+    // on receipt design, the only page it's allowed on. Uses the merchant's
+    // actual isDemoAccount (not just this request's `demo` flag), so an
+    // existing demo merchant logging back in still lands correctly even if
+    // `demo` wasn't part of this particular request.
+    res.json({ success: true, redirect: merchant.isDemoAccount ? '/dashboard/settings/receipt' : safeNextPath(next) });
   } catch (err) {
     console.error('Google sign-in failed:', err);
     res.status(500).json({ error: 'Something went wrong on our end — please try again in a moment.' });

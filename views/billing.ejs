@@ -43,7 +43,7 @@
   </style>
 </head>
 <body>
-  <%- include('partials/dashboard-header', { activeNav: 'billing' }) %>
+  <%- include('partials/dashboard-header', { activeNav: 'billing', isDemoAccount: merchant.isDemoAccount }) %>
 
   <div class="topbar">
     <div>
@@ -57,6 +57,11 @@
 
   <div class="app-body">
     <% if (error) { %><div class="error-box"><%= error %></div><% } %>
+    <% if (merchant.isDemoAccount) { %>
+      <div class="error-box" style="color: var(--teal-deep); background: var(--teal-wash);">
+        You're on the free demo — receipt design only, no card on file. Start a subscription below to connect a POS and send real receipts.
+      </div>
+    <% } %>
     <% if (typeof blocked !== 'undefined' && blocked) { %>
       <div class="error-box">
         Your ReceipTap service is paused — start or restart your subscription below to regain access to your dashboard.

@@ -54,6 +54,12 @@ async function requireActiveSubscription(req, res, next) {
     let merchant = await prisma.merchant.findUnique({ where: { id: req.session.merchantId } });
     if (!merchant) return res.redirect('/login');
 
+    // Demo accounts never have a real subscription -- their subscriptionStatus
+    // sits at INCOMPLETE forever, which would otherwise get them redirected to
+    // billing?blocked=1 on every page including the one they're allowed on.
+    // middleware/demoAccountGate.js is what actually controls their access.
+    if (merchant.isDemoAccount) return next();
+
     // Refresh from Stripe when local state would block or when there's a
     // subscription that might have changed state
     if (['CANCELED', 'PAST_DUE', 'INCOMPLETE'].includes(merchant.subscriptionStatus)) {

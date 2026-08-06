@@ -56,6 +56,14 @@ model Merchant {
   subscriptionStatus   SubscriptionStatus @default(INCOMPLETE)
   trialEndsAt          DateTime?
 
+  // Free tier: signed up with no card at all, specifically to design their
+  // receipt before committing to a paid plan. Never has a Stripe
+  // subscription -- middleware/demoAccountGate.js restricts these accounts
+  // to receipt design + billing (to upgrade) only; requireActiveSubscription
+  // (middleware/subscriptionGate.js) explicitly skips its own check for them
+  // rather than blocking on the permanently-INCOMPLETE subscriptionStatus.
+  isDemoAccount Boolean @default(false)
+
   pucks              Puck[]
   issuedReceipts     Transaction[]      @relation("IssuedReceipts")
   collectedExpenses  Transaction[]      @relation("CollectedExpenses")

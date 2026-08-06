@@ -62,6 +62,17 @@ app.use(require('./routes/pucks'));          // /r/:puckId tap routing, /claim/:
 app.use(require('./routes/receipt'));        // /receipt/:transactionId
 app.use(require('./routes/webhooks'));       // /webhooks/pos/square, /webhooks/pos/clover
 
+// Demo-account gate: a free, no-card merchant (Merchant.isDemoAccount) can
+// only reach receipt design and billing (to upgrade) -- everything else on
+// /dashboard redirects there. Mounted before the subscription gate below,
+// which separately knows to skip its own check for demo accounts so the two
+// don't fight over the same request -- see middleware/demoAccountGate.js.
+const { requireDemoAccess } = require('./middleware/demoAccountGate');
+app.use('/dashboard', (req, res, next) => {
+  if (!req.session?.merchantId) return next();
+  return requireDemoAccess(req, res, next);
+});
+
 // Subscription gate: every /dashboard/* page requires a valid subscription,
 // EXCEPT /dashboard/billing itself (blocked merchants need it to re-subscribe)
 // and pos-setup's oauth callback flow. Customer wallet (/account/*) is never

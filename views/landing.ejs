@@ -183,6 +183,13 @@
     .pc-bottom li::before { content: '✓'; position: absolute; left: 0; color: var(--teal); font-weight: 700; }
     .cta-fine { font-size: 12.5px; color: var(--ink-soft); margin-top: 10px; text-align: center; }
 
+    .pricing-row { display: flex; gap: 28px; justify-content: center; align-items: stretch; flex-wrap: wrap; margin-top: 40px; }
+    .pricing-row .price-card2 { margin: 0; flex: 1 1 380px; max-width: 420px; display: flex; flex-direction: column; }
+    .pricing-row .price-card2 .pc-bottom { flex: 1; display: flex; flex-direction: column; }
+    .pricing-row .price-card2 .cta-main { margin-top: auto; }
+    .pc-top--demo { background: var(--paper-raised); color: var(--ink); border-bottom: 1px solid var(--line); }
+    .pc-top--demo .pc-sub { color: var(--ink-soft); }
+
     /* ---------- FAQ: two columns ---------- */
     .faq-grid { column-count: 2; column-gap: 48px; margin-top: 26px; }
     .faq-item { border-bottom: 1px solid var(--line); padding: 4px 0; break-inside: avoid; }
@@ -366,23 +373,40 @@
 
   <section class="section" id="pricing" style="text-align: center;">
     <div class="section-eyebrow">Pricing</div>
-    <h2>One plan. Everything included.</h2>
-    <div class="price-card2">
-      <div class="pc-top">
-        <div class="price">$49.99<small> USD / month</small></div>
-        <div class="pc-sub">per location · 30-day free trial</div>
+    <h2>Start free, upgrade when you're ready.</h2>
+    <div class="pricing-row">
+      <div class="price-card2">
+        <div class="pc-top pc-top--demo">
+          <div class="price">Free<small> demo</small></div>
+          <div class="pc-sub">no card required</div>
+        </div>
+        <div class="pc-bottom">
+          <ul>
+            <li>Design and preview your branded receipt</li>
+            <li>Try your logo, colors, and Google review link</li>
+            <li>No POS connection or live receipts on this tier</li>
+          </ul>
+          <a class="cta-main" href="/signup?demo=1" style="width: 100%; box-sizing: border-box;">Start free demo</a>
+          <div class="cta-fine">No card, no time limit — upgrade whenever you're ready</div>
+        </div>
       </div>
-      <div class="pc-bottom">
-        <ul>
-          <li>Unlimited digital receipts</li>
-          <li>Square POS integration</li>
-          <li>Email capture + Google review funnel</li>
-          <li>Repeat-customer & revenue analytics</li>
-          <li>AI receipt categorization for your customers</li>
-          <li>Cancel anytime — trial ends, no charge</li>
-        </ul>
-        <a class="cta-main" href="/signup" style="width: 100%; box-sizing: border-box;">Start 30-day free trial</a>
-        <div class="cta-fine">Card required to start · charged only when the trial ends</div>
+      <div class="price-card2">
+        <div class="pc-top">
+          <div class="price">$49.99<small> USD / month</small></div>
+          <div class="pc-sub">per location · 30-day free trial</div>
+        </div>
+        <div class="pc-bottom">
+          <ul>
+            <li>Unlimited digital receipts</li>
+            <li>Square POS integration</li>
+            <li>Email capture + Google review funnel</li>
+            <li>Repeat-customer & revenue analytics</li>
+            <li>AI receipt categorization for your customers</li>
+            <li>Cancel anytime — trial ends, no charge</li>
+          </ul>
+          <a class="cta-main" href="/signup" style="width: 100%; box-sizing: border-box;">Start 30-day free trial</a>
+          <div class="cta-fine">Card required to start · charged only when the trial ends</div>
+        </div>
       </div>
     </div>
   </section>

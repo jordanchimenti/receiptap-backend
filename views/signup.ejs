@@ -11,10 +11,17 @@
   <div class="centered-shell">
     <div class="auth-card">
       <img src="/images/receiptap-logo.png" alt="ReceipTap" style="height: 60px; margin-bottom: 20px;" />
-      <h1 style="font-size: 22px; margin-bottom: 6px;">Create your ReceipTap account</h1>
-      <p style="font-size: 13.5px; color: var(--ink-soft); margin: 8px 0 24px; line-height: 1.5;">
-        One account per business. You'll connect your POS next.
-      </p>
+      <% if (typeof demo !== 'undefined' && demo) { %>
+        <h1 style="font-size: 22px; margin-bottom: 6px;">Start your free demo</h1>
+        <p style="font-size: 13.5px; color: var(--ink-soft); margin: 8px 0 24px; line-height: 1.5;">
+          No card required. Design and preview your branded receipt right away — connect a POS and go live whenever you're ready to upgrade.
+        </p>
+      <% } else { %>
+        <h1 style="font-size: 22px; margin-bottom: 6px;">Create your ReceipTap account</h1>
+        <p style="font-size: 13.5px; color: var(--ink-soft); margin: 8px 0 24px; line-height: 1.5;">
+          One account per business. You'll connect your POS next.
+        </p>
+      <% } %>
 
       <div class="error-box" id="error-box" style="<%= error ? '' : 'display: none;' %>"><%= error %></div>
 
@@ -30,6 +37,7 @@
       <form method="POST" action="/signup">
         <input type="hidden" name="refCode" value="<%= typeof refCode !== 'undefined' ? refCode : '' %>" />
         <input type="hidden" name="next" value="<%= typeof next !== 'undefined' ? next : '' %>" />
+        <input type="hidden" name="demo" value="<%= (typeof demo !== 'undefined' && demo) ? '1' : '' %>" />
         <div class="field">
           <label for="ownerName">Your name</label>
           <input type="text" id="ownerName" name="ownerName" required autofocus />
@@ -56,7 +64,7 @@
           </div>
         </div>
 
-        <button type="submit" class="btn btn-primary">Create account</button>
+        <button type="submit" class="btn btn-primary"><%= (typeof demo !== 'undefined' && demo) ? 'Start free demo' : 'Create account' %></button>
       </form>
 
       <p style="font-size: 13px; color: var(--ink-soft); margin-top: 20px; text-align: center;">
@@ -70,6 +78,7 @@
     <script>
       const REF_CODE = '<%= typeof refCode !== 'undefined' ? refCode : '' %>';
       const NEXT_PATH = '<%= typeof next !== 'undefined' ? next : '' %>';
+      const DEMO_MODE = <%= (typeof demo !== 'undefined' && demo) ? 'true' : 'false' %>;
 
       // Google's button skips our own <form> entirely (it's Google's widget,
       // not a submit we control), so the "required" checkbox never gets a
@@ -96,6 +105,7 @@
             credential: response.credential,
             refCode: REF_CODE,
             next: NEXT_PATH,
+            demo: DEMO_MODE,
             acceptAll: true,
           }),
         });

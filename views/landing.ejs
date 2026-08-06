@@ -214,6 +214,7 @@
       .bento { grid-template-columns: 1fr; }
       .bento-tile.large, .bento-tile.small { grid-column: auto; }
       .faq-grid { column-count: 1; }
+      footer { flex-direction: column; gap: 10px; text-align: center; }
     }
   </style>
 </head>
@@ -421,7 +422,13 @@
 
   <footer>
     <span>© 2026 ReceipTap</span>
-    <span><a href="/login" style="color: inherit;">Merchant log in</a> · <a href="/account/login" style="color: inherit;">Customer wallet</a></span>
+    <span>
+      <a href="/login" style="color: inherit;">Merchant log in</a> ·
+      <a href="/account/login" style="color: inherit;">Customer wallet</a> ·
+      <a href="/legal/terms" style="color: inherit;">Terms</a> ·
+      <a href="/legal/privacy" style="color: inherit;">Privacy</a> ·
+      <a href="/legal/dpa" style="color: inherit;">DPA</a>
+    </span>
   </footer>
 
   <script>

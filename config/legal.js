@@ -16,8 +16,8 @@
 
 const LEGAL_DOCUMENTS = {
   TERMS: {
-    version: '2026-08-05.3',
-    lastUpdated: '2026-08-05',
+    version: '2026-08-06.2',
+    lastUpdated: '2026-08-06',
     label: 'Terms of Service',
   },
   PRIVACY: {

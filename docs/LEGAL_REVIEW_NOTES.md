@@ -8,7 +8,7 @@ not a replacement for reading the page.
 Covers: **Privacy Policy** (`/legal/privacy`, rendered from
 `views/partials/legal-privacy-content.ejs`, version `2026-08-05.2`) and
 **Terms of Service** (`/legal/terms`, rendered from
-`views/partials/legal-terms-content.ejs`, version `2026-08-05.3`).
+`views/partials/legal-terms-content.ejs`, version `2026-08-06.2`).
 
 The Data Processing Agreement (`/legal/dpa`) has no drafted content yet —
 it still renders the "coming soon" stub, so there is nothing to review on
@@ -61,6 +61,19 @@ met.
 4. Confirm what Stripe's own hosted Checkout page shows once configured
    with the real Price/trial settings, and make sure it doesn't contradict
    whatever ends up on our own pre-checkout screen.
+5. **New, as of the Hardware section being written (`TERMS.version`
+   `2026-08-06.1`–`.2`):** the Terms now disclose two real hardware
+   charges — a **$60 USD per-unit puck replacement fee** (unreturned puck
+   after cancellation, or lost/damaged while subscribed), and a **$25 USD
+   shipping charge** to actually receive the included puck in the first
+   place. The shipping charge is the more urgent of the two: it's a
+   near-certain cost for essentially every new subscriber, tied directly
+   to signup, not a contingent one like the replacement fee. Both are
+   currently disclosed only on the Terms page itself — nowhere on the
+   checkout/signup screen mentions either before a merchant agrees to the
+   Terms and starts a subscription. Same underlying issue as items 1-4
+   above: a fact that's legally required to be disclosed *before* payment
+   isn't yet shown anywhere pre-payment, only in a linked document.
 
 This was not fixed as part of drafting the Terms — flagging only, per
 instruction.
@@ -284,27 +297,49 @@ time-limited, etc.) and replace the placeholder paragraph with it.
 
 ---
 
-## 15–18. Hardware (NFC puck) terms — four undecided items
+## 15–17. Hardware (NFC puck) terms — RESOLVED (ownership, return, replacement)
 
 **Where:** "Hardware (NFC pucks)."
 
-**Issue:** the repo establishes what a puck *is* and how it's technically
-provisioned (passive, no battery/radio, linked via a claim code, assigned
-to a specific register), but establishes nothing about the commercial
-terms around it. Four separate open questions, flagged individually rather
-than guessed at:
+**Status: RESOLVED**, as of `TERMS.version` `2026-08-06.1`. The founder made
+the following business decisions, now written into the Hardware section:
 
-- **15. Ownership** — does a puck become the business's property, or does
-  it stay ReceipTap's property for the life of the subscription?
-- **16. Condition on cancellation** — does the business keep the puck,
-  return it, or something else?
-- **17. Replacement terms** — is a replacement for a lost or damaged puck
-  free, or chargeable, and at what cost?
-- **18. Shipping** — who pays for it, what's the expected delivery time,
-  and is international shipping offered?
+- **15. Ownership** — the puck stays the property of J.A.C. GLOBAL
+  APPROACH LTD at all times; it's provided for use with the service, and
+  ownership never transfers to the merchant.
+- **16. Condition on cancellation** — on cancellation or termination, a
+  prepaid return label is emailed to the address on file, and the
+  merchant has **30 days** from that email to return every puck on the
+  account.
+- **17. Replacement terms** — a puck not returned within that 30-day
+  window, or damaged/lost while the subscription is active, is replaced
+  at **$60 USD per unit**, charged to the payment method on file. A puck
+  that fails on its own (not the merchant's fault) is replaced free.
 
-**Needed:** a real decision on each of the four, to replace the four
-`[[REVIEW]]` markers in the Hardware section.
+**Note for the lawyer reviewing this:** the **$60 USD figure** and the
+**30-day return window** are business decisions made directly by the
+founder, not legal-research conclusions — worth confirming they're
+reasonable and enforceable (e.g., that $60 is defensible as a genuine
+pre-estimate of replacement cost rather than a penalty) rather than
+re-deriving them from scratch.
+
+## 18. Shipping — RESOLVED
+
+**Where:** "Hardware (NFC pucks)" → "Shipping."
+
+**Status: RESOLVED**, as of `TERMS.version` `2026-08-06.2`. The founder
+decided: the merchant pays a flat **$25 USD** shipping charge per
+shipment, shipping is currently **Canada-only**, and delivery is expected
+within **30 days** of a puck being sent.
+
+**Note for the lawyer reviewing this**, same as items 15–17: the $25
+figure, the 30-day delivery window, and the Canada-only limitation are
+founder business decisions, not legal-research conclusions. Worth
+flagging separately: **Canada-only shipping sits oddly next to the rest
+of these Terms**, which don't otherwise restrict who can sign up by
+country — worth confirming that's an intentional, temporary limitation
+(and deciding how a non-Canadian merchant who signs up anyway should be
+handled) rather than an oversight.
 
 ---
 

@@ -7,7 +7,9 @@ const express = require('express');
 const router = express.Router();
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 const multer = require('multer');
+const QRCode = require('qrcode');
 const prisma = require('../lib/prisma');
 const { ensureMerchantAffiliate } = require('./affiliates');
 const { MERCHANT_AFFILIATE_RATE } = require('../services/affiliateRates');
@@ -124,6 +126,49 @@ router.get('/dashboard/settings/receipt', requireAuth, async (req, res) => {
     saved: false,
     error: null,
   });
+});
+
+// Creates a real Transaction (sample line items, clearly not a real sale)
+// and hands back the actual /receipt/:id URL a customer would land on --
+// not the preview iframe below, the real page, with the merchant's real
+// saved theme. Demo-tier only: a demo account has no POS connected and no
+// puck, so this is its only way to ever see what its receipt looks like as
+// a customer would. Restricted to demo accounts specifically so a test
+// transaction never ends up mixed into a real merchant's revenue/analytics
+// -- a demo account has no real transactions to get confused with in the
+// first place.
+router.post('/dashboard/settings/receipt/test-sale', requireAuth, async (req, res) => {
+  const merchant = await prisma.merchant.findUnique({ where: { id: req.session.merchantId } });
+  if (!merchant?.isDemoAccount) {
+    return res.status(403).json({ error: 'Test receipts are only available on the free demo tier.' });
+  }
+
+  const lineItems = [
+    { name: 'Sample Item', quantity: 1, unitPrice: 899, total: 899 },
+    { name: 'Another Item', quantity: 2, unitPrice: 450, total: 900 },
+  ];
+  const subtotal = lineItems.reduce((sum, li) => sum + li.total, 0);
+  const tax = Math.round(subtotal * 0.13); // a round, sample tax rate -- not a real jurisdiction's rate
+  const total = subtotal + tax;
+
+  const transaction = await prisma.transaction.create({
+    data: {
+      id: `test_${crypto.randomBytes(8).toString('hex')}`,
+      merchantId: merchant.id,
+      posProvider: 'test',
+      lineItems,
+      subtotal,
+      tax,
+      discountTotal: 0,
+      total,
+      paymentMethod: 'Test sale — no real payment',
+    },
+  });
+
+  const receiptUrl = `${getBaseUrl(req)}/receipt/${transaction.id}`;
+  const qrDataUrl = await QRCode.toDataURL(receiptUrl);
+
+  res.json({ receiptUrl, qrDataUrl });
 });
 
 // A live, isolated preview of any layout + the merchant's own colors/branding —

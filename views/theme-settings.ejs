@@ -78,6 +78,24 @@
 
   <div class="app-body">
 
+  <% if (merchant.isDemoAccount) { %>
+    <div style="background:#eef2ff; border-radius:10px; padding:14px 18px; margin-bottom:16px; display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap;">
+      <div>
+        <strong style="font-size:13.5px; color:#3730a3;">See it as a customer would</strong>
+        <div style="font-size:12.5px; color:#4338ca; margin-top:2px;">
+          Sends a test receipt using your real saved design — no POS or real sale needed.
+        </div>
+      </div>
+      <button type="button" id="test-sale-btn" onclick="sendTestReceipt()" style="width:auto; margin:0; padding:10px 18px; background:#4338ca;">Send test receipt</button>
+    </div>
+    <div id="test-sale-result" style="display:none; background:#f9fafb; border-radius:10px; padding:18px; margin-bottom:16px; text-align:center;">
+      <img id="test-sale-qr" src="" alt="Scan to open your test receipt on your phone" style="width:160px; height:160px; border-radius:8px;" />
+      <div style="font-size:12.5px; color:#888; margin-top:8px;">Scan with your phone, or</div>
+      <a id="test-sale-link" href="#" target="_blank" style="font-size:13.5px; color:#2563eb; font-weight:600; text-decoration:none;">open it in a new tab &rarr;</a>
+    </div>
+    <div id="test-sale-error" class="banner error" style="display:none;"></div>
+  <% } %>
+
   <% if (saved) { %><div class="banner success">Settings saved.</div><% } %>
   <% if (error) { %><div class="banner error"><%= error %></div><% } %>
 
@@ -271,6 +289,32 @@
     }
     window.addEventListener('resize', resizeLayoutPreviews);
     resizeLayoutPreviews();
+
+    // Demo tier only -- see the button's `<% if (merchant.isDemoAccount) %>`
+    // guard above; the server independently rejects this for anyone else.
+    async function sendTestReceipt() {
+      const btn = document.getElementById('test-sale-btn');
+      const errorBox = document.getElementById('test-sale-error');
+      errorBox.style.display = 'none';
+      btn.disabled = true;
+      btn.textContent = 'Sending…';
+      try {
+        const res = await fetch('/dashboard/settings/receipt/test-sale', { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Something went wrong.');
+
+        document.getElementById('test-sale-qr').src = data.qrDataUrl;
+        document.getElementById('test-sale-link').href = data.receiptUrl;
+        document.getElementById('test-sale-result').style.display = 'block';
+        window.open(data.receiptUrl, '_blank');
+      } catch (err) {
+        errorBox.textContent = err.message;
+        errorBox.style.display = 'block';
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Send test receipt';
+      }
+    }
 
     function selectLayout(id) {
       document.getElementById('layoutId-input').value = id;

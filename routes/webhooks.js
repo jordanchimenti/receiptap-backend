@@ -156,11 +156,19 @@ router.post('/webhooks/pos/clover', async (req, res) => {
 
   try {
     const merchantEvents = body.merchants || {};
+    // TEMP DEBUG: log the raw shape of every real (non-handshake) Clover
+    // webhook call so a silent early-return anywhere below is visible in
+    // Railway logs instead of just producing no transaction with no trace.
+    // Remove once Clover order events are confirmed flowing end-to-end.
+    console.log('[clover webhook] received:', JSON.stringify(body));
     for (const [cloverMerchantId, events] of Object.entries(merchantEvents)) {
       for (const event of events) {
         // Only orders represent a sale -- object IDs are prefixed with their
         // type ("O:" orders, "P:" payments, "I:" inventory, ...).
-        if (!event.objectId || !event.objectId.startsWith('O:')) continue;
+        if (!event.objectId || !event.objectId.startsWith('O:')) {
+          console.log('[clover webhook] skipping non-order event:', event.objectId);
+          continue;
+        }
         await handleCloverOrderEvent(cloverMerchantId, event.objectId.slice(2));
       }
     }
@@ -173,20 +181,30 @@ router.post('/webhooks/pos/clover', async (req, res) => {
 
 async function handleCloverOrderEvent(cloverMerchantId, orderId) {
   const merchant = await prisma.merchant.findFirst({ where: { cloverMerchantId } });
-  if (!merchant) return; // event from a Clover account we don't recognize
+  if (!merchant) {
+    console.log('[clover webhook] no merchant found for cloverMerchantId:', cloverMerchantId);
+    return; // event from a Clover account we don't recognize
+  }
 
   const accessToken = await getValidCloverAccessToken(merchant);
   const order = await fetchCloverOrder(accessToken, cloverMerchantId, orderId);
+  console.log('[clover webhook] order fetched:', order.id, '-- paymentState:', order.paymentState, '-- total:', order.total);
 
   // OPEN | PAID | REFUNDED | CREDITED | PARTIALLY_PAID | PARTIALLY_REFUNDED --
   // only a fully completed sale should generate a receipt. An order can fire
   // several CREATE/UPDATE events while it's being built up before payment;
   // this re-checks the live order rather than trusting the event type.
-  if (order.paymentState !== 'PAID') return;
+  if (order.paymentState !== 'PAID') {
+    console.log('[clover webhook] skipping -- paymentState is not PAID:', order.paymentState);
+    return;
+  }
 
   // Clover retries webhook delivery -- if this order is already saved, stop.
   const existing = await prisma.transaction.findUnique({ where: { id: order.id } });
-  if (existing) return;
+  if (existing) {
+    console.log('[clover webhook] transaction already exists for order:', order.id);
+    return;
+  }
 
   // Best-effort field mapping -- Clover line items don't carry an explicit
   // quantity the way Square's do (a "3x Coffee" sale is 3 separate line item

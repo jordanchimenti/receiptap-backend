@@ -57,19 +57,20 @@ What's still open:
    the full $25.00 due today). Disclosed on the pre-payment screen in
    `views/billing.ejs` next to the trial/price disclosure.
 
-6. **New open question: shipping charge on a "Restart subscription."**
-   The $25 fee is only charged when `merchant.subscriptionStatus !==
-   'CANCELED'` — a merchant restarting after a prior cancellation is
-   *not* charged shipping again, deliberately, because whether they still
-   have their puck depends on whether they returned it under the 30-day
-   return window (see the $60 replacement fee above), and that isn't
-   tracked anywhere in this app today. This avoids ever double-charging
-   someone who kept their puck, at the cost of potentially under-charging
-   someone who returned it and needs a new one shipped for a restart.
-   **Needed:** decide whether/how to track "does this merchant currently
-   have a puck in hand" so a restart can charge shipping correctly in
-   both directions, or confirm the current conservative default (never
-   charge on restart) is acceptable for now.
+6. **Shipping charge on a "Restart subscription" — RESOLVED, no tracking
+   built.** The $25 fee is only charged when `merchant.subscriptionStatus
+   !== 'CANCELED'` — a merchant restarting after a prior cancellation is
+   *not* charged shipping again, since whether they still have their puck
+   depends on whether they returned it under the 30-day return window
+   (see the $60 replacement fee below), and nothing in this app tracks
+   that. **Decision (founder, 2026-08-07):** don't build return tracking
+   for this — it's a real feature (a `returnedAt`-style field plus a way
+   to mark a puck received back), and this scenario (cancel → return →
+   restart) has zero real-world volume so far, no customers yet. The
+   conservative default (never charge on restart) stays as the permanent
+   behavior; if the rare case of a restarting merchant who returned their
+   puck actually comes up, charge the $25 by hand in Stripe that one
+   time rather than maintaining tracking infrastructure for it.
 
 7. **The $60 replacement fee itself has no automation.** Confirmed while
    building the above: there's no prepaid-return-label emailing, no

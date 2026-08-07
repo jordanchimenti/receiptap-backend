@@ -200,17 +200,26 @@ DPA claims).
 
 ---
 
-## 7. "Shopify" subprocessor leftover
+## 7. "Shopify" isn't dead code — real integration planned
 
 **Where:** merchant "Subprocessors" list.
 
-**Issue:** some account-settings UI still has a leftover "Shopify" option
-from earlier development. It's not a working integration — no data is sent
-to or received from Shopify. The policy notes this explicitly rather than
-silently listing Shopify as a real subprocessor.
+**Status:** founder confirmed (2026-08-07) a real Shopify POS integration
+is planned soon — `Merchant.shopifyShopDomain`/`shopifyAccessToken`, the
+`else if (merchant.shopifyShopDomain)` display branch in
+`views/account-settings.ejs`, and the Shopify references in the admin
+panel and `routes/analytics.js`'s POS labels are **not** leftover cruft to
+remove; they're already-built groundwork for that integration
+(`shopifyAccessToken` currently just never gets set, since there's no
+`routes/oauth-shopify.js` or "Connect Shopify" button on
+`views/pos-setup.ejs` yet — that's the actual remaining work). Do not
+delete these fields/branches.
 
-**Needed:** either remove the leftover UI option from the product, or
-decide to leave the note in the policy permanently if the option stays.
+**Needed on the Privacy Policy page:** the disclosure currently says
+Shopify "is not a working integration today, and no data is sent to or
+received from Shopify" — true today, but this note needs to be revisited
+(most likely removed, with Shopify added as a real subprocessor in the
+list above it) once the integration actually ships, not before.
 
 ---
 

@@ -31,6 +31,16 @@ model Merchant {
   resetToken          String?   @unique
   resetTokenExpiresAt DateTime?
 
+  // Email verification -- demo-tier only (see routes/auth.js). Demo signup
+  // is the only free, no-card path in the app, so it's the cheapest one to
+  // fake an address on. Paid signups never touch these fields (Stripe
+  // checkout already implicitly validates the person). A demo account
+  // created via Google sign-in gets emailVerifiedAt set immediately instead
+  // of going through the token below, since Google already verified it.
+  emailVerifiedAt                 DateTime?
+  emailVerificationToken          String?   @unique
+  emailVerificationTokenExpiresAt DateTime?
+
   // Square OAuth
   squareMerchantId  String? @unique
   squareAccessToken String?

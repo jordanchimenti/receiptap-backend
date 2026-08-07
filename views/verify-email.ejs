@@ -1,0 +1,31 @@
+<!-- views/verify-email.ejs -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Verify Email - ReceipTap</title>
+  <link rel="stylesheet" href="/css/receiptap.css" />
+</head>
+<body>
+  <div class="centered-shell">
+    <div class="auth-card">
+      <img src="/images/receiptap-logo.png" alt="ReceipTap" style="height: 60px; margin-bottom: 20px;" />
+
+      <% if (valid) { %>
+        <h1 style="font-size: 22px; margin-bottom: 6px;">Email verified</h1>
+        <p style="font-size: 13.5px; color: var(--ink-soft); margin: 8px 0 24px; line-height: 1.5;">
+          You're all set — test receipts are unlocked on your account.
+        </p>
+        <a href="/dashboard/settings/receipt" class="btn btn-primary" style="display: block; text-align: center;">Go to receipt design</a>
+      <% } else { %>
+        <h1 style="font-size: 22px; margin-bottom: 6px;">Link expired</h1>
+        <p style="font-size: 13.5px; color: var(--ink-soft); margin: 8px 0 24px; line-height: 1.5;">
+          This verification link is invalid or has expired. Log in and request a new one from the receipt design page.
+        </p>
+        <a href="/login" class="btn btn-primary" style="display: block; text-align: center;">Log in</a>
+      <% } %>
+    </div>
+  </div>
+</body>
+</html>

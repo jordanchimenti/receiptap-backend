@@ -78,15 +78,28 @@
 
   <div class="app-body">
 
-  <% if (merchant.isDemoAccount) { %>
-    <div style="background:#eef2ff; border-radius:10px; padding:14px 18px; margin-bottom:16px; display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap;">
+  <% if (merchant.isDemoAccount && !merchant.emailVerifiedAt) { %>
+    <div style="background:#fffbeb; border-radius:10px; padding:14px 18px; margin-bottom:16px; display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap;">
       <div>
-        <strong style="font-size:13.5px; color:#3730a3;">See it as a customer would</strong>
-        <div style="font-size:12.5px; color:#4338ca; margin-top:2px;">
+        <strong style="font-size:13.5px; color:#92400e;">Verify your email to send test receipts</strong>
+        <div style="font-size:12.5px; color:#b45309; margin-top:2px;">
+          We sent a link to <%= merchant.email %>. Click it, then come back here.
+        </div>
+      </div>
+      <form method="POST" action="/verify-email/resend" style="margin:0;">
+        <button type="submit" style="width:auto; margin:0; padding:10px 18px; background:#b45309;">Resend link</button>
+      </form>
+    </div>
+    <% if (resent) { %><div class="banner success">Verification email resent — check your inbox.</div><% } %>
+  <% } else if (merchant.isDemoAccount) { %>
+    <div style="background:var(--teal-wash); border-radius:10px; padding:14px 18px; margin-bottom:16px; display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap;">
+      <div>
+        <strong style="font-size:13.5px; color:var(--teal-deep);">See it as a customer would</strong>
+        <div style="font-size:12.5px; color:var(--teal-deep); margin-top:2px;">
           Sends a test receipt using your real saved design — no POS or real sale needed.
         </div>
       </div>
-      <button type="button" id="test-sale-btn" onclick="sendTestReceipt()" style="width:auto; margin:0; padding:10px 18px; background:#4338ca;">Send test receipt</button>
+      <button type="button" id="test-sale-btn" onclick="sendTestReceipt()" style="width:auto; margin:0; padding:10px 18px; background:var(--teal);">Send test receipt</button>
     </div>
     <div id="test-sale-result" style="display:none; background:#f9fafb; border-radius:10px; padding:18px; margin-bottom:16px; text-align:center;">
       <img id="test-sale-qr" src="" alt="Scan to open your test receipt on your phone" style="width:160px; height:160px; border-radius:8px;" />

@@ -8,13 +8,14 @@ const bcrypt = require('bcrypt');
 const crypto = require('crypto');
 const { OAuth2Client } = require('google-auth-library');
 const prisma = require('../lib/prisma');
-const { sendPasswordResetEmail } = require('../services/emailService');
+const { sendPasswordResetEmail, sendVerificationEmail } = require('../services/emailService');
 const { recordLegalAcceptances } = require('../services/legalAcceptanceService');
 const { safeNextPath } = require('../lib/safeRedirect');
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 const RESET_TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hour
+const EMAIL_VERIFICATION_TOKEN_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 router.get('/signup', (req, res) => res.render('signup', {
   error: null,
@@ -61,10 +62,22 @@ router.post('/signup', async (req, res) => {
 
     const isDemoAccount = Boolean(demo);
     const passwordHash = await bcrypt.hash(password, 10);
+
+    // Only demo accounts need to prove their email is real -- see
+    // config/legal.js-adjacent reasoning in services/emailService.js. Paid
+    // signups skip this entirely; Stripe checkout already does that job.
+    const emailVerificationToken = isDemoAccount ? crypto.randomBytes(32).toString('hex') : null;
+    const emailVerificationTokenExpiresAt = isDemoAccount ? new Date(Date.now() + EMAIL_VERIFICATION_TOKEN_TTL_MS) : null;
+
     const merchant = await prisma.merchant.create({
-      data: { ownerName, businessName, email, passwordHash, referredByAffiliateId: referrer?.id || null, isDemoAccount },
+      data: { ownerName, businessName, email, passwordHash, referredByAffiliateId: referrer?.id || null, isDemoAccount, emailVerificationToken, emailVerificationTokenExpiresAt },
     });
     await recordLegalAcceptances(merchant.id, req);
+
+    if (isDemoAccount) {
+      const verifyUrl = `${req.protocol}://${req.get('host')}/verify-email/${emailVerificationToken}`;
+      await sendVerificationEmail({ email: merchant.email, name: merchant.ownerName || merchant.businessName }, verifyUrl);
+    }
 
     req.session.merchantId = merchant.id;
     // Demo accounts always land on receipt design -- it's the only page
@@ -147,6 +160,10 @@ router.post('/merchant/google', async (req, res) => {
         ? await prisma.affiliate.findUnique({ where: { referralCode: refCode.trim().toUpperCase() } })
         : null;
 
+      // Google already verified this email before handing it to us -- a demo
+      // account created this way skips the token/link flow entirely and is
+      // considered verified from the start (payload.email_verified is
+      // effectively always true for a completed Google sign-in).
       merchant = await prisma.merchant.create({
         data: {
           email,
@@ -155,6 +172,7 @@ router.post('/merchant/google', async (req, res) => {
           businessName: payload.given_name ? `${payload.given_name}'s Business` : 'My Business',
           referredByAffiliateId: referrer?.id || null,
           isDemoAccount: Boolean(demo),
+          emailVerifiedAt: payload.email_verified ? new Date() : null,
         },
       });
       await recordLegalAcceptances(merchant.id, req);
@@ -230,6 +248,44 @@ router.post('/reset-password/:token', async (req, res) => {
 
   req.session.merchantId = merchant.id;
   res.redirect('/dashboard/receipts-hub');
+});
+
+// Demo-tier email verification (see the isDemoAccount branch in POST
+// /signup above). Token is single-use and expires 24 hours after issue.
+router.get('/verify-email/:token', async (req, res) => {
+  const merchant = await prisma.merchant.findUnique({ where: { emailVerificationToken: req.params.token } });
+  const valid = Boolean(merchant && merchant.emailVerificationTokenExpiresAt > new Date());
+
+  if (valid) {
+    await prisma.merchant.update({
+      where: { id: merchant.id },
+      data: { emailVerifiedAt: new Date(), emailVerificationToken: null, emailVerificationTokenExpiresAt: null },
+    });
+  }
+
+  res.render('verify-email', { valid });
+});
+
+// Lets a signed-in demo merchant get a fresh link if theirs expired --
+// linked from the "verify your email" banner on theme-settings.
+router.post('/verify-email/resend', async (req, res) => {
+  if (!req.session?.merchantId) return res.redirect('/login');
+
+  const merchant = await prisma.merchant.findUnique({ where: { id: req.session.merchantId } });
+  if (!merchant || !merchant.isDemoAccount || merchant.emailVerifiedAt) {
+    return res.redirect('/dashboard/settings/receipt');
+  }
+
+  const emailVerificationToken = crypto.randomBytes(32).toString('hex');
+  await prisma.merchant.update({
+    where: { id: merchant.id },
+    data: { emailVerificationToken, emailVerificationTokenExpiresAt: new Date(Date.now() + EMAIL_VERIFICATION_TOKEN_TTL_MS) },
+  });
+
+  const verifyUrl = `${req.protocol}://${req.get('host')}/verify-email/${emailVerificationToken}`;
+  await sendVerificationEmail({ email: merchant.email, name: merchant.ownerName || merchant.businessName }, verifyUrl);
+
+  res.redirect('/dashboard/settings/receipt?resent=1');
 });
 
 module.exports = router;

@@ -35,4 +35,25 @@ async function sendPasswordResetEmail({ email, name }, resetUrl) {
   });
 }
 
-module.exports = { sendPasswordResetEmail };
+// Demo-tier signup only (see routes/auth.js) -- gates the "Send test
+// receipt" button on theme-settings until clicked.
+async function sendVerificationEmail({ email, name }, verifyUrl) {
+  if (!resend) {
+    console.log(`[emailService] RESEND_API_KEY not set -- verification link for ${email}:\n${verifyUrl}`);
+    return;
+  }
+
+  await resend.emails.send({
+    from: FROM_ADDRESS,
+    to: email,
+    subject: 'Verify your email for ReceipTap',
+    html: `
+      <p>Hi${name ? ' ' + name : ''},</p>
+      <p>Confirm this is your email to unlock test receipts on your free ReceipTap demo. This link expires in 24 hours:</p>
+      <p><a href="${verifyUrl}">${verifyUrl}</a></p>
+      <p>If you didn't sign up for ReceipTap, you can safely ignore this email.</p>
+    `,
+  });
+}
+
+module.exports = { sendPasswordResetEmail, sendVerificationEmail };

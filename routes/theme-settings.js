@@ -83,6 +83,7 @@ function handleLogoUpload(req, res, next) {
       merchantAffiliateRate: MERCHANT_AFFILIATE_RATE,
       saved: false,
       error: message,
+      resent: false,
     });
   });
 }
@@ -125,6 +126,7 @@ router.get('/dashboard/settings/receipt', requireAuth, async (req, res) => {
     merchantAffiliateRate: MERCHANT_AFFILIATE_RATE,
     saved: false,
     error: null,
+    resent: req.query.resent === '1',
   });
 });
 
@@ -141,6 +143,9 @@ router.post('/dashboard/settings/receipt/test-sale', requireAuth, async (req, re
   const merchant = await prisma.merchant.findUnique({ where: { id: req.session.merchantId } });
   if (!merchant?.isDemoAccount) {
     return res.status(403).json({ error: 'Test receipts are only available on the free demo tier.' });
+  }
+  if (!merchant.emailVerifiedAt) {
+    return res.status(403).json({ error: 'Verify your email before sending a test receipt — check your inbox, or resend the link from this page.' });
   }
 
   const lineItems = [
@@ -344,6 +349,7 @@ router.post('/dashboard/settings/receipt', requireAuth, handleLogoUpload, async 
         merchantAffiliateRate: MERCHANT_AFFILIATE_RATE,
         saved: false,
         error: 'Enter a valid Google review link (should start with https:// and be a Google URL).',
+        resent: false,
       });
     }
   }
@@ -414,7 +420,7 @@ router.post('/dashboard/settings/receipt', requireAuth, handleLogoUpload, async 
     prisma.receiptTheme.findUnique({ where: { merchantId: req.session.merchantId } }),
     prisma.loyaltyProgram.findUnique({ where: { merchantId: req.session.merchantId } }),
   ]);
-  res.render('theme-settings', { merchant, theme, loyalty: loyaltyForDisplay(loyalty), merchantAffiliateRate: MERCHANT_AFFILIATE_RATE, saved: true, error: null });
+  res.render('theme-settings', { merchant, theme, loyalty: loyaltyForDisplay(loyalty), merchantAffiliateRate: MERCHANT_AFFILIATE_RATE, saved: true, error: null, resent: false });
 });
 
 // Social links render as an href straight on the receipt page -- reject

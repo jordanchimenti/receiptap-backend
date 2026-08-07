@@ -88,7 +88,11 @@ Solo founder, first-time coder. Explain in plain language, one step at a time.
 
 ## Built and working
 
-- Merchant auth, Square OAuth, webhook-driven receipt capture
+- Merchant auth, Square OAuth, webhook-driven receipt capture. Proven
+  end-to-end with real transactions through a live ngrok tunnel (Square and
+  Clover both), not just sandbox — `verifySquareSignature()` in
+  `routes/webhooks.js` does real HMAC-SHA256 verification against
+  `SQUARE_WEBHOOK_SIGNATURE_KEY`, not a placeholder.
 - NFC puck lifecycle: batch IDs, claim codes, QR activation
 - "Assign to next sale" pairing — merchant arms a puck, rings one test sale,
   the webhook binds puck to register. Merchant never sees an ID.
@@ -160,16 +164,13 @@ Solo founder, first-time coder. Explain in plain language, one step at a time.
 
 ## Not done yet
 
-- **End-to-end Square webhook test has never run.** Needs a public URL —
-  ngrok or real hosting. This is the biggest unproven piece of the product.
-- `verifySquareSignature()` in `routes/webhooks.js` is a placeholder that
-  returns `true`. Must implement real HMAC verification before launch.
 - No Stripe webhook secret configured; the subscription gate polls Stripe
   instead (max once per 10 min per merchant) to compensate.
 - The eight older dashboard pages still have prototype styling inside the new
   rail: receipts-hub, analytics, repeat-customers, customer-emails,
   merchant-receipts, pos-setup, theme-settings, merchant-expenses.
-- Not deployed. Not in version control. Both worth doing early.
+- Not deployed yet — in version control and pushed to GitHub
+  (jordanchimenti/receiptap-backend) now, just not hosted anywhere real yet.
 - `/legal/terms`, `/legal/privacy`, `/legal/dpa` are stub "coming soon" pages
   with no actual policy text yet — the checkboxes and acceptance-logging
   infrastructure are real and working, the documents themselves aren't

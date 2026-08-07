@@ -1,8 +1,7 @@
 <!-- views/partials/legal-privacy-content.ejs -->
 <!-- The real Privacy Policy body. Included by views/legal-document.ejs only
-     when documentType === 'PRIVACY' -- Terms/DPA still render the plain
-     "coming soon" stub. Every [[REVIEW: ...]] marker below is also
-     collected in docs/LEGAL_REVIEW_NOTES.md -- if you resolve one here,
+     when documentType === 'PRIVACY'. Every [[REVIEW: ...]] marker below is
+     also collected in docs/LEGAL_REVIEW_NOTES.md -- if you resolve one here,
      resolve it there too. -->
 <style>
   .privacy-doc { max-width: 720px; margin: 0 auto; padding: 28px 20px 80px; }
@@ -52,7 +51,7 @@
     personal information depending on how you use ReceipTap — as a shopper
     who tapped a receipt, or as a business using ReceipTap at your
     register. It's published by <strong><%= entity.legalName %></strong>
-    (<%= entity.registeredAddress || '<span class="review">[[REVIEW: address pending]]</span>' %>),
+    (<%- entity.registeredAddress || '<span class="review">[[REVIEW: address pending]]</span>' %>),
     and is governed by the laws of <%= entity.governingLaw %>.
   </p>
 
@@ -183,7 +182,6 @@
       party deciding its purpose. Our
       <a href="/legal/dpa">Data Processing Agreement</a> covers this
       relationship in detail.
-      <span class="review">[[REVIEW: the DPA page itself has no content yet — same "coming soon" status as Terms of Service. Should be written before this policy is treated as final.]]</span>
     </p>
 
     <h3>Your responsibilities</h3>

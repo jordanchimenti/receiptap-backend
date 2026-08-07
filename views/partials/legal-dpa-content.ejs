@@ -1,0 +1,322 @@
+<!-- views/partials/legal-dpa-content.ejs -->
+<!-- The real Data Processing Agreement body. Included by views/legal-document.ejs
+     only when documentType === 'DPA'. Every [[REVIEW: ...]] marker below is
+     also collected in docs/LEGAL_REVIEW_NOTES.md -- if you resolve one here,
+     resolve it there too.
+
+     Governs ReceipTap's processing of a merchant's CUSTOMERS' (shoppers')
+     personal data on that merchant's behalf -- the merchant is the
+     Controller, ReceipTap is the Processor. This is incorporated by
+     reference into the Terms of Service (see the "Data Processing
+     Agreement" subsection of legal-terms-content.ejs) -- a merchant's
+     single signup checkbox covers agreeing to this page too, per
+     CLAUDE.md's "Conventions" section. Subprocessor list below must stay
+     in sync with the Privacy Policy's merchant "Subprocessors" section --
+     they describe the same underlying facts to two different audiences. -->
+<style>
+  .dpa-doc { max-width: 720px; margin: 0 auto; padding: 28px 20px 80px; }
+  .dpa-doc .logo-row { text-align: center; margin-bottom: 20px; }
+  .dpa-doc .logo-row img { height: 40px; }
+  .dpa-doc h1 { font-size: 24px; letter-spacing: -0.01em; margin: 0 0 6px; text-align: center; }
+  .dpa-doc .meta { text-align: center; font-size: 12.5px; color: var(--ink-soft); margin-bottom: 28px; }
+  .dpa-doc .intro { font-size: 15px; line-height: 1.6; color: var(--ink); margin-bottom: 22px; }
+  .dpa-doc .jump-nav {
+    display: flex; flex-direction: column; gap: 6px; background: var(--paper-raised);
+    border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; margin-bottom: 32px;
+  }
+  .dpa-doc .jump-nav .jump-label { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-soft); margin-bottom: 4px; }
+  .dpa-doc .jump-nav a {
+    font-size: 14px; font-weight: 600; color: var(--teal-deep); text-decoration: none;
+  }
+  .dpa-doc section { margin-bottom: 34px; }
+  .dpa-doc .section-banner {
+    font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--teal-deep); background: var(--teal-wash); display: inline-block;
+    padding: 4px 10px; border-radius: 999px; margin-bottom: 10px;
+  }
+  .dpa-doc h2 { font-size: 19px; margin: 0 0 14px; letter-spacing: -0.01em; }
+  .dpa-doc h3 { font-size: 15px; margin: 20px 0 8px; }
+  .dpa-doc p { font-size: 14.5px; line-height: 1.65; color: var(--ink); margin: 0 0 14px; }
+  .dpa-doc ul { margin: 0 0 14px; padding-left: 20px; }
+  .dpa-doc li { font-size: 14.5px; line-height: 1.65; color: var(--ink); margin-bottom: 6px; }
+  .dpa-doc .review {
+    display: inline; background: #FBF0D0; color: #7A5B00; padding: 1px 4px;
+    border-radius: 4px; font-size: 13.5px; font-weight: 600;
+  }
+  .dpa-doc hr { border: none; border-top: 1px solid var(--line); margin: 30px 0; }
+  .dpa-doc .contact-box {
+    background: var(--paper-raised); border: 1px solid var(--line); border-radius: 12px;
+    padding: 16px 18px; font-size: 14px; line-height: 1.6;
+  }
+  .dpa-doc .back-top { font-size: 13px; }
+</style>
+
+<div class="dpa-doc">
+  <div class="logo-row"><img src="/images/receiptap-logo.png" alt="ReceipTap" /></div>
+  <h1>ReceipTap Data Processing Agreement</h1>
+  <p class="meta">Version <%= doc.version %> &middot; last updated <%= doc.lastUpdated %></p>
+
+  <p class="intro">
+    This Data Processing Agreement ("DPA") is between
+    <strong><%= entity.legalName %></strong>
+    (<%- entity.registeredAddress || '<span class="review">[[REVIEW: address pending]]</span>' %>)
+    and the business using ReceipTap ("you," "the business"). It's
+    incorporated by reference into our
+    <a href="/legal/terms">Terms of Service</a> — by accepting the Terms,
+    you're also agreeing to this DPA, even though it's published at its own
+    page and versioned on its own schedule. It governs how we handle
+    personal data belonging to <strong>your customers</strong> — the
+    shoppers who tap a puck and save a receipt — not your own account data,
+    which our <a href="/legal/privacy">Privacy Policy</a> already covers.
+  </p>
+
+  <div class="jump-nav">
+    <div class="jump-label">Jump to</div>
+    <a href="#roles">Roles: who's the controller, who's the processor</a>
+    <a href="#scope">What this covers</a>
+    <a href="#instructions">Processing only on your instructions</a>
+    <a href="#security">Security measures</a>
+    <a href="#subprocessors">Subprocessors</a>
+    <a href="#transfers">Where the data goes</a>
+    <a href="#assistance">Helping with your customers' requests</a>
+    <a href="#breach">If something goes wrong</a>
+    <a href="#deletion">Deleting or returning data</a>
+    <a href="#audit">Demonstrating compliance</a>
+    <a href="#liability">Liability</a>
+    <a href="#changes">Changes to this DPA</a>
+    <a href="#law">Governing law</a>
+  </div>
+
+  <!-- =================== ROLES =================== -->
+  <section id="roles">
+    <h2>Roles: who's the controller, who's the processor</h2>
+    <p>
+      When one of your customers taps a puck and chooses to save their
+      receipt — entering an email, or signing in with Google — personal
+      data about them gets collected and stored. For that data,
+      <strong>you're the controller</strong>: you decide why it's being
+      collected (to give your customer their receipt, to build a
+      relationship with them, to send them offers if they've agreed) and
+      what happens with it once you have it. <strong>We're the
+      processor</strong>: we hold and handle that data as your service
+      provider, on your instructions, not on our own judgment about what to
+      do with it.
+    </p>
+    <p class="back-top"><a href="#roles">↑ Back to top</a></p>
+  </section>
+
+  <hr />
+
+  <!-- =================== SCOPE =================== -->
+  <section id="scope">
+    <h2>What this covers</h2>
+    <h3>Categories of data subjects</h3>
+    <p>The customers who tap a ReceipTap puck at your register and choose to save a receipt.</p>
+    <h3>Categories of personal data</h3>
+    <ul>
+      <li>Email address (always, if they save a receipt)</li>
+      <li>Name (only if they save by signing in with Google)</li>
+      <li>What they bought, how much, and when — the receipt itself</li>
+      <li>The IP address their device connected from, captured only at the moment they tap a consent checkbox, as proof of that specific choice</li>
+    </ul>
+    <h3>Nature and purpose of processing</h3>
+    <p>
+      Storing and displaying receipts back to the customer in their
+      ReceipTap wallet, generating AI category and tax-deductibility
+      suggestions for their own purchases, and passing their email and
+      consent choice to you so you can run your own review requests,
+      loyalty offers, and marketing — as described in our
+      <a href="/legal/privacy">Privacy Policy</a>.
+    </p>
+    <h3>Duration</h3>
+    <p>
+      For as long as your ReceipTap subscription is active, and afterward
+      only for the retention periods described below.
+    </p>
+    <p class="back-top"><a href="#scope">↑ Back to top</a></p>
+  </section>
+
+  <hr />
+
+  <!-- =================== INSTRUCTIONS =================== -->
+  <section id="instructions">
+    <h2>Processing only on your instructions</h2>
+    <p>
+      We process your customers' personal data only to provide the
+      ReceipTap service to you, as described in our Terms of Service and
+      Privacy Policy — that's the documented instruction this DPA is
+      itself the record of. We don't sell it, and we don't use it for our
+      own marketing or for any other business's benefit. If we're ever
+      required by law to disclose it, we'll tell you first unless the law
+      prohibits that.
+    </p>
+    <p>
+      Anyone on our side with access to this data — our own staff and the
+      subprocessors listed below — is bound by confidentiality obligations
+      that cover it.
+    </p>
+    <p class="back-top"><a href="#instructions">↑ Back to top</a></p>
+  </section>
+
+  <hr />
+
+  <!-- =================== SECURITY =================== -->
+  <section id="security">
+    <h2>Security measures</h2>
+    <p>
+      Passwords are never stored in plain text — they're one-way hashed
+      before being saved. Payment card details never reach our own
+      servers; they're held entirely by Stripe. Access to your dashboard
+      and your customers' data requires an authenticated login session,
+      and our production traffic runs over HTTPS.
+      <span class="review">[[REVIEW: this section describes the security measures actually implemented today, factually. It intentionally does not claim any formal certification (e.g. SOC 2, ISO 27001) or a specific encryption-at-rest guarantee from our infrastructure providers, since neither has been independently confirmed as of this writing. Confirm what Supabase and our hosting provider actually guarantee before strengthening this language, rather than asserting more than is known to be true.]]</span>
+    </p>
+    <p class="back-top"><a href="#security">↑ Back to top</a></p>
+  </section>
+
+  <hr />
+
+  <!-- =================== SUBPROCESSORS =================== -->
+  <section id="subprocessors">
+    <h2>Subprocessors</h2>
+    <p>
+      We use the following subprocessors, each bound by their own
+      confidentiality and data-protection obligations to us:
+    </p>
+    <ul>
+      <li><strong>Supabase</strong> — our database, hosted in Canada</li>
+      <li><strong>Stripe</strong> — payment processing, for your subscription and for affiliate payouts</li>
+      <li><strong>Anthropic</strong> — AI category suggestions, using only a business name and item list, never a customer's name, email, or purchase amounts</li>
+      <li><strong>Google</strong> — sign-in verification only</li>
+      <li><strong>Square, Clover</strong> — whichever point-of-sale system you connect</li>
+      <li><strong>Resend</strong> — password-reset emails</li>
+    </ul>
+    <p>
+      If we add, replace, or drop a subprocessor, we'll update this list
+      and this page's version number — and, the next time you visit your
+      dashboard afterward, you'll be asked to review and accept the new
+      version before continuing, the same way any other change to this DPA
+      works. You're not required to take any action for this to happen; it
+      isn't something we do by hand.
+    </p>
+    <p class="back-top"><a href="#subprocessors">↑ Back to top</a></p>
+  </section>
+
+  <hr />
+
+  <!-- =================== TRANSFERS =================== -->
+  <section id="transfers">
+    <h2>Where the data goes</h2>
+    <p>
+      Your customers' data is stored in Canada. A few subprocessors above
+      briefly touch part of it outside Canada in the course of providing
+      their service to us: Google, to confirm a sign-in; Anthropic, for
+      category suggestions (business name and item list only, as noted
+      above); and Resend, only if a password reset is requested.
+      <span class="review">[[REVIEW: same gap as the Privacy Policy's equivalent section — the region our own application server (Railway) runs in could not be confirmed from the codebase as of this writing. Confirm and update this paragraph once known, and confirm whether any additional cross-border transfer safeguard (e.g. standard contractual clauses) is legally required for the subprocessors named above.]]</span>
+    </p>
+    <p class="back-top"><a href="#transfers">↑ Back to top</a></p>
+  </section>
+
+  <hr />
+
+  <!-- =================== ASSISTANCE =================== -->
+  <section id="assistance">
+    <h2>Helping with your customers' requests</h2>
+    <p>
+      If one of your customers asks you to access, correct, or delete their
+      data, you can look them up and delete their data with your business
+      directly from <a href="/dashboard/customer-emails">your dashboard</a>
+      — no need to come to us first. If you need help with a request our
+      tools don't cover, contact us at <%= entity.contactEmail %>.
+    </p>
+    <p class="back-top"><a href="#assistance">↑ Back to top</a></p>
+  </section>
+
+  <hr />
+
+  <!-- =================== BREACH =================== -->
+  <section id="breach">
+    <h2>If something goes wrong</h2>
+    <p>
+      If a security incident happens that puts your customers' personal
+      data at risk, we'll notify you without undue delay after becoming
+      aware of it, so you can meet your own legal obligations as the
+      controller.
+      <span class="review">[[REVIEW: same gap as the Privacy Policy's equivalent section — confirm the specific notification timeline this DPA should commit to (e.g. "within 72 hours"), consistent with whatever PIPEDA/provincial timeline research resolves there, before publishing.]]</span>
+    </p>
+    <p class="back-top"><a href="#breach">↑ Back to top</a></p>
+  </section>
+
+  <hr />
+
+  <!-- =================== DELETION =================== -->
+  <section id="deletion">
+    <h2>Deleting or returning data</h2>
+    <p>
+      Our policy is to delete a customer's saved receipts and account
+      <strong><%= retention.SHOPPER_RECEIPT_MONTHS %> months</strong> after
+      they're created, and to remove or de-identify your own business data
+      <strong><%= retention.DEACTIVATED_MERCHANT_PURGE_DAYS %> days</strong>
+      after you close your ReceipTap account.
+      <span class="review">[[REVIEW: same operational-status gap as the Privacy Policy and Terms of Service — automatic deletion on this schedule is built into our systems (services/dataRetentionService.js) but has not been switched on in production as of this writing (RETENTION_PURGE_ENABLED is unset). Confirm live status before publishing this page, or describe current manual/ad-hoc handling instead.]]</span>
+    </p>
+    <p class="back-top"><a href="#deletion">↑ Back to top</a></p>
+  </section>
+
+  <hr />
+
+  <!-- =================== AUDIT =================== -->
+  <section id="audit">
+    <h2>Demonstrating compliance</h2>
+    <p>
+      <span class="review">[[REVIEW: no audit-rights clause has been decided yet. A typical DPA gives the controller (you) some right to request information demonstrating our compliance with this agreement, sometimes including a right to audit (directly or via a third party) with reasonable notice. Given this is currently a small operation without a dedicated compliance team, decide what's realistic to commit to here — e.g. a written attestation on request, rather than an on-site audit right — before publishing this page.]]</span>
+    </p>
+    <p class="back-top"><a href="#audit">↑ Back to top</a></p>
+  </section>
+
+  <hr />
+
+  <!-- =================== LIABILITY =================== -->
+  <section id="liability">
+    <h2>Liability</h2>
+    <p>
+      <span class="review">[[REVIEW: the Terms of Service caps our total liability at the subscription fees paid in the prior 12 months (see the Terms' "Limitation of liability" section). Whether that same cap should apply to claims arising specifically from this DPA — or whether data-protection claims need to be carved out with a different (often higher, or uncapped) limit, as many DPAs do — is a legal decision, not one made here. Confirm before publishing this page.]]</span>
+    </p>
+    <p class="back-top"><a href="#liability">↑ Back to top</a></p>
+  </section>
+
+  <hr />
+
+  <!-- =================== CHANGES =================== -->
+  <section id="changes">
+    <h2>Changes to this DPA</h2>
+    <p>
+      When we make a real change to this DPA — most commonly adding,
+      replacing, or dropping a subprocessor — we publish the new version
+      here and update the "last updated" date at the top. The next time
+      you visit your dashboard after a real change, you'll be asked to
+      review and accept the new version before continuing.
+    </p>
+    <p class="back-top"><a href="#changes">↑ Back to top</a></p>
+  </section>
+
+  <hr />
+
+  <!-- =================== GOVERNING LAW =================== -->
+  <section id="law">
+    <h2>Governing law</h2>
+    <p>
+      This DPA is governed by the laws of <%= entity.governingLaw %>, same
+      as our Terms of Service.
+    </p>
+
+    <h2>Contact us</h2>
+    <div class="contact-box">
+      <%= entity.contactRole %><br />
+      <%= entity.legalName %><br />
+      <%= entity.registeredAddress || '[[REVIEW: address pending]]' %><br />
+      <a href="mailto:<%= entity.contactEmail %>"><%= entity.contactEmail %></a>
+    </div>
+  </section>
+</div>

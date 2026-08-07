@@ -1,10 +1,10 @@
 // routes/legal.js
-// Stub pages so the signup checkboxes link somewhere real instead of a dead
-// link (no policy text lives here -- that's a separate, deliberate task),
-// plus the re-acceptance interstitial the dashboard redirects to when
-// middleware/legalReacceptance.js finds a stale acceptance. Both the stub
-// pages and this form read their version/label from config/legal.js, the
-// single source of truth.
+// Serves the three real legal documents (Terms, Privacy, DPA -- their
+// actual content lives in views/partials/legal-*-content.ejs), plus the
+// re-acceptance interstitial the dashboard redirects to when
+// middleware/legalReacceptance.js finds a stale acceptance. Both the
+// documents and this form read their version/label from config/legal.js,
+// the single source of truth.
 const express = require('express');
 const router = express.Router();
 const { LEGAL_DOCUMENTS } = require('../config/legal');

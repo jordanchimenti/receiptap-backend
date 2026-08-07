@@ -1,8 +1,7 @@
 <!-- views/partials/legal-terms-content.ejs -->
 <!-- The real Terms of Service body. Included by views/legal-document.ejs only
-     when documentType === 'TERMS' -- DPA still renders the plain
-     "coming soon" stub. Every [[REVIEW: ...]] marker below is also
-     collected in docs/LEGAL_REVIEW_NOTES.md -- if you resolve one here,
+     when documentType === 'TERMS'. Every [[REVIEW: ...]] marker below is
+     also collected in docs/LEGAL_REVIEW_NOTES.md -- if you resolve one here,
      resolve it there too.
 
      PLAN-AGNOSTIC BY DESIGN: no dollar figure, trial length, or plan name
@@ -57,7 +56,7 @@
 
   <p class="intro">
     These Terms are between <strong><%= entity.legalName %></strong>
-    (<%= entity.registeredAddress || '<span class="review">[[REVIEW: address pending]]</span>' %>)
+    (<%- entity.registeredAddress || '<span class="review">[[REVIEW: address pending]]</span>' %>)
     and the business that creates a ReceipTap account ("you," "the
     business"). They're written for businesses, not for the individual
     shoppers who tap a puck to get a receipt — shoppers are covered by our

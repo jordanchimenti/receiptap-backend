@@ -1,9 +1,11 @@
 <!-- views/legal-document.ejs -->
-<!-- DPA still has no real text, so it falls through to the "coming soon"
-     stub below. Privacy and Terms have real content now, rendered from
-     partials/legal-privacy-content.ejs and partials/legal-terms-content.ejs
-     -- see routes/legal.js for the `documentType`/`entity`/`retention`
-     locals both depend on. -->
+<!-- All three documents have real content now, rendered from
+     partials/legal-privacy-content.ejs, partials/legal-terms-content.ejs,
+     and partials/legal-dpa-content.ejs -- see routes/legal.js for the
+     `documentType`/`entity`/`retention` locals all three depend on. The
+     "coming soon" fallback below is now unreachable for TERMS/PRIVACY/DPA;
+     it's kept only in case a fourth document type is ever added here
+     before its own content is written. -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -17,6 +19,8 @@
     <%- include('partials/legal-privacy-content', { doc, entity, retention }) %>
   <% } else if (documentType === 'TERMS') { %>
     <%- include('partials/legal-terms-content', { doc, entity, retention }) %>
+  <% } else if (documentType === 'DPA') { %>
+    <%- include('partials/legal-dpa-content', { doc, entity, retention }) %>
   <% } else { %>
     <div class="centered-shell">
       <div class="auth-card">

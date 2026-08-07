@@ -6,13 +6,11 @@ itself, rendered inline on the page — this file is a summary index of it,
 not a replacement for reading the page.
 
 Covers: **Privacy Policy** (`/legal/privacy`, rendered from
-`views/partials/legal-privacy-content.ejs`, version `2026-08-05.2`) and
+`views/partials/legal-privacy-content.ejs`, version `2026-08-05.2`),
 **Terms of Service** (`/legal/terms`, rendered from
-`views/partials/legal-terms-content.ejs`, version `2026-08-06.2`).
-
-The Data Processing Agreement (`/legal/dpa`) has no drafted content yet —
-it still renders the "coming soon" stub, so there is nothing to review on
-that page yet.
+`views/partials/legal-terms-content.ejs`, version `2026-08-06.2`), and
+**Data Processing Agreement** (`/legal/dpa`, rendered from
+`views/partials/legal-dpa-content.ejs`, version `2026-08-06.1`).
 
 ---
 
@@ -162,17 +160,21 @@ paragraph if the app server itself runs outside Canada.
 
 ---
 
-## 6. DPA has no content yet
+## 6. DPA has no content yet — RESOLVED
 
 **Where:** "Our role for your customers' data" (merchant section), links to
 `/legal/dpa`.
 
-**Issue:** the Privacy Policy references the Data Processing Agreement as
-where the processor relationship is spelled out in detail, but that page is
-still the "coming soon" stub.
-
-**Needed:** write the DPA before treating this Privacy Policy as final —
-right now the link points to an empty page.
+**Status: RESOLVED**, as of `DPA.version` `2026-08-06.1`. The DPA is now
+drafted (`views/partials/legal-dpa-content.ejs`), covering roles, scope,
+security measures, subprocessors, transfers, breach notification, deletion,
+audit rights, and liability. It has its own set of open `[[REVIEW: ...]]`
+items — see the new "Data Processing Agreement" section below, after item
+20 — most of which restate gaps already listed above (address, retention/
+purge-live-status, transfer region, breach timeline) because the same
+underlying facts are now stated in a third document, plus two genuinely new
+open questions (audit rights, whether the Terms' liability cap extends to
+DPA claims).
 
 ---
 
@@ -387,6 +389,74 @@ document looks like, and whether a merchant with a separately-signed DPA
 should still have their `LegalAcceptance` DPA row written (documenting
 that the click-through was superseded) or handled entirely outside this
 table.
+
+---
+
+## Data Processing Agreement
+
+The DPA (`/legal/dpa`) was drafted as part of the same pass that produced
+this update — see item 6 above. It reuses the same `ENTITY` constant as
+Terms/Privacy, so items 1/10 (registered address) resolve there too once
+filled in. Its subprocessor list must be kept in sync with the Privacy
+Policy's merchant "Subprocessors" section by hand — they describe the same
+underlying facts to two different audiences and there's no shared template
+enforcing that today.
+
+**Restated gaps** (same underlying fact as an item above, now also stated
+on the DPA page — resolving the item above resolves this too, nothing
+separate to track):
+
+- Registered address — same as item 1/10.
+- Retention windows enforced in code but not live in production
+  (`RETENTION_PURGE_ENABLED` unset) — same as item 2/19.
+- Application server (Railway) region unconfirmed — same as item 5.
+- Breach notification timeline unconfirmed under PIPEDA — same as item 8.
+
+## 21. Security-measures language is deliberately conservative
+
+**Where:** "Security measures."
+
+**Issue:** the page states only what's actually implemented and confirmed
+today (hashed passwords, cards never touching our servers, HTTPS, session
+auth) — it does not claim a formal certification (SOC 2, ISO 27001) or an
+encryption-at-rest guarantee from Supabase or our hosting provider, since
+neither has been independently confirmed.
+
+**Needed:** confirm what Supabase and the hosting provider actually
+guarantee (encryption at rest, in particular) before strengthening this
+language — don't assert more than is currently known to be true.
+
+---
+
+## 22. Audit rights not decided
+
+**Where:** "Demonstrating compliance."
+
+**Issue:** no audit-rights clause has been decided. A typical DPA gives the
+controller (the merchant) some right to request information demonstrating
+compliance, sometimes including a right to audit — directly or via a third
+party — with reasonable notice. This is currently a small operation without
+a dedicated compliance team.
+
+**Needed:** decide what's realistic to commit to (e.g. a written
+attestation on request, rather than an on-site audit right) and replace the
+placeholder paragraph with it.
+
+---
+
+## 23. Whether the Terms' liability cap extends to DPA claims
+
+**Where:** "Liability."
+
+**Issue:** the Terms of Service cap total liability at the subscription
+fees paid in the prior 12 months. Whether that same cap should apply to
+claims arising specifically from the DPA, or whether data-protection claims
+need a separate (often higher, or uncapped) limit, as is common in DPAs
+generally, hasn't been decided.
+
+**Needed:** a legal decision on whether to carve out a different liability
+limit for DPA/data-protection claims, then replace the placeholder
+paragraph with the answer.
 
 ---
 

@@ -26,8 +26,8 @@ const LEGAL_DOCUMENTS = {
     label: 'Privacy Policy',
   },
   DPA: {
-    version: '2026-08-05.1',
-    lastUpdated: '2026-08-05',
+    version: '2026-08-06.1',
+    lastUpdated: '2026-08-06',
     label: 'Data Processing Agreement',
   },
 };

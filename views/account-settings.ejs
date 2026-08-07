@@ -6,6 +6,23 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Settings - ReceipTap</title>
   <link rel="stylesheet" href="/css/receiptap.css" />
+  <style>
+    .deactivate-modal-overlay {
+      display: none;
+      position: fixed; inset: 0; background: rgba(15, 23, 42, 0.45);
+      align-items: center; justify-content: center; z-index: 100;
+    }
+    .deactivate-modal-overlay.open { display: flex; }
+    .deactivate-modal-box {
+      background: #fff; border-radius: 14px; padding: 28px; width: 440px; max-width: 90vw;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+    }
+    .deactivate-modal-box h2 { font-size: 18px; margin: 0 0 12px; color: var(--danger); }
+    .deactivate-modal-box p { font-size: 13.5px; color: var(--ink-soft); margin: 0 0 12px; line-height: 1.55; }
+    .deactivate-modal-box ul { margin: 0 0 16px; padding-left: 20px; }
+    .deactivate-modal-box li { font-size: 13.5px; color: var(--ink-soft); margin-bottom: 8px; line-height: 1.5; }
+    .deactivate-modal-box li strong { color: var(--ink); }
+  </style>
 </head>
 <body>
   <%- include('partials/dashboard-header', { activeNav: 'account' }) %>
@@ -85,6 +102,53 @@
         <% } %>
       </div>
     </div>
+
+    <!-- Danger zone -->
+    <div class="card" style="margin-bottom:20px; border-color: var(--danger);">
+      <div class="card-head"><h2 style="color: var(--danger);">Danger zone</h2></div>
+      <div style="padding:18px 20px; display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap;">
+        <div>
+          <div style="font-size:14px; font-weight:600; margin-bottom:2px;">Deactivate account</div>
+          <div style="font-size:12.5px; color:var(--ink-soft); max-width:480px;">
+            Immediately ends your access and can't be undone by you — if you
+            just want to stop paying but keep using ReceipTap until your
+            current period ends, <a href="/dashboard/billing">cancel your subscription</a>
+            from Billing instead.
+          </div>
+        </div>
+        <button type="button" class="btn btn-secondary" style="width:auto; color:var(--danger); border-color:var(--danger);" id="open-deactivate-modal">Deactivate account</button>
+      </div>
+    </div>
   </div>
+
+  <div class="deactivate-modal-overlay" id="deactivate-modal" onclick="if (event.target === this) closeDeactivateModal();">
+    <div class="deactivate-modal-box">
+      <h2>Deactivate your account?</h2>
+      <ul>
+        <% if (['ACTIVE', 'TRIALING', 'PAST_DUE'].includes(merchant.subscriptionStatus)) { %>
+          <li><strong>Your subscription is cancelled right now</strong> — even if you have paid time remaining, not at the end of your billing period.</li>
+        <% } %>
+        <li><strong>You're logged out immediately and can't log back in</strong> — there's no self-serve way to reactivate. Undoing this requires contacting us directly.</li>
+        <li><strong>Your account data is permanently deleted in <%= purgeDays %> days.</strong></li>
+      </ul>
+      <p>If you just want to stop being billed but keep your receipts working until your paid period ends, use "Cancel Subscription" on the Billing page instead — this is different from that.</p>
+      <form method="POST" action="/dashboard/settings/account/deactivate" style="margin:0 0 10px;">
+        <button type="submit" class="btn btn-primary" style="width:100%; background: var(--danger);">Yes, deactivate my account</button>
+      </form>
+      <button type="button" onclick="closeDeactivateModal();" style="width:100%; background:none; border:none; padding:10px; font-size:13px; font-weight:600; color:var(--ink-soft); cursor:pointer; font-family:var(--font-body);">Never mind, take me back</button>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      var openBtn = document.getElementById('open-deactivate-modal');
+      if (openBtn) openBtn.addEventListener('click', function () {
+        document.getElementById('deactivate-modal').classList.add('open');
+      });
+    })();
+    function closeDeactivateModal() {
+      document.getElementById('deactivate-modal').classList.remove('open');
+    }
+  </script>
 </body>
 </html>

@@ -8,6 +8,7 @@ const router = express.Router();
 const bcrypt = require('bcrypt');
 const prisma = require('../lib/prisma');
 const { stripe } = require('../services/stripeService');
+const { DEACTIVATED_MERCHANT_PURGE_DAYS } = require('../config/retention');
 
 function requireAuth(req, res, next) {
   if (!req.session?.merchantId) return res.redirect('/login');
@@ -23,6 +24,7 @@ router.get('/dashboard/settings/account', requireAuth, async (req, res) => {
     passwordError: req.query.passwordError || null,
     passwordSuccess: req.query.passwordSuccess === '1',
     posError: req.query.posError || null,
+    purgeDays: DEACTIVATED_MERCHANT_PURGE_DAYS,
   });
 });
 
@@ -91,12 +93,18 @@ router.post('/dashboard/settings/account/disconnect-pos', requireAuth, async (re
   res.redirect('/dashboard/settings/account');
 });
 
-// POST /dashboard/settings/account/deactivate — cancels billing, blocks
-// future logins. Data isn't touched immediately (a mistaken deactivation
-// should be reversible without having already lost anything), but sets
-// deactivatedAt so services/dataRetentionService.js's purgeDeactivatedMerchants()
-// knows when the DEACTIVATED_MERCHANT_PURGE_DAYS grace window (config/retention.js)
-// started -- after which this merchant's data is actually purged for real.
+// POST /dashboard/settings/account/deactivate — cancels billing immediately
+// (not at period end, unlike the Billing page's "Cancel Subscription" —
+// see docs/LEGAL_REVIEW_NOTES.md item 24) and blocks future logins right
+// away. Data itself isn't deleted immediately -- deactivatedAt just starts
+// the DEACTIVATED_MERCHANT_PURGE_DAYS grace window (config/retention.js)
+// that services/dataRetentionService.js's purgeDeactivatedMerchants() later
+// acts on -- but there's no self-serve reactivation flow anywhere in this
+// app (routes/auth.js blocks login once isActive is false), so from the
+// merchant's own side this is immediate and permanent, not "reversible" in
+// any way they can act on themselves. The view (account-settings.ejs) warns
+// about this plainly before the confirming click, precisely because the
+// consequence is real and can't be undone by the person triggering it.
 router.post('/dashboard/settings/account/deactivate', requireAuth, async (req, res) => {
   const merchant = await prisma.merchant.findUnique({ where: { id: req.session.merchantId } });
 

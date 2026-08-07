@@ -500,12 +500,40 @@ paragraph with the answer.
 
 ---
 
-## 24. Three cancellation paths, two different behaviors — code risk, not just a wording gap
+## 24. Three cancellation paths, two different behaviors — RESOLVED (warned), one path still unconfirmed
 
 **Where:** not a `[[REVIEW]]` marker on any page — a cross-cutting
 consistency issue found while drafting the Refunds section (item 14
 above), since accurately describing "what happens when you cancel"
 required checking what the code actually does.
+
+**Status: RESOLVED for paths 1 and 2** (2026-08-07). Founder decision: the
+divergence is intentional — "Deactivate account" is meant to be more final
+than "Cancel Subscription," not an oversight — so the fix was a clear
+warning, not changing the behavior. `views/account-settings.ejs` now has a
+"Danger zone" section with a "Deactivate account" button (previously,
+there was no UI trigger for this route at all — see the note below) that
+opens a confirmation modal stating, plainly: the subscription is cancelled
+*right now* (shown only when a subscription is actually active), the
+merchant is logged out immediately with no self-serve way back in, and
+account data is permanently deleted after the real
+`DEACTIVATED_MERCHANT_PURGE_DAYS` window (read from `config/retention.js`,
+not hardcoded). It also points to "Cancel Subscription" on the Billing
+page as the right choice for someone who just wants to stop paying.
+
+**Bonus finding while building this:** `/dashboard/settings/account/deactivate`
+had **no UI entry point anywhere** before this fix — the route existed and
+worked, but no button or form in any view called it. It's also, in
+practice, **not reversible by the merchant at all**: `routes/auth.js`
+blocks login the instant `isActive` is false, and per the schema comment
+on `Merchant.deactivatedAt`, there's no reactivation flow anywhere in the
+app — only a founder editing the database by hand could undo it. The
+route's own comment previously claimed this "should be reversible," which
+was inaccurate; fixed to describe the real behavior.
+
+**Still open — path 3:** Stripe's own Customer Portal cancellation
+behavior remains unconfirmed (see item 14, Gap 2) — a Stripe Dashboard
+setting, not visible in this codebase.
 
 **Issue:** there are three distinct ways a merchant's subscription stops,
 and they behave differently:

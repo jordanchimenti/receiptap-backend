@@ -17,6 +17,7 @@ const {
   handleWebhookEvent,
   hasAccess,
   mapStripeStatus,
+  syncPuckReturnWindows,
   TRIAL_DAYS,
   SHIPPING_FEE_CENTS,
   applyRetentionDiscount,
@@ -82,10 +83,12 @@ router.get('/dashboard/billing', requireAuth, async (req, res) => {
     const subs = await stripe.subscriptions.list({ customer: merchant.stripeCustomerId, limit: 1 });
     const sub = subs.data[0];
     if (sub) {
+      const status = mapStripeStatus(sub.status);
       merchant = await prisma.merchant.update({
         where: { id: merchant.id },
-        data: { stripeSubscriptionId: sub.id, subscriptionStatus: mapStripeStatus(sub.status) },
+        data: { stripeSubscriptionId: sub.id, subscriptionStatus: status },
       });
+      await syncPuckReturnWindows(merchant.id, status);
     }
   }
 

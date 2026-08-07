@@ -122,6 +122,16 @@ model Puck {
   createdAt DateTime  @default(now())
   claimedAt DateTime?
 
+  // Hardware return tracking (Terms of Service, "Hardware (NFC pucks)"
+  // section) -- set on every puck a merchant currently has when their
+  // subscription is canceled (see syncPuckReturnWindows() in
+  // services/stripeService.js), cleared if they restart before returning
+  // it. Tracking only -- the $60 USD replacement fee itself is still
+  // charged by hand in Stripe if the deadline passes with no return; see
+  // docs/LEGAL_REVIEW_NOTES.md item 7 for why that isn't automated (yet).
+  returnDeadlineAt DateTime?
+  returnedAt       DateTime? // set from /admin/pucks once the founder confirms a puck physically arrived back
+
   @@index([merchantId])
   @@index([claimCode])
 }

@@ -11,7 +11,7 @@
 // enforced and reactivations are honored even before webhooks are set up.
 
 const prisma = require('../lib/prisma');
-const { stripe } = require('../services/stripeService');
+const { stripe, syncPuckReturnWindows } = require('../services/stripeService');
 
 const REFRESH_INTERVAL_MS = 10 * 60 * 1000;
 const lastRefresh = new Map(); // merchantId -> timestamp
@@ -34,10 +34,12 @@ async function refreshStatusFromStripe(merchant) {
     const sub = await stripe.subscriptions.retrieve(merchant.stripeSubscriptionId);
     const status = mapStripeStatus(sub.status);
     if (status !== merchant.subscriptionStatus) {
-      return prisma.merchant.update({
+      const updated = await prisma.merchant.update({
         where: { id: merchant.id },
         data: { subscriptionStatus: status },
       });
+      await syncPuckReturnWindows(merchant.id, status);
+      return updated;
     }
   } catch (err) {
     console.error('[subscriptionGate] Stripe status refresh failed:', err.message);

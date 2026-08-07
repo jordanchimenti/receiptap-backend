@@ -63,6 +63,46 @@
     <% if (error) { %><div class="error-box" style="margin-bottom:18px;"><%= error %></div><% } %>
 
     <div class="card" style="margin-bottom:20px;">
+      <div class="card-head">
+        <h2>Pending puck returns</h2>
+        <span style="font-size:12.5px;color:var(--ink-soft);"><%= pendingReturns.length.toLocaleString('en-US') %> awaiting return</span>
+      </div>
+      <% if (pendingReturns.length === 0) { %>
+        <div class="blank">
+          <div class="bt">No pucks currently awaiting return</div>
+          <div class="bd">A row shows up here once a merchant with pucks cancels their subscription.</div>
+        </div>
+      <% } else { %>
+        <table class="dtable">
+          <thead>
+            <tr><th>Merchant</th><th>Puck ID</th><th>Return deadline</th><th>Status</th><th></th></tr>
+          </thead>
+          <tbody>
+            <% pendingReturns.forEach(function (p) { %>
+              <tr>
+                <td><%= p.merchantName %><br /><span style="font-size:11.5px; color:var(--ink-soft);"><%= p.merchantEmail %></span></td>
+                <td style="font-family:var(--font-mono);"><%= p.id %></td>
+                <td class="when"><%= new Date(p.deadline).toLocaleDateString('en-US', { dateStyle: 'medium' }) %></td>
+                <td>
+                  <% if (p.overdue) { %>
+                    <span class="pill pill-amber">Overdue — $60 fee applies</span>
+                  <% } else { %>
+                    <span class="pill pill-grey">Awaiting return</span>
+                  <% } %>
+                </td>
+                <td style="text-align:right;">
+                  <form method="POST" action="/admin/pucks/<%= p.id %>/mark-returned" style="margin:0;">
+                    <button type="submit" class="btn btn-secondary" style="width:auto; padding:5px 10px; font-size:12px;">Mark as returned</button>
+                  </form>
+                </td>
+              </tr>
+            <% }); %>
+          </tbody>
+        </table>
+      <% } %>
+    </div>
+
+    <div class="card" style="margin-bottom:20px;">
       <div class="card-head"><h2>Generate a puck</h2></div>
       <div style="padding: 18px 20px;">
         <p style="font-size:13px; color:var(--ink-soft); margin:0 0 14px;">Creates one new UNCLAIMED puck with a unique id and claim code.</p>

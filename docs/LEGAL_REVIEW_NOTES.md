@@ -72,13 +72,31 @@ What's still open:
    puck actually comes up, charge the $25 by hand in Stripe that one
    time rather than maintaining tracking infrastructure for it.
 
-7. **The $60 replacement fee itself has no automation.** Confirmed while
-   building the above: there's no prepaid-return-label emailing, no
-   30-day-return-window tracking, and no code path that actually charges
-   a departing merchant $60 for an unreturned puck. It's Terms-only
-   language today; enforcing it requires a human to notice and charge it
-   by hand in the Stripe Dashboard. Out of scope for this pass — flagging
-   only.
+7. **The $60 replacement fee — tracking built, charging still manual by
+   design.** Founder decision (2026-08-07): build the 30-day-return-window
+   tracking so it's visible, but keep the actual $60 charge a manual step
+   rather than automating an off-session card charge to a former customer
+   weeks after they've cancelled — getting that wrong (e.g. a puck lost in
+   transit, not the merchant's fault) risks a charge that feels
+   unauthorized to someone no longer actively using the product.
+
+   **What's built:** `Puck.returnDeadlineAt`/`returnedAt`
+   (`prisma/schema.prisma`), set by `syncPuckReturnWindows()` in
+   `services/stripeService.js` — called from every place
+   `Merchant.subscriptionStatus` actually changes (both Stripe webhook
+   handlers, the checkout-success sync in `routes/billing.js`, and the
+   polling fallback in `middleware/subscriptionGate.js`, since no Stripe
+   webhook secret is configured yet and any of these could be the one
+   that actually fires). Cancelling starts a 30-day deadline on every
+   puck the merchant currently has; restarting before returning it clears
+   the deadline. `/admin/pucks` shows every puck currently under a return
+   obligation, flags ones past their deadline as "$60 fee applies," and
+   has a "Mark as returned" action.
+
+   **Still not built, deliberately:** prepaid-return-label emailing (needs
+   a real shipping-carrier API integration, e.g. Shippo/EasyPost) and the
+   actual $60 charge itself — a human has to notice an overdue row on
+   `/admin/pucks` and charge it by hand in the Stripe Dashboard.
 
 ---
 

@@ -23,13 +23,13 @@ const SHIPPING_FEE_CENTS = 2500; // $25.00 USD
  *
  * The one-time $25 shipping fee is only added for a genuinely first-time
  * subscriber (subscriptionStatus !== 'CANCELED') -- a merchant restarting
- * after cancelling may or may not still have their puck depending on
- * whether they returned it under the Terms' 30-day return window, and
- * that isn't knowable from data this app tracks today. Charging shipping
- * again on every restart risks double-charging someone who kept their
- * puck; not charging it risks under-charging someone who returned it and
- * needs a new one shipped. Deliberately not guessed at here -- see
- * docs/LEGAL_REVIEW_NOTES.md for the open question on the restart case.
+ * after cancelling is never charged shipping again, permanently, by
+ * founder decision (2026-08-07): whether they still have their puck isn't
+ * tracked closely enough to charge correctly in both directions (Puck's
+ * returnDeadlineAt/returnedAt track the return window, but nothing
+ * upgrades a return window into "they definitely need a new puck shipped"
+ * automatically), and this scenario has had zero real-world volume so
+ * far. See docs/LEGAL_REVIEW_NOTES.md item 6 for the full reasoning.
  */
 async function createCheckoutSession(merchant, successUrl, cancelUrl) {
   if (!stripe) throw new Error('Stripe is not configured yet (missing STRIPE_SECRET_KEY).');
@@ -305,6 +305,32 @@ async function runScheduledPayouts() {
   }
 }
 
+const RETURN_WINDOW_DAYS = 30; // Terms' Hardware section: 30 days from cancellation to return a puck
+
+/**
+ * Starts or clears a merchant's puck return windows depending on their new
+ * subscription status. CANCELED starts a 30-day return clock (Terms'
+ * Hardware section) on every puck they currently have and haven't already
+ * returned. ACTIVE/TRIALING (a restart) clears any pending window, since
+ * they're keeping their hardware. This only tracks the clock — the $60 USD
+ * replacement fee itself is still charged by hand in Stripe if the deadline
+ * passes with no return; see docs/LEGAL_REVIEW_NOTES.md item 7 for why
+ * that isn't automated (yet).
+ */
+async function syncPuckReturnWindows(merchantId, newStatus) {
+  if (newStatus === 'CANCELED') {
+    await prisma.puck.updateMany({
+      where: { merchantId, returnDeadlineAt: null, returnedAt: null },
+      data: { returnDeadlineAt: new Date(Date.now() + RETURN_WINDOW_DAYS * 24 * 60 * 60 * 1000) },
+    });
+  } else if (newStatus === 'ACTIVE' || newStatus === 'TRIALING') {
+    await prisma.puck.updateMany({
+      where: { merchantId, returnDeadlineAt: { not: null }, returnedAt: null },
+      data: { returnDeadlineAt: null },
+    });
+  }
+}
+
 /**
  * Handles incoming Stripe webhook events. Keeps the local subscriptionStatus
  * in sync so the rest of the app never has to call Stripe directly to check
@@ -316,18 +342,24 @@ async function handleWebhookEvent(event) {
     case 'customer.subscription.updated': {
       const sub = event.data.object;
       const status = mapStripeStatus(sub.status);
-      await prisma.merchant.updateMany({
-        where: { stripeCustomerId: sub.customer },
+      const merchant = await prisma.merchant.findUnique({ where: { stripeCustomerId: sub.customer } });
+      if (!merchant) break;
+      await prisma.merchant.update({
+        where: { id: merchant.id },
         data: { stripeSubscriptionId: sub.id, subscriptionStatus: status },
       });
+      await syncPuckReturnWindows(merchant.id, status);
       break;
     }
     case 'customer.subscription.deleted': {
       const sub = event.data.object;
-      await prisma.merchant.updateMany({
-        where: { stripeCustomerId: sub.customer },
+      const merchant = await prisma.merchant.findUnique({ where: { stripeCustomerId: sub.customer } });
+      if (!merchant) break;
+      await prisma.merchant.update({
+        where: { id: merchant.id },
         data: { subscriptionStatus: 'CANCELED' },
       });
+      await syncPuckReturnWindows(merchant.id, 'CANCELED');
       break;
     }
     case 'invoice.payment_failed': {
@@ -371,6 +403,7 @@ module.exports = {
   getSubscriptionPrice,
   createPortalSession,
   handleWebhookEvent,
+  syncPuckReturnWindows,
   hasAccess,
   mapStripeStatus,
   TRIAL_DAYS,

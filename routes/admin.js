@@ -119,13 +119,23 @@ function puckUrl(req, id) {
 router.get('/admin/pucks', requireAdmin, async (req, res) => {
   const page = Math.max(1, parseInt(req.query.page, 10) || 1);
 
-  const [total, pucks] = await Promise.all([
+  const [total, pucks, pendingReturns] = await Promise.all([
     prisma.puck.count({ where: { source: 'ADMIN' } }),
     prisma.puck.findMany({
       where: { source: 'ADMIN' },
       orderBy: { createdAt: 'desc' },
       skip: (page - 1) * PUCKS_PER_PAGE,
       take: PUCKS_PER_PAGE,
+    }),
+    // Every puck currently under a return obligation, across ALL sources —
+    // not scoped to source: 'ADMIN' like the list above, since these are
+    // real merchants' actual hardware, not admin-panel test pucks. Set by
+    // syncPuckReturnWindows() in services/stripeService.js when a
+    // merchant's subscription is canceled.
+    prisma.puck.findMany({
+      where: { returnDeadlineAt: { not: null }, returnedAt: null },
+      orderBy: { returnDeadlineAt: 'asc' },
+      include: { merchant: { select: { businessName: true, email: true } } },
     }),
   ]);
 
@@ -137,7 +147,27 @@ router.get('/admin/pucks', requireAdmin, async (req, res) => {
     page,
     totalPages: Math.max(1, Math.ceil(total / PUCKS_PER_PAGE)),
     pucks: pucks.map((p) => ({ ...p, url: puckUrl(req, p.id) })),
+    pendingReturns: pendingReturns.map((p) => ({
+      id: p.id,
+      merchantName: p.merchant?.businessName || '(merchant no longer exists)',
+      merchantEmail: p.merchant?.email || '',
+      deadline: p.returnDeadlineAt,
+      overdue: p.returnDeadlineAt < new Date(),
+    })),
   });
+});
+
+// POST /admin/pucks/:id/mark-returned — founder confirms a puck physically
+// arrived back, closing its return window. Doesn't charge or refund
+// anything on its own — the $60 replacement fee is still charged by hand
+// in Stripe if a deadline passes with no return; see
+// docs/LEGAL_REVIEW_NOTES.md item 7 for why that isn't automated.
+router.post('/admin/pucks/:id/mark-returned', requireAdmin, async (req, res) => {
+  await prisma.puck.update({
+    where: { id: req.params.id },
+    data: { returnedAt: new Date() },
+  });
+  res.redirect('/admin/pucks');
 });
 
 // POST /admin/pucks/generate — mints one UNCLAIMED puck on demand, for

@@ -171,14 +171,16 @@ Solo founder, first-time coder. Explain in plain language, one step at a time.
   merchant-receipts, pos-setup, theme-settings, merchant-expenses.
 - Not deployed yet — in version control and pushed to GitHub
   (jordanchimenti/receiptap-backend) now, just not hosted anywhere real yet.
-- `/legal/terms`, `/legal/privacy`, `/legal/dpa` are stub "coming soon" pages
-  with no actual policy text yet — the checkboxes and acceptance-logging
-  infrastructure are real and working, the documents themselves aren't
-  written. Remember to bump the version in `config/legal.js` when they are
-  (see Conventions). The retention windows in `config/retention.js` have the
-  same problem — they're enforced in code but not documented anywhere a
-  shopper or merchant can actually read them yet, since that's the same
-  unwritten privacy policy.
+- `/legal/terms`, `/legal/privacy`, and `/legal/dpa` are all drafted now
+  (real content, not stubs — see `views/partials/legal-*-content.ejs`), and
+  the retention windows from `config/retention.js` are stated on them. But
+  none is launch-ready: each has open `[[REVIEW: ...]]` markers for
+  business/legal decisions not yet made (registered address, tax treatment,
+  refund policy, audit rights, whether live purging is actually on, etc.)
+  — full catalog in `docs/LEGAL_REVIEW_NOTES.md`. That file also flags a
+  **launch blocker**: the checkout screen (`views/billing.ejs`) doesn't
+  disclose price/currency/first-charge-date before payment the way the
+  Terms already promise it does.
 - **Live data-purging has never been turned on.** `RETENTION_PURGE_ENABLED`
   is unset in every environment; the daily job has only ever run in dry-run
   mode. Before flipping it on: watch its `PurgeLog` output in production for

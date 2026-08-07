@@ -308,16 +308,34 @@ is relied on, or decide on and document an interim manual process.
 
 ---
 
-## 14. No refund policy or refund logic exists
+## 14. Refund policy — RESOLVED (policy), two gaps remain
 
 **Where:** "Refunds."
 
-**Issue:** grepped the whole codebase — zero refund-related Stripe calls,
-zero refund routes, zero refund policy decided. A refund today would have
-to be issued by hand, directly in the Stripe Dashboard, one at a time.
+**Status: RESOLVED**, as of `TERMS.version` `2026-08-07.1`. Founder
+decision: no refunds after the trial, including for partial billing
+periods — downgrading or reduced usage doesn't generate a credit either.
+Two exceptions: a discretionary refund for extended service failure that's
+our fault, and a full refund for a genuine duplicate/erroneous charge.
+Hardware fees (shipping, replacement) are called out as separate from
+subscription fees and not governed by this section — see the Hardware
+section instead. A closing sentence preserves any right that can't be
+waived under applicable law.
 
-**Needed:** decide the actual policy (none, prorated, discretionary,
-time-limited, etc.) and replace the placeholder paragraph with it.
+**Gap 1 — operational, not policy:** there's still zero refund-related
+Stripe calls or refund routes in the codebase, so even the two exceptions
+above are issued by hand, one at a time, in the Stripe Dashboard. Flagged
+as an inline operational note on the page itself, not a `[[REVIEW]]`
+marker, since the policy question is what's resolved here.
+
+**Gap 2 — Stripe Customer Portal cancellation path unconfirmed:** the
+Billing page's "Manage in Stripe" button sends a merchant to Stripe's own
+Customer Portal, which also lets them cancel from there. Whether Stripe is
+configured (in the Stripe Dashboard, not this codebase) to cancel
+immediately or at period-end for that path hasn't been confirmed — flagged
+inline as a `[[REVIEW]]` marker rather than assumed to match either of the
+two paths described in the page (see item 24 below for why those two
+differ from each other in the first place).
 
 ---
 
@@ -479,6 +497,58 @@ generally, hasn't been decided.
 **Needed:** a legal decision on whether to carve out a different liability
 limit for DPA/data-protection claims, then replace the placeholder
 paragraph with the answer.
+
+---
+
+## 24. Three cancellation paths, two different behaviors — code risk, not just a wording gap
+
+**Where:** not a `[[REVIEW]]` marker on any page — a cross-cutting
+consistency issue found while drafting the Refunds section (item 14
+above), since accurately describing "what happens when you cancel"
+required checking what the code actually does.
+
+**Issue:** there are three distinct ways a merchant's subscription stops,
+and they behave differently:
+
+1. **"Cancel Subscription"** (Billing page → retention-discount modal) —
+   `cancelSubscriptionAtPeriodEnd()` in `services/stripeService.js`, which
+   calls `stripe.subscriptions.update(id, { cancel_at_period_end: true })`.
+   Access continues through the end of the already-paid period.
+2. **"Deactivate account"** (Account Settings) —
+   `routes/account-settings.js`'s `/dashboard/settings/account/deactivate`,
+   which calls `stripe.subscriptions.cancel(id)` — Stripe's **immediate**
+   cancellation, no period-end grace. In the same request, it also sets
+   `isActive: false` and `deactivatedAt: new Date()`, which starts the
+   `DEACTIVATED_MERCHANT_PURGE_DAYS` data-purge clock
+   (`config/retention.js`), and destroys the session immediately, logging
+   the merchant out on the spot.
+3. **Stripe's own Customer Portal** ("Manage in Stripe") — behavior is a
+   Stripe Dashboard setting, not confirmed from this codebase. See item 14,
+   Gap 2, above.
+
+**Why this is a risk beyond just wording it accurately (which the Refunds
+section now does):** a merchant who wants to stop paying but assumes
+"deactivate" is just a more thorough version of "cancel" gets a materially
+different outcome — losing access *today* instead of at their paid
+period's end, with no separate confirmation step calling that out, and
+their data-deletion clock silently starts in the same click. That's a UX
+and disclosure risk independent of what the Terms say: the Account
+Settings deactivate button doesn't warn a merchant that it behaves
+differently from the Billing page's cancel button, or that it starts data
+deletion.
+
+**Needed:** decide whether this divergence is intentional (deactivation is
+meant to be more final than cancellation) or accidental (an oversight from
+building the two flows separately at different times). If intentional,
+add an explicit warning on the "Deactivate account" button/confirmation
+about the immediate-access-loss and data-purge-clock consequences, so a
+merchant can't trigger it by mistake thinking it's equivalent to
+cancelling. If accidental, decide whether "Deactivate account" should
+instead cancel at period-end like the Billing page does, and only start
+the purge clock once the paid period actually ends. Either way, this
+should be reconciled in the product (button copy, confirmation flow, or
+the underlying Stripe call), not left as something only the Terms page
+explains correctly.
 
 ---
 

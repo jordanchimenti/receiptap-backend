@@ -212,7 +212,67 @@
   <section id="refunds">
     <h2>Refunds</h2>
     <p>
-      <span class="review">[[REVIEW: no refund policy has been decided, and no refund logic exists in our billing system today — a refund would currently have to be issued by hand, one at a time, directly in Stripe. Decide the actual policy (none, prorated, discretionary, etc.) and replace this paragraph with it. Until then, if you believe you were charged in error, contact us at <%= entity.contactEmail %> and we'll look at it individually.]]</span>
+      Your free trial is the time to decide whether ReceipTap is right for
+      you. A payment method is required to start it, but if you cancel
+      before it ends, you're never charged anything.
+    </p>
+    <p>
+      Once your trial ends and a subscription charge is made, that charge
+      is <strong>non-refundable</strong> — including for a partial billing
+      period. Downgrading your plan or using ReceipTap less during a
+      billing period doesn't generate a refund or credit either.
+    </p>
+
+    <h3>Cancelling vs. deactivating your account</h3>
+    <p>
+      <strong>Cancelling your subscription</strong>, from the Billing page
+      in your dashboard, stops future billing — you keep access through
+      the end of the period you already paid for, and no prorated refund
+      is issued for the unused remainder of it.
+    </p>
+    <p>
+      <strong>Deactivating your account</strong>, from Account Settings,
+      is different: it ends your subscription and your access
+      <strong>immediately</strong>, not at the end of your paid period, as
+      part of closing your account entirely. Deactivating partway through
+      a paid period doesn't produce a refund for the unused remainder
+      either — the trial is your opportunity to decide before you're ever
+      charged, not a right to a partial refund afterward.
+    </p>
+    <p>
+      <span class="review">[[REVIEW: a third path exists -- cancelling from Stripe's own Customer Portal (linked from the Billing page as "Manage in Stripe"). Whether that's configured as immediate or end-of-period cancellation is set in the Stripe Dashboard, not in this codebase, and hasn't been confirmed as of this writing. Confirm it and either fold its behavior into one of the two paths described above or describe it as its own case before this page is treated as final.]]</span>
+    </p>
+
+    <h3>Exceptions</h3>
+    <ul>
+      <li>
+        <strong>Service failure on our side.</strong> If ReceipTap is
+        materially unavailable or non-functional for an extended part of a
+        billing period because of a fault of ours, and we aren't able to
+        resolve it, we may — at our discretion — refund or credit you for
+        the affected period. Reach out to us at <%= entity.contactEmail %>
+        to request this.
+      </li>
+      <li>
+        <strong>Duplicate or erroneous charges.</strong> If you were
+        charged by mistake — for example, charged twice for the same
+        period — we'll refund the mistaken charge in full. Contact us at
+        <%= entity.contactEmail %> and we'll look into it.
+      </li>
+    </ul>
+    <p>
+      <span class="review">[[REVIEW: refunds under either exception above are still issued by hand, one at a time, directly in Stripe -- no refund logic exists in the billing system today. That's an operational gap, not a policy gap; the policy itself is decided (see docs/LEGAL_REVIEW_NOTES.md item 14).]]</span>
+    </p>
+
+    <p>
+      Hardware fees — the shipping charge and the puck replacement fee
+      described in the <a href="#hardware">Hardware (NFC pucks)</a>
+      section — are separate from your subscription fee and aren't
+      governed by this section.
+    </p>
+    <p>
+      Nothing in this section limits any right you have under applicable
+      law that can't be waived by agreement.
     </p>
     <p class="back-top"><a href="#refunds">↑ Back to top</a></p>
   </section>

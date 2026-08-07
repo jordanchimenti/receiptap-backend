@@ -8,10 +8,28 @@ const stripe = process.env.STRIPE_SECRET_KEY
 
 const TRIAL_DAYS = 30;
 
+// The Hardware section of the Terms of Service (TERMS.version 2026-08-06.2)
+// discloses this as a flat one-time charge to actually receive the included
+// puck. Charged as a one-time Checkout line item alongside the recurring
+// subscription price -- Stripe invoices and collects a one-time item
+// immediately at checkout even when the recurring item has a trial, so this
+// lands today, not deferred to when the trial ends.
+const SHIPPING_FEE_CENTS = 2500; // $25.00 USD
+
 /**
  * Creates a Stripe Checkout session for a merchant to start their subscription.
  * Card is collected upfront; Stripe runs a 30-day trial and auto-charges when
  * it ends. Reuses their existing Stripe customer if one already exists.
+ *
+ * The one-time $25 shipping fee is only added for a genuinely first-time
+ * subscriber (subscriptionStatus !== 'CANCELED') -- a merchant restarting
+ * after cancelling may or may not still have their puck depending on
+ * whether they returned it under the Terms' 30-day return window, and
+ * that isn't knowable from data this app tracks today. Charging shipping
+ * again on every restart risks double-charging someone who kept their
+ * puck; not charging it risks under-charging someone who returned it and
+ * needs a new one shipped. Deliberately not guessed at here -- see
+ * docs/LEGAL_REVIEW_NOTES.md for the open question on the restart case.
  */
 async function createCheckoutSession(merchant, successUrl, cancelUrl) {
   if (!stripe) throw new Error('Stripe is not configured yet (missing STRIPE_SECRET_KEY).');
@@ -30,10 +48,24 @@ async function createCheckoutSession(merchant, successUrl, cancelUrl) {
     });
   }
 
+  const isFirstTimeSubscriber = merchant.subscriptionStatus !== 'CANCELED';
+
+  const lineItems = [{ price: process.env.STRIPE_PRICE_ID, quantity: 1 }];
+  if (isFirstTimeSubscriber) {
+    lineItems.push({
+      price_data: {
+        currency: 'usd',
+        product_data: { name: 'ReceipTap puck — shipping (one-time)' },
+        unit_amount: SHIPPING_FEE_CENTS,
+      },
+      quantity: 1,
+    });
+  }
+
   const session = await stripe.checkout.sessions.create({
     customer: customerId,
     mode: 'subscription',
-    line_items: [{ price: process.env.STRIPE_PRICE_ID, quantity: 1 }],
+    line_items: lineItems,
     subscription_data: {
       trial_period_days: TRIAL_DAYS,
     },
@@ -45,6 +77,28 @@ async function createCheckoutSession(merchant, successUrl, cancelUrl) {
   });
 
   return session.url;
+}
+
+/**
+ * Fetches the real subscription price from Stripe (amount, currency,
+ * billing interval) — used so the pre-checkout screen can disclose the
+ * actual price instead of a hand-maintained copy of the number that goes
+ * stale silently if the Stripe Price is ever changed. Returns null if
+ * Stripe isn't configured or the price can't be fetched, so the caller can
+ * degrade gracefully rather than crash the billing page over this.
+ */
+async function getSubscriptionPrice() {
+  if (!stripe || !process.env.STRIPE_PRICE_ID) return null;
+  try {
+    const price = await stripe.prices.retrieve(process.env.STRIPE_PRICE_ID);
+    return {
+      amount: (price.unit_amount / 100).toFixed(2),
+      currency: price.currency.toUpperCase(),
+      interval: price.recurring?.interval || 'month',
+    };
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -314,11 +368,13 @@ function hasAccess(merchant) {
 module.exports = {
   stripe,
   createCheckoutSession,
+  getSubscriptionPrice,
   createPortalSession,
   handleWebhookEvent,
   hasAccess,
   mapStripeStatus,
   TRIAL_DAYS,
+  SHIPPING_FEE_CENTS,
   applyRetentionDiscount,
   cancelSubscriptionAtPeriodEnd,
   resumeSubscription,

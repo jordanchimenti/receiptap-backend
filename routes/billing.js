@@ -12,10 +12,13 @@ const prisma = require('../lib/prisma');
 const {
   stripe,
   createCheckoutSession,
+  getSubscriptionPrice,
   createPortalSession,
   handleWebhookEvent,
   hasAccess,
   mapStripeStatus,
+  TRIAL_DAYS,
+  SHIPPING_FEE_CENTS,
   applyRetentionDiscount,
   cancelSubscriptionAtPeriodEnd,
   resumeSubscription,
@@ -92,6 +95,11 @@ router.get('/dashboard/billing', requireAuth, async (req, res) => {
   let upcoming = null;
   let activeReceiptTaps = 0;
 
+  // Fetched regardless of whether this merchant has a Stripe customer yet —
+  // someone who's never subscribed still needs to see the real price before
+  // they click "Start free trial," not just existing subscribers.
+  const price = await getSubscriptionPrice();
+
   if (stripe && merchant.stripeCustomerId) {
     const [subResult, pmResult, invResult, upcomingResult, puckCount] = await Promise.all([
       merchant.stripeSubscriptionId
@@ -117,9 +125,23 @@ router.get('/dashboard/billing', requireAuth, async (req, res) => {
     activeReceiptTaps = puckCount;
   }
 
+  // The exact date a first charge would land if they start a trial today —
+  // shown on the "Not started"/"Restart subscription" screen before the
+  // card is ever collected, not just computed after a subscription exists.
+  const trialFirstChargeDate = new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000)
+    .toLocaleDateString('en-US', { dateStyle: 'medium' });
+
   res.render('billing', {
     merchant,
     access: hasAccess(merchant),
+    price,
+    trialDays: TRIAL_DAYS,
+    trialFirstChargeDate,
+    shippingFee: (SHIPPING_FEE_CENTS / 100).toFixed(2),
+    // Restarting after a cancellation doesn't charge shipping again — see
+    // the isFirstTimeSubscriber comment on createCheckoutSession() in
+    // services/stripeService.js for why that's deliberate, not an oversight.
+    chargesShipping: merchant.subscriptionStatus !== 'CANCELED',
     error: req.query.error || null,
     blocked: req.query.blocked === '1',
     success: req.query.success === '1',

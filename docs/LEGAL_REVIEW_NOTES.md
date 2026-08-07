@@ -23,58 +23,61 @@ session it hands off to (`services/stripeService.js` `createCheckoutSession`).
 **Issue:** the Terms of Service's "Subscription and billing" section
 promises that the trial length, exact amount, billing interval, and plan
 are "shown to you on the signup screen before you enter your card." Audited
-against the actual code, and that's only partly true:
+against the actual code, and that was only partly true.
 
-- ✅ Trial length appears, but only baked into the button text ("Start
-  30-day free trial") — not stated as a standalone disclosure.
-- ⚠️ Price appears ("$49.99 / month" at `views/billing.ejs:124`), but it's a
-  **hardcoded string in the template**, not fetched from Stripe or any DB
-  field — if the Stripe Price is ever changed, this goes stale silently and
-  the page starts showing a wrong price.
-- ❌ Currency is never labeled anywhere on this screen — just a bare `$`.
-- ❌ The exact date of first charge is not shown anywhere before the card
-  is submitted — it's only computed and displayed *after* a subscription
-  already exists.
+**Status: items 1–4 RESOLVED.** `views/billing.ejs` now shows, before the
+"Start 30-day free trial"/"Restart subscription" button:
 
-After this screen, the merchant is sent to Stripe's own hosted Checkout
-page, which is Stripe's UI, not this codebase's — whether it separately
-discloses an exact first-charge date or currency there could not be
-confirmed by reading this repo.
+- The real price and billing interval, fetched live from Stripe
+  (`getSubscriptionPrice()` in `services/stripeService.js`, reading the
+  `Price` object referenced by `STRIPE_PRICE_ID`) — no more hand-maintained
+  hardcoded number that can drift silently from the real Stripe price.
+- An explicit currency label (`USD`) next to every price shown on the page,
+  not just a bare `$`.
+- The exact first-charge date, computed as today + the real `TRIAL_DAYS`
+  constant, shown as a standalone sentence ("30-day free trial, then
+  $49.99 USD / month starting [date] — cancel anytime before then and pay
+  nothing. A card is required to start the trial.") — not just implied by
+  the button text, and not only computed after a subscription already
+  exists.
 
-**Why this is a blocker, not a routine `[[REVIEW]]`:** both the Ontario
-Consumer Protection Act and US auto-renewal laws require clear disclosure
-of price, renewal terms, and cancellation method *before* a purchase is
-completed. A Terms page reachable by a link satisfies the "in writing
-somewhere" requirement, not the "shown before you pay" requirement — those
-are two different legal obligations, and right now only the first one is
-met.
+What's still open:
 
-**Needed before launch:**
-1. Replace the hardcoded price in `views/billing.ejs` with a real value —
-   ideally fetched from the Stripe Price object referenced by
-   `STRIPE_PRICE_ID`, not a second hand-maintained copy of the number.
-2. Add an explicit currency label next to the price.
-3. Compute and display the exact first-charge date on this same screen,
-   before the "Start free trial" button — not just after subscribing.
-4. Confirm what Stripe's own hosted Checkout page shows once configured
-   with the real Price/trial settings, and make sure it doesn't contradict
-   whatever ends up on our own pre-checkout screen.
-5. **New, as of the Hardware section being written (`TERMS.version`
-   `2026-08-06.1`–`.2`):** the Terms now disclose two real hardware
-   charges — a **$60 USD per-unit puck replacement fee** (unreturned puck
-   after cancellation, or lost/damaged while subscribed), and a **$25 USD
-   shipping charge** to actually receive the included puck in the first
-   place. The shipping charge is the more urgent of the two: it's a
-   near-certain cost for essentially every new subscriber, tied directly
-   to signup, not a contingent one like the replacement fee. Both are
-   currently disclosed only on the Terms page itself — nowhere on the
-   checkout/signup screen mentions either before a merchant agrees to the
-   Terms and starts a subscription. Same underlying issue as items 1-4
-   above: a fact that's legally required to be disclosed *before* payment
-   isn't yet shown anywhere pre-payment, only in a linked document.
+4. **Stripe's own hosted Checkout page** is Stripe's UI, not this
+   codebase's — whether it separately (and consistently) discloses the
+   first-charge date and currency there could not be confirmed by reading
+   this repo. Worth a manual check against the real Checkout session once
+   convenient.
+5. **Shipping charge — RESOLVED for first-time signups.** The $25 USD
+   shipping fee is now a real one-time Stripe Checkout line item
+   (`services/stripeService.js` `createCheckoutSession`), added alongside
+   the recurring subscription price and charged immediately at checkout —
+   verified against the real Stripe API that it's uncoupled from the
+   trial (the recurring item shows $0 due today, the shipping item shows
+   the full $25.00 due today). Disclosed on the pre-payment screen in
+   `views/billing.ejs` next to the trial/price disclosure.
 
-This was not fixed as part of drafting the Terms — flagging only, per
-instruction.
+6. **New open question: shipping charge on a "Restart subscription."**
+   The $25 fee is only charged when `merchant.subscriptionStatus !==
+   'CANCELED'` — a merchant restarting after a prior cancellation is
+   *not* charged shipping again, deliberately, because whether they still
+   have their puck depends on whether they returned it under the 30-day
+   return window (see the $60 replacement fee above), and that isn't
+   tracked anywhere in this app today. This avoids ever double-charging
+   someone who kept their puck, at the cost of potentially under-charging
+   someone who returned it and needs a new one shipped for a restart.
+   **Needed:** decide whether/how to track "does this merchant currently
+   have a puck in hand" so a restart can charge shipping correctly in
+   both directions, or confirm the current conservative default (never
+   charge on restart) is acceptable for now.
+
+7. **The $60 replacement fee itself has no automation.** Confirmed while
+   building the above: there's no prepaid-return-label emailing, no
+   30-day-return-window tracking, and no code path that actually charges
+   a departing merchant $60 for an unreturned puck. It's Terms-only
+   language today; enforcing it requires a human to notice and charge it
+   by hand in the Stripe Dashboard. Out of scope for this pass — flagging
+   only.
 
 ---
 

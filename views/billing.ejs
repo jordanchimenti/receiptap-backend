@@ -126,7 +126,9 @@
           <div style="display:flex; align-items:flex-start; justify-content:space-between; margin-bottom: 16px;">
             <div>
               <div style="font-size:16px; font-weight:700;">ReceipTap Monthly</div>
-              <div style="font-size:13px; color:var(--ink-soft);">$49.99 / month</div>
+              <% if (price) { %>
+                <div style="font-size:13px; color:var(--ink-soft);">$<%= price.amount %> <%= price.currency %> / <%= price.interval %></div>
+              <% } %>
             </div>
             <span class="badge <%= access ? 'badge-teal' : 'badge-amber' %>">
               <% if (merchant.subscriptionStatus === 'ACTIVE') { %>Active
@@ -165,6 +167,19 @@
               </div>
             </div>
           <% } else { %>
+            <% if (price) { %>
+              <div style="font-size:12.5px; color:var(--ink-soft); margin-bottom:10px; line-height:1.5;">
+                <%= trialDays %>-day free trial, then
+                <strong>$<%= price.amount %> <%= price.currency %> / <%= price.interval %></strong>
+                starting <strong><%= trialFirstChargeDate %></strong> — cancel anytime before
+                then and pay nothing.
+                <% if (chargesShipping) { %>
+                  A one-time <strong>$<%= shippingFee %> USD shipping fee</strong> for your
+                  ReceipTap puck is charged today, separately from the trial.
+                <% } %>
+                A card is required to start the trial.
+              </div>
+            <% } %>
             <form method="POST" action="/dashboard/billing/checkout" style="margin:0;">
               <button type="submit" class="btn btn-primary">
                 <% if (merchant.subscriptionStatus === 'CANCELED') { %>Restart subscription<% } else { %>Start 30-day free trial<% } %>

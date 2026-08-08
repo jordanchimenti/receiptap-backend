@@ -9,6 +9,11 @@ const router = express.Router();
 const prisma = require('../lib/prisma');
 const { fetchOrder } = require('../services/squareService');
 const { fetchOrder: fetchCloverOrder, getValidAccessToken: getValidCloverAccessToken } = require('../services/cloverService');
+const {
+  fetchSale: fetchLightspeedSale,
+  getValidAccessToken: getValidLightspeedAccessToken,
+  verifyLightspeedSignature,
+} = require('../services/lightspeedService');
 
 const CLAIM_WINDOW_MS = 3 * 60 * 1000; // how long a puck shows the live receipt before reverting
 
@@ -272,5 +277,101 @@ function verifyCloverAuth(req) {
   if (!expected) return true;
   return req.headers['x-clover-auth'] === expected;
 }
+
+// ---------------------------------------------------------------------------
+// Lightspeed Retail (X-Series). LEAST VERIFIED handler in this file -- built
+// from public docs before this app had real Lightspeed credentials to test
+// against (see services/lightspeedService.js's header comment). The field
+// mapping below is best-effort, same posture as Clover's line-item mapping
+// note further up this file: verify against a real sandbox sale before
+// fully trusting it.
+// ---------------------------------------------------------------------------
+router.post('/webhooks/pos/lightspeed', async (req, res) => {
+  if (!verifyLightspeedSignature(req)) return res.sendStatus(401);
+
+  try {
+    const body = JSON.parse(req.body.toString('utf8'));
+
+    // Only a completed sale should generate a receipt -- ignore every other
+    // event type this app hasn't asked to be notified about. X-Series's
+    // docs note the `status` field is being deprecated in favor of a
+    // separate sale-state mechanism; CLOSED is the documented "done and
+    // paid" value as of this writing, but that migration is worth
+    // rechecking once a real account exists.
+    if (body.type !== 'sale.update') return res.sendStatus(200);
+
+    const domainPrefix = body.domain_prefix || body.retailer?.domain_prefix;
+    const saleId = body.id || body.payload?.id || body.data?.id;
+    if (!domainPrefix || !saleId) return res.sendStatus(200);
+
+    const merchant = await prisma.merchant.findFirst({ where: { lightspeedDomainPrefix: domainPrefix } });
+    if (!merchant) return res.sendStatus(404); // event from a Lightspeed retailer we don't recognize
+
+    // Lightspeed retries webhook delivery, and sale.update can fire more
+    // than once for one sale (layby/account sales) -- if this sale is
+    // already saved, just acknowledge and stop.
+    const existing = await prisma.transaction.findUnique({ where: { id: saleId } });
+    if (existing) return res.sendStatus(200);
+
+    const accessToken = await getValidLightspeedAccessToken(merchant);
+    const sale = await fetchLightspeedSale(domainPrefix, accessToken, saleId);
+
+    if (sale.status !== 'CLOSED') return res.sendStatus(200);
+
+    // Best-effort field mapping -- register_sale_products' exact shape
+    // (product name field in particular) hasn't been confirmed against a
+    // real sandbox sale. Falls back to a generic label rather than crash
+    // or show "undefined" on a real customer's receipt if a field is named
+    // differently than expected here.
+    const lineItemRows = sale.register_sale_products || sale.line_items || [];
+    const lineItems = lineItemRows.map((li) => ({
+      name: li.product_name || li.name || 'Item',
+      quantity: Number(li.quantity) || 1,
+      unitPrice: Math.round(Number(li.price || 0) * 100),
+      total: Math.round(Number(li.price || 0) * (Number(li.quantity) || 1) * 100),
+    }));
+
+    const totalTax = Math.round(Number(sale.totals?.total_tax || sale.total_tax || 0) * 100);
+    const totalPrice = Math.round(Number(sale.totals?.total_price || sale.total_price || 0) * 100);
+
+    const transaction = await prisma.transaction.create({
+      data: {
+        id: saleId,
+        merchantId: merchant.id,
+        posProvider: 'lightspeed',
+        posLocationId: sale.register_id || sale.outlet_id || domainPrefix,
+        posDeviceId: null,
+        orderNumber: sale.invoice_number || sale.receipt_number || null,
+        createdAt: sale.sale_date ? new Date(sale.sale_date) : new Date(),
+        lineItems,
+        subtotal: totalPrice - totalTax,
+        tax: totalTax,
+        discountTotal: 0,
+        total: totalPrice,
+        paymentMethod: null, // payment method detail not confirmed against a real sandbox sale yet
+      },
+    });
+
+    // A Lightspeed (X-Series) connection is a single retailer -- no
+    // device-level lanes to disambiguate between, same as Clover.
+    const puck = await prisma.puck.findFirst({
+      where: { merchantId: merchant.id, posLocationId: domainPrefix, posDeviceId: null },
+    });
+    if (puck) {
+      await prisma.puck.update({
+        where: { id: puck.id },
+        data: {
+          currentTransactionId: transaction.id,
+          transactionExpiresAt: new Date(Date.now() + CLAIM_WINDOW_MS),
+        },
+      });
+    }
+
+    res.sendStatus(200);
+  } catch (err) {
+    console.error('Error processing Lightspeed webhook:', err);
+    res.sendStatus(500); // tells Lightspeed to retry
+  }
+});
 
 module.exports = router;

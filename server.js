@@ -31,11 +31,14 @@ process.on('uncaughtException', (err) => {
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
-// Stripe and Square webhooks both need the raw, unparsed body for signature
-// verification — must be mounted BEFORE express.json() below, or the global
-// parser drains the body stream first and verification always fails.
+// Stripe, Square, and Lightspeed webhooks all need the raw, unparsed body
+// for signature verification — must be mounted BEFORE express.json() below,
+// or the global parser drains the body stream first and verification
+// always fails. Clover doesn't need this (its auth is a plain header
+// compare, not an HMAC over the body).
 app.use('/webhooks/stripe', express.raw({ type: 'application/json' }));
 app.use('/webhooks/pos/square', express.raw({ type: 'application/json' }));
+app.use('/webhooks/pos/lightspeed', express.raw({ type: 'application/json' }));
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -60,7 +63,7 @@ app.use(require('./routes/auth'));           // signup / login / logout
 app.use(require('./routes/legal'));          // /legal/terms, /legal/privacy, /legal/dpa -- stub pages linked from signup
 app.use(require('./routes/pucks'));          // /r/:puckId tap routing, /claim/:puckId
 app.use(require('./routes/receipt'));        // /receipt/:transactionId
-app.use(require('./routes/webhooks'));       // /webhooks/pos/square, /webhooks/pos/clover
+app.use(require('./routes/webhooks'));       // /webhooks/pos/square, /webhooks/pos/clover, /webhooks/pos/lightspeed
 
 // Demo-account gate: a free, no-card merchant (Merchant.isDemoAccount) can
 // only reach receipt design and billing (to upgrade) -- everything else on
@@ -97,6 +100,7 @@ app.use('/dashboard', (req, res, next) => {
 
 app.use(require('./routes/oauth-square'));   // /oauth/square/connect + callback, /dashboard/pos-setup
 app.use(require('./routes/oauth-clover'));   // /oauth/clover/connect + callback, /dashboard/pos-setup/assign-clover
+app.use(require('./routes/oauth-lightspeed')); // /oauth/lightspeed/connect + callback, /dashboard/pos-setup/assign-lightspeed
 app.use(require('./routes/merchant-dashboard'));  // /dashboard/receipts, /dashboard/receipts-hub
 app.use(require('./routes/merchant-expenses'));   // /dashboard/expenses, save-expense
 app.use(require('./routes/repeat-customers'));      // /dashboard/repeat-customers, AI-recognized repeat customer analytics + CSV export

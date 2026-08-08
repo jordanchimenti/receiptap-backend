@@ -62,6 +62,25 @@
     </div>
   <% } %>
 
+  <h2>Lightspeed</h2>
+  <% if (!lightspeedConnected) { %>
+    <p>Connect your Lightspeed Retail account so ReceipTap can automatically generate receipts from your sales.</p>
+    <a class="connect-btn" href="/oauth/lightspeed/connect">Connect Lightspeed</a>
+  <% } else { %>
+    <div class="connected-badge">✅ Lightspeed Connected</div>
+    <p>A Lightspeed connection is one store, so just assign a puck to it:</p>
+
+    <div class="location-row">
+      <div><strong>Register</strong></div>
+      <select onchange="assignLightspeedPuck(this.value)">
+        <option value="">Select a puck...</option>
+        <% pucks.forEach(function(p) { %>
+          <option value="<%= p.id %>" <%= p.posLocationId === lightspeedDomainPrefix ? 'selected' : '' %>><%= p.id %></option>
+        <% }); %>
+      </select>
+    </div>
+  <% } %>
+
   </div>
 
   <script>
@@ -83,6 +102,16 @@
         body: JSON.stringify({ puckId }),
       });
       alert('Puck assigned to your Clover store.');
+    }
+
+    async function assignLightspeedPuck(puckId) {
+      if (!puckId) return;
+      await fetch('/dashboard/pos-setup/assign-lightspeed', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ puckId }),
+      });
+      alert('Puck assigned to your Lightspeed store.');
     }
   </script>
 </body>

@@ -58,6 +58,20 @@ model Merchant {
   cloverRefreshToken         String?
   cloverAccessTokenExpiresAt DateTime?
 
+  // Lightspeed Retail (X-Series) OAuth. Like Clover, the access token
+  // expires -- services/lightspeedService.js's getValidAccessToken uses
+  // lightspeedAccessTokenExpiresAt the same way cloverService.js does.
+  // Unlike Clover, the refresh token itself ROTATES on every refresh (the
+  // old one is revoked the moment a new one is issued), so both tokens get
+  // overwritten together on every refresh, never just the access token.
+  // lightspeedDomainPrefix identifies which X-Series retailer this is --
+  // X-Series has no separate numeric merchant ID the way Square/Clover do;
+  // API calls are made against https://{domainPrefix}.retail.lightspeed.app.
+  lightspeedDomainPrefix         String?   @unique
+  lightspeedAccessToken          String?
+  lightspeedRefreshToken         String?
+  lightspeedAccessTokenExpiresAt DateTime?
+
   // Billing — ReceipTap's own subscription (merchant pays ReceipTap monthly).
   // Trial lives in Stripe: card collected at checkout, 30-day trial, then
   // auto-charge. INCOMPLETE = signed up but hasn't completed checkout yet.

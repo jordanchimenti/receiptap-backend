@@ -41,8 +41,14 @@ const REFRESH_SAFETY_MARGIN_MS = 60 * 1000;
 // request as of X-Series's 2026-06-01 change. sales:read/outlets:read/
 // registers:read/taxes:read cover reading a completed sale's line items,
 // totals, tax, and register/outlet info; webhooks is required separately
-// to create the per-retailer webhook subscription below.
-const LIGHTSPEED_SCOPES = 'sales:read outlets:read registers:read taxes:read webhooks';
+// to create the per-retailer webhook subscription below. products:read
+// added 2026-08-09 -- a sale's line items only carry product.id, not a
+// name, so this is needed to show real item names on a receipt rather than
+// the generic "Item" fallback in routes/webhooks.js. Any merchant who
+// connected before this scope was added needs to reconnect to actually be
+// granted it -- adding it here doesn't retroactively upgrade existing
+// tokens.
+const LIGHTSPEED_SCOPES = 'sales:read outlets:read registers:read taxes:read products:read webhooks';
 
 // Step 2 of OAuth: exchange the temporary authorization code for a token
 // pair. domainPrefix comes back from Lightspeed alongside the code on the

@@ -279,12 +279,17 @@ function verifyCloverAuth(req) {
 }
 
 // ---------------------------------------------------------------------------
-// Lightspeed Retail (X-Series). LEAST VERIFIED handler in this file -- built
-// from public docs before this app had real Lightspeed credentials to test
-// against (see services/lightspeedService.js's header comment). The field
-// mapping below is best-effort, same posture as Clover's line-item mapping
-// note further up this file: verify against a real sandbox sale before
-// fully trusting it.
+// Lightspeed Retail (X-Series). Field mapping below was corrected 2026-08-09
+// against a REAL completed sale on a real trial store (see the git history
+// for the original, doc-only-derived guesses this replaced) -- the original
+// version silently dropped every sale because it checked `sale.status !==
+// 'CLOSED'`, but the real field is `sale.state === 'closed'` (different
+// name, different casing) -- a completely different field, not a typo fix.
+// Line items also don't carry a product name inline -- only `product.id` --
+// so this OAuth connection would need `products:read` scope (added to
+// LIGHTSPEED_SCOPES going forward, but existing connections need to
+// reconnect to actually be granted it) before names can resolve; falls back
+// to a generic label rather than an extra API call per line item for now.
 // ---------------------------------------------------------------------------
 router.post('/webhooks/pos/lightspeed', async (req, res) => {
   if (!verifyLightspeedSignature(req)) return res.sendStatus(401);
@@ -293,11 +298,7 @@ router.post('/webhooks/pos/lightspeed', async (req, res) => {
     const body = JSON.parse(req.body.toString('utf8'));
 
     // Only a completed sale should generate a receipt -- ignore every other
-    // event type this app hasn't asked to be notified about. X-Series's
-    // docs note the `status` field is being deprecated in favor of a
-    // separate sale-state mechanism; CLOSED is the documented "done and
-    // paid" value as of this writing, but that migration is worth
-    // rechecking once a real account exists.
+    // event type this app hasn't asked to be notified about.
     if (body.type !== 'sale.update') return res.sendStatus(200);
 
     const domainPrefix = body.domain_prefix || body.retailer?.domain_prefix;
@@ -316,39 +317,43 @@ router.post('/webhooks/pos/lightspeed', async (req, res) => {
     const accessToken = await getValidLightspeedAccessToken(merchant);
     const sale = await fetchLightspeedSale(domainPrefix, accessToken, saleId);
 
-    if (sale.status !== 'CLOSED') return res.sendStatus(200);
+    if (sale.state !== 'closed') return res.sendStatus(200);
 
-    // Best-effort field mapping -- register_sale_products' exact shape
-    // (product name field in particular) hasn't been confirmed against a
-    // real sandbox sale. Falls back to a generic label rather than crash
-    // or show "undefined" on a real customer's receipt if a field is named
-    // differently than expected here.
-    const lineItemRows = sale.register_sale_products || sale.line_items || [];
-    const lineItems = lineItemRows.map((li) => ({
-      name: li.product_name || li.name || 'Item',
+    // Real shape confirmed live: sale.line_items[], each with quantity,
+    // product.id (no inline name -- see header comment), and
+    // pricing.price/pricing.total in dollars.
+    const lineItems = (sale.line_items || []).map((li) => ({
+      name: 'Item', // product.id only -- see header comment on products:read
       quantity: Number(li.quantity) || 1,
-      unitPrice: Math.round(Number(li.price || 0) * 100),
-      total: Math.round(Number(li.price || 0) * (Number(li.quantity) || 1) * 100),
+      unitPrice: Math.round(Number(li.pricing?.price || 0) * 100),
+      total: Math.round(Number(li.pricing?.total || 0) * 100),
     }));
 
-    const totalTax = Math.round(Number(sale.totals?.total_tax || sale.total_tax || 0) * 100);
-    const totalPrice = Math.round(Number(sale.totals?.total_price || sale.total_price || 0) * 100);
+    // Real shape confirmed live: sale.totals.price (pre-tax),
+    // sale.totals.tax, sale.totals.price_incl_tax (post-tax total) -- all
+    // in dollars.
+    const subtotal = Math.round(Number(sale.totals?.price || 0) * 100);
+    const tax = Math.round(Number(sale.totals?.tax || 0) * 100);
+    const total = Math.round(Number(sale.totals?.price_incl_tax || 0) * 100);
 
     const transaction = await prisma.transaction.create({
       data: {
         id: saleId,
         merchantId: merchant.id,
         posProvider: 'lightspeed',
-        posLocationId: sale.register_id || sale.outlet_id || domainPrefix,
+        posLocationId: sale.source?.register_id || sale.source?.outlet_id || domainPrefix,
         posDeviceId: null,
         orderNumber: sale.invoice_number || sale.receipt_number || null,
-        createdAt: sale.sale_date ? new Date(sale.sale_date) : new Date(),
+        createdAt: sale.date ? new Date(sale.date) : new Date(),
         lineItems,
-        subtotal: totalPrice - totalTax,
-        tax: totalTax,
+        subtotal,
+        tax,
         discountTotal: 0,
-        total: totalPrice,
-        paymentMethod: null, // payment method detail not confirmed against a real sandbox sale yet
+        total,
+        // sale.payments was an empty array on a real confirmed Cash sale --
+        // genuinely no payment-method data available from this endpoint as
+        // observed, not a mapping guess.
+        paymentMethod: null,
       },
     });
 

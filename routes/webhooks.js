@@ -14,6 +14,7 @@ const {
   getValidAccessToken: getValidLightspeedAccessToken,
   verifyLightspeedSignature,
 } = require('../services/lightspeedService');
+const { verifyShopifyWebhook } = require('../services/shopifyService');
 
 const CLAIM_WINDOW_MS = 3 * 60 * 1000; // how long a puck shows the live receipt before reverting
 
@@ -376,6 +377,98 @@ router.post('/webhooks/pos/lightspeed', async (req, res) => {
   } catch (err) {
     console.error('Error processing Lightspeed webhook:', err);
     res.sendStatus(500); // tells Lightspeed to retry
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Shopify POS. Only the orders/paid topic is subscribed to (see
+// oauth-shopify.js), so every request here already represents a completed
+// payment -- no separate "is this actually paid" check needed the way
+// Square/Clover's handlers have to make one. source_name is checked instead
+// to filter OUT online-storefront orders: this app only wants in-person
+// register sales, and a shop can generate both from one connection.
+// ---------------------------------------------------------------------------
+router.post('/webhooks/pos/shopify', async (req, res) => {
+  if (!verifyShopifyWebhook(req)) return res.sendStatus(401);
+
+  try {
+    const order = JSON.parse(req.body.toString('utf8'));
+
+    // "pos" is Shopify's own source_name value for a Shopify POS (in-person)
+    // sale -- "web", "mobile_app", etc. are online-channel orders this app
+    // has no use for.
+    if (order.source_name !== 'pos') return res.sendStatus(200);
+
+    const shopDomain = req.headers['x-shopify-shop-domain'];
+    if (!shopDomain) return res.sendStatus(200);
+
+    const merchant = await prisma.merchant.findFirst({ where: { shopifyShopDomain: shopDomain } });
+    if (!merchant) return res.sendStatus(404); // event from a shop we don't recognize
+
+    const transactionId = String(order.id);
+
+    // Shopify retries webhook delivery -- if this order is already saved,
+    // just acknowledge and stop.
+    const existing = await prisma.transaction.findUnique({ where: { id: transactionId } });
+    if (existing) return res.sendStatus(200);
+
+    // Money fields are decimal strings in the shop's currency (e.g. "9.99"),
+    // not cents -- convert here like every other provider's handler does.
+    const lineItems = (order.line_items || []).map((li) => {
+      const quantity = Number(li.quantity) || 1;
+      const unitPrice = Math.round(Number(li.price || 0) * 100);
+      return {
+        name: li.name || li.title,
+        quantity,
+        unitPrice,
+        total: unitPrice * quantity,
+      };
+    });
+
+    const subtotal = Math.round(Number(order.subtotal_price || 0) * 100);
+    const tax = Math.round(Number(order.total_tax || 0) * 100);
+    const total = Math.round(Number(order.total_price || 0) * 100);
+    const discountTotal = Math.round(Number(order.total_discounts || 0) * 100);
+
+    const transaction = await prisma.transaction.create({
+      data: {
+        id: transactionId,
+        merchantId: merchant.id,
+        posProvider: 'shopify',
+        // A Shopify connection is treated as one location for now -- see
+        // oauth-shopify.js's assign-shopify comment.
+        posLocationId: shopDomain,
+        posDeviceId: null,
+        orderNumber: order.name || (order.order_number ? String(order.order_number) : null),
+        createdAt: order.created_at ? new Date(order.created_at) : new Date(),
+        lineItems,
+        subtotal,
+        tax,
+        discountTotal,
+        total,
+        paymentMethod: Array.isArray(order.payment_gateway_names) && order.payment_gateway_names.length
+          ? order.payment_gateway_names[0]
+          : null,
+      },
+    });
+
+    const puck = await prisma.puck.findFirst({
+      where: { merchantId: merchant.id, posLocationId: shopDomain, posDeviceId: null },
+    });
+    if (puck) {
+      await prisma.puck.update({
+        where: { id: puck.id },
+        data: {
+          currentTransactionId: transaction.id,
+          transactionExpiresAt: new Date(Date.now() + CLAIM_WINDOW_MS),
+        },
+      });
+    }
+
+    res.sendStatus(200);
+  } catch (err) {
+    console.error('Error processing Shopify webhook:', err);
+    res.sendStatus(500); // tells Shopify to retry
   }
 });
 

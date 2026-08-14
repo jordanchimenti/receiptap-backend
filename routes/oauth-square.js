@@ -68,9 +68,9 @@ router.get('/oauth/square/callback', requireAuth, async (req, res) => {
 });
 
 // Step 3 (immediately after connecting): fetch their locations automatically.
-// Also renders Clover's and Lightspeed's connection state -- both are a
-// single location each (no picker needed there), so this just needs to know
-// if either is connected at all, not fetch anything further.
+// Also renders Clover's, Lightspeed's, and Shopify's connection state -- all
+// three are a single location each (no picker needed there), so this just
+// needs to know if each is connected at all, not fetch anything further.
 router.get('/dashboard/pos-setup', requireAuth, async (req, res) => {
   const merchant = await prisma.merchant.findUnique({ where: { id: req.session.merchantId } });
   const pucks = await prisma.puck.findMany({ where: { merchantId: merchant.id } });
@@ -78,9 +78,11 @@ router.get('/dashboard/pos-setup', requireAuth, async (req, res) => {
   const cloverMerchantId = merchant.cloverMerchantId;
   const lightspeedConnected = Boolean(merchant.lightspeedAccessToken);
   const lightspeedDomainPrefix = merchant.lightspeedDomainPrefix;
+  const shopifyConnected = Boolean(merchant.shopifyAccessToken);
+  const shopifyShopDomain = merchant.shopifyShopDomain;
 
   if (!merchant.squareAccessToken) {
-    return res.render('pos-setup', { connected: false, locations: [], pucks, cloverConnected, cloverMerchantId, lightspeedConnected, lightspeedDomainPrefix });
+    return res.render('pos-setup', { connected: false, locations: [], pucks, cloverConnected, cloverMerchantId, lightspeedConnected, lightspeedDomainPrefix, shopifyConnected, shopifyShopDomain });
   }
 
   const locResponse = await fetch(`${SQUARE_BASE_URL}/v2/locations`, {
@@ -88,7 +90,7 @@ router.get('/dashboard/pos-setup', requireAuth, async (req, res) => {
   });
   const { locations } = await locResponse.json();
 
-  res.render('pos-setup', { connected: true, locations: locations || [], pucks, cloverConnected, cloverMerchantId, lightspeedConnected, lightspeedDomainPrefix });
+  res.render('pos-setup', { connected: true, locations: locations || [], pucks, cloverConnected, cloverMerchantId, lightspeedConnected, lightspeedDomainPrefix, shopifyConnected, shopifyShopDomain });
 });
 
 // Assign a puck to a specific Square location/register

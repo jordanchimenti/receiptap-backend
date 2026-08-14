@@ -81,9 +81,47 @@
     </div>
   <% } %>
 
+  <h2>Shopify</h2>
+  <% if (!shopifyConnected) { %>
+    <p>Connect your Shopify POS account so ReceipTap can automatically generate receipts from in-person sales.</p>
+    <form onsubmit="event.preventDefault(); connectShopify();" style="display:flex; gap:8px; align-items:center; margin-top:12px;">
+      <input type="text" id="shopify-domain" placeholder="yourstorename.myshopify.com" style="padding:8px 12px; border-radius:6px; border:1px solid #ddd; min-width:260px;" />
+      <button type="submit" class="connect-btn" style="margin-top:0;">Connect Shopify</button>
+    </form>
+  <% } else { %>
+    <div class="connected-badge">✅ Shopify Connected (<%= shopifyShopDomain %>)</div>
+    <p>A Shopify connection is one store, so just assign a puck to it:</p>
+
+    <div class="location-row">
+      <div><strong>Register</strong></div>
+      <select onchange="assignShopifyPuck(this.value)">
+        <option value="">Select a puck...</option>
+        <% pucks.forEach(function(p) { %>
+          <option value="<%= p.id %>" <%= p.posLocationId === shopifyShopDomain ? 'selected' : '' %>><%= p.id %></option>
+        <% }); %>
+      </select>
+    </div>
+  <% } %>
+
   </div>
 
   <script>
+    function connectShopify() {
+      const domain = document.getElementById('shopify-domain').value.trim().toLowerCase();
+      if (!domain) return;
+      window.location.href = '/oauth/shopify/connect?shop=' + encodeURIComponent(domain);
+    }
+
+    async function assignShopifyPuck(puckId) {
+      if (!puckId) return;
+      await fetch('/dashboard/pos-setup/assign-shopify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ puckId }),
+      });
+      alert('Puck assigned to your Shopify store.');
+    }
+
     async function assignPuck(locationId, puckId) {
       if (!puckId) return;
       await fetch('/dashboard/pos-setup/assign', {

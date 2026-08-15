@@ -9,6 +9,8 @@
     .location-row { display: flex; justify-content: space-between; align-items: center; padding: 14px; background: #f9fafb; border-radius: 8px; margin-bottom: 8px; }
     select { padding: 6px 10px; border-radius: 6px; border: 1px solid #ddd; }
     .connected-badge { color: #059669; font-weight: 600; font-size: 13px; }
+    .connected-row { display: flex; align-items: center; gap: 12px; }
+    .disconnect-btn { background: none; border: none; color: #dc2626; font-size: 13px; font-weight: 600; cursor: pointer; padding: 0; text-decoration: underline; }
   </style>
 </head>
 <body>
@@ -27,7 +29,10 @@
     <p>Connect your Square account so ReceipTap can automatically generate receipts from your sales.</p>
     <a class="connect-btn" href="/oauth/square/connect">Connect Square</a>
   <% } else { %>
-    <div class="connected-badge">✅ Square Connected</div>
+    <div class="connected-row">
+      <div class="connected-badge">✅ Square Connected</div>
+      <%- include('partials/disconnect-pos-form', { provider: 'square' }) %>
+    </div>
     <p>Assign a ReceipTap puck to each register:</p>
 
     <% locations.forEach(function(loc) { %>
@@ -48,7 +53,10 @@
     <p>Connect your Clover account so ReceipTap can automatically generate receipts from your sales.</p>
     <a class="connect-btn" href="/oauth/clover/connect">Connect Clover</a>
   <% } else { %>
-    <div class="connected-badge">✅ Clover Connected</div>
+    <div class="connected-row">
+      <div class="connected-badge">✅ Clover Connected</div>
+      <%- include('partials/disconnect-pos-form', { provider: 'clover' }) %>
+    </div>
     <p>A Clover connection is one store, so just assign a puck to it:</p>
 
     <div class="location-row">
@@ -67,7 +75,10 @@
     <p>Connect your Lightspeed Retail account so ReceipTap can automatically generate receipts from your sales.</p>
     <a class="connect-btn" href="/oauth/lightspeed/connect">Connect Lightspeed</a>
   <% } else { %>
-    <div class="connected-badge">✅ Lightspeed Connected</div>
+    <div class="connected-row">
+      <div class="connected-badge">✅ Lightspeed Connected</div>
+      <%- include('partials/disconnect-pos-form', { provider: 'lightspeed' }) %>
+    </div>
     <p>A Lightspeed connection is one store, so just assign a puck to it:</p>
 
     <div class="location-row">
@@ -89,7 +100,10 @@
       <button type="submit" class="connect-btn" style="margin-top:0;">Connect Shopify</button>
     </form>
   <% } else { %>
-    <div class="connected-badge">✅ Shopify Connected (<%= shopifyShopDomain %>)</div>
+    <div class="connected-row">
+      <div class="connected-badge">✅ Shopify Connected (<%= shopifyShopDomain %>)</div>
+      <%- include('partials/disconnect-pos-form', { provider: 'shopify' }) %>
+    </div>
     <p>A Shopify connection is one store, so just assign a puck to it:</p>
 
     <div class="location-row">

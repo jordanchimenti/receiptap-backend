@@ -73,24 +73,31 @@ router.post('/dashboard/settings/account/password', requireAuth, async (req, res
   res.redirect('/dashboard/settings/account?passwordSuccess=1');
 });
 
-// POST /dashboard/settings/account/disconnect-pos — clears whichever POS
-// integration is connected. Existing Puck rows keep their posLocationId/
-// posDeviceId untouched — they just go stale until reconnected.
-router.post('/dashboard/settings/account/disconnect-pos', requireAuth, async (req, res) => {
-  const merchant = await prisma.merchant.findUnique({ where: { id: req.session.merchantId } });
+// POST /dashboard/settings/account/disconnect-pos — clears one specific POS
+// integration, named by `provider` in the request body. A merchant can have
+// several providers connected at once (each is independent -- see
+// pos-setup.ejs), so this can no longer guess "whichever one is connected"
+// the way the original single-provider version did; the caller says which.
+// Existing Puck rows keep their posLocationId/posDeviceId untouched -- they
+// just go stale until reconnected, same as before.
+const POS_DISCONNECT_FIELDS = {
+  square: { squareMerchantId: null, squareAccessToken: null },
+  clover: { cloverMerchantId: null, cloverAccessToken: null, cloverRefreshToken: null, cloverAccessTokenExpiresAt: null },
+  lightspeed: { lightspeedDomainPrefix: null, lightspeedAccessToken: null, lightspeedRefreshToken: null, lightspeedAccessTokenExpiresAt: null },
+  shopify: { shopifyShopDomain: null, shopifyAccessToken: null },
+};
 
-  if (merchant.squareMerchantId) {
-    await prisma.merchant.update({
-      where: { id: merchant.id },
-      data: { squareMerchantId: null, squareAccessToken: null },
-    });
-  } else if (merchant.shopifyShopDomain) {
-    await prisma.merchant.update({
-      where: { id: merchant.id },
-      data: { shopifyShopDomain: null, shopifyAccessToken: null },
-    });
+router.post('/dashboard/settings/account/disconnect-pos', requireAuth, async (req, res) => {
+  const { provider, redirectTo } = req.body;
+  const destination = redirectTo === '/dashboard/pos-setup' ? redirectTo : '/dashboard/settings/account';
+
+  const fields = POS_DISCONNECT_FIELDS[provider];
+  if (!fields) {
+    return res.redirect(`${destination}?posError=${encodeURIComponent('Unknown POS provider.')}`);
   }
-  res.redirect('/dashboard/settings/account');
+
+  await prisma.merchant.update({ where: { id: req.session.merchantId }, data: fields });
+  res.redirect(destination);
 });
 
 // POST /dashboard/settings/account/deactivate — cancels billing immediately

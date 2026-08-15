@@ -84,20 +84,28 @@
       <div class="card-head"><h2>POS connection</h2></div>
       <div style="padding:18px 20px;">
         <% if (posError) { %><div class="error-box" style="margin-bottom:14px;"><%= posError %></div><% } %>
-        <% if (merchant.squareMerchantId) { %>
-          <p style="font-size:13.5px; margin:0 0 14px;">Connected via <strong>Square</strong>.</p>
-          <form method="POST" action="/dashboard/settings/account/disconnect-pos" style="margin:0;" onsubmit="return confirm('Disconnect your POS? Sales will stop generating receipts until you reconnect.');">
-            <button type="submit" class="btn btn-secondary" style="width:auto; color:var(--danger);">Disconnect Square</button>
-          </form>
-        <% } else if (merchant.shopifyShopDomain) { %>
-          <p style="font-size:13.5px; margin:0 0 14px;">Connected via <strong>Shopify</strong> (<%= merchant.shopifyShopDomain %>).</p>
-          <form method="POST" action="/dashboard/settings/account/disconnect-pos" style="margin:0;" onsubmit="return confirm('Disconnect your POS? Sales will stop generating receipts until you reconnect.');">
-            <button type="submit" class="btn btn-secondary" style="width:auto; color:var(--danger);">Disconnect Shopify</button>
-          </form>
+        <%
+          const connectedPos = [
+            merchant.squareMerchantId && { provider: 'square', label: 'Square' },
+            merchant.cloverMerchantId && { provider: 'clover', label: 'Clover' },
+            merchant.lightspeedDomainPrefix && { provider: 'lightspeed', label: `Lightspeed (${merchant.lightspeedDomainPrefix})` },
+            merchant.shopifyShopDomain && { provider: 'shopify', label: `Shopify (${merchant.shopifyShopDomain})` },
+          ].filter(Boolean);
+        %>
+        <% if (connectedPos.length) { %>
+          <% connectedPos.forEach(function(pos) { %>
+            <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--border);">
+              <p style="font-size:13.5px; margin:0;">Connected via <strong><%= pos.label %></strong>.</p>
+              <form method="POST" action="/dashboard/settings/account/disconnect-pos" style="margin:0;" onsubmit="return confirm('Disconnect this POS? Its sales will stop generating receipts until you reconnect.');">
+                <input type="hidden" name="provider" value="<%= pos.provider %>" />
+                <button type="submit" class="btn btn-secondary" style="width:auto; color:var(--danger);">Disconnect</button>
+              </form>
+            </div>
+          <% }); %>
         <% } else { %>
           <div class="blank">
             <div class="bt">No POS connected</div>
-            <div class="bd">Connect Square or Shopify from the <a href="/dashboard/pos-setup">POS connection</a> page.</div>
+            <div class="bd">Connect a POS from the <a href="/dashboard/pos-setup">POS connection</a> page.</div>
           </div>
         <% } %>
       </div>

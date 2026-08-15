@@ -1,0 +1,9 @@
+<!-- views/partials/disconnect-pos-form.ejs -->
+<!-- Expects `provider` ('square' | 'clover' | 'lightspeed' | 'shopify'). Posts
+     to the same route account-settings.ejs uses, with redirectTo set so the
+     merchant lands back on pos-setup instead of account settings. -->
+<form method="POST" action="/dashboard/settings/account/disconnect-pos" style="margin:0;" onsubmit="return confirm('Disconnect this POS? Its sales will stop generating receipts until you reconnect.');">
+  <input type="hidden" name="provider" value="<%= provider %>" />
+  <input type="hidden" name="redirectTo" value="/dashboard/pos-setup" />
+  <button type="submit" class="disconnect-btn">Disconnect</button>
+</form>

@@ -417,9 +417,82 @@ async function deleteShopperEverywhere(email, { dryRun = true, initiatedByMercha
   return { found, details, error };
 }
 
+/**
+ * Shopify's shop/redact compliance webhook: fired ~48 hours after a
+ * merchant uninstalls the app (or on request), meaning ReceipTap no longer
+ * has any authorization to hold that shop's data and must erase it -- not
+ * just disconnect credentials the way the dashboard's own "Disconnect"
+ * button does (routes/account-settings.js's POS_DISCONNECT_FIELDS only
+ * clears shopifyShopDomain/shopifyAccessToken, leaving past Transaction
+ * rows in place on purpose for the merchant's own records). Here the
+ * Transaction rows themselves ARE the shop's data, so they're hard-deleted,
+ * scoped strictly to posProvider: 'shopify' and this exact shop domain --
+ * a merchant's Square/Clover/Lightspeed history is untouched.
+ */
+async function purgeShopifyShopData(shopDomain, { dryRun = true } = {}) {
+  const startedAt = new Date();
+  const details = { Transaction: 0, ShopperConsent: 0, Puck_unassigned: 0 };
+  let error = null;
+  let found = false;
+
+  try {
+    const merchant = await prisma.merchant.findUnique({ where: { shopifyShopDomain: shopDomain } });
+    if (merchant) {
+      found = true;
+      const txnIds = (
+        await prisma.transaction.findMany({
+          where: { merchantId: merchant.id, posProvider: 'shopify', posLocationId: shopDomain },
+          select: { id: true },
+        })
+      ).map((t) => t.id);
+
+      const consentCount = await prisma.shopperConsent.count({ where: { receiptId: { in: txnIds } } });
+      const puckCount = await prisma.puck.count({
+        where: { merchantId: merchant.id, posLocationId: shopDomain },
+      });
+
+      if (dryRun) {
+        details.Transaction = txnIds.length;
+        details.ShopperConsent = consentCount;
+        details.Puck_unassigned = puckCount;
+      } else {
+        const results = await prisma.$transaction([
+          prisma.shopperConsent.deleteMany({ where: { receiptId: { in: txnIds } } }),
+          prisma.transaction.deleteMany({ where: { id: { in: txnIds } } }),
+          prisma.puck.updateMany({
+            where: { merchantId: merchant.id, posLocationId: shopDomain },
+            data: { posLocationId: null, posDeviceId: null, currentTransactionId: null, transactionExpiresAt: null },
+          }),
+          prisma.merchant.update({
+            where: { id: merchant.id },
+            data: { shopifyShopDomain: null, shopifyAccessToken: null },
+          }),
+        ]);
+        details.ShopperConsent = results[0].count;
+        details.Transaction = results[1].count;
+        details.Puck_unassigned = results[2].count;
+      }
+    }
+  } catch (err) {
+    error = err.message;
+    console.error('[dataRetentionService] purgeShopifyShopData failed:', err);
+  }
+
+  await writePurgeLog({
+    jobName: 'purgeShopifyShopData',
+    dryRun,
+    details,
+    error,
+    initiatedByMerchantId: null,
+    startedAt,
+  });
+  return { found, details, error };
+}
+
 module.exports = {
   purgeExpiredReceipts,
   purgeDeactivatedMerchants,
   deleteShopperByEmail,
   deleteShopperEverywhere,
+  purgeShopifyShopData,
 };

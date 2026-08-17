@@ -476,81 +476,69 @@ router.post('/webhooks/pos/shopify', async (req, res) => {
 // ---------------------------------------------------------------------------
 // Shopify's three mandatory compliance webhooks -- required before the app
 // can be submitted for App Store review, regardless of whether it's ever
-// actually used. Nested under /webhooks/pos/shopify so they inherit that
-// path's express.raw() mount in server.js. Unlike orders/paid, these fire
-// for EVERY app on the platform whether or not this merchant is a customer,
-// so an unrecognized shop is expected, not an error -- always 200 once the
+// actually used. Unlike orders/paid (registered per-shop via API call in
+// oauth-shopify.js), compliance topics are declared ONCE in
+// shopify.app.toml's [[webhooks.subscriptions]] and Shopify requires all
+// three to share a single URI -- confirmed against shopify.dev's own
+// config docs, which show one `compliance_topics` array per `uri`, not one
+// URI per topic. So this is ONE route, not three, dispatched by the
+// X-Shopify-Topic header. Nested under /webhooks/pos/shopify to inherit
+// that path's express.raw() mount in server.js. These fire for EVERY app on
+// the platform whether or not this merchant is a customer, so an
+// unrecognized shop is expected, not an error -- always 200 once the
 // signature checks out, per Shopify's own docs.
 // ---------------------------------------------------------------------------
-
-// A shop owner or customer asked what data this app holds about a specific
-// customer. No automated export exists yet -- this logs the request with
-// enough detail (shop, customer email, which orders) for a human to fulfill
-// it manually within Shopify's response window, rather than pretending an
-// automated pipeline is already built.
-router.post('/webhooks/pos/shopify/customers-data-request', (req, res) => {
+router.post('/webhooks/pos/shopify/compliance', async (req, res) => {
   if (!verifyShopifyWebhook(req)) return res.sendStatus(401);
 
   try {
-    const payload = JSON.parse(req.body.toString('utf8'));
-    console.log('[Shopify compliance] customers/data_request:', {
-      shopDomain: payload.shop_domain,
-      customerEmail: payload.customer?.email,
-      ordersRequested: payload.orders_requested,
-    });
-    res.sendStatus(200);
-  } catch (err) {
-    console.error('Error processing Shopify customers/data_request webhook:', err);
-    res.sendStatus(500);
-  }
-});
-
-// A customer asked to have their data erased (or the shop owner did on
-// their behalf). Scoped to this one shop, same as the merchant-triggered
-// dashboard deletion -- deleteShopperByEmail() is the exact right primitive
-// already, not deleteShopperEverywhere(), since Shopify has no authority
-// over what this shopper did at a merchant's other POS connections.
-router.post('/webhooks/pos/shopify/customers-redact', async (req, res) => {
-  if (!verifyShopifyWebhook(req)) return res.sendStatus(401);
-
-  try {
-    const payload = JSON.parse(req.body.toString('utf8'));
-    const shopDomain = payload.shop_domain;
-    const email = payload.customer?.email;
-
-    const merchant = shopDomain
-      ? await prisma.merchant.findUnique({ where: { shopifyShopDomain: shopDomain } })
-      : null;
-
-    if (merchant && email) {
-      await deleteShopperByEmail(email, merchant.id, { dryRun: false });
-    }
-    res.sendStatus(200);
-  } catch (err) {
-    console.error('Error processing Shopify customers/redact webhook:', err);
-    res.sendStatus(500);
-  }
-});
-
-// The shop itself uninstalled (or requested erasure) -- ReceipTap no longer
-// has authorization to hold ANY of that shop's data, not just this
-// customer's. purgeShopifyShopData() hard-deletes the Transaction rows
-// (Shopify's data, unlike a merchant's own Square/Clover/Lightspeed sales)
-// and clears the now-orphaned connection, distinct from the dashboard's
-// "Disconnect" button which deliberately keeps past Transactions.
-router.post('/webhooks/pos/shopify/shop-redact', async (req, res) => {
-  if (!verifyShopifyWebhook(req)) return res.sendStatus(401);
-
-  try {
+    const topic = req.headers['x-shopify-topic'];
     const payload = JSON.parse(req.body.toString('utf8'));
     const shopDomain = payload.shop_domain;
 
-    if (shopDomain) {
-      await purgeShopifyShopData(shopDomain, { dryRun: false });
+    if (topic === 'customers/data_request') {
+      // A shop owner or customer asked what data this app holds about a
+      // specific customer. No automated export exists yet -- this logs the
+      // request with enough detail (shop, customer email, which orders) for
+      // a human to fulfill it manually within Shopify's response window,
+      // rather than pretending an automated pipeline is already built.
+      console.log('[Shopify compliance] customers/data_request:', {
+        shopDomain,
+        customerEmail: payload.customer?.email,
+        ordersRequested: payload.orders_requested,
+      });
+    } else if (topic === 'customers/redact') {
+      // A customer asked to have their data erased (or the shop owner did
+      // on their behalf). Scoped to this one shop, same as the
+      // merchant-triggered dashboard deletion -- deleteShopperByEmail() is
+      // the exact right primitive already, not deleteShopperEverywhere(),
+      // since Shopify has no authority over what this shopper did at a
+      // merchant's other POS connections.
+      const email = payload.customer?.email;
+      const merchant = shopDomain
+        ? await prisma.merchant.findUnique({ where: { shopifyShopDomain: shopDomain } })
+        : null;
+      if (merchant && email) {
+        await deleteShopperByEmail(email, merchant.id, { dryRun: false });
+      }
+    } else if (topic === 'shop/redact') {
+      // The shop itself uninstalled (or requested erasure) -- ReceipTap no
+      // longer has authorization to hold ANY of that shop's data, not just
+      // this customer's. purgeShopifyShopData() hard-deletes the
+      // Transaction rows (Shopify's data, unlike a merchant's own
+      // Square/Clover/Lightspeed sales) and clears the now-orphaned
+      // connection, distinct from the dashboard's "Disconnect" button which
+      // deliberately keeps past Transactions.
+      if (shopDomain) {
+        await purgeShopifyShopData(shopDomain, { dryRun: false });
+      }
+    } else {
+      console.warn('[Shopify compliance] Unrecognized topic:', topic);
     }
+
     res.sendStatus(200);
   } catch (err) {
-    console.error('Error processing Shopify shop/redact webhook:', err);
+    console.error('Error processing Shopify compliance webhook:', err);
     res.sendStatus(500);
   }
 });

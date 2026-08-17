@@ -28,6 +28,7 @@
   <% if (!connected) { %>
     <p>Connect your Square account so ReceipTap can automatically generate receipts from your sales.</p>
     <a class="connect-btn" href="/oauth/square/connect">Connect Square</a>
+    <p><a href="/dashboard/pos-setup/guide#square">How to connect &amp; assign a puck &rarr;</a></p>
   <% } else { %>
     <div class="connected-row">
       <div class="connected-badge">✅ Square Connected</div>
@@ -52,6 +53,7 @@
   <% if (!cloverConnected) { %>
     <p>Connect your Clover account so ReceipTap can automatically generate receipts from your sales.</p>
     <a class="connect-btn" href="/oauth/clover/connect">Connect Clover</a>
+    <p><a href="/dashboard/pos-setup/guide#clover">How to connect &amp; assign a puck &rarr;</a></p>
   <% } else { %>
     <div class="connected-row">
       <div class="connected-badge">✅ Clover Connected</div>
@@ -74,6 +76,7 @@
   <% if (!lightspeedConnected) { %>
     <p>Connect your Lightspeed Retail account so ReceipTap can automatically generate receipts from your sales.</p>
     <a class="connect-btn" href="/oauth/lightspeed/connect">Connect Lightspeed</a>
+    <p><a href="/dashboard/pos-setup/guide#lightspeed">How to connect &amp; assign a puck &rarr;</a></p>
   <% } else { %>
     <div class="connected-row">
       <div class="connected-badge">✅ Lightspeed Connected</div>
@@ -99,6 +102,7 @@
       <input type="text" id="shopify-domain" placeholder="yourstorename.myshopify.com" style="padding:8px 12px; border-radius:6px; border:1px solid #ddd; min-width:260px;" />
       <button type="submit" class="connect-btn" style="margin-top:0;">Connect Shopify</button>
     </form>
+    <p><a href="/dashboard/pos-setup/guide#shopify">How to connect &amp; assign a puck &rarr;</a></p>
   <% } else { %>
     <div class="connected-row">
       <div class="connected-badge">✅ Shopify Connected (<%= shopifyShopDomain %>)</div>

@@ -93,6 +93,14 @@ router.get('/dashboard/pos-setup', requireAuth, async (req, res) => {
   res.render('pos-setup', { connected: true, locations: locations || [], pucks, cloverConnected, cloverMerchantId, lightspeedConnected, lightspeedDomainPrefix, shopifyConnected, shopifyShopDomain });
 });
 
+// Static walkthrough for connecting + assigning a puck to each POS
+// provider. Not provider-specific itself, just co-located with the other
+// /dashboard/pos-setup/* routes rather than a route file of its own for one
+// static page.
+router.get('/dashboard/pos-setup/guide', requireAuth, (req, res) => {
+  res.render('pos-setup-guide');
+});
+
 // Assign a puck to a specific Square location/register
 router.post('/dashboard/pos-setup/assign', requireAuth, async (req, res) => {
   const { puckId, locationId } = req.body;

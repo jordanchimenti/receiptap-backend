@@ -1,0 +1,82 @@
+<!-- views/pos-setup-guide.ejs -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>POS Setup Guide</title>
+  <style>
+    .guide-section { margin-bottom: 40px; padding-bottom: 32px; border-bottom: 1px solid #eee; }
+    .guide-section:last-child { border-bottom: none; }
+    .guide-section ol { padding-left: 20px; }
+    .guide-section li { margin-bottom: 10px; line-height: 1.5; }
+    .guide-back { display: inline-block; margin-bottom: 20px; color: #056BFE; text-decoration: none; font-weight: 600; }
+    .guide-toc { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 32px; }
+    .guide-toc a { color: #056BFE; text-decoration: none; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <%- include('partials/dashboard-header', { activeNav: 'pos' }) %>
+
+  <div class="topbar">
+    <div>
+      <h1>POS Setup Guide</h1>
+    </div>
+  </div>
+
+  <div class="app-body">
+    <a class="guide-back" href="/dashboard/pos-setup">&larr; Back to POS connection</a>
+
+    <p>Every register needs a ReceipTap puck placed beside it, and that puck needs to be linked to the right POS location. Each POS provider connects a little differently — pick yours below.</p>
+
+    <div class="guide-toc">
+      <a href="#square">Square</a>
+      <a href="#clover">Clover</a>
+      <a href="#lightspeed">Lightspeed</a>
+      <a href="#shopify">Shopify</a>
+    </div>
+
+    <div class="guide-section" id="square">
+      <h2>Square</h2>
+      <ol>
+        <li>On the POS connection page, click <strong>Connect Square</strong>.</li>
+        <li>Log into your Square account and approve access when Square asks.</li>
+        <li>You'll land back on ReceipTap automatically, and every Square location you have will show up in a list.</li>
+        <li>For each register, pick the puck sitting next to it from the dropdown on that location's row.</li>
+      </ol>
+      <p>Have more than one register at the same location? ReceipTap can tell them apart once real sales start coming in — check the register list on the POS connection page after your first few sales.</p>
+    </div>
+
+    <div class="guide-section" id="clover">
+      <h2>Clover</h2>
+      <ol>
+        <li>On the POS connection page, click <strong>Connect Clover</strong>.</li>
+        <li>Log into your Clover account and approve access.</li>
+        <li>You'll land back on ReceipTap — a Clover connection covers one store, so there's no location list to pick from.</li>
+        <li>Pick the puck at your register from the dropdown to link it.</li>
+      </ol>
+    </div>
+
+    <div class="guide-section" id="lightspeed">
+      <h2>Lightspeed</h2>
+      <ol>
+        <li>On the POS connection page, click <strong>Connect Lightspeed</strong>.</li>
+        <li>Log into your Lightspeed Retail (X-Series) account and approve access.</li>
+        <li>You'll land back on ReceipTap — a Lightspeed connection covers one store, so there's no location list to pick from.</li>
+        <li>Pick the puck at your register from the dropdown to link it.</li>
+      </ol>
+    </div>
+
+    <div class="guide-section" id="shopify">
+      <h2>Shopify</h2>
+      <ol>
+        <li>On the POS connection page, type your store's address into the Shopify field, in the form <code>yourstorename.myshopify.com</code>.</li>
+        <li>Click <strong>Connect Shopify</strong>.</li>
+        <li>You'll be sent to Shopify's own "Install app" screen — click <strong>Install</strong> to approve it.</li>
+        <li>You'll land back on ReceipTap — a Shopify connection covers one store, so there's no location list to pick from.</li>
+        <li>Pick the puck at your register from the dropdown to link it.</li>
+      </ol>
+      <p>Only in-person sales rung through Shopify POS generate a ReceipTap receipt — online store orders are skipped automatically.</p>
+    </div>
+  </div>
+</body>
+</html>

@@ -208,15 +208,32 @@
   <section id="transfers">
     <h2>Where the data goes</h2>
     <p>
-      Your customers' data is stored in Canada. A few subprocessors above
-      briefly touch part of it outside Canada in the course of providing
-      their service to us: Google, to confirm a sign-in; Anthropic, for
-      category suggestions (business name and item list only, as noted
-      above); Resend, only if a password reset is requested; and the
-      point-of-sale system you connect, which holds your customers' sales
-      data on its own servers and exchanges it with us for as long as the
-      connection is active.
-      <span class="review">[[REVIEW: same gap as the Privacy Policy's equivalent section — the region our own application server (Railway) runs in could not be confirmed from the codebase as of this writing. Confirm and update this paragraph once known, and confirm whether any additional cross-border transfer safeguard (e.g. standard contractual clauses) is legally required for the subprocessors named above.]]</span>
+      Your customers' data is <strong>stored</strong> in Canada — our
+      database is hosted in Montreal. Our application servers, however, run
+      in the United States (Virginia), and all of that data is
+      <strong>processed</strong> there: every request, every session, and
+      every database result passes through those servers. Treat this as a
+      continuous transfer to the United States for the duration of the
+      service, not an occasional one.
+    </p>
+    <p>
+      The practical consequence, which you may need to account for in your
+      own privacy notice to your customers: while their data is being
+      processed on those servers, it can be subject to lawful access
+      requests from United States courts and government authorities. We
+      require valid legal process before disclosing anything, but we cannot
+      undertake that a foreign authority will never be able to compel access
+      to data processed within its jurisdiction.
+      <span class="review">[[REVIEW: confirm what this arrangement requires beyond disclosure — whether standard contractual clauses or an equivalent transfer mechanism are needed between us and the merchant for a Canada-stored / US-processed setup, and whether the merchant (as controller) has any obligation this DPA should expressly allocate.]]</span>
+    </p>
+    <p>
+      Separately, a few subprocessors above briefly touch part of the data
+      outside Canada in the course of providing their service to us: Google,
+      to confirm a sign-in; Anthropic, for category suggestions (business
+      name and item list only, as noted above); Resend, only if a password
+      reset is requested; and the point-of-sale system you connect, which
+      holds your customers' sales data on its own servers and exchanges it
+      with us for as long as the connection is active.
       <span class="review">[[REVIEW: the country each supported point-of-sale provider (Square, Clover, Lightspeed, Shopify) actually processes and stores connected sales data in was never confirmed — it cannot be determined from the codebase, only from each provider's own documentation. Same gap as the Privacy Policy's equivalent section.]]</span>
     </p>
     <p class="back-top"><a href="#transfers">↑ Back to top</a></p>

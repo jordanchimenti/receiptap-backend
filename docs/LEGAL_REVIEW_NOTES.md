@@ -6,11 +6,11 @@ itself, rendered inline on the page — this file is a summary index of it,
 not a replacement for reading the page.
 
 Covers: **Privacy Policy** (`/legal/privacy`, rendered from
-`views/partials/legal-privacy-content.ejs`, version `2026-08-18.1`),
+`views/partials/legal-privacy-content.ejs`, version `2026-08-18.2`),
 **Terms of Service** (`/legal/terms`, rendered from
-`views/partials/legal-terms-content.ejs`, version `2026-08-06.2`), and
+`views/partials/legal-terms-content.ejs`, version `2026-08-07.1`), and
 **Data Processing Agreement** (`/legal/dpa`, rendered from
-`views/partials/legal-dpa-content.ejs`, version `2026-08-18.1`).
+`views/partials/legal-dpa-content.ejs`, version `2026-08-18.2`).
 
 ---
 
@@ -168,51 +168,49 @@ revisiting once/if ReceipTap starts sending any marketing email itself.
 
 ---
 
-## 5. The app server cannot be in Canada — CONFIRMED, pages need rewriting
+## 5. Canada-stored, US-processed — RESOLVED (disclosed), one lawyer question open
 
 **Where:** "Where your data is stored" (Privacy Policy, shopper section) and
-"Where the data goes" (DPA). Both carry a `[[REVIEW]]` marker saying
-Railway's region couldn't be confirmed.
+"Where the data goes" (DPA).
 
-**Status: the question is now answered, and the answer is worse than "we
-don't know."** Railway offers exactly four deployment regions and **none of
-them is in Canada**:
+**Status: RESOLVED**, as of `PRIVACY.version` `2026-08-18.2` and
+`DPA.version` `2026-08-18.2`.
 
-| Region | Identifier | Location |
-|---|---|---|
-| US West | `us-west2` | California, USA |
-| US East | `us-east4-eqdc4a` | Virginia, USA |
-| EU West | `europe-west4-drams3a` | Amsterdam, Netherlands |
-| Southeast Asia | `asia-southeast1-eqsg3a` | Singapore |
+Railway has no Canadian region — the only four are US West (`us-west2`),
+US East (`us-east4-eqdc4a`), EU West (`europe-west4-drams3a`) and Southeast
+Asia (`asia-southeast1-eqsg3a`). **Founder decision (2026-08-18): US East,
+Virginia** — the closest of the four to the Supabase database in Montreal,
+so the lowest added latency on the tap-to-receipt path.
 
-So this is no longer "confirm the region and update the paragraph if it
-turns out to be outside Canada." Whichever region gets picked, the
-application server **is** outside Canada, and every request, session cookie,
-and database result passes through it. The database itself genuinely is in
-Canada (Supabase, AWS `ca-central-1`, Montreal) — that part stays true.
+Both pages previously said data is "stored in Canada" and then listed only
+Google, Anthropic, Resend and the connected POS as touching it elsewhere.
+That was wrong: the application server handles *everything*, and it is not
+in Canada. Both sections are now rewritten to say plainly that the database
+is in Montreal, the servers are in Virginia, and all data is therefore
+**processed** in the United States continuously — not occasionally.
 
-**What both pages currently say is therefore wrong**, not merely
-incomplete. They state data is stored in Canada and then enumerate the few
-subprocessors that touch it outside Canada — Google, Anthropic, Resend, and
-(as of the last pass) the connected POS. The app server isn't in that list,
-and it handles everything.
+Both also now disclose the actual consequence rather than burying it: data
+being processed on those servers can be subject to lawful access requests
+from US courts and authorities, and we say we can't promise otherwise. The
+DPA additionally flags this as something the merchant may need to account
+for in their own privacy notice to their customers.
 
-**Needed:**
+**Still open — one question per document, and they are different:**
 
-1. Pick the region (see `docs/DEPLOYMENT.md` step 2 — do it before
-   attaching the volume, or changing it later forces a volume migration
-   with downtime).
-2. Rewrite both paragraphs to say plainly where the application server runs
-   and that all data transits it, keeping the accurate statement that the
-   database is in Canada.
-3. Bump `PRIVACY.version` and `DPA.version` in the same commit, per
-   CLAUDE.md's version-bump rule.
-4. Have the lawyer confirm whether a US (or EU/Singapore) app server over a
-   Canadian database needs any additional cross-border transfer safeguard,
-   and whether it changes anything about the PIPEDA analysis.
+- **Privacy Policy:** is disclosure alone sufficient under PIPEDA for a
+  Canadian company processing Canadian personal data on US servers, or is
+  something further required (a specific consent step at signup, additional
+  contractual safeguards with the host)?
+- **DPA:** does a Canada-stored / US-processed arrangement need standard
+  contractual clauses or an equivalent transfer mechanism between us and the
+  merchant, and does the merchant-as-controller carry any obligation this
+  DPA should expressly allocate rather than leave unstated?
 
-**Not fixed on this pass deliberately:** the exact wording depends on which
-region is chosen, and guessing would put an invented fact on a legal page.
+**Note:** the region can be changed later, but not for free — moving a
+service with a volume attached forces a volume migration with downtime
+(`docs/DEPLOYMENT.md` step 2). If the lawyer's answer pushes toward EU West,
+that's a small edit to both pages plus another version bump, and best done
+before there's real data on the volume.
 
 ---
 

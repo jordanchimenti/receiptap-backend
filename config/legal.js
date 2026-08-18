@@ -21,12 +21,12 @@ const LEGAL_DOCUMENTS = {
     label: 'Terms of Service',
   },
   PRIVACY: {
-    version: '2026-08-18.1',
+    version: '2026-08-18.2',
     lastUpdated: '2026-08-18',
     label: 'Privacy Policy',
   },
   DPA: {
-    version: '2026-08-18.1',
+    version: '2026-08-18.2',
     lastUpdated: '2026-08-18',
     label: 'Data Processing Agreement',
   },

@@ -138,15 +138,32 @@
 
     <h3>Where your data is stored</h3>
     <p>
-      Your ReceipTap data is stored in Canada. A few features briefly send
-      part of it outside Canada: Google, to confirm your identity if you
-      sign in with Google; Anthropic, for the category suggestion described
-      above (using only the business name and item list, never your name,
-      email, prices, or total); Resend, if you ever request a
-      password-reset email from us; and the point-of-sale system you
-      connect, which holds your sales data on its own servers and exchanges
-      it with us for as long as the connection is active.
-      <span class="review">[[REVIEW: the region our own application server (Railway) runs in could not be confirmed from our codebase as of this policy's last-updated date — confirm and update this paragraph once known.]]</span>
+      Your receipts and account details are kept in a database in Canada, in
+      Montreal. The servers that actually run ReceipTap are in the United
+      States, in Virginia — so while your data is <em>stored</em> in Canada,
+      every page you open and every receipt you save passes through the
+      United States on its way there and back.
+    </p>
+    <p>
+      We're telling you this plainly because it has a real consequence:
+      while your data is being handled on those servers, it can be subject
+      to lawful access requests from United States courts and government
+      authorities, in the same way data held in Canada can be subject to
+      Canadian ones. We don't hand over data to anyone who asks, and we'd
+      require valid legal process — but we can't promise a foreign
+      government will never be able to compel access to data processed in
+      its country, and we'd rather say so than imply otherwise.
+      <span class="review">[[REVIEW: confirm this cross-border disclosure is sufficient under PIPEDA for a Canadian company processing Canadian personal data on US-based servers, and whether anything further (e.g. a specific consent step at signup, or additional contractual safeguards with the hosting provider) is required rather than disclosure alone.]]</span>
+    </p>
+    <p>
+      A few other services also handle part of your data outside Canada:
+      Google, to confirm your identity if you sign in with Google;
+      Anthropic, for the category suggestion described above (using only the
+      business name and item list, never your name, email, prices, or
+      total); Resend, if you ever request a password-reset email from us;
+      and whichever point-of-sale system the business you shopped at has
+      connected, which holds that sale on its own servers and exchanges it
+      with us for as long as the connection is active.
       <span class="review">[[REVIEW: the country each supported point-of-sale provider (Square, Clover, Lightspeed, Shopify) actually processes and stores connected sales data in was never confirmed — it cannot be determined from our codebase, only from each provider's own documentation. Confirm per provider, and confirm whether any additional cross-border transfer safeguard is required for them.]]</span>
     </p>
 

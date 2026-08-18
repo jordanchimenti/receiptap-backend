@@ -10,14 +10,13 @@ language; it is a factual trace of what the code does.
 (Supabase) is confirmed hosted in AWS `ca-central-1` (Montreal) from the
 `DATABASE_URL` host in `.env`
 (`aws-0-ca-central-1.pooler.supabase.com`). The application server itself is
-hosted on Railway, and **Railway has no Canadian region** — its only options
-are US West, US East, EU West (Amsterdam) and Southeast Asia (Singapore).
-Which of those four is in use is a dashboard setting, not visible in this
-repo (there is no `railway.json` field for it), but every one of them is
-outside Canada. Rows marked `NO*` therefore mean "no known transmission to a
-foreign subprocessor was found in the code — but every request still transits
-the Railway app server, which is outside Canada regardless of which region is
-selected." Rows marked
+hosted on Railway, which has **no Canadian region** — the four options are
+US West, US East, EU West (Amsterdam) and Southeast Asia (Singapore).
+**US East (Virginia) is the chosen region** (founder decision, 2026-08-18);
+it is a dashboard setting, not visible in this repo, since `railway.json`
+has no field for it. Rows marked `NO*` therefore mean "no known transmission
+to a foreign subprocessor was found in the code — but every request still
+transits the US-based app server." Rows marked
 `YES` are transmissions to a specific named subprocessor confirmed by reading
 the actual API call.
 
@@ -161,7 +160,7 @@ prior assumption list.
 | Subprocessor | Data received | Fields (from Section 1) | Hosted in | DPA / privacy terms URL |
 |---|---|---|---|---|
 | **Supabase** (Postgres database) | Everything in the schema — this is the primary datastore | All fields | Canada (AWS `ca-central-1`, confirmed from `DATABASE_URL`) | Not present anywhere in repo config. Not fabricated here — verify directly at supabase.com. |
-| **Railway** (app hosting) | The app process itself, and by extension every field in transit through it (request bodies, session cookies, DB query results before they render) | All fields, in transit | **Outside Canada, necessarily** — Railway offers only US West (`us-west2`), US East (`us-east4-eqdc4a`), EU West (`europe-west4-drams3a`) and Southeast Asia (`asia-southeast1-eqsg3a`). Which one is a dashboard setting, not in this repo. | Not present in repo config. Verify directly at railway.app. |
+| **Railway** (app hosting) | The app process itself, and by extension every field in transit through it (request bodies, session cookies, DB query results before they render) | All fields, in transit | **United States — US East, Virginia** (`us-east4-eqdc4a`), chosen 2026-08-18. Railway has no Canadian region. Set in the Railway dashboard, not in this repo. | Not present in repo config. Verify directly at railway.app. |
 | **Stripe** | Merchant billing identity (email, business name), Affiliate identity (email) and their Connect account, invoice/transfer IDs | `Merchant.email`, `Merchant.businessName`, `Merchant.stripeCustomerId`, `Merchant.stripeSubscriptionId`, `Affiliate.email`, `Affiliate.stripeConnectAccountId`, `Commission.stripeInvoiceId`/`stripeTransferId` | US (Stripe's standard API; no Canada-specific hosting configured in this repo) | Not present in repo config. Verify directly at stripe.com. |
 | **Anthropic** | Merchant business name + item name/quantity per line item (see Section 2 for the exact payload) | `Merchant.businessName`, partial `Transaction.lineItems` (name + quantity only) | US (Anthropic's standard API; no region configured in this repo) | Not present in repo config. Verify directly at anthropic.com. |
 | **Google** (Sign-In only — see note) | An ID token is sent to Google's verification library (`google-auth-library`) for both merchant and customer "Sign in with Google"; the email/name/sub already inside that Google-issued token is what gets extracted, not sent | `Merchant.email`/`googleId`, `Customer.email`/`googleId`/`name` (as the *source*, not an onward destination) | US/global (Google's identity infrastructure) | Not present in repo config. Verify directly at google.com. **Note:** "Google Reviews" is NOT a subprocessor here — confirmed no Places/Reviews API call exists; `ReceiptTheme.googleReviewUrl` is a plain merchant-supplied link. |
@@ -222,15 +221,16 @@ patterns.
    upload handlers in `routes/theme-settings.js` and `routes/billing.js`,
    neither of which contains any `fs.unlink` or equivalent.
 
-5. **The app server is outside Canada, and cannot be otherwise on
-   Railway.** The Supabase database is confirmed in Canada, but every
-   request also passes through the Railway app server first, and Railway
-   has no Canadian region — only US West, US East, EU West (Amsterdam) and
-   Southeast Asia (Singapore). Which of the four is in use is a dashboard
-   setting that isn't visible in this repo, but the "Does it leave Canada?"
-   answers marked `NO*` throughout Section 1 are **not** a clean guarantee
-   under any of them. This is a live gap on the Privacy Policy and DPA,
-   which both currently state data is held in Canada — see
+5. **The app server is in the United States — RESOLVED and disclosed.**
+   The Supabase database is confirmed in Canada (Montreal), but every
+   request also passes through the app server, and Railway has no Canadian
+   region. US East (Virginia) was chosen on 2026-08-18. So the "Does it
+   leave Canada?" answers marked `NO*` throughout Section 1 mean "not sent
+   to a foreign *subprocessor*" — they never meant "stayed in Canada," and
+   under a US app server they definitely don't. Both the Privacy Policy and
+   the DPA now state this outright, including that data processed there can
+   be subject to US legal process (`PRIVACY.version`/`DPA.version`
+   `2026-08-18.2`). One lawyer question remains open per document — see
    `docs/LEGAL_REVIEW_NOTES.md` item 5.
 
 6. **Session data lives in Postgres — RESOLVED, but it is not a Prisma

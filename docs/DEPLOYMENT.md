@@ -112,6 +112,11 @@ forces Railway to migrate the volume, which takes time proportional to its
 size and causes downtime. Picking first costs nothing; reordering these two
 steps costs an outage.
 
+**Chosen region: US East (`us-east4-eqdc4a`, Virginia)** — founder decision,
+2026-08-18. Set this one unless you've deliberately decided otherwise; the
+legal pages now name Virginia specifically, so changing it means editing them
+and bumping both versions again.
+
 **There is no Canadian region.** Railway has exactly four:
 
 | Region | Identifier | Location |
@@ -121,19 +126,17 @@ steps costs an outage.
 | EU West | `europe-west4-drams3a` | Amsterdam, Netherlands |
 | Southeast Asia | `asia-southeast1-eqsg3a` | Singapore |
 
-This is not just a latency choice — **it changes what your Privacy Policy and
-DPA have to say.** Both currently state that ReceipTap data is stored in
-Canada, naming only Google, Anthropic, Resend and the POS providers as
-touching it outside Canada. The database genuinely is in Canada (Supabase,
-`ca-central-1`, Montreal), but the app server will not be, in any of the four
-options — and every request, session cookie, and database result passes
-through it. So whichever you pick, those paragraphs become inaccurate as
-written and need rewriting, plus a `PRIVACY.version` and `DPA.version` bump.
-See `docs/LEGAL_REVIEW_NOTES.md` item 5.
+This was not just a latency choice — it changed what the legal pages had to
+say, and **that work is already done.** The Privacy Policy and DPA now state
+that the database is in Montreal, the servers are in Virginia, all data is
+processed in the US continuously, and that data processed there can be
+subject to US legal process. Both were bumped to `2026-08-18.2`.
 
-US East is the closest to Montreal of the four, if latency to the database is
-the deciding factor. That's a technical observation, not a legal one — a US
-region still means US jurisdiction over the app server.
+US East was picked because it's the closest of the four to the Supabase
+database in Montreal, so it adds the least latency to the tap-to-receipt
+path. That's a technical reason — a US region still means US jurisdiction
+over the app server, and `docs/LEGAL_REVIEW_NOTES.md` item 5 carries the one
+open lawyer question that follows from it.
 
 Note: there is **no** `railway.json` field for a single region — it's a
 dashboard setting only. (`multiRegionConfig` in the schema is for running
@@ -235,9 +238,13 @@ so I haven't guessed at config that might break the build on its own.
 
 - The legal pages have open `[[REVIEW]]` items and aren't launch-ready. See
   `docs/LEGAL_REVIEW_NOTES.md`. Deploying doesn't change that.
-- The Privacy Policy and DPA both still say data is held in Canada. Now that
-  it's confirmed Railway has no Canadian region, that's known to be wrong
-  about the app server regardless of which region you choose — it needs a
-  real rewrite and a version bump on both documents, not just a blank filled
-  in. Item 5 in `LEGAL_REVIEW_NOTES.md` has the detail.
+- The cross-border disclosure is **done** — both pages now state the
+  Montreal database / Virginia servers split and what it means. What's still
+  open is one lawyer question per document (whether disclosure alone
+  satisfies PIPEDA; whether the DPA needs standard contractual clauses for a
+  Canada-stored / US-processed setup). Item 5 in `LEGAL_REVIEW_NOTES.md`.
+- **If the region ever changes, both legal pages change with it.** They name
+  Virginia specifically. Moving regions also forces a volume migration with
+  downtime, so it's much cheaper to change now than after real merchant data
+  is on the volume.
 - Live data purging stays off.

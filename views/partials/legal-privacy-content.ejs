@@ -142,9 +142,12 @@
       part of it outside Canada: Google, to confirm your identity if you
       sign in with Google; Anthropic, for the category suggestion described
       above (using only the business name and item list, never your name,
-      email, prices, or total); and Resend, if you ever request a
-      password-reset email from us.
+      email, prices, or total); Resend, if you ever request a
+      password-reset email from us; and the point-of-sale system you
+      connect, which holds your sales data on its own servers and exchanges
+      it with us for as long as the connection is active.
       <span class="review">[[REVIEW: the region our own application server (Railway) runs in could not be confirmed from our codebase as of this policy's last-updated date — confirm and update this paragraph once known.]]</span>
+      <span class="review">[[REVIEW: the country each supported point-of-sale provider (Square, Clover, Lightspeed, Shopify) actually processes and stores connected sales data in was never confirmed — it cannot be determined from our codebase, only from each provider's own documentation. Confirm per provider, and confirm whether any additional cross-border transfer safeguard is required for them.]]</span>
     </p>
 
     <p class="back-top"><a href="#shopper">↑ Back to top</a></p>
@@ -162,7 +165,8 @@
       We hold your business name, your own name, your email, your login
       (a securely hashed password, or a linked Google account), your
       uploaded logo and receipt design choices, and the connection details
-      for the point-of-sale system you connect (Square or Clover) — never
+      for the point-of-sale system you connect (Square, Clover, Lightspeed,
+      or Shopify) — never
       your customers' card numbers, which don't pass through our systems.
     </p>
 
@@ -203,13 +207,9 @@
       <li><strong>Stripe</strong> — payment processing, for your subscription and for affiliate payouts</li>
       <li><strong>Anthropic</strong> — the AI category-suggestion feature described above</li>
       <li><strong>Google</strong> — sign-in verification only (not the "Rate us on Google" link, which is just a URL you provide, not a data integration)</li>
-      <li><strong>Square, Clover</strong> — whichever point-of-sale system you connect</li>
+      <li><strong>Square, Clover, Lightspeed, Shopify</strong> — whichever point-of-sale system you connect</li>
       <li><strong>Resend</strong> — password-reset emails</li>
     </ul>
-    <p>
-      <span class="review">[[REVIEW: "Shopify" appears as a leftover option in some account settings from earlier development — it is not a working integration today, and no data is sent to or received from Shopify. Remove that leftover option from the product before or alongside publishing this policy, or note its non-functional status here.]]</span>
-    </p>
-
     <h3>If you close your account</h3>
     <p>
       Our policy is to keep your business data for

@@ -35,9 +35,12 @@ the actual API call.
 | `Merchant.resetToken` / `resetTokenExpiresAt` | MERCHANT | Single-use password-reset link, embedded in the URL sent via Resend | Resend (the token value is embedded in the reset URL emailed out) | Cleared to `null` on successful reset (`routes/auth.js` line ~206). **If a reset is requested but never completed, the token is never cleared** — it just becomes unusable after the 1-hour expiry check; the value itself remains in the row indefinitely | YES (transits Resend as part of the URL) |
 | `Merchant.squareMerchantId` | MERCHANT | Identifies which Square account a webhook event belongs to (`routes/webhooks.js`) | Square (implicitly — it's Square's own identifier for the merchant, returned during OAuth) | NOTHING DELETES IT | YES (Square) |
 | `Merchant.squareAccessToken` | MERCHANT | Bearer token sent to Square's API to fetch order details (`services/squareService.js` `fetchOrder`) | Square | NOTHING DELETES IT | YES (Square) |
-| `Merchant.shopifyShopDomain` / `shopifyAccessToken` | MERCHANT | **UNKNOWN — no code path populates these.** No `routes/oauth-shopify.js` or equivalent exists, no webhook handler reads a Shopify event type, and `views/pos-setup.ejs` has no Shopify connect UI. The only code that *reads* these fields is `routes/account-settings.js` (a "disconnect" button with nothing to disconnect) and `routes/admin.js` (CSV export column). See GAPS. | None found | NOTHING DELETES IT | UNKNOWN — never observed being sent anywhere, since nothing populates it |
+| `Merchant.shopifyShopDomain` | MERCHANT | Identifies which Shopify shop a webhook event belongs to (`routes/webhooks.js`, matched against the `X-Shopify-Shop-Domain` header); also the API host itself, since Shopify has no shared API domain (`services/shopifyService.js` `shopifyAdminBaseUrl`) | Shopify (it's the merchant's own `*.myshopify.com` domain, supplied at connect time) | NOTHING DELETES IT | YES (Shopify) |
+| `Merchant.shopifyAccessToken` | MERCHANT | Bearer token sent to the Shopify Admin API to fetch order details and register webhooks (`services/shopifyService.js`); populated by `routes/oauth-shopify.js` | Shopify | NOTHING DELETES IT | YES (Shopify) |
 | `Merchant.cloverMerchantId` | MERCHANT | Identifies which Clover merchant a webhook event belongs to (`routes/webhooks.js`) | Clover | NOTHING DELETES IT | YES (Clover) |
 | `Merchant.cloverAccessToken` / `cloverRefreshToken` / `cloverAccessTokenExpiresAt` | MERCHANT | Bearer token + refresh credential sent to Clover's API to fetch order details (`services/cloverService.js`) | Clover | NOTHING DELETES IT | YES (Clover) |
+| `Merchant.lightspeedDomainPrefix` | MERCHANT | Identifies which Lightspeed X-Series retailer a webhook event belongs to (`routes/webhooks.js`); also forms the API host, `https://{domainPrefix}.retail.lightspeed.app` (`services/lightspeedService.js`) | Lightspeed (it's Lightspeed's own retailer prefix, returned during OAuth) | NOTHING DELETES IT | YES (Lightspeed) |
+| `Merchant.lightspeedAccessToken` / `lightspeedRefreshToken` / `lightspeedAccessTokenExpiresAt` | MERCHANT | Bearer token + refresh credential sent to Lightspeed's API to fetch sale details and register webhooks (`services/lightspeedService.js`); populated by `routes/oauth-lightspeed.js` | Lightspeed | NOTHING DELETES IT | YES (Lightspeed) |
 | `Merchant.stripeCustomerId` | MERCHANT | Stripe's own identifier for this merchant's billing account, used on every subsequent billing call (`services/stripeService.js`, `routes/billing.js`) | Stripe (it's Stripe's own ID, round-tripped on every call) | NOTHING DELETES IT | YES (Stripe) |
 | `Merchant.stripeSubscriptionId` | MERCHANT | Stripe's own identifier for the merchant's subscription, used to check/change subscription state | Stripe | NOTHING DELETES IT | YES (Stripe) |
 | `Merchant.subscriptionStatus` / `trialEndsAt` | MERCHANT | Gates dashboard access (`middleware/subscriptionGate.js`) | None (mirrors what Stripe reports, but not itself sent anywhere) | NOTHING DELETES IT | NO* |
@@ -162,7 +165,8 @@ prior assumption list.
 | **Square** | OAuth access token sent as a Bearer credential to fetch order data | `Merchant.squareAccessToken`, `Merchant.squareMerchantId` (sent); receives shopper purchase data *from* Square in the fetched order (line items, totals — this is inbound, not something ReceipTap sends Square) | US (Square's standard API; sandbox/production both `squareup.com`) | Not present in repo config. Verify directly at squareup.com. |
 | **Clover** | OAuth access/refresh tokens sent as Bearer credentials to fetch order data | `Merchant.cloverAccessToken`, `Merchant.cloverRefreshToken`, `Merchant.cloverMerchantId` (sent); receives shopper purchase data *from* Clover in the fetched order (inbound) | US (`clover.com`/`apisandbox.dev.clover.com`) | Not present in repo config. Verify directly at clover.com. |
 | **Resend** (email) | Recipient email + display name, embedded in password-reset emails (subject, HTML body, reset URL containing the token) | `Merchant.email`/`ownerName`/`resetToken`, `Customer.email`/`name`/`resetToken` | US (`resend.dev`/`resend.com`; the code comment notes the *sending* domain is currently the shared `resend.dev` sandbox, not a verified custom domain) | Not present in repo config. Verify directly at resend.com. |
-| **Shopify** | **Configured in schema, never actually called.** No outbound request to any Shopify API exists anywhere in `routes/` or `services/`. | `Merchant.shopifyShopDomain`/`shopifyAccessToken` fields exist but nothing populates or sends them | N/A — not a real integration | N/A |
+| **Shopify** | OAuth access token sent as a Bearer credential to fetch order data and register webhooks | `Merchant.shopifyAccessToken`, `Merchant.shopifyShopDomain` (sent); receives shopper purchase data *from* Shopify in the fetched order (inbound). Also receives Shopify's three mandatory compliance webhooks (`routes/webhooks.js` `/webhooks/pos/shopify/compliance`) | **UNKNOWN** — calls go to the merchant's own `*.myshopify.com` domain, which does not reveal a region. Verify directly at shopify.com. | Not present in repo config. Verify directly at shopify.com. |
+| **Lightspeed** (Retail / X-Series) | OAuth access/refresh tokens sent as Bearer credentials to fetch sale data and register webhooks | `Merchant.lightspeedAccessToken`, `Merchant.lightspeedRefreshToken`, `Merchant.lightspeedDomainPrefix` (sent); receives shopper purchase data *from* Lightspeed in the fetched sale (inbound) | **UNKNOWN** — `secure.retail.lightspeed.app` and `{domainPrefix}.retail.lightspeed.app`; neither reveals a region. Verify directly at lightspeedhq.com. | Not present in repo config. Verify directly at lightspeedhq.com. |
 
 **Checked and confirmed absent:** no error-tracking tool (Sentry, Bugsnag,
 Rollbar), no product analytics (Segment, Mixpanel, Amplitude, PostHog,
@@ -186,14 +190,20 @@ patterns.
    (only `/account/logout`, which clears a session cookie). Every personal
    data field in Section 1 is retained indefinitely once written.
 
-2. **`Merchant.shopifyShopDomain` / `shopifyAccessToken` are dead fields.**
-   They exist in the schema, are read by `routes/account-settings.js` (a
-   "Disconnect Shopify" button with no corresponding connect flow) and
-   `routes/admin.js` (listed as a possible POS type in CSV exports), but no
-   OAuth route, webhook handler, or POS-setup UI populates them anywhere.
-   This is collection-adjacent scaffolding for a feature that was never
-   built, not active data collection — but it's worth resolving one way or
-   the other (build it, or remove the dead field/UI).
+2. **`Merchant.shopifyShopDomain` / `shopifyAccessToken` are dead fields —
+   RESOLVED, the integration shipped.** These were scaffolding with no
+   code path when this inventory was first written. They are now populated
+   by `routes/oauth-shopify.js` and sent to the Shopify Admin API by
+   `services/shopifyService.js`, and `routes/webhooks.js` handles both
+   Shopify sale events and Shopify's three mandatory compliance webhooks.
+   A **Lightspeed Retail (X-Series)** integration shipped alongside it
+   (`routes/oauth-lightspeed.js`, `services/lightspeedService.js`). Both
+   are now traced in Sections 1 and 3 above, and both are disclosed as
+   subprocessors on the Privacy Policy and DPA as of `PRIVACY.version`
+   `2026-08-18.1` / `DPA.version` `2026-08-18.1`. What's still open is the
+   **hosting region** for every POS provider — Square and Clover were
+   traced to US API hosts, but Shopify's and Lightspeed's hosts don't
+   reveal one; see `docs/LEGAL_REVIEW_NOTES.md` item 7b.
 
 3. **Abandoned password-reset tokens are never cleared.** `resetToken` /
    `resetTokenExpiresAt` (both `Merchant` and `Customer`) are only nulled

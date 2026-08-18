@@ -6,11 +6,11 @@ itself, rendered inline on the page — this file is a summary index of it,
 not a replacement for reading the page.
 
 Covers: **Privacy Policy** (`/legal/privacy`, rendered from
-`views/partials/legal-privacy-content.ejs`, version `2026-08-05.2`),
+`views/partials/legal-privacy-content.ejs`, version `2026-08-18.1`),
 **Terms of Service** (`/legal/terms`, rendered from
 `views/partials/legal-terms-content.ejs`, version `2026-08-06.2`), and
 **Data Processing Agreement** (`/legal/dpa`, rendered from
-`views/partials/legal-dpa-content.ejs`, version `2026-08-06.1`).
+`views/partials/legal-dpa-content.ejs`, version `2026-08-18.1`).
 
 ---
 
@@ -200,26 +200,66 @@ DPA claims).
 
 ---
 
-## 7. "Shopify" isn't dead code — real integration planned
+## 7. Shopify — RESOLVED (integration shipped, now a disclosed subprocessor)
 
-**Where:** merchant "Subprocessors" list.
+**Where:** merchant "Subprocessors" list on the Privacy Policy and the DPA.
 
-**Status:** founder confirmed (2026-08-07) a real Shopify POS integration
-is planned soon — `Merchant.shopifyShopDomain`/`shopifyAccessToken`, the
-`else if (merchant.shopifyShopDomain)` display branch in
-`views/account-settings.ejs`, and the Shopify references in the admin
-panel and `routes/analytics.js`'s POS labels are **not** leftover cruft to
-remove; they're already-built groundwork for that integration
-(`shopifyAccessToken` currently just never gets set, since there's no
-`routes/oauth-shopify.js` or "Connect Shopify" button on
-`views/pos-setup.ejs` yet — that's the actual remaining work). Do not
-delete these fields/branches.
+**Status: RESOLVED**, as of `PRIVACY.version` `2026-08-18.1` and
+`DPA.version` `2026-08-18.1`. The Shopify POS integration the founder
+confirmed was coming (2026-08-07) has since shipped — `routes/oauth-shopify.js`,
+the sale webhook at `routes/webhooks.js` (`/webhooks/pos/shopify`), and
+Shopify's three mandatory compliance webhooks. So has a **Lightspeed
+Retail (X-Series)** integration (`routes/oauth-lightspeed.js`,
+`/webhooks/pos/lightspeed`), which was never mentioned on any legal page
+at all.
 
-**Needed on the Privacy Policy page:** the disclosure currently says
-Shopify "is not a working integration today, and no data is sent to or
-received from Shopify" — true today, but this note needs to be revisited
-(most likely removed, with Shopify added as a real subprocessor in the
-list above it) once the integration actually ships, not before.
+Both pages previously listed the POS subprocessors as "Square, Clover"
+only, and the Privacy Policy additionally carried a `[[REVIEW]]` marker
+asserting Shopify "is not a working integration today, and no data is
+sent to or received from Shopify" — true when written, false the moment
+the integration shipped. Fixed on this pass:
+
+- Both subprocessor lists now read "Square, Clover, Lightspeed, Shopify."
+- The false Shopify marker is removed from the Privacy Policy.
+- The Privacy Policy's "Account data we hold" paragraph, which named the
+  connectable POS systems as "(Square or Clover)," now names all four.
+- Per CLAUDE.md's convention that a subprocessor change bumps
+  `DPA.version` only, plus a genuine Privacy Policy wording change,
+  `PRIVACY.version` and `DPA.version` were both bumped — `TERMS.version`
+  was deliberately **not**. The Terms' own POS wording
+  ("Square, Clover, and any other point-of-sale provider we integrate
+  with") was already written generically and did not change.
+
+**Note:** bumping both versions means every existing merchant hits the
+`/legal/reaccept` interstitial on their next dashboard visit, naming the
+Privacy Policy and DPA — which is exactly what the DPA's Subprocessors
+section promises happens when a subprocessor is added.
+
+---
+
+## 7b. POS providers' own data regions were never confirmed — NEW
+
+**Where:** "Where your data is stored" (Privacy Policy) and "Where the
+data goes" (DPA).
+
+**Issue:** found while resolving item 7. Both sections enumerate which
+subprocessors take data outside Canada (Google, Anthropic, Resend) but
+never mentioned the POS connection at all — even though connecting a POS
+means sales data lives on that provider's servers and is exchanged with
+us continuously for as long as the connection is active. That omission
+predates the Lightspeed/Shopify work; it applied equally to Square and
+Clover.
+
+Both paragraphs now name the POS connection as a place data goes. What
+could **not** be resolved is which country each provider actually
+processes and stores that data in — that isn't determinable from this
+codebase, only from each provider's own documentation. A `[[REVIEW]]`
+marker to that effect is now live on both pages.
+
+**Needed:** confirm the processing/storage region for Square, Clover,
+Lightspeed, and Shopify individually, update both paragraphs, and confirm
+whether any additional cross-border transfer safeguard (e.g. standard
+contractual clauses) is required for them.
 
 ---
 

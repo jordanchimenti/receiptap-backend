@@ -10,11 +10,14 @@ language; it is a factual trace of what the code does.
 (Supabase) is confirmed hosted in AWS `ca-central-1` (Montreal) from the
 `DATABASE_URL` host in `.env`
 (`aws-0-ca-central-1.pooler.supabase.com`). The application server itself is
-hosted on Railway; **Railway's server region is not set anywhere in this
-repo** (no `railway.json`/`railway.toml`/region config found), so it cannot
-be confirmed from the codebase. Rows marked `NO*` mean "no known transmission
-to a foreign subprocessor was found in the code — but every request also
-transits the Railway app server, whose region is unverified." Rows marked
+hosted on Railway, and **Railway has no Canadian region** — its only options
+are US West, US East, EU West (Amsterdam) and Southeast Asia (Singapore).
+Which of those four is in use is a dashboard setting, not visible in this
+repo (there is no `railway.json` field for it), but every one of them is
+outside Canada. Rows marked `NO*` therefore mean "no known transmission to a
+foreign subprocessor was found in the code — but every request still transits
+the Railway app server, which is outside Canada regardless of which region is
+selected." Rows marked
 `YES` are transmissions to a specific named subprocessor confirmed by reading
 the actual API call.
 
@@ -158,7 +161,7 @@ prior assumption list.
 | Subprocessor | Data received | Fields (from Section 1) | Hosted in | DPA / privacy terms URL |
 |---|---|---|---|---|
 | **Supabase** (Postgres database) | Everything in the schema — this is the primary datastore | All fields | Canada (AWS `ca-central-1`, confirmed from `DATABASE_URL`) | Not present anywhere in repo config. Not fabricated here — verify directly at supabase.com. |
-| **Railway** (app hosting) | The app process itself, and by extension every field in transit through it (request bodies, session cookies, DB query results before they render) | All fields, in transit | **UNKNOWN** — no region is set in any repo config file found | Not present in repo config. Verify directly at railway.app. |
+| **Railway** (app hosting) | The app process itself, and by extension every field in transit through it (request bodies, session cookies, DB query results before they render) | All fields, in transit | **Outside Canada, necessarily** — Railway offers only US West (`us-west2`), US East (`us-east4-eqdc4a`), EU West (`europe-west4-drams3a`) and Southeast Asia (`asia-southeast1-eqsg3a`). Which one is a dashboard setting, not in this repo. | Not present in repo config. Verify directly at railway.app. |
 | **Stripe** | Merchant billing identity (email, business name), Affiliate identity (email) and their Connect account, invoice/transfer IDs | `Merchant.email`, `Merchant.businessName`, `Merchant.stripeCustomerId`, `Merchant.stripeSubscriptionId`, `Affiliate.email`, `Affiliate.stripeConnectAccountId`, `Commission.stripeInvoiceId`/`stripeTransferId` | US (Stripe's standard API; no Canada-specific hosting configured in this repo) | Not present in repo config. Verify directly at stripe.com. |
 | **Anthropic** | Merchant business name + item name/quantity per line item (see Section 2 for the exact payload) | `Merchant.businessName`, partial `Transaction.lineItems` (name + quantity only) | US (Anthropic's standard API; no region configured in this repo) | Not present in repo config. Verify directly at anthropic.com. |
 | **Google** (Sign-In only — see note) | An ID token is sent to Google's verification library (`google-auth-library`) for both merchant and customer "Sign in with Google"; the email/name/sub already inside that Google-issued token is what gets extracted, not sent | `Merchant.email`/`googleId`, `Customer.email`/`googleId`/`name` (as the *source*, not an onward destination) | US/global (Google's identity infrastructure) | Not present in repo config. Verify directly at google.com. **Note:** "Google Reviews" is NOT a subprocessor here — confirmed no Places/Reviews API call exists; `ReceiptTheme.googleReviewUrl` is a plain merchant-supplied link. |
@@ -219,21 +222,33 @@ patterns.
    upload handlers in `routes/theme-settings.js` and `routes/billing.js`,
    neither of which contains any `fs.unlink` or equivalent.
 
-5. **Railway's server region is UNKNOWN.** The Supabase database is
-   confirmed in Canada, but every request also passes through the Railway
-   app server first, and nothing in this repo specifies what region that
-   runs in. This means the "Does it leave Canada?" answers marked `NO*`
-   throughout Section 1 are conditional on Railway's (unverified) region —
-   they are not a clean guarantee.
+5. **The app server is outside Canada, and cannot be otherwise on
+   Railway.** The Supabase database is confirmed in Canada, but every
+   request also passes through the Railway app server first, and Railway
+   has no Canadian region — only US West, US East, EU West (Amsterdam) and
+   Southeast Asia (Singapore). Which of the four is in use is a dashboard
+   setting that isn't visible in this repo, but the "Does it leave Canada?"
+   answers marked `NO*` throughout Section 1 are **not** a clean guarantee
+   under any of them. This is a live gap on the Privacy Policy and DPA,
+   which both currently state data is held in Canada — see
+   `docs/LEGAL_REVIEW_NOTES.md` item 5.
 
-6. **Session data lives in server memory, not the database.** `express-session`
-   is configured in `server.js` with no store option set, which means it
-   defaults to the built-in `MemoryStore` — session data (just
-   `merchantId`/`customerId`/`affiliateId`/`isOwner`, confirmed by grep, no
-   other fields found stored in session) is lost on every server restart
-   and isn't captured by anything in Section 1 since it's not a Prisma
-   field. Flagging since a reader of this document might otherwise assume
-   all state lives in Postgres.
+6. **Session data lives in Postgres — RESOLVED, but it is not a Prisma
+   table.** This previously read "session data lives in server memory":
+   `express-session` had no store configured and fell back to the built-in
+   `MemoryStore`. It now uses `connect-pg-simple` (`lib/sessionStore.js`),
+   writing to a `session` table in the same database. Contents are
+   unchanged and still minimal — `merchantId`/`customerId`/`affiliateId`/
+   `isOwner`, confirmed by grep, no other fields found in session — but they
+   now persist across restarts instead of being discarded, which is what
+   stops every merchant and shopper being logged out on every deploy.
+
+   Two things to keep in mind for this document's purposes: the `session`
+   table is **not** in `prisma/schema.prisma` (connect-pg-simple owns its
+   layout), so it will never appear in Section 1 alongside the Prisma
+   models; and session rows now sit in the database subject to the same
+   retention questions as everything else, pruned every 15 minutes by
+   expiry only. No retention window in `config/retention.js` governs them.
 
 7. **Platform-wide shopper visibility.** `/admin/customers` and
    `/admin/customers/export` (gated by `requireAdmin`, i.e. `ADMIN_EMAILS`)

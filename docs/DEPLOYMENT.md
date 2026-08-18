@@ -103,14 +103,51 @@ moving those jobs to a real cron service. Not a config change.
 
 Point it at the GitHub repo. Railway detects Node and reads `railway.json`.
 
-### 2. Add the volume (before first deploy)
+### 2. Pick the region — BEFORE you create the volume
+
+Service → **Settings → Scale → Regions**.
+
+Do this first. Changing a service's region *after* a volume is attached
+forces Railway to migrate the volume, which takes time proportional to its
+size and causes downtime. Picking first costs nothing; reordering these two
+steps costs an outage.
+
+**There is no Canadian region.** Railway has exactly four:
+
+| Region | Identifier | Location |
+|---|---|---|
+| US West | `us-west2` | California, USA |
+| US East | `us-east4-eqdc4a` | Virginia, USA |
+| EU West | `europe-west4-drams3a` | Amsterdam, Netherlands |
+| Southeast Asia | `asia-southeast1-eqsg3a` | Singapore |
+
+This is not just a latency choice — **it changes what your Privacy Policy and
+DPA have to say.** Both currently state that ReceipTap data is stored in
+Canada, naming only Google, Anthropic, Resend and the POS providers as
+touching it outside Canada. The database genuinely is in Canada (Supabase,
+`ca-central-1`, Montreal), but the app server will not be, in any of the four
+options — and every request, session cookie, and database result passes
+through it. So whichever you pick, those paragraphs become inaccurate as
+written and need rewriting, plus a `PRIVACY.version` and `DPA.version` bump.
+See `docs/LEGAL_REVIEW_NOTES.md` item 5.
+
+US East is the closest to Montreal of the four, if latency to the database is
+the deciding factor. That's a technical observation, not a legal one — a US
+region still means US jurisdiction over the app server.
+
+Note: there is **no** `railway.json` field for a single region — it's a
+dashboard setting only. (`multiRegionConfig` in the schema is for running
+replicas in several regions at once, which this app can't do; see "Why
+exactly one instance" above.)
+
+### 3. Add the volume
 
 In the service → **Settings → Volumes** → add one, mount path `/data`.
 
 Then set `UPLOAD_DIR=/data/uploads`. Skip this and uploads work fine right up
 until your first redeploy silently erases them.
 
-### 3. Set the environment variables
+### 4. Set the environment variables
 
 Work from `.env.example` — it lists all 27 with notes on where each comes
 from. The ones that must be right on day one:
@@ -127,7 +164,7 @@ Leave `RETENTION_PURGE_ENABLED` unset. Live purging has never run; per
 CLAUDE.md it should sit in dry-run and have its `PurgeLog` output reviewed
 first.
 
-### 4. Deploy, then confirm it came up
+### 5. Deploy, then confirm it came up
 
 - `https://your-domain/healthz` returns `{"ok":true}`
 - The deploy log shows migrations applied, then
@@ -198,7 +235,9 @@ so I haven't guessed at config that might break the build on its own.
 
 - The legal pages have open `[[REVIEW]]` items and aren't launch-ready. See
   `docs/LEGAL_REVIEW_NOTES.md`. Deploying doesn't change that.
-- Railway's region is still unconfirmed, which is an open item on the Privacy
-  Policy and DPA (both state where data is held). Once deployed, **check the
-  region and update those pages** — item 5 in `LEGAL_REVIEW_NOTES.md`.
+- The Privacy Policy and DPA both still say data is held in Canada. Now that
+  it's confirmed Railway has no Canadian region, that's known to be wrong
+  about the app server regardless of which region you choose — it needs a
+  real rewrite and a version bump on both documents, not just a blank filled
+  in. Item 5 in `LEGAL_REVIEW_NOTES.md` has the detail.
 - Live data purging stays off.

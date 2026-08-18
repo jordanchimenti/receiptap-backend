@@ -168,17 +168,51 @@ revisiting once/if ReceipTap starts sending any marketing email itself.
 
 ---
 
-## 5. Server hosting region unconfirmed
+## 5. The app server cannot be in Canada — CONFIRMED, pages need rewriting
 
-**Where:** "Where your data is stored" (shopper section).
+**Where:** "Where your data is stored" (Privacy Policy, shopper section) and
+"Where the data goes" (DPA). Both carry a `[[REVIEW]]` marker saying
+Railway's region couldn't be confirmed.
 
-**Issue:** Supabase's region was confirmed from the codebase (AWS
-`ca-central-1`, Montreal) and is *not* flagged. Railway's region — where
-the application server itself runs — could not be confirmed from the
-codebase.
+**Status: the question is now answered, and the answer is worse than "we
+don't know."** Railway offers exactly four deployment regions and **none of
+them is in Canada**:
 
-**Needed:** confirm the Railway deployment region and update this
-paragraph if the app server itself runs outside Canada.
+| Region | Identifier | Location |
+|---|---|---|
+| US West | `us-west2` | California, USA |
+| US East | `us-east4-eqdc4a` | Virginia, USA |
+| EU West | `europe-west4-drams3a` | Amsterdam, Netherlands |
+| Southeast Asia | `asia-southeast1-eqsg3a` | Singapore |
+
+So this is no longer "confirm the region and update the paragraph if it
+turns out to be outside Canada." Whichever region gets picked, the
+application server **is** outside Canada, and every request, session cookie,
+and database result passes through it. The database itself genuinely is in
+Canada (Supabase, AWS `ca-central-1`, Montreal) — that part stays true.
+
+**What both pages currently say is therefore wrong**, not merely
+incomplete. They state data is stored in Canada and then enumerate the few
+subprocessors that touch it outside Canada — Google, Anthropic, Resend, and
+(as of the last pass) the connected POS. The app server isn't in that list,
+and it handles everything.
+
+**Needed:**
+
+1. Pick the region (see `docs/DEPLOYMENT.md` step 2 — do it before
+   attaching the volume, or changing it later forces a volume migration
+   with downtime).
+2. Rewrite both paragraphs to say plainly where the application server runs
+   and that all data transits it, keeping the accurate statement that the
+   database is in Canada.
+3. Bump `PRIVACY.version` and `DPA.version` in the same commit, per
+   CLAUDE.md's version-bump rule.
+4. Have the lawyer confirm whether a US (or EU/Singapore) app server over a
+   Canadian database needs any additional cross-border transfer safeguard,
+   and whether it changes anything about the PIPEDA analysis.
+
+**Not fixed on this pass deliberately:** the exact wording depends on which
+region is chosen, and guessing would put an invented fact on a legal page.
 
 ---
 

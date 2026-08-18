@@ -24,6 +24,12 @@ Solo founder, first-time coder. Explain in plain language, one step at a time.
   merchant-dashboard, merchant-expenses, repeat-customers, analytics,
   pdf-export, theme-settings, email-capture, customer-account, billing, admin
 - `middleware/` — subscriptionGate, requireAdmin, ownerFlag, legalReacceptance
+- `lib/sessionStore.js` — login sessions in Postgres, not in memory. See
+  Gotchas.
+- `lib/uploadPaths.js` — single source of truth for where uploaded logos and
+  profile photos are written. See Gotchas.
+- `railway.json` + `docs/DEPLOYMENT.md` — deploy config and the first-deploy
+  runbook.
 - `services/` — categorize-receipt, generate-receipt-pdf, stripeService,
   legalAcceptanceService, shopperConsentService, dataRetentionService,
   emailSuppressionService
@@ -151,6 +157,25 @@ Solo founder, first-time coder. Explain in plain language, one step at a time.
 - **Passive NFC.** The puck has no power and no radio. It can never report
   "online" or "offline". Any device-status UI must be about setup state
   (linked / pairing / needs linking), never connectivity.
+- **Sessions live in Postgres, not memory.** `lib/sessionStore.js` wires
+  `connect-pg-simple` into express-session. Never drop back to the default
+  in-memory store: it logs out every merchant and shopper on every deploy
+  and restart, and grows without bound. It opens a second connection pool
+  alongside Prisma's — capped at 3 on purpose, per the Prisma-client gotcha
+  below. Its `session` table is deliberately NOT in `schema.prisma`;
+  `connect-pg-simple` owns that table's layout, and `prisma migrate status`
+  is happy alongside it (verified).
+- **Uploads must never be hardcoded to a path inside the repo.** Logos and
+  profile photos go wherever `lib/uploadPaths.js` resolves — a persistent
+  volume in production (`UPLOAD_DIR`), `public/uploads/` locally. A host
+  replaces the checkout on every deploy, and logos print on receipts, so an
+  in-repo path silently blanks every merchant's receipt branding on each
+  deploy. The URLs stored in the database stay relative (`/uploads/...`) so
+  the physical path can move without a data migration.
+- **Exactly one instance.** `railway.json` pins `numReplicas: 1` and it must
+  stay there. A volume attaches to one instance, and the daily purge and
+  affiliate-payout schedulers are in-memory `setInterval` timers with no
+  shared lock — a second instance runs its own duplicate of both.
 - **Deletion FK order.** `ShopperConsent.receiptId -> Transaction` and
   `LoyaltyCard.customerId -> Customer` are both `ON DELETE RESTRICT` —
   delete the child rows before the parent or Postgres rejects it.
@@ -169,8 +194,17 @@ Solo founder, first-time coder. Explain in plain language, one step at a time.
 - The eight older dashboard pages still have prototype styling inside the new
   rail: receipts-hub, analytics, repeat-customers, customer-emails,
   merchant-receipts, pos-setup, theme-settings, merchant-expenses.
-- Not deployed yet — in version control and pushed to GitHub
-  (jordanchimenti/receiptap-backend) now, just not hosted anywhere real yet.
+- **Still not deployed, but no longer blocked on code.** The two things
+  that would have broken in production are fixed (sessions persist in
+  Postgres; uploads go to a configurable persistent path), `railway.json`
+  exists, `/healthz` answers, and `.env.example` documents all 27 env vars.
+  What remains is account-level setup, not code — see
+  `docs/DEPLOYMENT.md` for the runbook, including the post-deploy step of
+  updating OAuth redirect URIs and webhook URLs in Square/Clover/
+  Lightspeed/Shopify/Stripe/Google, which all still point at ngrok or
+  localhost. One known risk carried into the deploy: Playwright's Chromium
+  may lack system libraries on Railway, which would break bulk PDF export
+  only (it fails per-request and can't take the app down).
 - `/legal/terms`, `/legal/privacy`, and `/legal/dpa` are all drafted now
   (real content, not stubs — see `views/partials/legal-*-content.ejs`), and
   the retention windows from `config/retention.js` are stated on them. But

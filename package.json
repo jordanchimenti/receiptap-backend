@@ -9,12 +9,16 @@
     "generate-batch": "node scripts/generate-batch.js",
     "postinstall": "playwright install chromium"
   },
+  "engines": {
+    "node": "22.x"
+  },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.112.3",
     "@prisma/client": "^5.20.0",
     "archiver": "^6.0.2",
     "bcrypt": "^5.1.1",
     "chart.js": "^4.5.1",
+    "connect-pg-simple": "^10.0.0",
     "dotenv": "^16.4.5",
     "ejs": "^3.1.10",
     "express": "^4.22.2",
@@ -22,6 +26,7 @@
     "google-auth-library": "^10.9.0",
     "multer": "^2.2.0",
     "nanoid": "^3.3.7",
+    "pg": "^8.23.0",
     "playwright": "^1.56.0",
     "qrcode": "^1.5.4",
     "resend": "^6.18.1",

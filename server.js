@@ -5,6 +5,8 @@ require('dotenv').config();
 const express = require('express');
 const session = require('express-session');
 const path = require('path');
+const { createSessionStore } = require('./lib/sessionStore');
+const { UPLOAD_ROOT } = require('./lib/uploadPaths');
 
 const app = express();
 
@@ -41,12 +43,38 @@ app.use('/webhooks/pos/square', express.raw({ type: 'application/json' }));
 app.use('/webhooks/pos/lightspeed', express.raw({ type: 'application/json' }));
 app.use('/webhooks/pos/shopify', express.raw({ type: 'application/json' }));
 
+// Railway pings this to decide whether a new deploy actually came up before
+// it sends traffic to it (healthcheckPath in railway.json). Deliberately does
+// NOT touch the database: this answers "did the process boot and is it
+// listening," and a DB blip shouldn't make Railway tear down an otherwise
+// healthy container and retry forever.
+app.get('/healthz', (req, res) => res.status(200).json({ ok: true }));
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Merchant-uploaded logos and profile photos. Their URLs are stored in the
+// database as /uploads/logos/... and /uploads/profile-photos/..., but the
+// files themselves live wherever UPLOAD_DIR points (a persistent Railway
+// volume in production -- see lib/uploadPaths.js). With UPLOAD_DIR unset
+// this just re-serves what the line above already covers; with it set, this
+// is the only reason those URLs resolve at all.
+app.use('/uploads', express.static(UPLOAD_ROOT));
+
+// The session secret is what stops someone from forging a cookie that says
+// "I'm merchant #42." The dev fallback below is a real, publicly-readable
+// string in this repo, so shipping it would mean anyone who reads the source
+// can sign their own session -- refuse to boot in production rather than
+// come up looking fine while being wide open.
+if (process.env.NODE_ENV === 'production' && !process.env.SESSION_SECRET) {
+  console.error('FATAL: SESSION_SECRET must be set in production. Generate one with: openssl rand -base64 32');
+  process.exit(1);
+}
+
 app.use(
   session({
+    store: createSessionStore(session),
     secret: process.env.SESSION_SECRET || 'dev-secret-change-in-production',
     resave: false,
     saveUninitialized: false,

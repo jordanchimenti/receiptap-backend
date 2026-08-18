@@ -6,7 +6,6 @@
 const express = require('express');
 const router = express.Router();
 const path = require('path');
-const fs = require('fs');
 const multer = require('multer');
 const prisma = require('../lib/prisma');
 const {
@@ -30,11 +29,10 @@ function requireAuth(req, res, next) {
   next();
 }
 
-// Profile photo uploads -- same local-disk pattern as receipt logo uploads
-// (routes/theme-settings.js). Same caveat applies: this needs to move to
-// real object storage before the app is actually deployed anywhere.
-const PHOTO_DIR = path.join(__dirname, '..', 'public', 'uploads', 'profile-photos');
-fs.mkdirSync(PHOTO_DIR, { recursive: true });
+// Profile photo uploads -- same shared upload root as receipt logos
+// (lib/uploadPaths.js): a persistent Railway volume in production, falling
+// back to public/uploads/ locally.
+const { PHOTO_DIR } = require('../lib/uploadPaths');
 
 const ALLOWED_PHOTO_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
 

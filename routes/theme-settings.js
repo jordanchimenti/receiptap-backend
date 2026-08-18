@@ -6,7 +6,6 @@
 const express = require('express');
 const router = express.Router();
 const path = require('path');
-const fs = require('fs');
 const crypto = require('crypto');
 const multer = require('multer');
 const QRCode = require('qrcode');
@@ -33,13 +32,11 @@ function loyaltyForDisplay(loyalty) {
   };
 }
 
-// Logo uploads -- stored on local disk under public/, served the same way
-// public/images/receiptap-logo.png already is. NOTE: local disk storage only
-// works because this app isn't deployed anywhere yet. Most hosting platforms
-// wipe local files on every redeploy, so this needs to move to real object
-// storage (S3 / Supabase Storage) before going to production.
-const LOGO_DIR = path.join(__dirname, '..', 'public', 'uploads', 'logos');
-fs.mkdirSync(LOGO_DIR, { recursive: true });
+// Logo uploads -- written to the shared upload root (lib/uploadPaths.js),
+// which points at a persistent Railway volume in production and falls back
+// to public/uploads/ locally. The saved URL below stays /uploads/logos/...
+// either way; server.js serves that path from wherever the root actually is.
+const { LOGO_DIR } = require('../lib/uploadPaths');
 
 const ALLOWED_LOGO_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml'];
 

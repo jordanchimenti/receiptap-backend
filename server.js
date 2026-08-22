@@ -45,27 +45,33 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// NOTE: sessions are in-memory again for now. Moving them to Postgres with
-// connect-pg-simple is the right fix -- a restart currently signs everyone
-// out -- but its pool plus Prisma's exceeded Supabase's session-mode cap of
-// 15 clients, and session writes started failing with EMAXCONNSESSION, which
-// silently broke login: the redirect succeeded and the session was never
-// stored. Revisit using the transaction pooler (port 6543) or a store that
-// shares Prisma's single connection, rather than opening a second pool.
+// Sessions live in Postgres, through the app's own Prisma connection
+// (lib/prismaSessionStore.js). With the default MemoryStore every restart --
+// a deploy, a crash, a watch reload -- signed out every merchant and shopper
+// at once, and on more than one instance a request could land on a container
+// that had never seen the session.
+//
+// Deliberately NOT connect-pg-simple: it opens a second Postgres pool, and
+// Supabase's session-mode pooler caps at 15 clients for everything combined.
+// That cap was hit, session writes failed with EMAXCONNSESSION, and login
+// broke silently -- express-session treats a failed save as non-fatal, so the
+// redirect succeeded and the session simply wasn't there on the next request.
+const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+const { PrismaSessionStore } = require('./lib/prismaSessionStore');
 app.use(
   session({
+    store: new PrismaSessionStore({ ttlMs: SESSION_TTL_MS }),
     secret: process.env.SESSION_SECRET || 'dev-secret-change-in-production',
     resave: false,
     saveUninitialized: false,
     cookie: {
       secure: process.env.NODE_ENV === 'production',
-      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+      maxAge: SESSION_TTL_MS,
       httpOnly: true,
       sameSite: 'lax',
     },
   })
-);
-// --- Route modules built across this project -------------------------------
+);// --- Route modules built across this project -------------------------------
 const { ownerFlag } = require('./middleware/ownerFlag');
 app.use(ownerFlag);
 app.use(require('./routes/auth'));           // signup / login / logout

@@ -679,6 +679,24 @@ enum ConsentType {
 // whether it errored partway through. APPEND-ONLY, same as
 // LegalAcceptance/ShopperConsent: never update a row after it's written.
 // ---------------------------------------------------------------------------
+// Login sessions, stored here rather than in the server's memory so a deploy,
+// crash or watch-reload doesn't sign out every merchant and shopper at once
+// -- and so more than one instance can serve the same session.
+//
+// Read and written through lib/prismaSessionStore.js, which uses the app's
+// EXISTING Prisma connection. That's the whole point: an off-the-shelf store
+// opens its own pool, and Supabase's session-mode pooler caps at 15 clients
+// total. When that was tried, session writes started failing with
+// EMAXCONNSESSION and login broke silently -- the redirect succeeded and the
+// session was never saved.
+model Session {
+  sid       String   @id
+  data      String   // the serialised session, as express-session hands it over
+  expiresAt DateTime
+
+  @@index([expiresAt])
+}
+
 model PurgeLog {
   id          String  @id @default(cuid())
   jobName     String // "purgeExpiredReceipts" | "purgeDeactivatedMerchants" | "deleteShopperByEmail" | "deleteShopperEverywhere"

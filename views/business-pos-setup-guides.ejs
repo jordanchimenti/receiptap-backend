@@ -1,0 +1,71 @@
+<!-- views/business-pos-setup-guides.ejs -->
+<!-- Dark reskin of views/pos-setup-guides-index.ejs. Same locals
+     (providers: array of { key, providerName }), built from
+     getGuideProviders() in routes/oauth-square.js -- see
+     GET /account/business/pos/guides in routes/account-business.js. -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>POS Setup Guides - ReceipTap Business</title>
+  <link rel="stylesheet" href="/css/receiptap.css" />
+  <%- include('partials/wallet-dark-theme') %>
+  <style>
+    .biz-header { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+    .guide-sub { font-size: 13px; color: var(--w-ink-soft); line-height: 1.5; margin: 0 0 16px; }
+    .guide-search {
+      width: 100%; box-sizing: border-box; background: var(--w-card-raised); border: 1px solid var(--w-line);
+      color: var(--w-ink); border-radius: 10px; padding: 12px 14px; font-size: 14.5px; font-family: inherit; margin-bottom: 16px;
+    }
+    .guide-row { display: flex; align-items: center; justify-content: space-between; padding: 15px 18px; text-decoration: none; color: var(--w-ink); border-bottom: 1px solid var(--w-line); }
+    .guide-row:last-child { border-bottom: none; }
+    .guide-row-name { font-size: 14.5px; font-weight: 600; }
+    .guide-row-chevron { color: var(--w-ink-soft); }
+    .guide-empty { display: none; text-align: center; padding: 20px 10px; color: var(--w-ink-soft); font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div class="w-shell">
+    <div class="biz-header">
+      <a href="/account/business/pos" class="w-btn-icon" aria-label="Back">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      </a>
+      <div>
+        <div class="w-eyebrow">Business</div>
+        <h1 class="w-title" style="font-size:20px;">Setup guides</h1>
+      </div>
+    </div>
+
+    <p class="guide-sub">Search for your point-of-sale provider for a step-by-step walkthrough for connecting it and assigning a puck.</p>
+    <input type="text" id="guide-search" class="guide-search" placeholder="Search your POS provider…" autocomplete="off" />
+
+    <div class="w-card" id="guide-list">
+      <% providers.forEach(function(p) { %>
+        <a class="guide-row" data-name="<%= p.providerName.toLowerCase() %>" href="/account/business/pos/guide/<%= p.key %>">
+          <span class="guide-row-name"><%= p.providerName %></span>
+          <span class="guide-row-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg></span>
+        </a>
+      <% }); %>
+    </div>
+    <p class="guide-empty" id="guide-empty">No POS provider matches that search.</p>
+  </div>
+
+  <script>
+    var searchInput = document.getElementById('guide-search');
+    var cards = Array.from(document.querySelectorAll('.guide-row'));
+    var emptyState = document.getElementById('guide-empty');
+
+    searchInput.addEventListener('input', function () {
+      var query = searchInput.value.trim().toLowerCase();
+      var visibleCount = 0;
+      cards.forEach(function (card) {
+        var isMatch = card.dataset.name.includes(query);
+        card.style.display = isMatch ? '' : 'none';
+        if (isMatch) visibleCount++;
+      });
+      emptyState.style.display = visibleCount === 0 ? 'block' : 'none';
+    });
+  </script>
+</body>
+</html>

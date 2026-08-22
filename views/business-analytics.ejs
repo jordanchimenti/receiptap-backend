@@ -1,0 +1,257 @@
+<!-- views/business-analytics.ejs -->
+<!-- Dark reskin of views/analytics.ejs's content. Same locals -- see
+     computeAnalyticsData() in routes/analytics.js. Reuses the existing
+     GET /dashboard/analytics/activity JSON endpoint for the live-polling
+     "Recent Activity" list (same-origin fetch, no template involved, so
+     nothing to duplicate there). Chart.js dark-axis styling matches the
+     pattern already established in views/account-spending.ejs. -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Analytics - ReceipTap Business</title>
+  <link rel="stylesheet" href="/css/receiptap.css" />
+  <%- include('partials/wallet-dark-theme') %>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+  <style>
+    .biz-header { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+    .range-row { display: flex; gap: 8px; margin-bottom: 18px; }
+    .range-row select {
+      flex: 1; background: var(--w-card-raised); border: 1px solid var(--w-line); color: var(--w-ink);
+      border-radius: 10px; padding: 10px 12px; font-size: 13.5px; font-family: inherit;
+    }
+    .export-link { display: flex; align-items: center; font-size: 13px; font-weight: 600; color: var(--w-accent); text-decoration: none; padding: 0 6px; white-space: nowrap; }
+
+    .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+    .stat-card { padding: 14px 16px; }
+    .stat-label { font-size: 11px; color: var(--w-ink-soft); margin-bottom: 4px; }
+    .stat-value { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 19px; font-weight: 700; }
+    .stat-foot { font-size: 10.5px; color: var(--w-ink-soft); margin-top: 4px; }
+    .stat-foot.up { color: var(--w-accent); }
+
+    .panel { padding: 18px; margin-bottom: 16px; }
+    .panel h2 { font-size: 14.5px; margin: 0 0 14px; }
+    .chart-pad { height: 200px; }
+    .blank { text-align: center; padding: 24px 10px; }
+    .blank-title { font-size: 13px; font-weight: 700; margin-bottom: 4px; }
+    .blank-sub { font-size: 12px; color: var(--w-ink-soft); line-height: 1.5; }
+
+    .donut-wrap { display: flex; flex-direction: column; align-items: center; gap: 16px; }
+    .donut-wrap canvas { max-width: 160px; max-height: 160px; }
+    .legend { width: 100%; }
+    .legend-row { display: flex; justify-content: space-between; font-size: 12.5px; padding: 5px 0; }
+    .legend-row .lk { display: flex; align-items: center; gap: 8px; color: var(--w-ink-soft); }
+    .sw { width: 8px; height: 8px; border-radius: 50%; }
+
+    .live-badge { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700; color: var(--w-accent); }
+    .live-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--w-accent); }
+    .activity-row { display: flex; justify-content: space-between; font-size: 12.5px; padding: 8px 0; border-bottom: 1px solid var(--w-line); color: var(--w-ink); }
+    .activity-row:last-child { border-bottom: none; }
+    .activity-when { color: var(--w-ink-soft); flex-shrink: 0; margin-left: 10px; }
+  </style>
+</head>
+<body>
+  <div class="w-shell">
+    <div class="biz-header">
+      <a href="/account/business/more" class="w-btn-icon" aria-label="Back">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      </a>
+      <div>
+        <div class="w-eyebrow">Business</div>
+        <h1 class="w-title" style="font-size:20px;">Analytics</h1>
+      </div>
+    </div>
+
+    <form class="range-row" method="GET" action="/account/business/analytics">
+      <select name="days" onchange="this.form.submit()">
+        <option value="7" <%= days === 7 ? 'selected' : '' %>>Last 7 days</option>
+        <option value="30" <%= days === 30 ? 'selected' : '' %>>Last 30 days</option>
+        <option value="90" <%= days === 90 ? 'selected' : '' %>>Last 90 days</option>
+      </select>
+      <a class="export-link" href="/dashboard/analytics/export?days=<%= days %>">Export CSV</a>
+    </form>
+
+    <div class="stat-grid">
+      <div class="w-card stat-card">
+        <div class="stat-label">Total Receipts</div>
+        <div class="stat-value"><%= stats.totalReceipts.toLocaleString('en-US') %></div>
+        <div class="stat-foot <%= (stats.totalReceiptsDelta !== null && stats.totalReceiptsDelta >= 0) ? 'up' : '' %>">
+          <% if (stats.totalReceiptsDelta === null) { %>No prior period<% } else { %><%= stats.totalReceiptsDelta >= 0 ? '↑' : '↓' %> <%= Math.abs(stats.totalReceiptsDelta) %>%<% } %>
+        </div>
+      </div>
+      <div class="w-card stat-card">
+        <div class="stat-label">Total Customers</div>
+        <div class="stat-value"><%= stats.totalCustomers.toLocaleString('en-US') %></div>
+        <div class="stat-foot <%= (stats.totalCustomersDelta !== null && stats.totalCustomersDelta >= 0) ? 'up' : '' %>">
+          <% if (stats.totalCustomersDelta === null) { %>No prior period<% } else { %><%= stats.totalCustomersDelta >= 0 ? '↑' : '↓' %> <%= Math.abs(stats.totalCustomersDelta) %>%<% } %>
+        </div>
+      </div>
+      <div class="w-card stat-card">
+        <div class="stat-label">Receipts Claimed</div>
+        <div class="stat-value"><%= stats.receiptsClaimed.toLocaleString('en-US') %></div>
+        <div class="stat-foot <%= (stats.receiptsClaimedDelta !== null && stats.receiptsClaimedDelta >= 0) ? 'up' : '' %>">
+          <% if (stats.receiptsClaimedDelta === null) { %>No prior period<% } else { %><%= stats.receiptsClaimedDelta >= 0 ? '↑' : '↓' %> <%= Math.abs(stats.receiptsClaimedDelta) %>%<% } %>
+        </div>
+      </div>
+      <div class="w-card stat-card">
+        <div class="stat-label">Avg. Spend</div>
+        <div class="stat-value">$<%= Number(stats.avgSpend).toLocaleString('en-US', { minimumFractionDigits: 2 }) %></div>
+        <div class="stat-foot <%= (stats.avgSpendDelta !== null && stats.avgSpendDelta >= 0) ? 'up' : '' %>">
+          <% if (stats.avgSpendDelta === null) { %>No prior period<% } else { %><%= stats.avgSpendDelta >= 0 ? '↑' : '↓' %> <%= Math.abs(stats.avgSpendDelta) %>%<% } %>
+        </div>
+      </div>
+      <div class="w-card stat-card" style="grid-column: 1 / -1;">
+        <div class="stat-label">Claim Rate</div>
+        <div class="stat-value"><%= stats.claimRate %>%</div>
+        <div class="stat-foot <%= (stats.claimRateDelta !== null && stats.claimRateDelta >= 0) ? 'up' : '' %>">
+          <% if (stats.claimRateDelta === null) { %>No prior period<% } else { %><%= stats.claimRateDelta >= 0 ? '↑' : '↓' %> <%= Math.abs(stats.claimRateDelta) %> pts<% } %>
+        </div>
+      </div>
+    </div>
+
+    <div class="w-card panel">
+      <h2>Receipts Over Time</h2>
+      <% if (stats.totalReceipts === 0 && stats.receiptsClaimed === 0 && dayLabels.length && curByDay.every(function(n){ return n === 0; })) { %>
+        <div class="blank"><div class="blank-title">No receipts in this period</div><div class="blank-sub">Once sales come in, receipt volume will chart here.</div></div>
+      <% } else { %>
+        <div class="chart-pad"><canvas id="receipts-chart"></canvas></div>
+      <% } %>
+    </div>
+
+    <div class="w-card panel">
+      <h2>Receipts by POS Source</h2>
+      <% if (posBreakdown.length === 0) { %>
+        <div class="blank"><div class="blank-title">No receipts in this period</div><div class="blank-sub">Once sales come in, their POS source will break down here.</div></div>
+      <% } else { %>
+        <div class="donut-wrap">
+          <canvas id="pos-chart"></canvas>
+          <div class="legend">
+            <% posBreakdown.forEach(function (p) { %>
+              <div class="legend-row"><span class="lk"><span class="sw" style="background:<%= p.color %>;"></span><%= p.label %></span><span><%= p.count.toLocaleString('en-US') %></span></div>
+            <% }); %>
+          </div>
+        </div>
+      <% } %>
+    </div>
+
+    <div class="w-card panel">
+      <h2>Customer Growth</h2>
+      <% if (weekBuckets.every(function(n){ return n === 0; })) { %>
+        <div class="blank"><div class="blank-title">No new customers in this period</div><div class="blank-sub">New customers who claim a receipt will show up here, by week.</div></div>
+      <% } else { %>
+        <div class="chart-pad"><canvas id="growth-chart"></canvas></div>
+      <% } %>
+    </div>
+
+    <div class="w-card panel">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+        <h2 style="margin:0;">Recent Activity</h2>
+        <span class="live-badge"><span class="live-dot"></span>Live</span>
+      </div>
+      <div id="activity-list">
+        <% if (activity.length === 0) { %>
+          <div class="blank"><div class="blank-title">No activity yet</div><div class="blank-sub">Receipts and new customers will appear here as they happen.</div></div>
+        <% } else { %>
+          <% activity.forEach(function (a) { %>
+            <div class="activity-row"><span><%= a.text %></span><span class="activity-when"><%= a.when %></span></div>
+          <% }); %>
+        <% } %>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const dayLabels = <%- JSON.stringify(dayLabels) %>;
+    const curByDay = <%- JSON.stringify(curByDay) %>;
+    const prevByDay = <%- JSON.stringify(prevByDay) %>;
+    const posBreakdown = <%- JSON.stringify(posBreakdown) %>;
+    const weekLabels = <%- JSON.stringify(weekLabels) %>;
+    const weekBuckets = <%- JSON.stringify(weekBuckets) %>;
+
+    const shortLabels = dayLabels.map(d => {
+      const dt = new Date(d + 'T00:00:00');
+      return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    });
+
+    const axisColor = '#8d8d8d';
+    const gridColor = '#2a2a2a';
+
+    if (document.getElementById('receipts-chart')) {
+      new Chart(document.getElementById('receipts-chart'), {
+        type: 'line',
+        data: {
+          labels: shortLabels,
+          datasets: [
+            { label: 'This Period', data: curByDay, borderColor: '#056BFE', backgroundColor: 'rgba(5,107,254,0.12)', fill: true, tension: 0.3, pointRadius: 2 },
+            { label: 'Previous Period', data: prevByDay, borderColor: '#5a5f6b', borderDash: [5, 4], backgroundColor: 'transparent', fill: false, tension: 0.3, pointRadius: 0 },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: true, position: 'top', labels: { color: axisColor } } },
+          scales: {
+            y: { beginAtZero: true, ticks: { stepSize: 1, color: axisColor }, grid: { color: gridColor } },
+            x: { ticks: { color: axisColor }, grid: { display: false } },
+          },
+        },
+      });
+    }
+
+    if (document.getElementById('pos-chart')) {
+      new Chart(document.getElementById('pos-chart'), {
+        type: 'doughnut',
+        data: { labels: posBreakdown.map(p => p.label), datasets: [{ data: posBreakdown.map(p => p.count), backgroundColor: posBreakdown.map(p => p.color), borderWidth: 0 }] },
+        options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { display: false }, tooltip: { enabled: true } }, cutout: '68%' },
+      });
+    }
+
+    if (document.getElementById('growth-chart')) {
+      new Chart(document.getElementById('growth-chart'), {
+        type: 'bar',
+        data: { labels: weekLabels, datasets: [{ label: 'New customers', data: weekBuckets, backgroundColor: '#056BFE', borderRadius: 4 }] },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            y: { beginAtZero: true, ticks: { stepSize: 1, color: axisColor }, grid: { color: gridColor } },
+            x: { ticks: { color: axisColor }, grid: { display: false } },
+          },
+        },
+      });
+    }
+
+    function renderActivity(events) {
+      const list = document.getElementById('activity-list');
+      if (!events.length) {
+        list.innerHTML = '<div class="blank"><div class="blank-title">No activity yet</div><div class="blank-sub">Receipts and new customers will appear here as they happen.</div></div>';
+        return;
+      }
+      list.innerHTML = events.map(e =>
+        `<div class="activity-row"><span>${escapeHtml(e.text)}</span><span class="activity-when">${escapeHtml(e.when)}</span></div>`
+      ).join('');
+    }
+
+    function escapeHtml(s) {
+      const div = document.createElement('div');
+      div.textContent = s;
+      return div.innerHTML;
+    }
+
+    async function refreshActivity() {
+      try {
+        const res = await fetch('/dashboard/analytics/activity');
+        if (!res.ok || !(res.headers.get('content-type') || '').includes('application/json')) return;
+        const { events } = await res.json();
+        renderActivity(events);
+      } catch (e) {
+        console.warn('activity refresh failed', e);
+      }
+    }
+
+    setInterval(refreshActivity, 20000);
+  </script>
+</body>
+</html>

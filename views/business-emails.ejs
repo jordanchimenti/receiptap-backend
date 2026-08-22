@@ -1,0 +1,149 @@
+<!-- views/business-emails.ejs -->
+<!-- Dark reskin of views/customer-emails.ejs's content, mobile card list.
+     Same locals -- see computeCustomerEmailsData() in
+     routes/email-capture.js. The shopper-deletion lookup/confirm forms
+     post to /account/business/emails/* (routes/account-business.js),
+     which reuses the exact same deleteShopperByEmail() call as the real
+     dashboard's version. -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Customer Emails - ReceipTap Business</title>
+  <link rel="stylesheet" href="/css/receiptap.css" />
+  <%- include('partials/wallet-dark-theme') %>
+  <style>
+    .biz-header { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+    .biz-sub { font-size: 13px; color: var(--w-ink-soft); margin: 0 0 18px 48px; line-height: 1.5; }
+
+    .lookup-card { padding: 18px; margin-bottom: 18px; }
+    .lookup-card h2 { font-size: 15px; margin: 0 0 4px; }
+    .lookup-hint { font-size: 12.5px; color: var(--w-ink-soft); margin: 0 0 14px; line-height: 1.5; }
+    .lookup-form { display: flex; gap: 8px; }
+    .lookup-form input {
+      flex: 1; min-width: 0; background: var(--w-card-raised); border: 1px solid var(--w-line); color: var(--w-ink);
+      border-radius: 10px; padding: 10px 12px; font-size: 13.5px; font-family: inherit;
+    }
+    .btn-lookup, .btn-delete { padding: 10px 16px; border: none; border-radius: 10px; font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit; white-space: nowrap; }
+    .btn-lookup { background: var(--w-accent); color: #fff; }
+    .btn-delete { background: var(--w-danger); color: #fff; width: 100%; margin-top: 12px; }
+    .lookup-success { background: rgba(5,107,254,0.12); border: 1px solid rgba(5,107,254,0.35); color: var(--w-accent); border-radius: 10px; padding: 10px 14px; font-size: 13px; margin-bottom: 14px; }
+    .lookup-empty { font-size: 13px; color: var(--w-ink-soft); margin-top: 14px; }
+    .lookup-preview { margin-top: 14px; font-size: 13px; color: var(--w-ink); }
+    .lookup-preview ul { margin: 8px 0 4px; padding-left: 18px; line-height: 1.6; color: var(--w-ink-soft); }
+
+    .export-row { text-align: right; margin-bottom: 10px; }
+    .export-row a { font-size: 12.5px; font-weight: 600; color: var(--w-accent); text-decoration: none; }
+
+    .tabs { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+    .tab-btn {
+      font-size: 12.5px; font-weight: 700; padding: 8px 14px; border-radius: 999px; border: 1px solid var(--w-line);
+      background: var(--w-card-raised); color: var(--w-ink-soft); text-decoration: none;
+    }
+    .tab-btn.active { background: var(--w-accent); border-color: var(--w-accent); color: #fff; }
+
+    .email-row { padding: 13px 16px; border-bottom: 1px solid var(--w-line); }
+    .email-row:last-child { border-bottom: none; }
+    .email-top { display: flex; justify-content: space-between; align-items: center; }
+    .email-addr { font-size: 13px; font-weight: 600; }
+    .segment-tag { font-size: 10.5px; font-weight: 700; padding: 3px 9px; border-radius: 999px; }
+    .segment-new { background: rgba(5,107,254,0.2); color: var(--w-accent); }
+    .segment-repeat { background: rgba(5,107,254,0.12); color: var(--w-accent); }
+    .segment-lapsed { background: var(--w-card-raised); color: var(--w-ink-soft); border: 1px solid var(--w-line); }
+    .email-meta { font-size: 11.5px; color: var(--w-ink-soft); margin-top: 3px; }
+    .empty { text-align: center; padding: 30px 10px; color: var(--w-ink-soft); font-size: 13.5px; }
+    .segment-hint { font-size: 11.5px; color: var(--w-ink-soft); line-height: 1.6; margin-top: 14px; padding: 0 2px; }
+  </style>
+</head>
+<body>
+  <div class="w-shell">
+    <div class="biz-header">
+      <a href="/account/business/more" class="w-btn-icon" aria-label="Back">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      </a>
+      <div>
+        <div class="w-eyebrow">Business</div>
+        <h1 class="w-title" style="font-size:20px;">Customer emails</h1>
+      </div>
+    </div>
+    <p class="biz-sub">Collected when customers save a receipt from a tap at your store.</p>
+
+    <div class="w-card lookup-card">
+      <h2>Shopper Data Request</h2>
+      <p class="lookup-hint">If a shopper asks you to delete their data, look them up by email first, then remove it.</p>
+
+      <% if (deleted) { %>
+        <div class="lookup-success">Done — that shopper's data has been removed from your business.</div>
+      <% } %>
+
+      <form method="GET" action="/account/business/emails" class="lookup-form">
+        <input type="email" name="lookupEmail" placeholder="shopper@example.com" value="<%= lookupEmail %>" required />
+        <button type="submit" class="btn-lookup">Look Up</button>
+      </form>
+
+      <% if (lookupResult) { %>
+        <% if (!lookupResult.found) { %>
+          <div class="lookup-empty">No account found for <strong><%= lookupEmail %></strong>.</div>
+        <% } else if (lookupResult.details.Transaction_unlinked === 0 && lookupResult.details.ShopperConsent === 0 && lookupResult.details.LoyaltyCard === 0) { %>
+          <div class="lookup-empty">There's an account for <strong><%= lookupEmail %></strong>, but no data on file for them at your business.</div>
+        <% } else { %>
+          <div class="lookup-preview">
+            <p>Deleting <strong><%= lookupEmail %></strong> at your business will:</p>
+            <ul>
+              <li>Remove them as the named customer on <%= lookupResult.details.Transaction_unlinked %> receipt<%= lookupResult.details.Transaction_unlinked === 1 ? '' : 's' %></li>
+              <li>Delete <%= lookupResult.details.ShopperConsent %> consent record<%= lookupResult.details.ShopperConsent === 1 ? '' : 's' %></li>
+              <% if (lookupResult.details.LoyaltyCard > 0) { %><li>Delete their loyalty punch card</li><% } %>
+            </ul>
+            <form method="POST" action="/account/business/emails/delete" class="delete-confirm-form" data-confirm-email="<%= lookupEmail %>">
+              <input type="hidden" name="email" value="<%= lookupEmail %>" />
+              <button type="submit" class="btn-delete">Delete This Shopper's Data</button>
+            </form>
+          </div>
+        <% } %>
+      <% } %>
+    </div>
+
+    <div class="export-row">
+      <a href="/dashboard/customer-emails/export<%= activeFilter !== 'all' ? '?segment=' + activeFilter : '' %>">Export CSV<%= activeFilter !== 'all' ? ' (' + activeFilter + ')' : '' %></a>
+    </div>
+
+    <div class="tabs">
+      <a class="tab-btn <%= activeFilter === 'all' ? 'active' : '' %>" href="/account/business/emails">All (<%= counts.all %>)</a>
+      <a class="tab-btn <%= activeFilter === 'new' ? 'active' : '' %>" href="/account/business/emails?segment=new">New (<%= counts.new %>)</a>
+      <a class="tab-btn <%= activeFilter === 'repeat' ? 'active' : '' %>" href="/account/business/emails?segment=repeat">Repeat (<%= counts.repeat %>)</a>
+      <a class="tab-btn <%= activeFilter === 'lapsed' ? 'active' : '' %>" href="/account/business/emails?segment=lapsed">Lapsed (<%= counts.lapsed %>)</a>
+    </div>
+
+    <% if (emails.length === 0) { %>
+      <div class="w-card empty">No customers in this segment yet.</div>
+    <% } else { %>
+      <div class="w-card">
+        <% emails.forEach(function(e) { %>
+          <div class="email-row">
+            <div class="email-top">
+              <div class="email-addr"><%= e.email %></div>
+              <span class="segment-tag segment-<%= e.segment %>"><%= e.segment %></span>
+            </div>
+            <div class="email-meta"><%= e.visitCount %> visit<%= e.visitCount === 1 ? '' : 's' %> · Last visit <%= e.lastVisit %></div>
+          </div>
+        <% }); %>
+      </div>
+      <div class="segment-hint">
+        <strong>New</strong> = one visit, hasn't returned yet. <strong>Repeat</strong> = 2+ visits, still active. <strong>Lapsed</strong> = hasn't visited in 30+ days.
+      </div>
+    <% } %>
+  </div>
+
+  <script>
+    document.querySelectorAll('.delete-confirm-form').forEach(function (form) {
+      form.addEventListener('submit', function (e) {
+        var email = form.getAttribute('data-confirm-email');
+        if (!confirm('Delete all data for ' + email + ' at your business? This can\'t be undone.')) {
+          e.preventDefault();
+        }
+      });
+    });
+  </script>
+</body>
+</html>

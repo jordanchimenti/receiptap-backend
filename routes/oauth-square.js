@@ -6,6 +6,7 @@
 const express = require('express');
 const router = express.Router();
 const prisma = require('../lib/prisma');
+const { posReturnPath } = require('../lib/posReturnPath');
 
 function requireAuth(req, res, next) {
   if (!req.session?.merchantId) return res.redirect('/login');
@@ -27,7 +28,12 @@ router.get('/oauth/square/connect', requireAuth, (req, res) => {
     client_id: process.env.SQUARE_APP_ID,
     scope: 'MERCHANT_PROFILE_READ PAYMENTS_READ ORDERS_READ',
     session: 'false',
-    state: req.session.merchantId, // ties the callback back to the right merchant
+    // Round-tripped back on the callback below to know where to send the
+    // merchant afterward (real dashboard vs. the wallet) -- requireAuth on
+    // the callback already gives us req.session.merchantId, so this no
+    // longer needs to carry the merchant's identity the way the comment
+    // used to imply.
+    state: posReturnPath(req.query.next),
     redirect_uri: redirectUri, // Square 400s with no body if this is missing entirely
   });
   res.redirect(`${SQUARE_BASE_URL}/oauth2/authorize?${params}`);
@@ -35,7 +41,7 @@ router.get('/oauth/square/connect', requireAuth, (req, res) => {
 
 // Step 2: Square redirects back here with a temporary code
 router.get('/oauth/square/callback', requireAuth, async (req, res) => {
-  const { code } = req.query;
+  const { code, state } = req.query;
   if (!code) return res.status(400).send('Missing authorization code from Square');
 
   // Must exactly match the redirect_uri used in the authorize request above.
@@ -64,15 +70,17 @@ router.get('/oauth/square/callback', requireAuth, async (req, res) => {
     data: { squareMerchantId, squareAccessToken: access_token },
   });
 
-  res.redirect('/dashboard/pos-setup');
+  res.redirect(posReturnPath(state));
 });
 
-// Step 3 (immediately after connecting): fetch their locations automatically.
-// Also renders Clover's, Lightspeed's, and Shopify's connection state -- all
-// three are a single location each (no picker needed there), so this just
-// needs to know if each is connected at all, not fetch anything further.
-router.get('/dashboard/pos-setup', requireAuth, async (req, res) => {
-  const merchant = await prisma.merchant.findUnique({ where: { id: req.session.merchantId } });
+// Shared by GET /dashboard/pos-setup and GET /account/business/pos (the
+// wallet's dark reskin) -- see routes/account-business.js. Fetches Square's
+// locations live (needs a fresh API call, not just stored data), plus
+// Clover's/Lightspeed's/Shopify's connection state -- all three are a
+// single location each (no picker needed there), so this just needs to
+// know if each is connected at all, not fetch anything further.
+async function computePosSetupData(merchantId) {
+  const merchant = await prisma.merchant.findUnique({ where: { id: merchantId } });
   const pucks = await prisma.puck.findMany({ where: { merchantId: merchant.id } });
   const cloverConnected = Boolean(merchant.cloverAccessToken);
   const cloverMerchantId = merchant.cloverMerchantId;
@@ -82,7 +90,7 @@ router.get('/dashboard/pos-setup', requireAuth, async (req, res) => {
   const shopifyShopDomain = merchant.shopifyShopDomain;
 
   if (!merchant.squareAccessToken) {
-    return res.render('pos-setup', { connected: false, locations: [], pucks, cloverConnected, cloverMerchantId, lightspeedConnected, lightspeedDomainPrefix, shopifyConnected, shopifyShopDomain });
+    return { connected: false, locations: [], pucks, cloverConnected, cloverMerchantId, lightspeedConnected, lightspeedDomainPrefix, shopifyConnected, shopifyShopDomain };
   }
 
   const locResponse = await fetch(`${SQUARE_BASE_URL}/v2/locations`, {
@@ -90,15 +98,124 @@ router.get('/dashboard/pos-setup', requireAuth, async (req, res) => {
   });
   const { locations } = await locResponse.json();
 
-  res.render('pos-setup', { connected: true, locations: locations || [], pucks, cloverConnected, cloverMerchantId, lightspeedConnected, lightspeedDomainPrefix, shopifyConnected, shopifyShopDomain });
+  return { connected: true, locations: locations || [], pucks, cloverConnected, cloverMerchantId, lightspeedConnected, lightspeedDomainPrefix, shopifyConnected, shopifyShopDomain };
+}
+
+router.get('/dashboard/pos-setup', requireAuth, async (req, res) => {
+  res.render('pos-setup', await computePosSetupData(req.session.merchantId));
 });
 
-// Static walkthrough for connecting + assigning a puck to each POS
-// provider. Not provider-specific itself, just co-located with the other
-// /dashboard/pos-setup/* routes rather than a route file of its own for one
-// static page.
-router.get('/dashboard/pos-setup/guide', requireAuth, (req, res) => {
-  res.render('pos-setup-guide');
+// Static per-provider walkthroughs for connecting + assigning a puck. Not
+// provider-specific code, just co-located with the other
+// /dashboard/pos-setup/* routes rather than a route file of its own for a
+// handful of static pages. One template (views/pos-setup-guide.ejs) driven
+// by this data rather than four near-identical EJS files.
+//
+// Every step is { text, image }, image optional — a screenshot with a red
+// callout baked into the pixels, or null for a step with nothing to
+// screenshot (e.g. a physical action like tapping the puck to a phone).
+//
+// GETTING_STARTED_STEPS covers the part of onboarding that's identical for
+// every provider (sign in, start the trial, tap the puck, enter the
+// activation code) and gets prepended to each provider's own steps below,
+// rather than repeated once per provider.
+const GETTING_STARTED_STEPS = [
+  {
+    text: 'Sign in to your ReceipTap account — or <a href="/signup">create one</a> if you\'re new. Do this <strong>before</strong> tapping the puck, so you land back in the right place afterward instead of your dashboard home.',
+    image: '/images/pos-guides/getting-started/01-create-account.png',
+  },
+  {
+    text: "If this is a brand-new account, you'll be asked to start your 30-day free trial before you can reach anything else — a card is required, but you won't be charged until the trial ends. Go to <a href=\"/dashboard/billing\">Billing</a> to start it.",
+    image: '/images/pos-guides/getting-started/02-start-trial.png',
+  },
+  {
+    text: 'Tap and hold your phone to the ReceipTap puck.',
+    image: null,
+  },
+  {
+    text: "Enter the 6-character activation code printed on the insert card that came in the box, then click <strong>Activate</strong>. If you see a red \"Incorrect activation code\" message, double-check what you typed against the card — it's case-insensitive, so that's not the issue.",
+    image: '/images/pos-guides/getting-started/04-enter-claim-code.png',
+  },
+  {
+    text: "You'll land automatically on the POS connection page — that's where the steps below pick up.",
+    image: null,
+  },
+];
+
+const POS_SETUP_GUIDES = {
+  square: {
+    providerName: 'Square',
+    steps: [
+      { text: 'On the POS connection page, click <strong>Connect Square</strong>.', image: '/images/pos-guides/square/01-connect-button.png' },
+      { text: 'Log into your Square account when Square asks.', image: '/images/pos-guides/square/02-square-login.jpg' },
+      { text: "Click <strong>Allow</strong> to approve ReceipTap's access to your Square account.", image: null },
+      { text: "You'll land back on ReceipTap — a Square connection covers one store, so there's no location list to pick from.", image: '/images/pos-guides/square/03-connected-badge.png' },
+      { text: 'Pick the puck at your register from the dropdown to link it.', image: '/images/pos-guides/square/04-assign-puck.jpg' },
+    ],
+    note: 'Have more than one register? ReceipTap can tell them apart once real sales start coming in — check the register list on the POS connection page after your first few sales.',
+  },
+  clover: {
+    providerName: 'Clover',
+    steps: [
+      { text: 'On the POS connection page, click <strong>Connect Clover</strong>.', image: null },
+      { text: 'Log into your Clover account when Clover asks.', image: '/images/pos-guides/clover/02-clover-login.jpg' },
+      { text: "Click <strong>Allow</strong> to approve ReceipTap's access to your Clover account.", image: null },
+      { text: "You'll land back on ReceipTap — a Clover connection covers one store, so there's no location list to pick from.", image: null },
+      { text: 'Pick the puck at your register from the dropdown to link it.', image: '/images/pos-guides/clover/01-assign-puck.png' },
+    ],
+  },
+  lightspeed: {
+    providerName: 'Lightspeed',
+    steps: [
+      { text: 'On the POS connection page, click <strong>Connect Lightspeed</strong>.', image: null },
+      { text: 'Log into your Lightspeed Retail (X-Series) account when Lightspeed asks.', image: '/images/pos-guides/lightspeed/02-lightspeed-login.jpg' },
+      { text: "Click <strong>Allow</strong> to approve ReceipTap's access to your Lightspeed account.", image: null },
+      { text: "You'll land back on ReceipTap — a Lightspeed connection covers one store, so there's no location list to pick from.", image: null },
+      { text: 'Pick the puck at your register from the dropdown to link it.', image: '/images/pos-guides/lightspeed/01-assign-puck.png' },
+    ],
+  },
+  shopify: {
+    providerName: 'Shopify',
+    steps: [
+      { text: "On the POS connection page, type your store's address into the Shopify field, in the form <code>yourstorename.myshopify.com</code>.", image: '/images/pos-guides/shopify/01-domain-input.png' },
+      { text: 'Click <strong>Connect Shopify</strong>.', image: null },
+      { text: 'You\'ll be sent to Shopify\'s own "Install app" screen — click <strong>Install</strong> to approve it.', image: null },
+      { text: "You'll land back on ReceipTap — a Shopify connection covers one store, so there's no location list to pick from.", image: null },
+      { text: 'Pick the puck at your register from the dropdown to link it.', image: '/images/pos-guides/shopify/02-assign-puck.png' },
+    ],
+    note: 'Only in-person sales rung through Shopify POS generate a ReceipTap receipt — online store orders are skipped automatically.',
+  },
+};
+
+// Searchable index of every provider's guide, reachable from the sidebar --
+// pulls the list straight from POS_SETUP_GUIDES rather than a separate
+// hardcoded list, so a future fifth provider only has to be added once.
+// Shared by GET /dashboard/pos-setup/guides and GET /account/business/pos/guides
+// (the wallet's dark reskin) -- see routes/account-business.js.
+function getGuideProviders() {
+  return Object.keys(POS_SETUP_GUIDES).map((key) => ({
+    key,
+    providerName: POS_SETUP_GUIDES[key].providerName,
+  }));
+}
+
+// Shared by GET /dashboard/pos-setup/guide/:provider and
+// GET /account/business/pos/guide/:provider. Returns null for an unknown
+// provider key so each thin route can 404 itself.
+function computeGuideData(provider) {
+  const guide = POS_SETUP_GUIDES[provider];
+  if (!guide) return null;
+  return { note: null, ...guide, steps: [...GETTING_STARTED_STEPS, ...guide.steps] };
+}
+
+router.get('/dashboard/pos-setup/guides', requireAuth, (req, res) => {
+  res.render('pos-setup-guides-index', { providers: getGuideProviders() });
+});
+
+router.get('/dashboard/pos-setup/guide/:provider', requireAuth, (req, res) => {
+  const data = computeGuideData(req.params.provider);
+  if (!data) return res.status(404).send('No setup guide for that POS provider.');
+  res.render('pos-setup-guide', data);
 });
 
 // Assign a puck to a specific Square location/register
@@ -161,3 +278,6 @@ router.post('/dashboard/pos-setup/assign-device', requireAuth, async (req, res) 
 });
 
 module.exports = router;
+module.exports.computePosSetupData = computePosSetupData;
+module.exports.getGuideProviders = getGuideProviders;
+module.exports.computeGuideData = computeGuideData;

@@ -8,6 +8,7 @@ const router = express.Router();
 const bcrypt = require('bcrypt');
 const prisma = require('../lib/prisma');
 const { stripe } = require('../services/stripeService');
+const { uploadProfilePhoto } = require('./billing');
 const { DEACTIVATED_MERCHANT_PURGE_DAYS } = require('../config/retention');
 
 function requireAuth(req, res, next) {
@@ -15,10 +16,42 @@ function requireAuth(req, res, next) {
   next();
 }
 
+// Shared allowlist for "where should this settings action redirect back
+// to" -- same reasoning as lib/safeRedirect.js's safeNextPath, kept local
+// to this file since these are POST-body redirect targets, not the
+// next-path query param that helper covers. Lets the wallet's dark
+// Settings pages (routes/account-business.js) return to themselves instead
+// of always landing on the real dashboard's settings page.
+const WALLET_SETTINGS_PATHS = ['/account/business/settings', '/account/business/account'];
+function settingsRedirectTarget(redirectTo) {
+  return WALLET_SETTINGS_PATHS.includes(redirectTo) ? redirectTo : '/dashboard/settings/account';
+}
+
+// Wraps the shared multer instance (routes/billing.js) with THIS file's own
+// error redirect, since handlePhotoUpload there hardcodes /dashboard/billing.
+// `destinationFor` reads req.body.redirectTo the same way every other route
+// in this file does, so a bad upload sends the merchant back to whichever
+// settings page they were actually on.
+function handleProfilePhotoUpload(req, res, next) {
+  uploadProfilePhoto(req, res, (err) => {
+    if (!err) return next();
+    const destination = settingsRedirectTarget(req.body.redirectTo);
+    const message =
+      err.code === 'LIMIT_FILE_SIZE'
+        ? 'Photo file is too large (2MB max).'
+        : 'Please upload a valid image file (PNG, JPG, or WEBP).';
+    res.redirect(`${destination}?profileError=${encodeURIComponent(message)}`);
+  });
+}
+
 router.get('/dashboard/settings/account', requireAuth, async (req, res) => {
-  const merchant = await prisma.merchant.findUnique({ where: { id: req.session.merchantId } });
+  const [merchant, receiptTheme] = await Promise.all([
+    prisma.merchant.findUnique({ where: { id: req.session.merchantId } }),
+    prisma.receiptTheme.findUnique({ where: { merchantId: req.session.merchantId } }),
+  ]);
   res.render('account-settings', {
     merchant,
+    receiptTheme,
     businessError: req.query.businessError || null,
     businessSuccess: req.query.businessSuccess === '1',
     passwordError: req.query.passwordError || null,
@@ -28,12 +61,46 @@ router.get('/dashboard/settings/account', requireAuth, async (req, res) => {
   });
 });
 
+// POST /dashboard/settings/account/profile — the wallet's generic Settings
+// page's "Merchant Profile" panel: photo, owner name, login email, and an
+// optional phone number. Distinct from POST .../business above, which edits
+// businessName -- this route never touches it. Reuses the same
+// email-uniqueness check that route already has, since both write to the
+// same Merchant.email column.
+router.post('/dashboard/settings/account/profile', requireAuth, handleProfilePhotoUpload, async (req, res) => {
+  const { ownerName, email, ownerPhone, redirectTo } = req.body;
+  const destination = settingsRedirectTarget(redirectTo);
+
+  if (!email) {
+    return res.redirect(`${destination}?profileError=` + encodeURIComponent('Email is required.'));
+  }
+  const normalizedEmail = email.trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+    return res.redirect(`${destination}?profileError=` + encodeURIComponent('Enter a valid email address.'));
+  }
+
+  const existing = await prisma.merchant.findFirst({
+    where: { email: normalizedEmail, NOT: { id: req.session.merchantId } },
+  });
+  if (existing) {
+    return res.redirect(`${destination}?profileError=` + encodeURIComponent('That email is already in use by another account.'));
+  }
+
+  const data = { ownerName: ownerName || null, email: normalizedEmail, ownerPhone: ownerPhone || null };
+  if (req.file) {
+    data.profilePhotoUrl = `/uploads/profile-photos/${req.file.filename}`;
+  }
+  await prisma.merchant.update({ where: { id: req.session.merchantId }, data });
+  res.redirect(`${destination}?profileSuccess=1`);
+});
+
 // POST /dashboard/settings/account/business — update business name/email.
 router.post('/dashboard/settings/account/business', requireAuth, async (req, res) => {
-  const { businessName, email } = req.body;
+  const { businessName, email, phone, redirectTo } = req.body;
+  const destination = settingsRedirectTarget(redirectTo);
 
   if (!businessName || !email) {
-    return res.redirect('/dashboard/settings/account?businessError=' + encodeURIComponent('Business name and email are both required.'));
+    return res.redirect(`${destination}?businessError=` + encodeURIComponent('Business name and email are both required.'));
   }
 
   const normalizedEmail = email.trim().toLowerCase();
@@ -41,36 +108,109 @@ router.post('/dashboard/settings/account/business', requireAuth, async (req, res
     where: { email: normalizedEmail, NOT: { id: req.session.merchantId } },
   });
   if (existing) {
-    return res.redirect('/dashboard/settings/account?businessError=' + encodeURIComponent('That email is already in use by another account.'));
+    return res.redirect(`${destination}?businessError=` + encodeURIComponent('That email is already in use by another account.'));
   }
 
-  await prisma.merchant.update({
-    where: { id: req.session.merchantId },
-    data: { businessName, email: normalizedEmail },
-  });
-  res.redirect('/dashboard/settings/account?businessSuccess=1');
+  // phone lives on ReceiptTheme (it's what prints on a receipt) but is edited
+  // here, next to the business name -- one field, one place. Absent key means
+  // "leave it alone" rather than "clear it", so a form that doesn't render the
+  // input can't wipe a saved number; present-but-empty is a real clear, since
+  // the field is optional.
+  const phoneWrite = 'phone' in req.body ? { phone: phone || null } : {};
+  await Promise.all([
+    prisma.merchant.update({
+      where: { id: req.session.merchantId },
+      data: { businessName, email: normalizedEmail },
+    }),
+    prisma.receiptTheme.upsert({
+      where: { merchantId: req.session.merchantId },
+      update: phoneWrite,
+      create: { merchantId: req.session.merchantId, ...phoneWrite },
+    }),
+  ]);
+  res.redirect(`${destination}?businessSuccess=1`);
 });
 
 // POST /dashboard/settings/account/password — change password, current
 // password required to confirm it's really them.
 router.post('/dashboard/settings/account/password', requireAuth, async (req, res) => {
-  const { currentPassword, newPassword, confirmNewPassword } = req.body;
+  const { currentPassword, newPassword, confirmNewPassword, redirectTo } = req.body;
+  const destination = settingsRedirectTarget(redirectTo);
 
   const merchant = await prisma.merchant.findUnique({ where: { id: req.session.merchantId } });
   const currentOk = currentPassword && (await bcrypt.compare(currentPassword, merchant.passwordHash));
   if (!currentOk) {
-    return res.redirect('/dashboard/settings/account?passwordError=' + encodeURIComponent('Current password is incorrect.'));
+    return res.redirect(`${destination}?passwordError=` + encodeURIComponent('Current password is incorrect.'));
   }
   if (!newPassword || newPassword.length < 8) {
-    return res.redirect('/dashboard/settings/account?passwordError=' + encodeURIComponent('New password must be at least 8 characters.'));
+    return res.redirect(`${destination}?passwordError=` + encodeURIComponent('New password must be at least 8 characters.'));
   }
   if (newPassword !== confirmNewPassword) {
-    return res.redirect('/dashboard/settings/account?passwordError=' + encodeURIComponent('New passwords do not match.'));
+    return res.redirect(`${destination}?passwordError=` + encodeURIComponent('New passwords do not match.'));
   }
 
   const passwordHash = await bcrypt.hash(newPassword, 10);
   await prisma.merchant.update({ where: { id: req.session.merchantId }, data: { passwordHash } });
-  res.redirect('/dashboard/settings/account?passwordSuccess=1');
+  res.redirect(`${destination}?passwordSuccess=1`);
+});
+
+// POST /dashboard/settings/account/business-profile — the wallet Business
+// Settings page's "Business Profile" panel: businessEmail/website/industry
+// live on Merchant (account record only, never shown to a customer), while
+// gstHstNumber lives on ReceiptTheme (what actually prints on a receipt).
+// Receipt Design no longer edits either -- it's design-only now -- so this
+// page is the single place both are set. phone is also on ReceiptTheme but
+// is edited from the Business information panel, not here.
+router.post('/dashboard/settings/account/business-profile', requireAuth, async (req, res) => {
+  const { businessEmail, industry, gstHstNumber, redirectTo } = req.body;
+  const destination = settingsRedirectTarget(redirectTo);
+  const merchantId = req.session.merchantId;
+
+  if (businessEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(businessEmail)) {
+    return res.redirect(`${destination}?businessProfileError=` + encodeURIComponent('Enter a valid business email.'));
+  }
+
+  await Promise.all([
+    prisma.merchant.update({
+      where: { id: merchantId },
+      data: {
+        businessEmail: businessEmail || null,
+        // website deliberately absent: it moved to Receipt design's Header
+        // block, and writing it here would blank whatever that page saved.
+        industry: industry || null,
+      },
+    }),
+    // phone deliberately absent: it moved to the Business information panel
+    // above, and writing it here would blank whatever that panel just saved.
+    prisma.receiptTheme.upsert({
+      where: { merchantId },
+      update: { gstHstNumber: gstHstNumber || null },
+      create: { merchantId, gstHstNumber: gstHstNumber || null },
+    }),
+  ]);
+  res.redirect(`${destination}?businessProfileSuccess=1`);
+});
+
+// POST /dashboard/settings/account/business-address — the one address on
+// file, and the one that prints on receipts/PDFs (see businessAddressLines
+// in views/receipt.ejs). ReceiptTheme's old free-text `location` field used
+// to duplicate this on Receipt Design and is no longer edited or rendered.
+router.post('/dashboard/settings/account/business-address', requireAuth, async (req, res) => {
+  const { addressLine1, addressLine2, addressCity, addressRegion, addressPostalCode, addressCountry, redirectTo } = req.body;
+  const destination = settingsRedirectTarget(redirectTo);
+
+  await prisma.merchant.update({
+    where: { id: req.session.merchantId },
+    data: {
+      addressLine1: addressLine1 || null,
+      addressLine2: addressLine2 || null,
+      addressCity: addressCity || null,
+      addressRegion: addressRegion || null,
+      addressPostalCode: addressPostalCode || null,
+      addressCountry: addressCountry || null,
+    },
+  });
+  res.redirect(`${destination}?addressSuccess=1`);
 });
 
 // POST /dashboard/settings/account/disconnect-pos — clears one specific POS
@@ -89,7 +229,10 @@ const POS_DISCONNECT_FIELDS = {
 
 router.post('/dashboard/settings/account/disconnect-pos', requireAuth, async (req, res) => {
   const { provider, redirectTo } = req.body;
-  const destination = redirectTo === '/dashboard/pos-setup' ? redirectTo : '/dashboard/settings/account';
+  const destination =
+    redirectTo === '/dashboard/pos-setup' || redirectTo === '/account/business/pos'
+      ? redirectTo
+      : settingsRedirectTarget(redirectTo);
 
   const fields = POS_DISCONNECT_FIELDS[provider];
   if (!fields) {

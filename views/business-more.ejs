@@ -1,0 +1,230 @@
+<!-- views/business-more.ejs -->
+<!-- "More" tab of the wallet's dark "Business" section -- the third of
+     three top-level pages alongside Dashboard (business-overview.ejs,
+     served at /account/business itself) and ReceipTaps
+     (business-pucks.ejs), reached via partials/business-tab-bar.ejs.
+     Lists the remaining sections that don't get their own tab, same
+     menu-row pattern as views/account-more.ejs, plus the same
+     Personal/Business toggle views/account-more.ejs and the old
+     business-home.ejs both show -- replaces business-home.ejs, which
+     used to be the sole entry point into all of these before the tab
+     bar existed. -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title><%= merchant.businessName %> - ReceipTap Business</title>
+  <link rel="stylesheet" href="/css/receiptap.css" />
+  <%- include('partials/wallet-dark-theme') %>
+  <style>
+    .biz-header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+    .section-label { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--w-ink-soft); margin: 22px 4px 10px; }
+    .section-label:first-of-type { margin-top: 0; }
+    .menu-row {
+      display: flex; align-items: center; gap: 14px; padding: 16px 18px; text-decoration: none;
+      color: var(--w-ink); border-bottom: 1px solid var(--w-line);
+    }
+    /* Same treatment the personal More page gives its log-out row. */
+    .menu-row.danger .menu-row-icon { background: rgba(255,69,58,0.12); color: var(--w-danger); }
+    .menu-row.danger .menu-row-label { color: var(--w-danger); }
+    .menu-row:last-child { border-bottom: none; }
+    .menu-row-icon {
+      width: 36px; height: 36px; border-radius: 10px; background: var(--w-accent-wash); color: var(--w-accent);
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .menu-row-icon svg { width: 18px; height: 18px; }
+    .menu-row-label { flex: 1; font-size: 14.5px; font-weight: 600; }
+    .menu-row-chevron { color: var(--w-ink-soft); }
+    .menu-row.locked { opacity: 0.55; }
+    .menu-row.locked .menu-row-chevron { color: var(--w-ink-soft); }
+
+    .view-toggle {
+      display: flex; background: var(--w-card-raised); border: 1px solid var(--w-line); border-radius: 999px;
+      padding: 4px; margin-bottom: 22px; gap: 4px;
+    }
+    .view-toggle a {
+      flex: 1; display: flex; align-items: center; justify-content: center; gap: 7px; text-decoration: none;
+      color: var(--w-ink-soft); font-size: 13.5px; font-weight: 700; padding: 9px 0; border-radius: 999px;
+    }
+    .view-toggle a.active { background: var(--w-accent); color: #fff; }
+
+    .business-card { padding: 22px 20px; margin-bottom: 20px; }
+    .business-card-icon {
+      width: 40px; height: 40px; border-radius: 12px; background: var(--w-accent-wash); color: var(--w-accent);
+      display: flex; align-items: center; justify-content: center; margin-bottom: 14px;
+    }
+    .business-card h2 { font-size: 16px; margin: 0 0 6px; }
+    .business-card p { font-size: 13.5px; color: var(--w-ink-soft); line-height: 1.5; margin: 0 0 18px; }
+    .business-card .w-btn { width: auto; padding: 12px 22px; display: inline-flex; }
+
+    .featured-row { display: flex; align-items: center; gap: 14px; padding: 18px; text-decoration: none; color: var(--w-ink); }
+    .featured-row-icon {
+      width: 40px; height: 40px; border-radius: 12px; background: var(--w-accent-wash); color: var(--w-accent);
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .featured-row-icon svg { width: 20px; height: 20px; }
+    .featured-row-body { flex: 1; min-width: 0; }
+    .featured-row-title { font-size: 15px; font-weight: 700; }
+    .featured-row-sub { font-size: 12.5px; color: var(--w-ink-soft); margin-top: 2px; }
+    .featured-row-chevron { color: var(--w-ink-soft); flex-shrink: 0; }
+  </style>
+</head>
+<body>
+  <% var lockIcon = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>'; %>
+  <% var chevronIcon = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>'; %>
+  <div class="w-shell">
+    <div class="biz-header">
+      <div>
+        <div class="w-eyebrow">Business</div>
+        <h1 class="w-title" style="font-size:20px;"><%= merchant.businessName %></h1>
+      </div>
+    </div>
+
+    <!-- Same Personal/Business toggle as views/account-more.ejs -- shown
+         here too since a merchant session and the wallet's Personal view
+         are separate logins (see the comment on GET /account/more in
+         routes/customer-account.js). "Personal" goes to /account/more,
+         which itself requires a customer session (requireCustomerAuth) --
+         if this browser has none, it correctly prompts a real wallet
+         login rather than pretending this merchant account and a wallet
+         account are the same thing. -->
+    <div class="view-toggle">
+      <a href="/account/more">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>
+        Personal
+      </a>
+      <a href="/account/more?view=business" class="active">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21V9l9-6 9 6v12"/><path d="M9 21v-6h6v6"/></svg>
+        Business
+      </a>
+    </div>
+
+    <!-- Same upsell card as the "business" toggle on views/account-more.ejs
+         -- shown here too whenever this merchant doesn't have a real card on
+         file yet (see requireFullBusinessAccess, routes/account-business.js
+         -- checked live against Stripe, not just merchant.subscriptionStatus,
+         since that field can drift from reality). Links to the wallet's own
+         billing page rather than the real dashboard's, so starting a trial
+         keeps them inside the wallet. -->
+    <% if (!hasFullAccess) { %>
+      <div class="w-card business-card">
+        <div class="business-card-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></div>
+        <h2>Unlock your business tools</h2>
+        <p>You don't have an active subscription with a card on file yet. Add a card to start your 30-day free trial and get full access to Receipts, Analytics, Customers, Customer emails, and POS connection.</p>
+        <a class="w-btn" href="/account/business/billing">Add your card</a>
+      </div>
+    <% } %>
+
+    <div class="w-card">
+      <a class="featured-row" href="/account/business/settings">
+        <div class="featured-row-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 21V9l9-6 9 6v12"/><path d="M9 21v-6h6v6"/></svg></div>
+        <div class="featured-row-body">
+          <div class="featured-row-title">Business Settings</div>
+          <div class="featured-row-sub">Business profile, tax info, and address</div>
+        </div>
+        <div class="featured-row-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg></div>
+      </a>
+    </div>
+
+    <!-- Read-only Billing display, built in the wallet's dark theme
+         (views/business-billing.ejs) -- see routes/account-business.js.
+         Starting a NEW subscription (Checkout) still only happens on the
+         real dashboard (the "Unlock your business tools" card in
+         account-more.ejs sends a not-yet-subscribed merchant there), since
+         requireActiveSubscription already blocks this whole wallet section
+         until a subscription exists -- nobody reaches this card without one. -->
+    <div class="w-card">
+      <a class="featured-row" href="/account/business/billing">
+        <div class="featured-row-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="5" width="20" height="14" rx="2.5"/><path d="M2 10h20"/></svg></div>
+        <div class="featured-row-body">
+          <div class="featured-row-title">Billing</div>
+          <div class="featured-row-sub">Plan, payment, and invoices</div>
+        </div>
+        <div class="featured-row-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg></div>
+      </a>
+    </div>
+
+    <!-- Generic account Settings (views/business-account.ejs) -- distinct
+         from Business Settings above: your own name/photo/email/phone and
+         password, never shown to a customer. -->
+    <div class="w-card">
+      <a class="featured-row" href="/account/business/account">
+        <div class="featured-row-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5"/></svg></div>
+        <div class="featured-row-body">
+          <div class="featured-row-title">Settings</div>
+          <div class="featured-row-sub">Your profile, login, and password</div>
+        </div>
+        <div class="featured-row-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg></div>
+      </a>
+    </div>
+
+    <div class="section-label">Setup</div>
+    <div class="w-card">
+      <a class="menu-row" href="/account/business/receipt-design">
+        <div class="menu-row-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20h16"/><path d="M6 16 16 6a2.1 2.1 0 0 1 3 3L9 19l-4 1Z"/></svg></div>
+        <div class="menu-row-label">Receipt design</div>
+        <div class="menu-row-chevron"><%- chevronIcon %></div>
+      </a>
+      <!-- Not locked, deliberately -- referring other businesses doesn't
+           require a paid ReceipTap subscription of your own, same as
+           Receipt design (see the comment on GET /account/business/referrals,
+           routes/account-business.js). Opens the Partner Program display
+           page; `from` tells it which of the two Partner Program surfaces to
+           send this merchant on to for their actual referral link. -->
+      <a class="menu-row" href="/partner-program?from=%2Faccount%2Fbusiness%2Freferrals">
+        <div class="menu-row-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="8" cy="9" r="3"/><path d="M2.5 20c0-3 2.5-5.5 5.5-5.5s5.5 2.5 5.5 5.5"/><path d="M16 4.5c1.7.4 3 2 3 3.8s-1.3 3.4-3 3.8M18.5 14.3c1.8.6 3 2.3 3 4.2"/></svg></div>
+        <div class="menu-row-label">Partner Program</div>
+        <div class="menu-row-chevron"><%- chevronIcon %></div>
+      </a>
+      <a class="menu-row <%= !hasFullAccess ? 'locked' : '' %>" href="/account/business/pos">
+        <div class="menu-row-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="4" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg></div>
+        <div class="menu-row-label">POS connection</div>
+        <div class="menu-row-chevron"><%- !hasFullAccess ? lockIcon : chevronIcon %></div>
+      </a>
+      <a class="menu-row <%= !hasFullAccess ? 'locked' : '' %>" href="/account/business/pos/guides">
+        <div class="menu-row-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 0 1 5 0c0 1.5-1.5 2-2 2.5S12 12.5 12 13.5"/><path d="M12 17h.01"/></svg></div>
+        <div class="menu-row-label">Setup guide</div>
+        <div class="menu-row-chevron"><%- !hasFullAccess ? lockIcon : chevronIcon %></div>
+      </a>
+    </div>
+
+    <div class="section-label">Insights</div>
+    <div class="w-card">
+      <a class="menu-row <%= !hasFullAccess ? 'locked' : '' %>" href="/account/business/receipts">
+        <div class="menu-row-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 2h12v20l-3-2-3 2-3-2-3 2Z"/><path d="M9 8h6M9 12h6"/></svg></div>
+        <div class="menu-row-label">Receipts</div>
+        <div class="menu-row-chevron"><%- !hasFullAccess ? lockIcon : chevronIcon %></div>
+      </a>
+      <a class="menu-row <%= !hasFullAccess ? 'locked' : '' %>" href="/account/business/analytics">
+        <div class="menu-row-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg></div>
+        <div class="menu-row-label">Analytics</div>
+        <div class="menu-row-chevron"><%- !hasFullAccess ? lockIcon : chevronIcon %></div>
+      </a>
+      <a class="menu-row <%= !hasFullAccess ? 'locked' : '' %>" href="/account/business/customers">
+        <div class="menu-row-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5"/><path d="M16 5.5a3.2 3.2 0 0 1 0 6M18 20c0-2.4-.9-4.2-2.3-5.3"/></svg></div>
+        <div class="menu-row-label">Customers</div>
+        <div class="menu-row-chevron"><%- !hasFullAccess ? lockIcon : chevronIcon %></div>
+      </a>
+      <a class="menu-row <%= !hasFullAccess ? 'locked' : '' %>" href="/account/business/emails">
+        <div class="menu-row-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="m3 7 9 6 9-6"/></svg></div>
+        <div class="menu-row-label">Customer emails</div>
+        <div class="menu-row-chevron"><%- !hasFullAccess ? lockIcon : chevronIcon %></div>
+      </a>
+    </div>
+
+    <div class="w-card" style="margin-top: 26px;">
+      <form method="POST" action="/logout" style="margin:0;">
+        <button type="submit" class="menu-row danger" style="width:100%; border:none; background:none; cursor:pointer; font-family:inherit;">
+          <div class="menu-row-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>
+          </div>
+          <div class="menu-row-label">Log out</div>
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <%- include('partials/business-tab-bar', { active: 'more' }) %>
+</body>
+</html>

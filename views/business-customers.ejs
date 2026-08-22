@@ -1,0 +1,62 @@
+<!-- views/business-customers.ejs -->
+<!-- Dark reskin of views/repeat-customers.ejs's content, mobile card list.
+     Same locals -- see computeRepeatCustomersData() in
+     routes/repeat-customers.js. -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Customers - ReceipTap Business</title>
+  <link rel="stylesheet" href="/css/receiptap.css" />
+  <%- include('partials/wallet-dark-theme') %>
+  <style>
+    .biz-header { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+    .biz-sub { font-size: 13px; color: var(--w-ink-soft); margin: 0 0 18px 48px; }
+    .export-row { text-align: right; margin-bottom: 12px; }
+    .export-row a { font-size: 12.5px; font-weight: 600; color: var(--w-accent); text-decoration: none; }
+    .cust-row { padding: 14px 16px; border-bottom: 1px solid var(--w-line); }
+    .cust-row:last-child { border-bottom: none; }
+    .cust-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+    .cust-name { font-size: 13.5px; font-weight: 700; }
+    .cust-total { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 13.5px; font-weight: 700; }
+    .cust-meta { font-size: 12px; color: var(--w-ink-soft); }
+    .cat-tag { display: inline-block; margin-top: 6px; font-size: 10.5px; font-weight: 700; background: var(--w-accent-wash); color: var(--w-accent); padding: 3px 9px; border-radius: 999px; }
+    .empty { text-align: center; padding: 30px 10px; color: var(--w-ink-soft); font-size: 13.5px; }
+    .export-hint { font-size: 12px; color: var(--w-ink-soft); line-height: 1.5; margin-top: 14px; padding: 0 2px; }
+  </style>
+</head>
+<body>
+  <div class="w-shell">
+    <div class="biz-header">
+      <a href="/account/business/more" class="w-btn-icon" aria-label="Back">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      </a>
+      <div>
+        <div class="w-eyebrow">Business</div>
+        <h1 class="w-title" style="font-size:20px;">Customers</h1>
+      </div>
+    </div>
+    <p class="biz-sub">Customers who've saved a receipt from <%= businessName %> 2+ times.</p>
+
+    <% if (customers.length === 0) { %>
+      <div class="w-card empty">No repeat customers yet. As customers save receipts more than once, they'll show up here.</div>
+    <% } else { %>
+      <div class="export-row"><a href="/dashboard/repeat-customers/export">Export CSV</a></div>
+      <div class="w-card">
+        <% customers.forEach(function(c) { %>
+          <div class="cust-row">
+            <div class="cust-top">
+              <div class="cust-name"><%= c.name || c.email %></div>
+              <div class="cust-total">$<%= c.totalSpent %></div>
+            </div>
+            <div class="cust-meta"><%= c.visitCount %> visits · Last visit <%= c.lastVisit %></div>
+            <% if (c.topCategory) { %><span class="cat-tag"><%= c.topCategory %></span><% } %>
+          </div>
+        <% }); %>
+      </div>
+      <div class="export-hint">Export this list as a CSV and import it into Mailchimp, Klaviyo, or whatever email platform you already use.</div>
+    <% } %>
+  </div>
+</body>
+</html>

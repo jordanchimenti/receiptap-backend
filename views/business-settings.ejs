@@ -1,0 +1,239 @@
+<!-- views/business-settings.ejs -->
+<!-- Dark reskin of views/account-settings.ejs's content, PLUS two new
+     panels (Business Profile, Business Address) and a bulk "Disconnect all
+     tiles" danger-zone action that only exist here -- the real dashboard's
+     account-settings.ejs doesn't have them (see routes/account-settings.js
+     for the new write routes: business-profile, business-address). Same
+     locals otherwise (see GET /account/business/settings in
+     routes/account-business.js). Posts to routes/account-settings.js with
+     a hidden redirectTo field so they land back here instead of the real
+     dashboard -- see settingsRedirectTarget() there. Deactivation is
+     unchanged: same warning copy verbatim, same route (it destroys the
+     session regardless of entry point, so there's no "return to wallet"
+     concept for it).
+
+     Business Profile's phone/GST-HST fields are the SAME ReceiptTheme
+     fields Receipt Design edits -- what actually prints on a customer's
+     receipt -- reused rather than duplicated, so there's only ever one
+     value on file. Business email/website and the full Business Address
+     also print on every receipt/PDF (see views/receipt.ejs's
+     businessAddressLines and views/receipt-layouts/*.ejs) -- Industry is
+     the one Merchant field here that's account-only, never shown. -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Settings - ReceipTap Business</title>
+  <link rel="stylesheet" href="/css/receiptap.css" />
+  <%- include('partials/wallet-dark-theme') %>
+  <style>
+    .biz-header { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+    .panel { padding: 18px; margin-bottom: 16px; }
+    .panel h2 { font-size: 14.5px; margin: 0 0 14px; }
+    .w-field { margin-bottom: 14px; }
+    .w-field:last-child { margin-bottom: 0; }
+    .w-field label { display: block; font-size: 12.5px; font-weight: 600; color: var(--w-ink-soft); margin-bottom: 6px; }
+    .w-field input, .w-field select {
+      width: 100%; box-sizing: border-box; background: var(--w-card-raised); border: 1px solid var(--w-line);
+      color: var(--w-ink); border-radius: 10px; padding: 11px 13px; font-size: 14.5px; font-family: inherit;
+    }
+    .field-row { display: flex; gap: 10px; }
+    .field-row .w-field { flex: 1; min-width: 0; }
+    .field-hint { font-size: 12px; color: var(--w-ink-soft); margin-top: -8px; margin-bottom: 14px; line-height: 1.4; }
+    .banner { padding: 11px 14px; border-radius: 10px; font-size: 13px; margin-bottom: 14px; }
+    .banner.success { background: rgba(5,107,254,0.12); border: 1px solid rgba(5,107,254,0.35); color: var(--w-accent); }
+    .banner.error { background: rgba(255,69,58,0.12); border: 1px solid rgba(255,69,58,0.35); color: var(--w-danger); }
+
+    .pos-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--w-line); gap: 12px; }
+    .pos-row:last-child { border-bottom: none; }
+    .pos-row p { font-size: 13px; margin: 0; color: var(--w-ink); }
+    .disconnect-btn { background: none; border: 1px solid var(--w-danger); color: var(--w-danger); border-radius: 999px; padding: 7px 14px; font-size: 12px; font-weight: 700; cursor: pointer; font-family: inherit; white-space: nowrap; }
+    .empty { text-align: center; padding: 16px 10px; color: var(--w-ink-soft); font-size: 13px; }
+    .empty a { color: var(--w-accent); text-decoration: none; font-weight: 600; }
+
+    .danger-panel { border-color: rgba(255,69,58,0.35); }
+    .danger-panel h2 { color: var(--w-danger); }
+    .danger-panel p { font-size: 12.5px; color: var(--w-ink-soft); line-height: 1.5; margin: 0 0 14px; }
+    .danger-panel p a { color: var(--w-accent); text-decoration: none; }
+    .deactivate-btn { width: 100%; background: none; border: 1px solid var(--w-danger); color: var(--w-danger); border-radius: 999px; padding: 11px; font-size: 13.5px; font-weight: 700; cursor: pointer; font-family: inherit; }
+
+    .deactivate-modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 200; align-items: center; justify-content: center; padding: 20px; }
+    .deactivate-modal-overlay.open { display: flex; }
+    .deactivate-modal-box { background: var(--w-card-raised); border: 1px solid var(--w-line); border-radius: 16px; padding: 24px; width: 100%; max-width: 400px; }
+    .deactivate-modal-box h2 { font-size: 17px; margin: 0 0 12px; color: var(--w-danger); }
+    .deactivate-modal-box ul { margin: 0 0 14px; padding-left: 18px; }
+    .deactivate-modal-box li { font-size: 13px; color: var(--w-ink-soft); margin-bottom: 8px; line-height: 1.5; }
+    .deactivate-modal-box li strong { color: var(--w-ink); }
+    .deactivate-modal-box p { font-size: 13px; color: var(--w-ink-soft); margin: 0 0 16px; line-height: 1.5; }
+    .deactivate-confirm-btn { width: 100%; background: var(--w-danger); color: #fff; border: none; border-radius: 999px; padding: 13px; font-size: 14px; font-weight: 700; cursor: pointer; font-family: inherit; margin-bottom: 10px; }
+    .deactivate-cancel-btn { width: 100%; background: none; border: none; padding: 10px; font-size: 13px; font-weight: 600; color: var(--w-ink-soft); cursor: pointer; font-family: inherit; }
+  </style>
+</head>
+<body>
+  <div class="w-shell">
+    <div class="biz-header">
+      <a href="/account/business/more" class="w-btn-icon" aria-label="Back">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      </a>
+      <div>
+        <div class="w-eyebrow">Business</div>
+        <h1 class="w-title" style="font-size:20px;">Settings</h1>
+      </div>
+    </div>
+
+    <div class="w-card panel">
+      <h2>Business information</h2>
+      <% if (businessError) { %><div class="banner error"><%= businessError %></div><% } %>
+      <% if (businessSuccess) { %><div class="banner success">Business info updated.</div><% } %>
+      <form method="POST" action="/dashboard/settings/account/business">
+        <input type="hidden" name="redirectTo" value="/account/business/settings" />
+        <div class="w-field"><label for="businessName">Business name</label><input type="text" id="businessName" name="businessName" value="<%= merchant.businessName %>" required /></div>
+        <div class="w-field"><label for="email">Email</label><input type="email" id="email" name="email" value="<%= merchant.email %>" required /></div>
+        <div class="w-field"><label for="businessPhone">Phone (optional)</label><input type="text" id="businessPhone" name="phone" value="<%= receiptTheme ? (receiptTheme.phone || '') : '' %>" placeholder="416-555-1234" /></div>
+        <div class="field-hint">Shown on the receipts your customers receive. Leave blank to not show one.</div>
+        <button type="submit" class="w-btn" style="margin-top:4px;">Save</button>
+      </form>
+    </div>
+
+    <div class="w-card panel">
+      <h2>Business profile</h2>
+      <% if (businessProfileError) { %><div class="banner error"><%= businessProfileError %></div><% } %>
+      <% if (businessProfileSuccess) { %><div class="banner success">Business profile updated.</div><% } %>
+      <form method="POST" action="/dashboard/settings/account/business-profile">
+        <input type="hidden" name="redirectTo" value="/account/business/settings" />
+        <p style="font-size:12.5px; color:var(--w-ink-soft); margin:-8px 0 14px; line-height:1.5;">Shown on the receipts your customers receive.</p>
+        <div class="w-field"><label for="businessEmail">Business email (optional)</label><input type="email" id="businessEmail" name="businessEmail" value="<%= merchant.businessEmail || '' %>" placeholder="hello@yourbusiness.com" /></div>
+        <div class="field-hint">Separate from your login email above.</div>
+        <div class="w-field"><label for="profileGstHst">GST/HST number</label><input type="text" id="profileGstHst" name="gstHstNumber" value="<%= receiptTheme ? (receiptTheme.gstHstNumber || '') : '' %>" placeholder="123456789 RT0001" /></div>
+        <div class="field-hint">Prints on receipts of $100 or more, for customers claiming an input tax credit.</div>
+        <div class="w-field">
+          <label for="industry">Industry (optional)</label>
+          <select id="industry" name="industry">
+            <option value="">Select your industry…</option>
+            <% ['Café / Coffee Shop', 'Restaurant / Food Service', 'Retail', 'Salon & Beauty', 'Professional Services', 'Other'].forEach(function(opt) { %>
+              <option value="<%= opt %>" <%= merchant.industry === opt ? 'selected' : '' %>><%= opt %></option>
+            <% }); %>
+          </select>
+        </div>
+        <div class="field-hint">For your own records only — not shown on receipts.</div>
+        <button type="submit" class="w-btn" style="margin-top:4px;">Save changes</button>
+      </form>
+    </div>
+
+    <div class="w-card panel">
+      <h2>Business address</h2>
+      <p style="font-size:12.5px; color:var(--w-ink-soft); margin:-8px 0 14px; line-height:1.5;">Used on tax invoices and digital receipt PDFs.</p>
+      <% if (addressSuccess) { %><div class="banner success">Business address updated.</div><% } %>
+      <form method="POST" action="/dashboard/settings/account/business-address">
+        <input type="hidden" name="redirectTo" value="/account/business/settings" />
+        <div class="w-field"><label for="addressLine1">Street address</label><input type="text" id="addressLine1" name="addressLine1" value="<%= merchant.addressLine1 || '' %>" placeholder="123 Main Street" /></div>
+        <div class="w-field"><label for="addressLine2">Suite / Level / Unit (optional)</label><input type="text" id="addressLine2" name="addressLine2" value="<%= merchant.addressLine2 || '' %>" placeholder="Suite 4, Level 2" /></div>
+        <div class="field-row">
+          <div class="w-field"><label for="addressCity">Suburb / City</label><input type="text" id="addressCity" name="addressCity" value="<%= merchant.addressCity || '' %>" placeholder="Newtown" /></div>
+          <div class="w-field"><label for="addressRegion">State / Province</label><input type="text" id="addressRegion" name="addressRegion" value="<%= merchant.addressRegion || '' %>" placeholder="ON" /></div>
+        </div>
+        <div class="field-row">
+          <div class="w-field"><label for="addressPostalCode">Postal code</label><input type="text" id="addressPostalCode" name="addressPostalCode" value="<%= merchant.addressPostalCode || '' %>" placeholder="A1A 1A1" /></div>
+          <div class="w-field"><label for="addressCountry">Country</label><input type="text" id="addressCountry" name="addressCountry" value="<%= merchant.addressCountry || '' %>" placeholder="Canada" /></div>
+        </div>
+        <button type="submit" class="w-btn" style="margin-top:4px;">Save changes</button>
+      </form>
+    </div>
+
+    <div class="w-card panel">
+      <h2>Change password</h2>
+      <% if (passwordError) { %><div class="banner error"><%= passwordError %></div><% } %>
+      <% if (passwordSuccess) { %><div class="banner success">Password changed.</div><% } %>
+      <form method="POST" action="/dashboard/settings/account/password">
+        <input type="hidden" name="redirectTo" value="/account/business/settings" />
+        <div class="w-field"><label for="currentPassword">Current password</label><input type="password" id="currentPassword" name="currentPassword" required /></div>
+        <div class="w-field"><label for="newPassword">New password</label><input type="password" id="newPassword" name="newPassword" required minlength="8" /></div>
+        <div class="w-field"><label for="confirmNewPassword">Confirm new password</label><input type="password" id="confirmNewPassword" name="confirmNewPassword" required minlength="8" /></div>
+        <button type="submit" class="w-btn" style="margin-top:4px;">Change password</button>
+      </form>
+    </div>
+
+    <div class="w-card panel">
+      <h2>POS connection</h2>
+      <% if (posError) { %><div class="banner error"><%= posError %></div><% } %>
+      <%
+        const connectedPos = [
+          merchant.squareMerchantId && { provider: 'square', label: 'Square' },
+          merchant.cloverMerchantId && { provider: 'clover', label: 'Clover' },
+          merchant.lightspeedDomainPrefix && { provider: 'lightspeed', label: `Lightspeed (${merchant.lightspeedDomainPrefix})` },
+          merchant.shopifyShopDomain && { provider: 'shopify', label: `Shopify (${merchant.shopifyShopDomain})` },
+        ].filter(Boolean);
+      %>
+      <% if (connectedPos.length) { %>
+        <% connectedPos.forEach(function(pos) { %>
+          <div class="pos-row">
+            <p>Connected via <strong><%= pos.label %></strong></p>
+            <form method="POST" action="/dashboard/settings/account/disconnect-pos" onsubmit="return confirm('Disconnect this POS? Its sales will stop generating receipts until you reconnect.');">
+              <input type="hidden" name="provider" value="<%= pos.provider %>" />
+              <input type="hidden" name="redirectTo" value="/account/business/settings" />
+              <button type="submit" class="disconnect-btn">Disconnect</button>
+            </form>
+          </div>
+        <% }); %>
+      <% } else { %>
+        <div class="empty">No POS connected. Connect one from the <a href="/dashboard/pos-setup">POS connection</a> page.</div>
+      <% } %>
+    </div>
+
+    <div class="w-card panel danger-panel">
+      <h2>Danger zone</h2>
+      <% if (disconnectAllSuccess) { %><div class="banner success">All ReceipTaps have been released from your account.</div><% } %>
+      <p>Releasing every ReceipTap stops them from issuing receipts immediately, and each one needs its claim code entered again before it can be used.</p>
+      <button type="button" class="deactivate-btn" id="open-disconnect-all-modal" style="margin-bottom:14px;">Disconnect all ReceipTaps</button>
+      <p>Deactivating immediately ends your access and can't be undone by you — if you just want to stop paying but keep using ReceipTap until your current period ends, <a href="/dashboard/billing">cancel your subscription</a> from Billing instead.</p>
+      <button type="button" class="deactivate-btn" id="open-deactivate-modal">Deactivate account</button>
+    </div>
+  </div>
+
+  <div class="deactivate-modal-overlay" id="disconnect-all-modal" onclick="if (event.target === this) closeDisconnectAllModal();">
+    <div class="deactivate-modal-box">
+      <h2>Disconnect all ReceipTaps?</h2>
+      <p>Every ReceipTap linked to your account will be released and stop issuing receipts immediately. Each one will need to be re-claimed with its code before it can be used again.</p>
+      <form method="POST" action="/account/business/pucks/disconnect-all">
+        <button type="submit" class="deactivate-confirm-btn">Yes, disconnect all</button>
+      </form>
+      <button type="button" onclick="closeDisconnectAllModal();" class="deactivate-cancel-btn">Never mind, take me back</button>
+    </div>
+  </div>
+
+  <div class="deactivate-modal-overlay" id="deactivate-modal" onclick="if (event.target === this) closeDeactivateModal();">
+    <div class="deactivate-modal-box">
+      <h2>Deactivate your account?</h2>
+      <ul>
+        <% if (['ACTIVE', 'TRIALING', 'PAST_DUE'].includes(merchant.subscriptionStatus)) { %>
+          <li><strong>Your subscription is cancelled right now</strong> — even if you have paid time remaining, not at the end of your billing period.</li>
+        <% } %>
+        <li><strong>You're logged out immediately and can't log back in</strong> — there's no self-serve way to reactivate. Undoing this requires contacting us directly.</li>
+        <li><strong>Your account data is permanently deleted in <%= purgeDays %> days.</strong></li>
+      </ul>
+      <p>If you just want to stop being billed but keep your receipts working until your paid period ends, use "Cancel Subscription" on the Billing page instead — this is different from that.</p>
+      <form method="POST" action="/dashboard/settings/account/deactivate">
+        <button type="submit" class="deactivate-confirm-btn">Yes, deactivate my account</button>
+      </form>
+      <button type="button" onclick="closeDeactivateModal();" class="deactivate-cancel-btn">Never mind, take me back</button>
+    </div>
+  </div>
+
+  <script>
+    document.getElementById('open-deactivate-modal').addEventListener('click', function () {
+      document.getElementById('deactivate-modal').classList.add('open');
+    });
+    function closeDeactivateModal() {
+      document.getElementById('deactivate-modal').classList.remove('open');
+    }
+
+    document.getElementById('open-disconnect-all-modal').addEventListener('click', function () {
+      document.getElementById('disconnect-all-modal').classList.add('open');
+    });
+    function closeDisconnectAllModal() {
+      document.getElementById('disconnect-all-modal').classList.remove('open');
+    }
+  </script>
+</body>
+</html>

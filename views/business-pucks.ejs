@@ -1,0 +1,125 @@
+<!-- views/business-pucks.ejs -->
+<!-- Dark reskin of views/pucks-list.ejs's content, adapted for mobile: a
+     flat list with each puck's status/location/connection shown inline,
+     rather than the desktop version's master-detail two-pane and
+     By-Location tab. Same underlying data -- see computePucksData() in
+     routes/merchant-dashboard.js. -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ReceipTaps - ReceipTap Business</title>
+  <link rel="stylesheet" href="/css/receiptap.css" />
+  <%- include('partials/wallet-dark-theme') %>
+  <style>
+    .biz-header { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+    .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+    .stat-card { padding: 14px 16px; }
+    .stat-label { font-size: 11px; color: var(--w-ink-soft); margin-bottom: 4px; }
+    .stat-value { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 20px; font-weight: 700; }
+
+    .search-card { padding: 14px 16px; margin-bottom: 12px; }
+    .search-card .w-field { margin-bottom: 0; }
+    .chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+    .chip {
+      font-size: 12px; font-weight: 600; padding: 6px 13px; border-radius: 999px;
+      text-decoration: none; border: 1px solid var(--w-line); color: var(--w-ink-soft); background: var(--w-card-raised);
+    }
+    .chip.active { background: var(--w-accent); border-color: var(--w-accent); color: #fff; }
+
+    .puck-row { padding: 14px 16px; border-bottom: 1px solid var(--w-line); }
+    .puck-row:last-child { border-bottom: none; }
+    .puck-row-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+    .puck-id { font-size: 13.5px; font-weight: 700; font-family: var(--font-mono); }
+    .puck-badge { font-size: 10.5px; font-weight: 700; padding: 3px 9px; border-radius: 999px; }
+    .puck-badge.linked { background: rgba(5,107,254,0.2); color: var(--w-accent); }
+    .puck-badge.pairing { background: rgba(5,107,254,0.12); color: var(--w-accent); }
+    .puck-badge.needs { background: var(--w-card-raised); color: var(--w-ink-soft); border: 1px solid var(--w-line); }
+    .puck-meta { font-size: 12px; color: var(--w-ink-soft); line-height: 1.6; }
+    .unassign-btn { background: none; border: none; color: var(--w-danger); font-size: 12px; font-weight: 600; cursor: pointer; padding: 0; margin-top: 6px; font-family: inherit; }
+
+    .empty { text-align: center; padding: 30px 10px; color: var(--w-ink-soft); font-size: 13.5px; }
+    .pager { display: flex; justify-content: space-between; align-items: center; margin-top: 14px; font-size: 13px; }
+    .pager a { color: var(--w-accent); font-weight: 600; text-decoration: none; }
+    .pager span { color: var(--w-ink-soft); }
+
+    .recent-card { padding: 16px; margin-top: 18px; }
+    .recent-item { display: flex; justify-content: space-between; font-size: 12.5px; padding: 6px 0; color: var(--w-ink-soft); }
+    .recent-item span:first-child { color: var(--w-ink); font-weight: 600; }
+  </style>
+</head>
+<body>
+  <div class="w-shell">
+    <div class="biz-header">
+      <div>
+        <div class="w-eyebrow">Business</div>
+        <h1 class="w-title" style="font-size:20px;">ReceipTaps</h1>
+      </div>
+    </div>
+
+    <div class="stat-grid">
+      <div class="w-card stat-card"><div class="stat-label">Total</div><div class="stat-value"><%= stats.total %></div></div>
+      <div class="w-card stat-card"><div class="stat-label">Linked</div><div class="stat-value"><%= stats.linked %></div></div>
+      <div class="w-card stat-card"><div class="stat-label">Needs linking</div><div class="stat-value"><%= stats.needsLinking %></div></div>
+      <div class="w-card stat-card"><div class="stat-label">Activated in <%= stats.monthLabel %></div><div class="stat-value"><%= stats.activatedThisMonth %></div></div>
+    </div>
+
+    <form class="w-card search-card" method="GET" action="/account/business/pucks">
+      <div class="w-field"><input type="text" name="search" placeholder="Search by ID or claim code" value="<%= filters.search %>" /></div>
+    </form>
+
+    <div class="chips">
+      <a class="chip <%= !filters.status ? 'active' : '' %>" href="/account/business/pucks?search=<%= encodeURIComponent(filters.search) %>">All</a>
+      <a class="chip <%= filters.status === 'linked' ? 'active' : '' %>" href="/account/business/pucks?search=<%= encodeURIComponent(filters.search) %>&status=linked">Linked</a>
+      <a class="chip <%= filters.status === 'pairing' ? 'active' : '' %>" href="/account/business/pucks?search=<%= encodeURIComponent(filters.search) %>&status=pairing">Pairing</a>
+      <a class="chip <%= filters.status === 'needsLinking' ? 'active' : '' %>" href="/account/business/pucks?search=<%= encodeURIComponent(filters.search) %>&status=needsLinking">Needs linking</a>
+    </div>
+
+    <% if (pucks.length === 0) { %>
+      <div class="w-card empty">No ReceipTaps match.</div>
+    <% } else { %>
+      <div class="w-card">
+        <% pucks.forEach(function(p) { %>
+          <div class="puck-row">
+            <div class="puck-row-top">
+              <div class="puck-id">ReceipTap <%= p.id.slice(0, 4).toUpperCase() %></div>
+              <% if (p.linked) { %><span class="puck-badge linked">Linked</span>
+              <% } else if (p.pairing) { %><span class="puck-badge pairing">Pairing…</span>
+              <% } else { %><span class="puck-badge needs">Needs linking</span><% } %>
+            </div>
+            <div class="puck-meta">
+              Location: <%= p.location %><br />
+              Connected to: <%= p.connectedTo %><br />
+              Added <%= p.claimedAt ? new Date(p.claimedAt).toLocaleDateString('en-US', { dateStyle: 'medium' }) : 'not yet activated' %>
+            </div>
+            <% if (p.linked) { %>
+              <form method="POST" action="/account/business/pucks/<%= p.id %>/unassign">
+                <button type="submit" class="unassign-btn">Unassign</button>
+              </form>
+            <% } %>
+          </div>
+        <% }); %>
+      </div>
+      <% if (totalPages > 1) { %>
+        <div class="pager">
+          <% if (page > 1) { %><a href="/account/business/pucks?page=<%= page - 1 %>&search=<%= encodeURIComponent(filters.search) %>&status=<%= filters.status %>">← Previous</a><% } else { %><span></span><% } %>
+          <span>Page <%= page %> of <%= totalPages %></span>
+          <% if (page < totalPages) { %><a href="/account/business/pucks?page=<%= page + 1 %>&search=<%= encodeURIComponent(filters.search) %>&status=<%= filters.status %>">Next →</a><% } else { %><span></span><% } %>
+        </div>
+      <% } %>
+    <% } %>
+
+    <% if (recentActivations.length > 0) { %>
+      <div class="w-card recent-card">
+        <div class="panel-head" style="margin-bottom:10px;"><h2 style="font-size:14px;margin:0;">Recently activated</h2></div>
+        <% recentActivations.forEach(function(p) { %>
+          <div class="recent-item"><span>ReceipTap <%= p.id.slice(0, 4).toUpperCase() %></span><span><%= p.when %></span></div>
+        <% }); %>
+      </div>
+    <% } %>
+  </div>
+
+  <%- include('partials/business-tab-bar', { active: 'pucks' }) %>
+</body>
+</html>

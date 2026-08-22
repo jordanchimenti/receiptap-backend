@@ -1,0 +1,307 @@
+<!-- views/business-overview.ejs -->
+<!-- Dark reskin of views/dashboard-overview.ejs's content, single-column
+     for mobile. Same locals (merchant, stats, puckStatus, pucks, recent) --
+     see computeOverviewData() in routes/merchant-dashboard.js. -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Overview - ReceipTap Business</title>
+  <link rel="stylesheet" href="/css/receiptap.css" />
+  <%- include('partials/wallet-dark-theme') %>
+  <style>
+    .biz-header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+
+    .setup-card { padding: 18px; margin-bottom: 18px; }
+    .setup-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+    .setup-eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--w-accent); }
+    .setup-pct { font-size: 13px; font-weight: 700; color: var(--w-ink-soft); }
+    .setup-bar { height: 6px; border-radius: 999px; background: var(--w-card-raised); overflow: hidden; margin-bottom: 16px; }
+    .setup-bar-fill { height: 100%; background: var(--w-accent); border-radius: 999px; }
+    .setup-row { display: flex; align-items: flex-start; gap: 12px; padding: 9px 0; }
+    .setup-check {
+      width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0; margin-top: 1px;
+      display: flex; align-items: center; justify-content: center; border: 1.5px solid var(--w-line);
+    }
+    .setup-check svg { width: 12px; height: 12px; }
+    .setup-row.done .setup-check { background: rgba(5,107,254,0.15); border-color: transparent; color: var(--w-accent); }
+    .setup-row-body { flex: 1; min-width: 0; }
+    .setup-row-title { font-size: 13.5px; font-weight: 700; color: var(--w-ink); }
+    .setup-row.done .setup-row-title { color: var(--w-ink-soft); text-decoration: line-through; }
+    .setup-row-sub { font-size: 12px; color: var(--w-ink-soft); margin-top: 2px; line-height: 1.4; }
+    .setup-row-chevron { color: var(--w-ink-soft); flex-shrink: 0; margin-top: 3px; }
+    a.setup-row { text-decoration: none; }
+
+    .hero-card {
+      padding: 20px 22px; margin-bottom: 18px;
+      background: radial-gradient(120% 140% at 100% 0%, rgba(5,107,254,0.35) 0%, var(--w-card) 65%);
+      border-color: rgba(5,107,254,0.3);
+    }
+    .hero-eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--w-ink-soft); }
+    .hero-value { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 34px; font-weight: 700; margin: 4px 0; }
+    .hero-sub { font-size: 13px; color: var(--w-ink-soft); }
+    .hero-divider { height: 1px; background: var(--w-line); margin: 16px 0; }
+    .hero-substats { display: flex; }
+    .hero-substat { flex: 1; }
+    .hero-substat + .hero-substat { border-left: 1px solid var(--w-line); padding-left: 16px; margin-left: 16px; }
+    .hero-substat-label { font-size: 10.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--w-ink-soft); margin-bottom: 3px; }
+    .hero-substat-value { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 17px; font-weight: 700; }
+    .hero-substat-sub { font-size: 11px; color: var(--w-ink-soft); }
+
+    .panel { padding: 18px; margin-bottom: 16px; }
+    .panel-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+    .panel-head h2 { font-size: 15px; margin: 0; }
+    .panel-head a { font-size: 12.5px; font-weight: 600; color: var(--w-accent); text-decoration: none; }
+    .blank { text-align: center; padding: 20px 10px; }
+    .blank-title { font-size: 13.5px; font-weight: 700; margin-bottom: 4px; }
+    .blank-sub { font-size: 12.5px; color: var(--w-ink-soft); line-height: 1.5; margin-bottom: 14px; }
+
+    .recent-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--w-line); }
+    .recent-row:last-child { border-bottom: none; }
+    .who-row { display: flex; align-items: center; gap: 10px; }
+    .who-av { width: 28px; height: 28px; border-radius: 50%; background: var(--w-card-raised); color: var(--w-ink-soft); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; text-transform: uppercase; flex-shrink: 0; }
+    .who-email { font-size: 13px; }
+    .recent-total { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 13.5px; font-weight: 700; text-align: right; }
+    .recent-when { font-size: 11px; color: var(--w-ink-soft); text-align: right; }
+
+    .stackbar { display: flex; height: 8px; border-radius: 999px; overflow: hidden; background: var(--w-card-raised); margin-bottom: 14px; }
+    .legend-row { display: flex; justify-content: space-between; align-items: center; font-size: 13px; margin-bottom: 8px; }
+    .legend-row:last-child { margin-bottom: 0; }
+    .legend-key { display: flex; align-items: center; gap: 8px; color: var(--w-ink-soft); }
+    .sw { width: 8px; height: 8px; border-radius: 50%; }
+    .status-note { font-size: 12.5px; color: var(--w-ink-soft); line-height: 1.5; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--w-line); }
+    .status-note.warn { color: var(--w-accent); }
+
+    .puck-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .puck-card { background: var(--w-card-raised); border: 1px solid var(--w-line); border-radius: 12px; padding: 12px; text-decoration: none; color: var(--w-ink); }
+    .puck-name { font-size: 12.5px; font-weight: 700; margin-bottom: 6px; }
+    .puck-badge { font-size: 10.5px; font-weight: 700; padding: 2px 8px; border-radius: 999px; display: inline-block; }
+    .puck-badge.linked { background: rgba(5,107,254,0.2); color: var(--w-accent); }
+    .puck-badge.pairing { background: rgba(5,107,254,0.12); color: var(--w-accent); }
+    .puck-badge.needs { background: var(--w-card-raised); color: var(--w-ink-soft); border: 1px solid var(--w-line); }
+    .puck-date { font-size: 11px; color: var(--w-ink-soft); margin-top: 6px; }
+
+    .qa-row { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--w-line); text-decoration: none; color: var(--w-ink); font-size: 13.5px; font-weight: 600; }
+    .qa-row:last-child { border-bottom: none; }
+    .qa-icon { width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .qa-icon svg { width: 15px; height: 15px; }
+  </style>
+</head>
+<body>
+  <%
+    var name = (merchant.ownerName || merchant.businessName || 'there').split(' ')[0];
+    var st = puckStatus;
+    var pct = function (n) { return st.total ? (n / st.total) * 100 : 0; };
+  %>
+  <div class="w-shell">
+    <div class="biz-header">
+      <div>
+        <div class="w-eyebrow">Business</div>
+        <h1 class="w-title" style="font-size:20px;">Welcome back, <%= name %></h1>
+      </div>
+    </div>
+
+    <div class="w-card setup-card">
+      <div class="setup-head">
+        <div class="setup-eyebrow">Setup progress</div>
+        <div class="setup-pct"><%= setup.percent %>%</div>
+      </div>
+      <div class="setup-bar"><div class="setup-bar-fill" style="width: <%= setup.percent %>%;"></div></div>
+
+      <a class="setup-row done" href="/account/business/settings">
+        <div class="setup-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div>
+        <div class="setup-row-body">
+          <div class="setup-row-title">Create your account</div>
+          <div class="setup-row-sub">View your business information.</div>
+        </div>
+        <div class="setup-row-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg></div>
+      </a>
+
+      <% if (setup.billingAdded) { %>
+        <a class="setup-row done" href="/dashboard/billing">
+          <div class="setup-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div>
+          <div class="setup-row-body">
+            <div class="setup-row-title">Start your subscription</div>
+            <div class="setup-row-sub">Manage your subscription and billing.</div>
+          </div>
+          <div class="setup-row-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg></div>
+        </a>
+      <% } else { %>
+        <a class="setup-row" href="/dashboard/billing">
+          <div class="setup-check"></div>
+          <div class="setup-row-body">
+            <div class="setup-row-title">Start your subscription</div>
+            <div class="setup-row-sub">A card is required to start your free trial.</div>
+          </div>
+          <div class="setup-row-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg></div>
+        </a>
+      <% } %>
+
+      <% if (setup.puckSetUp) { %>
+        <a class="setup-row done" href="/account/business/pucks">
+          <div class="setup-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div>
+          <div class="setup-row-body">
+            <div class="setup-row-title">Set up your first ReceipTap</div>
+            <div class="setup-row-sub">Manage your ReceipTaps.</div>
+          </div>
+          <div class="setup-row-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg></div>
+        </a>
+      <% } else { %>
+        <a class="setup-row" href="/account/business/pucks">
+          <div class="setup-check"></div>
+          <div class="setup-row-body">
+            <div class="setup-row-title">Set up your first ReceipTap</div>
+            <div class="setup-row-sub">Tap the puck with your phone, or type its activation code, to add it to this account.</div>
+          </div>
+          <div class="setup-row-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg></div>
+        </a>
+      <% } %>
+
+      <% if (setup.receiptCustomized) { %>
+        <a class="setup-row done" href="/account/business/receipt-design">
+          <div class="setup-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div>
+          <div class="setup-row-body">
+            <div class="setup-row-title">Customize your receipt</div>
+            <div class="setup-row-sub">Edit your receipt design.</div>
+          </div>
+          <div class="setup-row-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg></div>
+        </a>
+      <% } else { %>
+        <a class="setup-row" href="/account/business/receipt-design">
+          <div class="setup-check"></div>
+          <div class="setup-row-body">
+            <div class="setup-row-title">Customize your receipt</div>
+            <div class="setup-row-sub">Add your logo, colours, and links customers see on every tap.</div>
+          </div>
+          <div class="setup-row-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg></div>
+        </a>
+      <% } %>
+
+      <%# Done once the receipt banner is actually switched on (that's what
+          starts earning, not merely visiting a page). Either way this row goes
+          to the Partner Program: the landing page while they're deciding, and
+          their own referral link and earnings once they're in. %>
+      <% if (setup.partnerProgramOn) { %>
+        <a class="setup-row done" href="/account/business/referrals">
+          <div class="setup-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div>
+          <div class="setup-row-body">
+            <div class="setup-row-title">Join the Partner Program</div>
+            <div class="setup-row-sub">See your referral link and earnings.</div>
+          </div>
+          <div class="setup-row-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg></div>
+        </a>
+      <% } else { %>
+        <a class="setup-row" href="/partner-program?from=%2Faccount%2Fbusiness%2Freferrals">
+          <div class="setup-check"></div>
+          <div class="setup-row-body">
+            <div class="setup-row-title">Join the Partner Program</div>
+            <div class="setup-row-sub">Earn <%= merchantAffiliateRate %>% recurring on every business you refer. Free to join.</div>
+          </div>
+          <div class="setup-row-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg></div>
+        </a>
+      <% } %>
+    </div>
+
+    <div class="w-card hero-card">
+      <div class="hero-eyebrow">Today</div>
+      <div class="hero-value">$<%= Number(stats.todayRevenue).toLocaleString('en-US', { minimumFractionDigits: 2 }) %></div>
+      <div class="hero-sub"><%= stats.todayReceipts %> receipt<%= stats.todayReceipts === 1 ? '' : 's' %> issued</div>
+      <div class="hero-divider"></div>
+      <div class="hero-substats">
+        <div class="hero-substat">
+          <div class="hero-substat-label">Devices</div>
+          <div class="hero-substat-value"><%= stats.pucksLinked %>/<%= stats.pucksActive %></div>
+          <div class="hero-substat-sub">linked</div>
+        </div>
+        <div class="hero-substat">
+          <div class="hero-substat-label">This month</div>
+          <div class="hero-substat-value">$<%= Number(stats.monthRevenue).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) %></div>
+          <div class="hero-substat-sub"><%= stats.monthLabel %></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="w-card panel">
+      <div class="panel-head"><h2>Recent receipts</h2><a href="/account/business/receipts">View all</a></div>
+      <% if (recent.length === 0) { %>
+        <div class="blank">
+          <div class="blank-title">No receipts yet</div>
+          <div class="blank-sub">Once your POS is connected and a customer taps a ReceipTap, their receipts land here within seconds.</div>
+        </div>
+      <% } else { %>
+        <% recent.forEach(function (r) { %>
+          <div class="recent-row">
+            <div class="who-row">
+              <div class="who-av"><%= r.identified ? r.who.charAt(0) : '·' %></div>
+              <span class="who-email" style="<%= r.identified ? '' : 'color:var(--w-ink-soft);' %>"><%= r.who %></span>
+            </div>
+            <div>
+              <div class="recent-total">$<%= r.total %></div>
+              <div class="recent-when"><%= r.when %></div>
+            </div>
+          </div>
+        <% }); %>
+      <% } %>
+    </div>
+
+    <div class="w-card panel">
+      <div class="panel-head"><h2>ReceipTap status</h2><a href="/account/business/pucks">Manage</a></div>
+      <!-- Same brand blue throughout, just varied in shade/opacity so the
+           3 segments stay visually distinguishable -- see the note on
+           POS_COLORS in routes/analytics.js for the same pattern. -->
+      <div class="stackbar">
+        <span style="width: <%= pct(st.linked) %>%; background: var(--w-accent);"></span>
+        <span style="width: <%= pct(st.pairing) %>%; background: rgba(5,107,254,0.55);"></span>
+        <span style="width: <%= pct(st.setup) %>%; background: rgba(5,107,254,0.22);"></span>
+      </div>
+      <div class="legend-row"><span class="legend-key"><span class="sw" style="background:var(--w-accent);"></span>Linked to a register</span><span><%= st.linked %></span></div>
+      <div class="legend-row"><span class="legend-key"><span class="sw" style="background:rgba(5,107,254,0.55);"></span>Pairing right now</span><span><%= st.pairing %></span></div>
+      <div class="legend-row"><span class="legend-key"><span class="sw" style="background:rgba(5,107,254,0.22);"></span>Needs linking</span><span><%= st.setup %></span></div>
+      <% if (st.total === 0) { %>
+        <div class="status-note warn">No ReceipTaps activated yet.</div>
+      <% } else if (st.setup > 0) { %>
+        <div class="status-note warn"><%= st.setup %> <%= st.setup === 1 ? 'ReceipTap needs' : 'ReceipTaps need' %> linking to a register before receipts reach it.</div>
+      <% } else { %>
+        <div class="status-note">Everything is linked. Receipts are routed automatically.</div>
+      <% } %>
+    </div>
+
+    <div class="w-card panel">
+      <div class="panel-head"><h2>Your ReceipTaps</h2><a href="/account/business/pucks">See all</a></div>
+      <% if (pucks.length === 0) { %>
+        <div class="blank">
+          <div class="blank-title">No ReceipTaps on this account</div>
+          <div class="blank-sub">Each puck ships with a six-character activation code on its insert card.</div>
+        </div>
+      <% } else { %>
+        <div class="puck-grid">
+          <% pucks.forEach(function (p) { %>
+            <a class="puck-card" href="/account/business/pucks?selected=<%= p.id %>">
+              <div class="puck-name">ReceipTap <%= p.id.slice(0, 4).toUpperCase() %></div>
+              <% if (p.linked) { %><span class="puck-badge linked">Linked</span>
+              <% } else if (p.pairing) { %><span class="puck-badge pairing">Pairing…</span>
+              <% } else { %><span class="puck-badge needs">Needs linking</span><% } %>
+              <div class="puck-date">Added <%= p.claimedAt ? new Date(p.claimedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—' %></div>
+            </a>
+          <% }); %>
+        </div>
+      <% } %>
+    </div>
+
+    <div class="w-card panel">
+      <div class="panel-head"><h2>Quick actions</h2></div>
+      <a class="qa-row" href="/account/business/analytics">
+        <span class="qa-icon" style="background:rgba(5,107,254,0.15); color:var(--w-accent);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg></span>
+        See what's selling
+      </a>
+      <a class="qa-row" href="/account/business/emails">
+        <span class="qa-icon" style="background:rgba(5,107,254,0.15); color:var(--w-accent);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="m3 7 9 6 9-6"/></svg></span>
+        Export your customer list
+      </a>
+    </div>
+  </div>
+
+  <%- include('partials/business-tab-bar', { active: 'dashboard' }) %>
+</body>
+</html>

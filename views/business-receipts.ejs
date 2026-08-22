@@ -1,0 +1,131 @@
+<!-- views/business-receipts.ejs -->
+<!-- Dark reskin of views/receipts-hub.ejs's content, mobile card list
+     instead of a table. Same locals -- see computeReceiptsHubData() in
+     routes/merchant-dashboard.js. -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Receipts - ReceipTap Business</title>
+  <link rel="stylesheet" href="/css/receiptap.css" />
+  <%- include('partials/wallet-dark-theme') %>
+  <style>
+    .biz-header { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+    .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+    .tab-btn {
+      flex: 1; text-align: center; font-size: 13px; font-weight: 700; padding: 10px 0;
+      border-radius: 999px; border: 1px solid var(--w-line); background: var(--w-card-raised);
+      color: var(--w-ink-soft); text-decoration: none;
+    }
+    .tab-btn.active { background: var(--w-accent); border-color: var(--w-accent); color: #fff; }
+
+    .filter-card { padding: 14px 16px; margin-bottom: 16px; }
+    .filter-row { display: flex; gap: 10px; margin-bottom: 10px; }
+    .filter-row .w-field { flex: 1; margin-bottom: 0; }
+    .filter-actions { display: flex; align-items: center; gap: 14px; }
+    .filter-actions .clear-link { font-size: 12.5px; color: var(--w-ink-soft); }
+
+    .export-row { display: flex; gap: 16px; justify-content: flex-end; margin-bottom: 12px; }
+    .export-row a { font-size: 12.5px; font-weight: 600; color: var(--w-accent); text-decoration: none; }
+
+    .receipt-row { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; border-bottom: 1px solid var(--w-line); text-decoration: none; color: var(--w-ink); }
+    .receipt-row:last-child { border-bottom: none; }
+    .receipt-date { font-size: 13.5px; font-weight: 600; }
+    .receipt-sub { font-size: 11.5px; color: var(--w-ink-soft); margin-top: 2px; }
+    .receipt-total { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 14px; font-weight: 700; }
+    .empty { text-align: center; padding: 30px 10px; color: var(--w-ink-soft); font-size: 13.5px; }
+
+    .pager { display: flex; justify-content: space-between; align-items: center; margin-top: 14px; font-size: 13px; }
+    .pager a { color: var(--w-accent); font-weight: 600; text-decoration: none; }
+    .pager span { color: var(--w-ink-soft); }
+  </style>
+</head>
+<body>
+  <div class="w-shell">
+    <div class="biz-header">
+      <a href="/account/business/more" class="w-btn-icon" aria-label="Back">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      </a>
+      <div>
+        <div class="w-eyebrow">Business</div>
+        <h1 class="w-title" style="font-size:20px;">Receipts</h1>
+      </div>
+    </div>
+
+    <div class="tabs">
+      <a class="tab-btn <%= activeTab === 'customer' ? 'active' : '' %>" href="/account/business/receipts?tab=customer&from=<%= encodeURIComponent(filters.from) %>&to=<%= encodeURIComponent(filters.to) %>">Customer Receipts</a>
+      <a class="tab-btn <%= activeTab === 'merchant' ? 'active' : '' %>" href="/account/business/receipts?tab=merchant&from=<%= encodeURIComponent(filters.from) %>&to=<%= encodeURIComponent(filters.to) %>">Merchant Receipts</a>
+    </div>
+
+    <form class="w-card filter-card" method="GET" action="/account/business/receipts">
+      <input type="hidden" name="tab" value="<%= activeTab %>" />
+      <div class="filter-row">
+        <div class="w-field"><label>From</label><input type="date" name="from" value="<%= filters.from %>" /></div>
+        <div class="w-field"><label>To</label><input type="date" name="to" value="<%= filters.to %>" /></div>
+      </div>
+      <div class="filter-actions">
+        <button class="w-btn" type="submit" style="width:auto; padding:9px 18px; font-size:13px;">Filter</button>
+        <% if (filters.from || filters.to) { %>
+          <a class="clear-link" href="/account/business/receipts?tab=<%= activeTab %>">Clear dates</a>
+        <% } %>
+      </div>
+    </form>
+
+    <% if (activeTab === 'customer') { %>
+      <div class="export-row">
+        <a href="/dashboard/receipts/export?from=<%= encodeURIComponent(filters.from) %>&to=<%= encodeURIComponent(filters.to) %>">Export CSV</a>
+        <a href="/dashboard/receipts/pdf-export?from=<%= encodeURIComponent(filters.from) %>&to=<%= encodeURIComponent(filters.to) %>">Export PDF Copies</a>
+      </div>
+      <% if (customerReceipts.length === 0) { %>
+        <div class="w-card empty">No sales recorded yet.</div>
+      <% } else { %>
+        <div class="w-card">
+          <% customerReceipts.forEach(function(t) { %>
+            <a class="receipt-row" href="/receipt/<%= t.id %>" target="_blank" rel="noopener">
+              <div>
+                <div class="receipt-date"><%= t.date %></div>
+                <div class="receipt-sub"><%= t.paymentMethod || 'No payment method' %></div>
+              </div>
+              <div class="receipt-total">$<%= t.total %></div>
+            </a>
+          <% }); %>
+        </div>
+        <% if (customerTotalPages > 1) { %>
+          <div class="pager">
+            <% if (page > 1) { %><a href="/account/business/receipts?tab=customer&from=<%= encodeURIComponent(filters.from) %>&to=<%= encodeURIComponent(filters.to) %>&page=<%= page - 1 %>">← Previous</a><% } else { %><span></span><% } %>
+            <span>Page <%= page %> of <%= customerTotalPages %></span>
+            <% if (page < customerTotalPages) { %><a href="/account/business/receipts?tab=customer&from=<%= encodeURIComponent(filters.from) %>&to=<%= encodeURIComponent(filters.to) %>&page=<%= page + 1 %>">Next →</a><% } else { %><span></span><% } %>
+          </div>
+        <% } %>
+      <% } %>
+    <% } else { %>
+      <div class="export-row">
+        <a href="/dashboard/expenses/export?from=<%= encodeURIComponent(filters.from) %>&to=<%= encodeURIComponent(filters.to) %>">Export CSV</a>
+      </div>
+      <% if (merchantReceipts.length === 0) { %>
+        <div class="w-card empty">No merchant records yet.</div>
+      <% } else { %>
+        <div class="w-card">
+          <% merchantReceipts.forEach(function(t) { %>
+            <a class="receipt-row" href="/receipt/<%= t.id %><%= t.kind === 'own-sale' ? '?copy=merchant' : '' %>" target="_blank" rel="noopener">
+              <div>
+                <div class="receipt-date"><%= t.date %></div>
+                <div class="receipt-sub"><%= t.kind === 'purchased' ? 'Bought at ' + t.soldByName : (t.paymentMethod || 'No payment method') %></div>
+              </div>
+              <div class="receipt-total">$<%= t.total %></div>
+            </a>
+          <% }); %>
+        </div>
+        <% if (merchantTotalPages > 1) { %>
+          <div class="pager">
+            <% if (page > 1) { %><a href="/account/business/receipts?tab=merchant&from=<%= encodeURIComponent(filters.from) %>&to=<%= encodeURIComponent(filters.to) %>&page=<%= page - 1 %>">← Previous</a><% } else { %><span></span><% } %>
+            <span>Page <%= page %> of <%= merchantTotalPages %></span>
+            <% if (page < merchantTotalPages) { %><a href="/account/business/receipts?tab=merchant&from=<%= encodeURIComponent(filters.from) %>&to=<%= encodeURIComponent(filters.to) %>&page=<%= page + 1 %>">Next →</a><% } else { %><span></span><% } %>
+          </div>
+        <% } %>
+      <% } %>
+    <% } %>
+  </div>
+</body>
+</html>

@@ -10,6 +10,7 @@ const express = require('express');
 const router = express.Router();
 const prisma = require('../lib/prisma');
 const { CLOVER_AUTH_BASE_URL, exchangeCodeForToken } = require('../services/cloverService');
+const { posReturnPath } = require('../lib/posReturnPath');
 
 function requireAuth(req, res, next) {
   if (!req.session?.merchantId) return res.redirect('/login');
@@ -22,7 +23,9 @@ router.get('/oauth/clover/connect', requireAuth, (req, res) => {
   const params = new URLSearchParams({
     client_id: process.env.CLOVER_APP_ID,
     redirect_uri: redirectUri,
-    state: req.session.merchantId, // ties the callback back to the right merchant
+    // Round-tripped back on the callback below to know where to send the
+    // merchant afterward -- see the identical comment in oauth-square.js.
+    state: posReturnPath(req.query.next),
   });
   res.redirect(`${CLOVER_AUTH_BASE_URL}/oauth/v2/authorize?${params}`);
 });
@@ -30,7 +33,7 @@ router.get('/oauth/clover/connect', requireAuth, (req, res) => {
 // Step 2: Clover redirects back here with a temporary code AND the merchant
 // ID directly (Square only gives you the merchant ID in the token response).
 router.get('/oauth/clover/callback', requireAuth, async (req, res) => {
-  const { code, merchant_id: cloverMerchantId } = req.query;
+  const { code, merchant_id: cloverMerchantId, state } = req.query;
   if (!code || !cloverMerchantId) return res.status(400).send('Missing authorization code from Clover');
 
   let tokens;
@@ -51,7 +54,7 @@ router.get('/oauth/clover/callback', requireAuth, async (req, res) => {
     },
   });
 
-  res.redirect('/dashboard/pos-setup');
+  res.redirect(posReturnPath(state));
 });
 
 // A Clover connection IS one location -- no picker needed, just bind

@@ -1,0 +1,348 @@
+<!-- views/business-billing.ejs -->
+<!-- Dark reskin of views/billing.ejs's Current Plan / Payment Method /
+     Invoice History / Billing Summary sections. Same computeBillingData()
+     locals (see GET /account/business/billing in routes/account-business.js)
+     -- read-only display, no Checkout/cancel/retention-discount UI here.
+     /account/business/* is already gated by requireActiveSubscription
+     (server.js), so nobody reaches this page without a real subscription in
+     flight -- there's no "Start trial" state to build, unlike billing.ejs.
+     Canceling/changing plan funnels through "Manage billing" into Stripe's
+     own hosted Customer Portal, same as the reference design this page's
+     Current Plan card borrows from.
+
+     Payment Method is the one section that's native here rather than
+     deferred to the Portal -- every card on file, add/set-default/remove,
+     with removal blocked if it would leave zero cards (an active
+     subscription needs one on file for the trial-end auto-charge to work
+     at all). Card entry uses Stripe.js Elements (loaded below via
+     STRIPE_PUBLISHABLE_KEY, safe to expose client-side) so the actual card
+     number is tokenized in the browser and never touches this server --
+     see createSetupIntent/attachPaymentMethod/setDefaultPaymentMethod/
+     removePaymentMethod in services/stripeService.js. -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Billing - ReceipTap Business</title>
+  <link rel="stylesheet" href="/css/receiptap.css" />
+  <%- include('partials/wallet-dark-theme') %>
+  <style>
+    .biz-header { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+    .panel { padding: 18px; margin-bottom: 16px; }
+    .panel h2 { font-size: 14.5px; margin: 0 0 14px; }
+    .banner { padding: 11px 14px; border-radius: 10px; font-size: 13px; margin-bottom: 16px; }
+    .banner.error { background: rgba(255,69,58,0.12); border: 1px solid rgba(255,69,58,0.35); color: var(--w-danger); }
+    .banner.warn, .banner.success { background: rgba(5,107,254,0.12); border: 1px solid rgba(5,107,254,0.35); color: var(--w-accent); }
+
+    .plan-card {
+      padding: 20px 22px; margin-bottom: 16px;
+      background: radial-gradient(120% 140% at 100% 0%, rgba(5,107,254,0.35) 0%, var(--w-card) 65%);
+      border-color: rgba(5,107,254,0.3);
+    }
+    .plan-head { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 16px; }
+    .plan-name { font-size: 17px; font-weight: 700; }
+    .plan-price { font-size: 13px; color: var(--w-ink-soft); margin-top: 2px; }
+    .trial-info { font-size: 12.5px; color: var(--w-ink-soft); line-height: 1.5; margin-bottom: 12px; }
+    .trial-info strong { color: var(--w-ink); }
+    .badge { font-size: 11px; font-weight: 700; padding: 5px 12px; border-radius: 999px; white-space: nowrap; }
+    .badge-active { background: rgba(5,107,254,0.2); color: var(--w-accent); }
+    .badge-warn { background: rgba(255,69,58,0.15); color: var(--w-danger); }
+    .plan-grid { display: flex; gap: 24px; margin-bottom: 18px; flex-wrap: wrap; }
+    .plan-grid-label { font-size: 10.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--w-ink-soft); margin-bottom: 3px; }
+    .plan-grid-value { font-size: 15px; font-weight: 700; }
+    .manage-btn {
+      display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%;
+      background: #fff; color: #111; border: none; border-radius: 999px; padding: 13px 20px;
+      font-size: 14.5px; font-weight: 700; text-decoration: none; cursor: pointer; font-family: inherit; box-sizing: border-box;
+    }
+    .manage-sub { font-size: 11.5px; color: var(--w-ink-soft); text-align: center; margin-top: 10px; }
+
+    .pm-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 0; border-bottom: 1px solid var(--w-line); }
+    .pm-row:last-of-type { border-bottom: none; }
+    .pm-brand { font-size: 14px; font-weight: 600; text-transform: capitalize; }
+    .pm-brand .pm-default-tag { font-size: 10px; font-weight: 700; color: var(--w-accent); background: rgba(5,107,254,0.15); border-radius: 999px; padding: 2px 8px; margin-left: 8px; text-transform: none; }
+    .pm-exp { font-size: 12px; color: var(--w-ink-soft); margin-top: 2px; }
+    .pm-actions { display: flex; gap: 8px; flex-shrink: 0; }
+    .pm-action-btn {
+      background: none; border: 1px solid var(--w-line); color: var(--w-ink-soft); border-radius: 999px;
+      padding: 6px 12px; font-size: 11.5px; font-weight: 600; cursor: pointer; font-family: inherit; white-space: nowrap;
+    }
+    .pm-action-btn.remove { border-color: rgba(255,69,58,0.35); color: var(--w-danger); }
+    .add-pm-btn {
+      width: 100%; margin-top: 14px; background: none; border: 1px dashed var(--w-line); color: var(--w-accent);
+      border-radius: 12px; padding: 11px; font-size: 13.5px; font-weight: 700; cursor: pointer; font-family: inherit;
+    }
+
+    .pm-modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 200; align-items: center; justify-content: center; padding: 20px; }
+    .pm-modal-overlay.open { display: flex; }
+    .pm-modal-box { background: var(--w-card-raised); border: 1px solid var(--w-line); border-radius: 16px; padding: 24px; width: 100%; max-width: 400px; }
+    .pm-modal-box h2 { font-size: 17px; margin: 0 0 16px; }
+    #card-element { background: var(--w-card); border: 1px solid var(--w-line); border-radius: 10px; padding: 13px; margin-bottom: 12px; }
+    #card-errors { color: var(--w-danger); font-size: 12.5px; margin-bottom: 12px; min-height: 16px; }
+    .pm-modal-save-btn { width: 100%; background: var(--w-accent); color: #fff; border: none; border-radius: 999px; padding: 13px; font-size: 14px; font-weight: 700; cursor: pointer; font-family: inherit; margin-bottom: 10px; }
+    .pm-modal-save-btn:disabled { opacity: 0.6; cursor: default; }
+    .pm-modal-cancel-btn { width: 100%; background: none; border: none; padding: 10px; font-size: 13px; font-weight: 600; color: var(--w-ink-soft); cursor: pointer; font-family: inherit; }
+
+    .invoice-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--w-line); gap: 10px; }
+    .invoice-row:last-child { border-bottom: none; }
+    .invoice-id { font-size: 13px; font-weight: 600; }
+    .invoice-date { font-size: 11.5px; color: var(--w-ink-soft); margin-top: 2px; }
+    .invoice-right { text-align: right; flex-shrink: 0; }
+    .invoice-amt { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 13.5px; font-weight: 700; }
+    .pill { display: inline-block; font-size: 10.5px; font-weight: 700; padding: 2px 9px; border-radius: 999px; margin-top: 3px; }
+    .pill-paid { background: rgba(5,107,254,0.2); color: var(--w-accent); }
+    .pill-other { background: var(--w-card-raised); color: var(--w-ink-soft); border: 1px solid var(--w-line); }
+    .invoice-dl { font-size: 11.5px; font-weight: 600; color: var(--w-accent); text-decoration: none; display: block; margin-top: 3px; }
+
+    .summary-row { display: flex; justify-content: space-between; font-size: 13.5px; padding: 5px 0; color: var(--w-ink-soft); }
+    .summary-row.discount { color: var(--w-accent); font-weight: 600; }
+    .summary-total { display: flex; justify-content: space-between; font-size: 16px; font-weight: 700; border-top: 1px solid var(--w-line); margin-top: 10px; padding-top: 10px; }
+
+    .empty { text-align: center; padding: 20px 10px; color: var(--w-ink-soft); font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div class="w-shell">
+    <div class="biz-header">
+      <a href="/account/business/more" class="w-btn-icon" aria-label="Back">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      </a>
+      <div>
+        <div class="w-eyebrow">Business</div>
+        <h1 class="w-title" style="font-size:20px;">Billing</h1>
+      </div>
+    </div>
+
+    <!-- Real Stripe payment methods, not merchant.subscriptionStatus -- that
+         field can drift from reality (e.g. leftover test-mode Stripe IDs on
+         an account that predates this app's switch to live keys still read
+         as TRIALING locally even though they don't exist in live Stripe).
+         paymentMethods comes from computeBillingData (routes/billing.js),
+         which already fails safe to an empty array on any Stripe error. -->
+    <% var hasSubscriptionInFlight = paymentMethods.length > 0; %>
+
+    <% if (error) { %><div class="banner error"><%= error %></div><% } %>
+    <% if (pmSuccess) { %><div class="banner success">Payment method updated.</div><% } %>
+    <% if (justStarted) { %><div class="banner success">You're all set — your trial has started.</div><% } %>
+    <% if (justResumed) { %><div class="banner success">Your cancellation was undone — your subscription will continue as normal.</div><% } %>
+    <% if (merchant.subscriptionStatus === 'PAST_DUE') { %>
+      <div class="banner warn">Your last payment didn't go through. We'll retry automatically, but please update your card soon.</div>
+    <% } %>
+    <% if (cancelAtPeriodEnd) { %>
+      <div class="banner warn" style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+        <span>Your subscription is set to cancel<% if (nextBillingDate) { %> on <%= nextBillingDate %><% } %> — you'll keep access until then.</span>
+        <form method="POST" action="/account/business/billing/resume" style="margin:0;">
+          <button type="submit" class="pm-action-btn" style="flex-shrink:0;">Keep my subscription</button>
+        </form>
+      </div>
+    <% } %>
+
+    <div class="w-card plan-card">
+      <div class="plan-head">
+        <div>
+          <div class="plan-name">ReceipTap Monthly</div>
+          <% if (price) { %><div class="plan-price">$<%= price.amount %> <%= price.currency %> / <%= price.interval %></div><% } %>
+        </div>
+        <span class="badge <%= hasSubscriptionInFlight ? (merchant.subscriptionStatus === 'PAST_DUE' ? 'badge-warn' : 'badge-active') : 'badge-warn' %>">
+          <% if (merchant.subscriptionStatus === 'ACTIVE') { %>Active
+          <% } else if (merchant.subscriptionStatus === 'TRIALING') { %>Trialing
+          <% } else if (merchant.subscriptionStatus === 'PAST_DUE') { %>Past due
+          <% } else if (merchant.subscriptionStatus === 'CANCELED') { %>Canceled
+          <% } else { %>Not started<% } %>
+        </span>
+      </div>
+      <div class="plan-grid">
+        <% if (nextBillingDate) { %>
+          <div><div class="plan-grid-label">Renews</div><div class="plan-grid-value"><%= nextBillingDate %></div></div>
+        <% } %>
+        <% if (subscriptionStartDate) { %>
+          <div><div class="plan-grid-label">Started</div><div class="plan-grid-value"><%= subscriptionStartDate %></div></div>
+        <% } %>
+        <div><div class="plan-grid-label">Business</div><div class="plan-grid-value"><%= merchant.businessName %></div></div>
+      </div>
+      <% if (hasSubscriptionInFlight) { %>
+        <form method="POST" action="/account/business/billing/portal" target="_blank">
+          <button type="submit" class="manage-btn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14 21 3"/></svg>
+            Manage billing
+          </button>
+        </form>
+        <div class="manage-sub">Update card, view invoices, or cancel — secured by Stripe</div>
+      <% } else { %>
+        <% if (price) { %>
+          <div class="trial-info">
+            <%= trialDays %>-day free trial, then
+            <strong>$<%= price.amount %> <%= price.currency %> / <%= price.interval %></strong>
+            starting <strong><%= trialFirstChargeDate %></strong> — cancel anytime before
+            then and pay nothing.
+            <% if (chargesShipping) { %>
+              A one-time <strong>$<%= shippingFee %> USD shipping fee</strong> for your
+              ReceipTap puck is charged today, separately from the trial.
+            <% } %>
+            A card is required to start the trial.
+          </div>
+        <% } %>
+        <form method="POST" action="/account/business/billing/checkout">
+          <button type="submit" class="manage-btn">
+            <%= merchant.subscriptionStatus === 'CANCELED' ? 'Restart subscription' : 'Start 30-day free trial' %>
+          </button>
+        </form>
+      <% } %>
+    </div>
+
+    <div class="w-card panel">
+      <h2>Payment method</h2>
+      <% if (!hasSubscriptionInFlight) { %>
+        <!-- No real card on file -- createSetupIntent()/attachPaymentMethod()
+             (services/stripeService.js) both require a working Stripe
+             customer, so there's nothing to add here until Checkout creates
+             one for real. Matches views/billing.ejs's same fallback for a
+             merchant who hasn't started a subscription. -->
+        <div class="empty">No payment method on file. Start your subscription to add a card.</div>
+      <% } else { %>
+          <% paymentMethods.forEach(function (pm) { %>
+            <div class="pm-row">
+              <div>
+                <div class="pm-brand"><%= pm.brand %> ending in <%= pm.last4 %><% if (pm.isDefault) { %><span class="pm-default-tag">Default</span><% } %></div>
+                <div class="pm-exp">Expires <%= String(pm.expMonth).padStart(2, '0') %>/<%= pm.expYear %></div>
+              </div>
+              <div class="pm-actions">
+                <% if (!pm.isDefault) { %>
+                  <form method="POST" action="/account/business/billing/payment-methods/<%= pm.id %>/default">
+                    <button type="submit" class="pm-action-btn">Make default</button>
+                  </form>
+                <% } %>
+                <% if (paymentMethods.length > 1) { %>
+                  <form method="POST" action="/account/business/billing/payment-methods/<%= pm.id %>/delete" onsubmit="return confirm('Remove this card? This can\'t be undone.');">
+                    <button type="submit" class="pm-action-btn remove">Remove</button>
+                  </form>
+                <% } %>
+              </div>
+            </div>
+          <% }); %>
+        <button type="button" class="add-pm-btn" id="open-add-pm-modal">+ Add payment method</button>
+      <% } %>
+    </div>
+
+    <div class="w-card panel">
+      <h2>Invoice history</h2>
+      <% if (invoices.length === 0) { %>
+        <div class="empty">No invoices yet.</div>
+      <% } else { %>
+        <% invoices.forEach(function (inv) { %>
+          <div class="invoice-row">
+            <div>
+              <div class="invoice-id"><%= inv.id %></div>
+              <div class="invoice-date"><%= inv.date %></div>
+            </div>
+            <div class="invoice-right">
+              <div class="invoice-amt">$<%= inv.amount %></div>
+              <span class="pill <%= inv.status === 'Paid' ? 'pill-paid' : 'pill-other' %>"><%= inv.status %></span>
+              <% if (inv.pdfUrl) { %><a href="<%= inv.pdfUrl %>" target="_blank" rel="noopener" class="invoice-dl">Download</a><% } %>
+            </div>
+          </div>
+        <% }); %>
+      <% } %>
+    </div>
+
+    <div class="w-card panel">
+      <h2>Billing summary</h2>
+      <% if (upcoming) { %>
+        <div style="font-size:12.5px; color:var(--w-ink-soft); margin-bottom:10px;">
+          Next payment<% if (upcoming.date) { %> on <%= upcoming.date %><% } %>
+        </div>
+        <% upcoming.lines.forEach(function (line) { %>
+          <div class="summary-row"><span><%= line.description %></span><span>$<%= line.amount %></span></div>
+        <% }); %>
+        <% if (upcoming.discountAmount) { %>
+          <div class="summary-row discount"><span>Retention discount (50% off)</span><span>-$<%= upcoming.discountAmount %></span></div>
+        <% } %>
+        <div class="summary-total"><span>Total</span><span>$<%= upcoming.total %></span></div>
+      <% } else { %>
+        <div class="empty">No upcoming payment on file.</div>
+      <% } %>
+    </div>
+  </div>
+
+  <div class="pm-modal-overlay" id="add-pm-modal" onclick="if (event.target === this) closeAddPmModal();">
+    <div class="pm-modal-box">
+      <h2>Add payment method</h2>
+      <form id="add-pm-form">
+        <div id="card-element"></div>
+        <div id="card-errors"></div>
+        <button type="submit" class="pm-modal-save-btn" id="add-pm-submit">Save card</button>
+      </form>
+      <button type="button" onclick="closeAddPmModal();" class="pm-modal-cancel-btn">Cancel</button>
+    </div>
+  </div>
+
+  <script src="https://js.stripe.com/v3/"></script>
+  <script>
+    var stripe = <%- stripePublishableKey ? "Stripe('" + stripePublishableKey + "')" : 'null' %>;
+    var elements, cardElement;
+
+    if (stripe) {
+      elements = stripe.elements();
+      cardElement = elements.create('card', {
+        style: {
+          base: { color: '#ffffff', fontSize: '15px', '::placeholder': { color: '#8d8d8d' } },
+          invalid: { color: '#ff453a' },
+        },
+      });
+    }
+
+    var openAddPmBtn = document.getElementById('open-add-pm-modal');
+    // Not on the page yet for a merchant with no Stripe customer -- see the
+    // Payment method panel's stripeCustomerId check above.
+    if (openAddPmBtn) {
+      openAddPmBtn.addEventListener('click', function () {
+        document.getElementById('add-pm-modal').classList.add('open');
+        if (cardElement && !cardElement._mounted) {
+          cardElement.mount('#card-element');
+          cardElement._mounted = true;
+        }
+      });
+    }
+    function closeAddPmModal() {
+      document.getElementById('add-pm-modal').classList.remove('open');
+    }
+
+    document.getElementById('add-pm-form').addEventListener('submit', async function (e) {
+      e.preventDefault();
+      if (!stripe) return;
+      var submitBtn = document.getElementById('add-pm-submit');
+      var errorBox = document.getElementById('card-errors');
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Saving…';
+      errorBox.textContent = '';
+
+      try {
+        var setupResp = await fetch('/account/business/billing/setup-intent', { method: 'POST' });
+        var setupData = await setupResp.json();
+        if (setupData.error) throw new Error(setupData.error);
+
+        var result = await stripe.confirmCardSetup(setupData.clientSecret, {
+          payment_method: { card: cardElement },
+        });
+        if (result.error) throw new Error(result.error.message);
+
+        var form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '/account/business/billing/payment-methods';
+        var input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'paymentMethodId';
+        input.value = result.setupIntent.payment_method;
+        form.appendChild(input);
+        document.body.appendChild(form);
+        form.submit();
+      } catch (err) {
+        errorBox.textContent = err.message;
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Save card';
+      }
+    });
+  </script>
+</body>
+</html>

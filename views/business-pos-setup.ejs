@@ -1,0 +1,245 @@
+<!-- views/business-pos-setup.ejs -->
+<!-- Dark reskin of views/pos-setup.ejs's content. Same computePosSetupData()
+     locals (see GET /account/business/pos in routes/account-business.js).
+     Connect links carry ?next=/account/business/pos so the OAuth callback
+     (routes/oauth-{square,clover,lightspeed,shopify}.js) lands back here
+     instead of the real dashboard -- see lib/posReturnPath.js. Disconnect
+     forms post to the same shared route as pos-setup.ejs
+     (POST /dashboard/settings/account/disconnect-pos) with
+     redirectTo=/account/business/pos. Puck-assignment dropdowns call the
+     exact same JSON endpoints pos-setup.ejs's own JS does
+     (/dashboard/pos-setup/assign, assign-clover, assign-lightspeed,
+     assign-shopify) -- those were already provider-agnostic with no
+     hardcoded redirect, so nothing needed to change there. -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>POS Connection - ReceipTap Business</title>
+  <link rel="stylesheet" href="/css/receiptap.css" />
+  <%- include('partials/wallet-dark-theme') %>
+  <style>
+    .biz-header { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+    .panel { padding: 18px; margin-bottom: 16px; }
+    .panel h2 { font-size: 15px; margin: 0 0 4px; }
+    .panel-sub { font-size: 12.5px; color: var(--w-ink-soft); margin: 0 0 14px; line-height: 1.5; }
+    .banner { padding: 11px 14px; border-radius: 10px; font-size: 13px; margin-bottom: 16px; }
+    .banner.error { background: rgba(255,69,58,0.12); border: 1px solid rgba(255,69,58,0.35); color: var(--w-danger); }
+
+    .connect-btn {
+      display: inline-flex; align-items: center; justify-content: center; background: var(--w-accent); color: #fff;
+      border: none; border-radius: 999px; padding: 12px 20px; font-size: 13.5px; font-weight: 700;
+      text-decoration: none; cursor: pointer; font-family: inherit;
+    }
+    .guide-link { display: block; margin-top: 10px; font-size: 12.5px; color: var(--w-accent); text-decoration: none; font-weight: 600; }
+
+    .connected-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 14px; }
+    .connected-badge { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; color: var(--w-accent); }
+    .disconnect-btn { background: none; border: 1px solid rgba(255,69,58,0.35); color: var(--w-danger); border-radius: 999px; padding: 7px 14px; font-size: 12px; font-weight: 700; cursor: pointer; font-family: inherit; white-space: nowrap; }
+
+    .assign-hint { font-size: 12.5px; color: var(--w-ink-soft); margin-bottom: 12px; }
+    .location-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--w-line); }
+    .location-row:last-child { border-bottom: none; }
+    .location-name { font-size: 13.5px; font-weight: 600; }
+    .location-addr { font-size: 11.5px; color: var(--w-ink-soft); margin-top: 2px; }
+    .location-row select {
+      background: var(--w-card-raised); border: 1px solid var(--w-line); color: var(--w-ink);
+      border-radius: 8px; padding: 7px 10px; font-size: 13px; font-family: inherit; max-width: 150px;
+    }
+
+    .shopify-form { display: flex; gap: 8px; margin-top: 4px; }
+    .shopify-form input {
+      flex: 1; min-width: 0; background: var(--w-card-raised); border: 1px solid var(--w-line); color: var(--w-ink);
+      border-radius: 10px; padding: 11px 13px; font-size: 13.5px; font-family: inherit;
+    }
+  </style>
+</head>
+<body>
+  <div class="w-shell">
+    <div class="biz-header">
+      <a href="/account/business/more" class="w-btn-icon" aria-label="Back">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      </a>
+      <div>
+        <div class="w-eyebrow">Business</div>
+        <h1 class="w-title" style="font-size:20px;">POS connection</h1>
+      </div>
+    </div>
+
+    <% if (posError) { %><div class="banner error"><%= posError %></div><% } %>
+
+    <!-- Square -->
+    <div class="w-card panel">
+      <h2>Square</h2>
+      <% if (!connected) { %>
+        <p class="panel-sub">Connect your Square account so ReceipTap can automatically generate receipts from your sales.</p>
+        <a class="connect-btn" href="/oauth/square/connect?next=/account/business/pos">Connect Square</a>
+        <a class="guide-link" href="/account/business/pos/guide/square">How to connect &amp; assign a puck &rarr;</a>
+      <% } else { %>
+        <div class="connected-row">
+          <div class="connected-badge">✓ Square connected</div>
+          <form method="POST" action="/dashboard/settings/account/disconnect-pos" onsubmit="return confirm('Disconnect this POS? Its sales will stop generating receipts until you reconnect.');">
+            <input type="hidden" name="provider" value="square" />
+            <input type="hidden" name="redirectTo" value="/account/business/pos" />
+            <button type="submit" class="disconnect-btn">Disconnect</button>
+          </form>
+        </div>
+        <div class="assign-hint">Assign a ReceipTap puck to each register:</div>
+        <% locations.forEach(function(loc) { %>
+          <div class="location-row">
+            <div>
+              <div class="location-name"><%= loc.name %></div>
+              <% if (loc.address && loc.address.address_line_1) { %><div class="location-addr"><%= loc.address.address_line_1 %></div><% } %>
+            </div>
+            <select onchange="assignPuck('<%= loc.id %>', this.value)">
+              <option value="">Select a puck…</option>
+              <% pucks.forEach(function(p) { %>
+                <option value="<%= p.id %>" <%= p.posLocationId === loc.id ? 'selected' : '' %>><%= p.id.slice(0, 4).toUpperCase() %></option>
+              <% }); %>
+            </select>
+          </div>
+        <% }); %>
+      <% } %>
+    </div>
+
+    <!-- Clover -->
+    <div class="w-card panel">
+      <h2>Clover</h2>
+      <% if (!cloverConnected) { %>
+        <p class="panel-sub">Connect your Clover account so ReceipTap can automatically generate receipts from your sales.</p>
+        <a class="connect-btn" href="/oauth/clover/connect?next=/account/business/pos">Connect Clover</a>
+        <a class="guide-link" href="/account/business/pos/guide/clover">How to connect &amp; assign a puck &rarr;</a>
+      <% } else { %>
+        <div class="connected-row">
+          <div class="connected-badge">✓ Clover connected</div>
+          <form method="POST" action="/dashboard/settings/account/disconnect-pos" onsubmit="return confirm('Disconnect this POS? Its sales will stop generating receipts until you reconnect.');">
+            <input type="hidden" name="provider" value="clover" />
+            <input type="hidden" name="redirectTo" value="/account/business/pos" />
+            <button type="submit" class="disconnect-btn">Disconnect</button>
+          </form>
+        </div>
+        <div class="assign-hint">A Clover connection is one store, so just assign a puck to it:</div>
+        <div class="location-row">
+          <div class="location-name">Register</div>
+          <select onchange="assignCloverPuck(this.value)">
+            <option value="">Select a puck…</option>
+            <% pucks.forEach(function(p) { %>
+              <option value="<%= p.id %>" <%= p.posLocationId === cloverMerchantId ? 'selected' : '' %>><%= p.id.slice(0, 4).toUpperCase() %></option>
+            <% }); %>
+          </select>
+        </div>
+      <% } %>
+    </div>
+
+    <!-- Lightspeed -->
+    <div class="w-card panel">
+      <h2>Lightspeed</h2>
+      <% if (!lightspeedConnected) { %>
+        <p class="panel-sub">Connect your Lightspeed Retail account so ReceipTap can automatically generate receipts from your sales.</p>
+        <a class="connect-btn" href="/oauth/lightspeed/connect?next=/account/business/pos">Connect Lightspeed</a>
+        <a class="guide-link" href="/account/business/pos/guide/lightspeed">How to connect &amp; assign a puck &rarr;</a>
+      <% } else { %>
+        <div class="connected-row">
+          <div class="connected-badge">✓ Lightspeed connected</div>
+          <form method="POST" action="/dashboard/settings/account/disconnect-pos" onsubmit="return confirm('Disconnect this POS? Its sales will stop generating receipts until you reconnect.');">
+            <input type="hidden" name="provider" value="lightspeed" />
+            <input type="hidden" name="redirectTo" value="/account/business/pos" />
+            <button type="submit" class="disconnect-btn">Disconnect</button>
+          </form>
+        </div>
+        <div class="assign-hint">A Lightspeed connection is one store, so just assign a puck to it:</div>
+        <div class="location-row">
+          <div class="location-name">Register</div>
+          <select onchange="assignLightspeedPuck(this.value)">
+            <option value="">Select a puck…</option>
+            <% pucks.forEach(function(p) { %>
+              <option value="<%= p.id %>" <%= p.posLocationId === lightspeedDomainPrefix ? 'selected' : '' %>><%= p.id.slice(0, 4).toUpperCase() %></option>
+            <% }); %>
+          </select>
+        </div>
+      <% } %>
+    </div>
+
+    <!-- Shopify -->
+    <div class="w-card panel">
+      <h2>Shopify</h2>
+      <% if (!shopifyConnected) { %>
+        <p class="panel-sub">Connect your Shopify POS account so ReceipTap can automatically generate receipts from in-person sales.</p>
+        <form class="shopify-form" onsubmit="event.preventDefault(); connectShopify();">
+          <input type="text" id="shopify-domain" placeholder="yourstorename.myshopify.com" />
+          <button type="submit" class="connect-btn">Connect</button>
+        </form>
+        <a class="guide-link" href="/account/business/pos/guide/shopify">How to connect &amp; assign a puck &rarr;</a>
+      <% } else { %>
+        <div class="connected-row">
+          <div class="connected-badge">✓ Shopify connected (<%= shopifyShopDomain %>)</div>
+          <form method="POST" action="/dashboard/settings/account/disconnect-pos" onsubmit="return confirm('Disconnect this POS? Its sales will stop generating receipts until you reconnect.');">
+            <input type="hidden" name="provider" value="shopify" />
+            <input type="hidden" name="redirectTo" value="/account/business/pos" />
+            <button type="submit" class="disconnect-btn">Disconnect</button>
+          </form>
+        </div>
+        <div class="assign-hint">A Shopify connection is one store, so just assign a puck to it:</div>
+        <div class="location-row">
+          <div class="location-name">Register</div>
+          <select onchange="assignShopifyPuck(this.value)">
+            <option value="">Select a puck…</option>
+            <% pucks.forEach(function(p) { %>
+              <option value="<%= p.id %>" <%= p.posLocationId === shopifyShopDomain ? 'selected' : '' %>><%= p.id.slice(0, 4).toUpperCase() %></option>
+            <% }); %>
+          </select>
+        </div>
+      <% } %>
+    </div>
+  </div>
+
+  <script>
+    function connectShopify() {
+      var domain = document.getElementById('shopify-domain').value.trim().toLowerCase();
+      if (!domain) return;
+      window.location.href = '/oauth/shopify/connect?shop=' + encodeURIComponent(domain) + '&next=' + encodeURIComponent('/account/business/pos');
+    }
+
+    async function assignPuck(locationId, puckId) {
+      if (!puckId) return;
+      await fetch('/dashboard/pos-setup/assign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ puckId, locationId }),
+      });
+      alert('Puck assigned to this register.');
+    }
+
+    async function assignCloverPuck(puckId) {
+      if (!puckId) return;
+      await fetch('/dashboard/pos-setup/assign-clover', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ puckId }),
+      });
+      alert('Puck assigned to your Clover store.');
+    }
+
+    async function assignLightspeedPuck(puckId) {
+      if (!puckId) return;
+      await fetch('/dashboard/pos-setup/assign-lightspeed', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ puckId }),
+      });
+      alert('Puck assigned to your Lightspeed store.');
+    }
+
+    async function assignShopifyPuck(puckId) {
+      if (!puckId) return;
+      await fetch('/dashboard/pos-setup/assign-shopify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ puckId }),
+      });
+      alert('Puck assigned to your Shopify store.');
+    }
+  </script>
+</body>
+</html>

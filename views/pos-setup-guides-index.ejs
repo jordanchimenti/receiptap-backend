@@ -1,0 +1,62 @@
+<!-- views/pos-setup-guides-index.ejs -->
+<!-- Searchable index of the per-provider setup guides. locals: providers
+     (array of { key, providerName }), built from routes/oauth-square.js's
+     POS_SETUP_GUIDES rather than hardcoded here. -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>POS Setup Guides</title>
+  <style>
+    .guide-search { width: 100%; max-width: 420px; padding: 12px 16px; border: 1px solid #E4E0D6; border-radius: 10px; font-size: 15px; margin-bottom: 24px; font-family: inherit; }
+    .guide-list { display: flex; flex-direction: column; gap: 10px; max-width: 640px; }
+    .guide-card { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; background: #fff; border: 1px solid #E4E0D6; border-radius: 12px; text-decoration: none; color: inherit; }
+    .guide-card:hover { border-color: #056BFE; }
+    .guide-card-name { font-weight: 600; font-size: 16px; }
+    .guide-card-arrow { color: #056BFE; font-weight: 600; font-size: 14px; }
+    .guide-empty { display: none; color: #5C5A54; padding: 12px 0; }
+  </style>
+</head>
+<body>
+  <%- include('partials/dashboard-header', { activeNav: 'guides' }) %>
+
+  <div class="topbar">
+    <div>
+      <h1>POS Setup Guides</h1>
+    </div>
+  </div>
+
+  <div class="app-body">
+    <p>Search for your point-of-sale provider for a detailed, step-by-step walkthrough — with screenshots — for connecting it and assigning a puck.</p>
+
+    <input type="text" id="guide-search" class="guide-search" placeholder="Search your POS provider..." autocomplete="off" />
+
+    <div class="guide-list" id="guide-list">
+      <% providers.forEach(function(p) { %>
+        <a class="guide-card" data-name="<%= p.providerName.toLowerCase() %>" href="/dashboard/pos-setup/guide/<%= p.key %>">
+          <span class="guide-card-name"><%= p.providerName %></span>
+          <span class="guide-card-arrow">View guide &rarr;</span>
+        </a>
+      <% }); %>
+    </div>
+    <p class="guide-empty" id="guide-empty">No POS provider matches that search.</p>
+  </div>
+
+  <script>
+    const searchInput = document.getElementById('guide-search');
+    const cards = Array.from(document.querySelectorAll('.guide-card'));
+    const emptyState = document.getElementById('guide-empty');
+
+    searchInput.addEventListener('input', function () {
+      const query = searchInput.value.trim().toLowerCase();
+      let visibleCount = 0;
+      cards.forEach(function (card) {
+        const isMatch = card.dataset.name.includes(query);
+        card.style.display = isMatch ? '' : 'none';
+        if (isMatch) visibleCount++;
+      });
+      emptyState.style.display = visibleCount === 0 ? 'block' : 'none';
+    });
+  </script>
+</body>
+</html>

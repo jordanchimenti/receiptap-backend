@@ -8,7 +8,7 @@
     .connect-btn { display: inline-block; background: #111; color: #fff; padding: 12px 20px; border-radius: 8px; text-decoration: none; font-weight: 600; margin-top: 12px; }
     .location-row { display: flex; justify-content: space-between; align-items: center; padding: 14px; background: #f9fafb; border-radius: 8px; margin-bottom: 8px; }
     select { padding: 6px 10px; border-radius: 6px; border: 1px solid #ddd; }
-    .connected-badge { color: #059669; font-weight: 600; font-size: 13px; }
+    .connected-badge { color: #0350BE; font-weight: 600; font-size: 13px; }
     .connected-row { display: flex; align-items: center; gap: 12px; }
     .disconnect-btn { background: none; border: none; color: #dc2626; font-size: 13px; font-weight: 600; cursor: pointer; padding: 0; text-decoration: underline; }
   </style>
@@ -28,7 +28,7 @@
   <% if (!connected) { %>
     <p>Connect your Square account so ReceipTap can automatically generate receipts from your sales.</p>
     <a class="connect-btn" href="/oauth/square/connect">Connect Square</a>
-    <p><a href="/dashboard/pos-setup/guide#square">How to connect &amp; assign a puck &rarr;</a></p>
+    <p><a href="/dashboard/pos-setup/guide/square">How to connect &amp; assign a puck &rarr;</a></p>
   <% } else { %>
     <div class="connected-row">
       <div class="connected-badge">✅ Square Connected</div>
@@ -53,7 +53,7 @@
   <% if (!cloverConnected) { %>
     <p>Connect your Clover account so ReceipTap can automatically generate receipts from your sales.</p>
     <a class="connect-btn" href="/oauth/clover/connect">Connect Clover</a>
-    <p><a href="/dashboard/pos-setup/guide#clover">How to connect &amp; assign a puck &rarr;</a></p>
+    <p><a href="/dashboard/pos-setup/guide/clover">How to connect &amp; assign a puck &rarr;</a></p>
   <% } else { %>
     <div class="connected-row">
       <div class="connected-badge">✅ Clover Connected</div>
@@ -76,7 +76,7 @@
   <% if (!lightspeedConnected) { %>
     <p>Connect your Lightspeed Retail account so ReceipTap can automatically generate receipts from your sales.</p>
     <a class="connect-btn" href="/oauth/lightspeed/connect">Connect Lightspeed</a>
-    <p><a href="/dashboard/pos-setup/guide#lightspeed">How to connect &amp; assign a puck &rarr;</a></p>
+    <p><a href="/dashboard/pos-setup/guide/lightspeed">How to connect &amp; assign a puck &rarr;</a></p>
   <% } else { %>
     <div class="connected-row">
       <div class="connected-badge">✅ Lightspeed Connected</div>
@@ -102,7 +102,7 @@
       <input type="text" id="shopify-domain" placeholder="yourstorename.myshopify.com" style="padding:8px 12px; border-radius:6px; border:1px solid #ddd; min-width:260px;" />
       <button type="submit" class="connect-btn" style="margin-top:0;">Connect Shopify</button>
     </form>
-    <p><a href="/dashboard/pos-setup/guide#shopify">How to connect &amp; assign a puck &rarr;</a></p>
+    <p><a href="/dashboard/pos-setup/guide/shopify">How to connect &amp; assign a puck &rarr;</a></p>
   <% } else { %>
     <div class="connected-row">
       <div class="connected-badge">✅ Shopify Connected (<%= shopifyShopDomain %>)</div>

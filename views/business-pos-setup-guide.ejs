@@ -1,0 +1,68 @@
+<!-- views/business-pos-setup-guide.ejs -->
+<!-- Dark reskin of views/pos-setup-guide.ejs. Same locals (providerName,
+     steps: array of { text, image } -- image optional, note: optional
+     string), from computeGuideData() in routes/oauth-square.js -- see
+     GET /account/business/pos/guide/:provider in routes/account-business.js.
+
+     The screenshots baked into each step (POS_SETUP_GUIDES' image paths,
+     routes/oauth-square.js) are captures of the real navy-rail dashboard's
+     UI, not this dark theme -- a small note below flags that so it doesn't
+     read as a mismatch/bug. Retaking them against the dark theme is real
+     follow-up work, not done here. -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title><%= providerName %> Setup Guide - ReceipTap Business</title>
+  <link rel="stylesheet" href="/css/receiptap.css" />
+  <%- include('partials/wallet-dark-theme') %>
+  <style>
+    .biz-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+    .guide-note {
+      font-size: 12px; color: var(--w-ink-soft); line-height: 1.5; background: var(--w-card-raised);
+      border: 1px solid var(--w-line); border-radius: 10px; padding: 10px 12px; margin-bottom: 18px;
+    }
+    .guide-steps { padding: 6px 0; }
+    .guide-step { display: flex; gap: 14px; padding: 16px 18px; border-bottom: 1px solid var(--w-line); }
+    .guide-step:last-child { border-bottom: none; }
+    .guide-step-num {
+      width: 26px; height: 26px; border-radius: 50%; background: var(--w-accent-wash); color: var(--w-accent);
+      display: flex; align-items: center; justify-content: center; font-size: 12.5px; font-weight: 700; flex-shrink: 0;
+    }
+    .guide-step-body { flex: 1; min-width: 0; }
+    .guide-step-text { font-size: 13.5px; line-height: 1.55; }
+    .guide-step-text a { color: var(--w-accent); }
+    .guide-screenshot { display: block; max-width: 100%; margin-top: 10px; border: 1px solid var(--w-line); border-radius: 10px; }
+    .guide-footer-note { font-size: 12.5px; color: var(--w-ink-soft); line-height: 1.6; margin-top: 16px; }
+  </style>
+</head>
+<body>
+  <div class="w-shell">
+    <div class="biz-header">
+      <a href="/account/business/pos/guides" class="w-btn-icon" aria-label="Back">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      </a>
+      <div>
+        <div class="w-eyebrow">Business</div>
+        <h1 class="w-title" style="font-size:20px;"><%= providerName %> setup</h1>
+      </div>
+    </div>
+
+    <div class="guide-note">Screenshots below are from the classic dashboard — the steps themselves are still accurate for this view.</div>
+
+    <div class="w-card guide-steps">
+      <% steps.forEach(function(step, i) { %>
+        <div class="guide-step">
+          <div class="guide-step-num"><%= i + 1 %></div>
+          <div class="guide-step-body">
+            <div class="guide-step-text"><%- step.text %></div>
+            <% if (step.image) { %><img class="guide-screenshot" src="<%= step.image %>" alt="" /><% } %>
+          </div>
+        </div>
+      <% }); %>
+    </div>
+    <% if (note) { %><p class="guide-footer-note"><%- note %></p><% } %>
+  </div>
+</body>
+</html>

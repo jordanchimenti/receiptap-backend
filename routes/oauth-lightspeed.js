@@ -10,6 +10,7 @@ const express = require('express');
 const router = express.Router();
 const prisma = require('../lib/prisma');
 const { LIGHTSPEED_AUTH_BASE_URL, LIGHTSPEED_SCOPES, exchangeCodeForToken, createWebhookSubscription } = require('../services/lightspeedService');
+const { posReturnPath } = require('../lib/posReturnPath');
 
 function requireAuth(req, res, next) {
   if (!req.session?.merchantId) return res.redirect('/login');
@@ -24,7 +25,9 @@ router.get('/oauth/lightspeed/connect', requireAuth, (req, res) => {
     client_id: process.env.LIGHTSPEED_CLIENT_ID,
     redirect_uri: redirectUri,
     scope: LIGHTSPEED_SCOPES,
-    state: req.session.merchantId, // ties the callback back to the right merchant
+    // Round-tripped back on the callback below to know where to send the
+    // merchant afterward -- see the identical comment in oauth-square.js.
+    state: posReturnPath(req.query.next),
   });
   res.redirect(`${LIGHTSPEED_AUTH_BASE_URL}/connect?${params}`);
 });
@@ -35,7 +38,7 @@ router.get('/oauth/lightspeed/connect', requireAuth, (req, res) => {
 // and every subsequent API call is made against that retailer's own
 // subdomain).
 router.get('/oauth/lightspeed/callback', requireAuth, async (req, res) => {
-  const { code, domain_prefix: domainPrefix } = req.query;
+  const { code, domain_prefix: domainPrefix, state } = req.query;
   if (!code || !domainPrefix) return res.status(400).send('Missing authorization code from Lightspeed');
 
   const redirectUri = `${req.protocol}://${req.get('host')}/oauth/lightspeed/callback`;
@@ -72,7 +75,7 @@ router.get('/oauth/lightspeed/callback', requireAuth, async (req, res) => {
     console.error('Lightspeed webhook subscription failed:', err.message);
   }
 
-  res.redirect('/dashboard/pos-setup');
+  res.redirect(posReturnPath(state));
 });
 
 // A Lightspeed (X-Series) connection IS one retailer -- no picker needed,

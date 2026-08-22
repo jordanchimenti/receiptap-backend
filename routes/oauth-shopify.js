@@ -17,6 +17,7 @@ const {
   exchangeCodeForToken,
   createWebhookSubscription,
 } = require('../services/shopifyService');
+const { posReturnPath } = require('../lib/posReturnPath');
 
 function requireAuth(req, res, next) {
   if (!req.session?.merchantId) return res.redirect('/login');
@@ -32,14 +33,19 @@ router.get('/oauth/shopify/connect', requireAuth, (req, res) => {
   }
 
   const redirectUri = `${req.protocol}://${req.get('host')}/oauth/shopify/callback`;
-  res.redirect(buildAuthorizeUrl(shop, redirectUri, req.session.merchantId));
+  // Round-tripped back on the callback below to know where to send the
+  // merchant afterward -- see the identical comment in oauth-square.js.
+  // Shopify's own HMAC signature (verifyOAuthCallback below) covers this
+  // value too, same as every other query param it echoes back, so
+  // repurposing it doesn't weaken that check.
+  res.redirect(buildAuthorizeUrl(shop, redirectUri, posReturnPath(req.query.next)));
 });
 
 // Step 2: Shopify redirects back here with a temporary code AND the shop
 // domain directly -- the shop IS the identity, same role as Lightspeed's
 // domain prefix.
 router.get('/oauth/shopify/callback', requireAuth, async (req, res) => {
-  const { code, shop } = req.query;
+  const { code, shop, state } = req.query;
   if (!code || !isValidShopDomain(shop)) return res.status(400).send('Missing or invalid shop from Shopify');
   if (!verifyOAuthCallback(req.query)) return res.status(400).send('Could not verify this request came from Shopify');
 
@@ -71,7 +77,7 @@ router.get('/oauth/shopify/callback', requireAuth, async (req, res) => {
     console.error('Shopify webhook subscription failed:', err.message);
   }
 
-  res.redirect('/dashboard/pos-setup');
+  res.redirect(posReturnPath(state));
 });
 
 // A Shopify connection is treated as one location for now -- same

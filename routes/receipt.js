@@ -35,7 +35,16 @@ router.get('/receipt/:transactionId', async (req, res) => {
   // stop the receipt rendering, which is the thing the customer is waiting for.
   if (!isMerchantCopy && req.session.customerId) {
     try {
-      await claimReceiptForShopper(transaction.id, req.session.customerId);
+      // Opt-out, not opt-in: on by default because it's what the modal
+      // promises, but a shopper who turned it off in Settings gets the old
+      // behaviour -- nothing saves until they press Save.
+      const shopper = await prisma.customer.findUnique({
+        where: { id: req.session.customerId },
+        select: { autoSaveOnTap: true },
+      });
+      if (shopper?.autoSaveOnTap) {
+        await claimReceiptForShopper(transaction.id, req.session.customerId);
+      }
     } catch (err) {
       console.error('[receipt] auto-claim on view failed (receipt still shown):', err.message);
     }

@@ -505,6 +505,17 @@ model Customer {
   // later receipt from a different merchant doesn't overwrite it.
   // Attribution expires REFERRAL_WINDOW_DAYS after the timestamp below
   // (lib/referralAttribution.js); the row is kept for history either way.
+  // Whether tapping a puck while signed in saves the receipt on its own.
+  // Defaults on, because that's what the save modal has always promised --
+  // but a shopper who'd rather decide receipt by receipt can turn it off, and
+  // then the Save button behaves exactly as it used to.
+  //
+  // Distinct from cross-merchant card recognition (ShopperIdentifier): this
+  // one is about a receipt they DID tap for on this device, and needs no
+  // identity matching. The two are separate switches because they're separate
+  // decisions, and someone may reasonably want one without the other.
+  autoSaveOnTap Boolean @default(true)
+
   referredByAffiliateId String?
   referredByAffiliate   Affiliate? @relation("CustomerReferrals", fields: [referredByAffiliateId], references: [id])
   referralAttributedAt  DateTime?

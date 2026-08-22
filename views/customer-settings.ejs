@@ -14,6 +14,20 @@
   <style>
     .settings-header { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
     .settings-card { padding: 20px; margin-bottom: 18px; }
+    .pref-row { display: flex; align-items: center; gap: 12px; }
+    .pref-row label { flex: 1; font-size: 13.5px; font-weight: 500; color: var(--w-ink); cursor: pointer; }
+    .sw { position: relative; flex: none; width: 44px; height: 26px; }
+    .sw input {
+      appearance: none; -webkit-appearance: none; margin: 0; cursor: pointer;
+      width: 44px; height: 26px; border-radius: 999px; background: #3a3a3a; border: none;
+      transition: background 0.18s ease;
+    }
+    .sw input:checked { background: var(--w-accent); }
+    .sw input::after {
+      content: ''; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px;
+      border-radius: 50%; background: #fff; transition: transform 0.18s ease;
+    }
+    .sw input:checked::after { transform: translateX(18px); }
     .recognition-list { list-style: none; margin: 0 0 14px; padding: 0; }
     .recognition-list li {
       display: flex; align-items: center; justify-content: space-between; gap: 12px;
@@ -76,6 +90,25 @@
       </form>
     </div>
 
+    <%# Saving receipts. Sits above Card recognition because it applies to
+        every shopper on every POS, while recognition is Square-only and only
+        appears once a link exists. %>
+    <div class="w-card settings-card">
+      <h2>Saving receipts</h2>
+      <p class="sub">
+        When you tap a ReceipTap and you're signed in, the receipt saves to your wallet on its own.
+        Turn this off if you'd rather choose each time with the Save button.
+      </p>
+      <% if (autoSaveSuccess) { %><div class="success-note">Saved.</div><% } %>
+      <form method="POST" action="/account/settings/auto-save" style="margin:0;">
+        <div class="pref-row">
+          <label for="autoSaveOnTap">Save receipts when I tap</label>
+          <span class="sw"><input type="checkbox" id="autoSaveOnTap" name="autoSaveOnTap" <%= customer.autoSaveOnTap ? 'checked' : '' %> /></span>
+        </div>
+        <button type="submit" class="w-btn" style="margin-top:14px;">Save preference</button>
+      </form>
+    </div>
+
     <%# Cross-merchant recognition. Shown only when a link actually exists --
         a shopper who has never consented shouldn't be told about a feature
         that isn't touching them. Never renders the hash itself. %>
@@ -83,8 +116,9 @@
       <div class="w-card settings-card">
         <h2>Card recognition</h2>
         <p class="sub">
-          Your receipts save automatically when you pay at another ReceipTap business with the same
-          card — no tapping. We match a code your card issuer gives us, never your card number.
+          Different from the switch above: that one saves a receipt you tapped for. This one saves it
+          when you pay at another ReceipTap business with the same card, without tapping at all. We
+          match a code your card issuer gives us, never your card number.
         </p>
         <% if (recognitionRevoked) { %><div class="success-note">Card recognition is off.</div><% } %>
         <ul class="recognition-list">

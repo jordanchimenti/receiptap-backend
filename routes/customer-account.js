@@ -673,12 +673,24 @@ router.get('/account/settings', requireCustomerAuth, async (req, res) => {
   res.render('customer-settings', {
     customer,
     recognitionLinks,
+    autoSaveSuccess: req.query.autoSaveSuccess === '1',
     profileError: req.query.profileError || null,
     profileSuccess: req.query.profileSuccess === '1',
     passwordError: req.query.passwordError || null,
     passwordSuccess: req.query.passwordSuccess === '1',
     recognitionRevoked: req.query.recognitionRevoked === '1',
   });
+});
+
+// POST /account/settings/auto-save — the shopper choosing whether tapping a
+// puck saves the receipt by itself. Posted from a form rather than toggled
+// live, so the stored value always matches what they last confirmed.
+router.post('/account/settings/auto-save', requireCustomerAuth, async (req, res) => {
+  await prisma.customer.update({
+    where: { id: req.session.customerId },
+    data: { autoSaveOnTap: req.body.autoSaveOnTap === 'on' },
+  });
+  res.redirect('/account/settings?autoSaveSuccess=1');
 });
 
 // POST /account/settings/recognition/revoke — the shopper turning off

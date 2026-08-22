@@ -6,67 +6,198 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Log In - ReceipTap</title>
   <link rel="stylesheet" href="/css/receiptap.css" />
+  <style>
+    /* Dark pill-button design, matching the customer wallet login
+       (views/account-login.ejs) -- kept self-contained here rather than
+       pulling in views/partials/wallet-dark-theme.ejs, since that partial
+       is documented as customer-wallet-pages-only and this is a merchant
+       page borrowing the same look, not becoming a wallet page. */
+    :root {
+      --ml-bg: #0a0a0a;
+      --ml-card: #161616;
+      --ml-card-raised: #1c1c1c;
+      --ml-line: #2a2a2a;
+      --ml-ink: #ffffff;
+      --ml-ink-soft: #8d8d8d;
+      --ml-accent: #056BFE;
+      --ml-accent-deep: #0350BE;
+      --ml-danger: #ff453a;
+    }
+    body { background: var(--ml-bg); color: var(--ml-ink); font-family: var(--font-body); margin: 0; }
+    .auth-shell { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+    .auth-card { width: 100%; max-width: 380px; background: var(--ml-card); border: 1px solid var(--ml-line); border-radius: 20px; padding: 36px 30px; text-align: center; }
+    .auth-title { font-family: var(--font-display); font-size: 24px; font-weight: 700; margin: 4px 0 6px; color: var(--ml-ink); }
+    .auth-sub { font-size: 13.5px; color: var(--ml-ink-soft); margin: 0 0 24px; line-height: 1.5; }
+    .auth-field { text-align: left; margin-bottom: 16px; }
+    .auth-field-row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
+    .auth-field label { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ml-ink-soft); }
+    .auth-field a { font-size: 12.5px; font-weight: 600; color: var(--ml-accent); text-decoration: none; }
+    .auth-input-wrap { position: relative; }
+    .auth-field input {
+      width: 100%; box-sizing: border-box; background: var(--ml-card-raised); border: 1px solid var(--ml-line);
+      color: var(--ml-ink); border-radius: 12px; padding: 13px 16px; font-size: 15px; font-family: inherit;
+    }
+    .auth-field input:focus { outline: 2px solid var(--ml-accent); outline-offset: 1px; border-color: var(--ml-accent); }
+    .pw-toggle {
+      position: absolute; right: 4px; top: 50%; transform: translateY(-50%); background: none; border: none;
+      color: var(--ml-ink-soft); cursor: pointer; padding: 8px; display: flex;
+    }
+    .consent-row { display: flex; align-items: flex-start; gap: 8px; text-align: left; margin: 6px 0 18px; }
+    .consent-row input[type="checkbox"] { margin-top: 3px; flex-shrink: 0; }
+    .consent-row label { font-size: 12.5px; color: var(--ml-ink-soft); line-height: 1.45; font-weight: 400; }
+    .consent-row label a { color: var(--ml-accent); font-weight: 600; text-decoration: none; }
+    .auth-pill-btn {
+      display: block; width: 100%; box-sizing: border-box; background: var(--ml-accent); color: #fff; border: none;
+      border-radius: 999px; padding: 14px 20px; font-size: 15px; font-weight: 700; cursor: pointer; font-family: inherit;
+      margin-bottom: 22px;
+    }
+    .auth-pill-btn:hover { background: var(--ml-accent-deep); }
+    .auth-divider { display: flex; align-items: center; gap: 10px; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ml-ink-soft); margin-bottom: 16px; }
+    .auth-divider span.line { flex: 1; height: 1px; background: var(--ml-line); }
+    .auth-oauth-btn {
+      display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; box-sizing: border-box;
+      padding: 12px 16px; border-radius: 999px; font-size: 14.5px; font-weight: 600; text-decoration: none;
+      border: 1px solid var(--ml-line); margin-bottom: 10px; cursor: pointer; font-family: inherit;
+    }
+    .auth-oauth-btn.apple { background: #000; color: #fff; border-color: #000; }
+    .auth-oauth-btn.microsoft { background: var(--ml-card-raised); color: var(--ml-ink); }
+    #google-signin-btn { display: flex; justify-content: center; margin-bottom: 10px; }
+    .auth-error {
+      background: rgba(255, 69, 58, 0.12); border: 1px solid rgba(255, 69, 58, 0.35); color: var(--ml-danger);
+      border-radius: 10px; padding: 11px 14px; font-size: 13.5px; margin-bottom: 16px; text-align: left;
+    }
+    /* The logo's "Receip" wordmark is dark navy, meant for a light
+       background -- same paper-toned chip already used on the customer
+       login page so it stays legible here. */
+    .logo-chip { display: inline-block; background: var(--paper); border-radius: 12px; padding: 10px 18px; margin-bottom: 22px; }
+    .logo-chip img { display: block; height: 32px; }
+  </style>
 </head>
 <body>
-  <div class="centered-shell">
+  <div class="auth-shell">
     <div class="auth-card">
-      <img src="/images/receiptap-logo.png" alt="ReceipTap" style="height: 60px; margin-bottom: 20px;" />
-      <h1 style="font-size: 22px; margin-bottom: 6px;">Log in to ReceipTap</h1>
-      <p style="font-size: 13.5px; color: var(--ink-soft); margin: 8px 0 24px; line-height: 1.5;">
-        Manage your receipts, POS connections, and locations.
-      </p>
+      <div class="logo-chip"><img src="/images/receiptap-logo.png" alt="ReceipTap" /></div>
+      <h1 class="auth-title">Log in to ReceipTap</h1>
+      <p class="auth-sub">Manage your receipts, POS connections, and locations.</p>
 
-      <div class="error-box" id="error-box" style="<%= error ? '' : 'display: none;' %>"><%= error %></div>
+      <div class="auth-error" id="error-box" style="<%= error ? '' : 'display: none;' %>"><%= error %></div>
       <% if (typeof deactivated !== 'undefined' && deactivated) { %>
-        <div class="error-box" style="color: var(--ink-soft); background: var(--paper);">Your account has been deactivated. Contact support if this was a mistake.</div>
-      <% } %>
-
-      <% if (googleClientId) { %>
-        <div id="google-signin-btn" style="display: flex; justify-content: center; margin-bottom: 14px;"></div>
-        <div style="display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--ink-soft); margin: 14px 0;">
-          <span style="flex: 1; height: 1px; background: var(--line);"></span>
-          or
-          <span style="flex: 1; height: 1px; background: var(--line);"></span>
-        </div>
+        <div class="auth-error">Your account has been deactivated. Contact support if this was a mistake.</div>
       <% } %>
 
       <form method="POST" action="/login">
         <input type="hidden" name="redirect" value="<%= redirect %>" />
-        <div class="field">
-          <label for="email">Email</label>
-          <input type="email" id="email" name="email" required autofocus />
+        <div class="auth-field">
+          <div class="auth-field-row"><label for="email">Email</label></div>
+          <input type="email" id="email" name="email" placeholder="you@example.com" required autofocus />
         </div>
-        <div class="field">
-          <label for="password">Password</label>
-          <input type="password" id="password" name="password" required />
+        <div class="auth-field">
+          <div class="auth-field-row">
+            <label for="password">Password</label>
+            <a href="/forgot-password">Forgot password?</a>
+          </div>
+          <div class="auth-input-wrap">
+            <input type="password" id="password" name="password" placeholder="Your password" required />
+            <button type="button" class="pw-toggle" id="pw-toggle" aria-label="Show password">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
         </div>
-        <button type="submit" class="btn btn-primary">Log in</button>
+
+        <div class="consent-row">
+          <input type="checkbox" id="acceptAll" required />
+          <label for="acceptAll">
+            I agree to the <a href="/legal/terms" target="_blank" rel="noopener">Terms of Service</a>, which include the <a href="/legal/dpa" target="_blank" rel="noopener">Data Processing Agreement</a>, and I have read the <a href="/legal/privacy" target="_blank" rel="noopener">Privacy Policy</a>.
+          </label>
+        </div>
+
+        <button type="submit" class="auth-pill-btn">Log in</button>
       </form>
 
-      <p style="font-size: 13px; margin-top: 14px; text-align: center;">
-        <a href="/forgot-password" style="color: var(--teal-deep); font-weight: 600; text-decoration: none;">Forgot password?</a>
-      </p>
+      <% if (googleClientId || appleClientId || microsoftClientId) { %>
+        <div class="auth-divider"><span class="line"></span>Or continue with<span class="line"></span></div>
+      <% } %>
 
-      <p style="font-size: 13px; color: var(--ink-soft); margin-top: 12px; text-align: center;">
-        New here? <a href="/signup" style="color: var(--teal-deep); font-weight: 600; text-decoration: none;">Create a merchant account</a>
+      <% if (googleClientId) { %>
+        <div id="google-signin-btn"></div>
+      <% } %>
+      <% if (appleClientId) { %>
+        <a href="#" onclick="return startOAuth('apple', event)" class="auth-oauth-btn apple">
+          <svg width="16" height="16" viewBox="0 0 384 512" fill="#fff"><path d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 20.7-88.5 20.7-15 0-49.4-19.7-76.4-19.7C63.3 141.2 4 184.8 4 273.5q0 39.3 14.4 81.2c12.8 36.7 59 126.7 107.2 125.2 25.2-.6 43-17.9 75.8-17.9 31.8 0 48.3 17.9 76.4 17.9 48.6-.7 90.4-82.5 102.6-119.3-65.2-30.7-61.7-90-61.7-91.9zm-56.6-164.2c27.3-32.4 24.8-61.9 24-72.5-24.1 1.4-52 16.4-67.9 34.9-17.5 19.8-27.8 44.3-25.6 71.9 26.1 2 49.9-11.4 69.5-34.3z"/></svg>
+          Continue with Apple
+        </a>
+      <% } %>
+      <% if (microsoftClientId) { %>
+        <a href="#" onclick="return startOAuth('microsoft', event)" class="auth-oauth-btn microsoft">
+          <svg width="16" height="16" viewBox="0 0 21 21"><rect x="1" y="1" width="9" height="9" fill="#f25022"/><rect x="11" y="1" width="9" height="9" fill="#7fba00"/><rect x="1" y="11" width="9" height="9" fill="#00a4ef"/><rect x="11" y="11" width="9" height="9" fill="#ffb900"/></svg>
+          Continue with Microsoft
+        </a>
+      <% } %>
+
+      <p style="font-size: 13px; color: var(--ml-ink-soft); margin-top: 18px;">
+        New here? <a href="/signup" style="color: var(--ml-accent); font-weight: 600; text-decoration: none;">Create a merchant account</a>
       </p>
     </div>
   </div>
+
+  <script>
+    const REDIRECT_TO = '<%= redirect %>';
+
+    document.getElementById('pw-toggle').addEventListener('click', () => {
+      const input = document.getElementById('password');
+      input.type = input.type === 'password' ? 'text' : 'password';
+    });
+
+    function consentChecked() {
+      return document.getElementById('acceptAll').checked;
+    }
+
+    function showError(msg) {
+      const el = document.getElementById('error-box');
+      el.textContent = msg;
+      el.style.display = 'block';
+    }
+
+    // Google/Apple/Microsoft can each act as a signup too (a brand-new
+    // merchant who's never created an account can start straight from
+    // this login page) -- the server only enforces the checkbox in that
+    // new-account case (see findOrCreateMerchantFromOAuth in
+    // routes/auth.js), same as the signup page's own OAuth buttons, so
+    // the checkbox has to be read and carried through here too, not just
+    // on /signup.
+    function startOAuth(provider, event) {
+      event.preventDefault();
+      if (!consentChecked()) {
+        showError("Please agree to the Terms of Service (which include the Data Processing Agreement), and confirm you've read the Privacy Policy, first.");
+        return false;
+      }
+      const params = new URLSearchParams({
+        from: 'login',
+        next: REDIRECT_TO,
+        acceptAll: '1',
+      });
+      window.location.href = '/merchant/' + provider + '/connect?' + params;
+      return false;
+    }
+  </script>
 
   <% if (googleClientId) { %>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script>
       async function handleGoogleSignIn(response) {
+        if (!consentChecked()) {
+          showError("Please agree to the Terms of Service (which include the Data Processing Agreement), and confirm you've read the Privacy Policy, first.");
+          return;
+        }
+
         const res = await fetch('/merchant/google', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ credential: response.credential }),
+          body: JSON.stringify({ credential: response.credential, next: REDIRECT_TO, acceptAll: true }),
         });
         const data = await res.json();
         if (!res.ok) {
-          const el = document.getElementById('error-box');
-          el.textContent = data.error || 'Google sign-in failed.';
-          el.style.display = 'block';
+          showError(data.error || 'Google sign-in failed.');
           return;
         }
         window.location.href = data.redirect;
@@ -80,7 +211,7 @@
           });
           google.accounts.id.renderButton(
             document.getElementById('google-signin-btn'),
-            { theme: 'outline', size: 'large', width: 280 }
+            { theme: 'outline', size: 'large', shape: 'pill', width: 320 }
           );
         }
       };

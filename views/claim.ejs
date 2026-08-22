@@ -6,20 +6,62 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Activate Your ReceipTap - ReceipTap</title>
   <link rel="stylesheet" href="/css/receiptap.css" />
+  <style>
+    /* Dark pill-button design, matching views/login.ejs and views/signup.ejs
+       -- self-contained here rather than shared, for the same reason those
+       two are: stays isolated from the light `.auth-card`/`.field` classes
+       still used by the other merchant pages that haven't moved to this
+       look yet (forgot-password, reset-password, affiliate pages, etc). */
+    :root {
+      --ms-bg: #0a0a0a;
+      --ms-card: #161616;
+      --ms-card-raised: #1c1c1c;
+      --ms-line: #2a2a2a;
+      --ms-ink: #ffffff;
+      --ms-ink-soft: #8d8d8d;
+      --ms-accent: #056BFE;
+      --ms-accent-deep: #0350BE;
+      --ms-danger: #ff453a;
+    }
+    body { background: var(--ms-bg); color: var(--ms-ink); font-family: var(--font-body); margin: 0; }
+    .auth-shell { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+    .auth-card { width: 100%; max-width: 380px; background: var(--ms-card); border: 1px solid var(--ms-line); border-radius: 20px; padding: 36px 30px; text-align: center; }
+    .auth-title { font-family: var(--font-display); font-size: 22px; font-weight: 700; margin: 4px 0 6px; color: var(--ms-ink); }
+    .auth-sub { font-size: 13.5px; color: var(--ms-ink-soft); margin: 0 0 24px; line-height: 1.5; }
+    .auth-field { text-align: left; margin-bottom: 16px; }
+    .auth-field label { display: block; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ms-ink-soft); margin-bottom: 6px; }
+    .auth-field input {
+      width: 100%; box-sizing: border-box; background: var(--ms-card-raised); border: 1px solid var(--ms-line);
+      color: var(--ms-ink); border-radius: 12px; padding: 13px 16px; font-size: 15px; font-family: inherit;
+    }
+    .auth-field input:focus { outline: 2px solid var(--ms-accent); outline-offset: 1px; border-color: var(--ms-accent); }
+    .auth-pill-btn {
+      display: block; width: 100%; box-sizing: border-box; background: var(--ms-accent); color: #fff; border: none;
+      border-radius: 999px; padding: 14px 20px; font-size: 15px; font-weight: 700; cursor: pointer; font-family: inherit;
+    }
+    .auth-pill-btn:hover { background: var(--ms-accent-deep); }
+    .auth-error {
+      background: rgba(255, 69, 58, 0.12); border: 1px solid rgba(255, 69, 58, 0.35); color: var(--ms-danger);
+      border-radius: 10px; padding: 11px 14px; font-size: 13.5px; margin-bottom: 16px; text-align: left;
+    }
+    /* The logo's "Receip" wordmark is dark navy, meant for a light
+       background -- same paper-toned chip already used on login.ejs/
+       signup.ejs so it stays legible here. */
+    .logo-chip { display: inline-block; background: var(--paper); border-radius: 12px; padding: 10px 18px; margin-bottom: 22px; }
+    .logo-chip img { display: block; height: 32px; }
+  </style>
 </head>
 <body>
-  <div class="centered-shell">
+  <div class="auth-shell">
     <div class="auth-card">
-      <img src="/images/receiptap-logo.png" alt="ReceipTap" style="height: 54px; margin-bottom: 18px;" />
-      <h1 style="font-size: 22px; margin-bottom: 6px;">Activate your ReceipTap</h1>
-      <p style="font-size: 13.5px; color: var(--ink-soft); margin: 8px 0 22px; line-height: 1.5;">
-        Enter the 6-character code printed on the insert card that came with this puck.
-      </p>
+      <div class="logo-chip"><img src="/images/receiptap-logo.png" alt="ReceipTap" /></div>
+      <h1 class="auth-title">Activate your ReceipTap</h1>
+      <p class="auth-sub">Enter the 6-character code printed on the insert card that came with this puck.</p>
 
-      <div class="error-box" id="error-box" style="display: none;"></div>
+      <div class="auth-error" id="error-box" style="display: none;"></div>
 
       <form id="claim-form">
-        <div class="field">
+        <div class="auth-field">
           <label for="claimCode">Activation code</label>
           <input
             type="text"
@@ -33,7 +75,7 @@
             style="text-transform: uppercase; letter-spacing: 3px; font-family: var(--font-mono); font-size: 18px; text-align: center;"
           />
         </div>
-        <button class="btn btn-primary" type="submit">Activate</button>
+        <button class="auth-pill-btn" type="submit">Activate</button>
       </form>
     </div>
   </div>

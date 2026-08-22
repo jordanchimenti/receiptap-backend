@@ -6,95 +6,192 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Sign Up - ReceipTap</title>
   <link rel="stylesheet" href="/css/receiptap.css" />
+  <style>
+    /* Dark pill-button design, matching views/login.ejs -- self-contained
+       here rather than shared, for the same reason login.ejs is: this
+       stays isolated from the light `.auth-card`/`.field` classes still
+       used by the 13+ other merchant pages that haven't moved to this
+       look yet (forgot-password, reset-password, affiliate pages, etc). */
+    :root {
+      --ms-bg: #0a0a0a;
+      --ms-card: #161616;
+      --ms-card-raised: #1c1c1c;
+      --ms-line: #2a2a2a;
+      --ms-ink: #ffffff;
+      --ms-ink-soft: #8d8d8d;
+      --ms-accent: #056BFE;
+      --ms-accent-deep: #0350BE;
+      --ms-danger: #ff453a;
+    }
+    body { background: var(--ms-bg); color: var(--ms-ink); font-family: var(--font-body); margin: 0; }
+    .auth-shell { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+    .auth-card { width: 100%; max-width: 380px; background: var(--ms-card); border: 1px solid var(--ms-line); border-radius: 20px; padding: 36px 30px; text-align: center; }
+    .auth-title { font-family: var(--font-display); font-size: 22px; font-weight: 700; margin: 4px 0 6px; color: var(--ms-ink); }
+    .auth-sub { font-size: 13.5px; color: var(--ms-ink-soft); margin: 0 0 24px; line-height: 1.5; }
+    .auth-field { text-align: left; margin-bottom: 16px; }
+    .auth-field label { display: block; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ms-ink-soft); margin-bottom: 6px; }
+    .auth-field input {
+      width: 100%; box-sizing: border-box; background: var(--ms-card-raised); border: 1px solid var(--ms-line);
+      color: var(--ms-ink); border-radius: 12px; padding: 13px 16px; font-size: 15px; font-family: inherit;
+    }
+    .auth-field input:focus { outline: 2px solid var(--ms-accent); outline-offset: 1px; border-color: var(--ms-accent); }
+    .consent-row { display: flex; align-items: flex-start; gap: 8px; text-align: left; margin: 6px 0 18px; }
+    .consent-row input[type="checkbox"] { margin-top: 3px; flex-shrink: 0; accent-color: var(--ms-accent); }
+    .consent-row label { font-size: 12.5px; color: var(--ms-ink-soft); line-height: 1.45; font-weight: 400; }
+    .consent-row label a { color: var(--ms-accent); font-weight: 600; text-decoration: none; }
+    .auth-pill-btn {
+      display: block; width: 100%; box-sizing: border-box; background: var(--ms-accent); color: #fff; border: none;
+      border-radius: 999px; padding: 14px 20px; font-size: 15px; font-weight: 700; cursor: pointer; font-family: inherit;
+    }
+    .auth-pill-btn:hover { background: var(--ms-accent-deep); }
+    .auth-divider { display: flex; align-items: center; gap: 10px; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ms-ink-soft); margin: 18px 0 16px; }
+    .auth-divider span.line { flex: 1; height: 1px; background: var(--ms-line); }
+    .auth-oauth-btn {
+      display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; box-sizing: border-box;
+      padding: 12px 16px; border-radius: 999px; font-size: 14.5px; font-weight: 600; text-decoration: none;
+      border: 1px solid var(--ms-line); margin-bottom: 10px; cursor: pointer; font-family: inherit;
+    }
+    .auth-oauth-btn.apple { background: #000; color: #fff; border-color: #000; }
+    .auth-oauth-btn.microsoft { background: var(--ms-card-raised); color: var(--ms-ink); }
+    #google-signin-btn { display: flex; justify-content: center; margin-bottom: 10px; }
+    .auth-error {
+      background: rgba(255, 69, 58, 0.12); border: 1px solid rgba(255, 69, 58, 0.35); color: var(--ms-danger);
+      border-radius: 10px; padding: 11px 14px; font-size: 13.5px; margin-bottom: 16px; text-align: left;
+    }
+    /* The logo's "Receip" wordmark is dark navy, meant for a light
+       background -- same paper-toned chip already used on login.ejs and
+       the customer wallet auth pages so it stays legible here. */
+    .logo-chip { display: inline-block; background: var(--paper); border-radius: 12px; padding: 10px 18px; margin-bottom: 22px; }
+    .logo-chip img { display: block; height: 32px; }
+  </style>
 </head>
 <body>
-  <div class="centered-shell">
+  <div class="auth-shell">
     <div class="auth-card">
-      <img src="/images/receiptap-logo.png" alt="ReceipTap" style="height: 60px; margin-bottom: 20px;" />
+      <div class="logo-chip"><img src="/images/receiptap-logo.png" alt="ReceipTap" /></div>
       <% if (typeof demo !== 'undefined' && demo) { %>
-        <h1 style="font-size: 22px; margin-bottom: 6px;">Start your free demo</h1>
-        <p style="font-size: 13.5px; color: var(--ink-soft); margin: 8px 0 24px; line-height: 1.5;">
-          No card required. Design and preview your branded receipt right away — connect a POS and go live whenever you're ready to upgrade.
-        </p>
+        <h1 class="auth-title">Start your free demo</h1>
+        <p class="auth-sub">No card required. Design and preview your branded receipt right away — connect a POS and go live whenever you're ready to upgrade.</p>
       <% } else { %>
-        <h1 style="font-size: 22px; margin-bottom: 6px;">Create your ReceipTap account</h1>
-        <p style="font-size: 13.5px; color: var(--ink-soft); margin: 8px 0 24px; line-height: 1.5;">
-          One account per business. You'll connect your POS next.
-        </p>
+        <h1 class="auth-title">Create your ReceipTap account</h1>
+        <p class="auth-sub">One account per business. You'll connect your POS next.</p>
       <% } %>
 
-      <div class="error-box" id="error-box" style="<%= error ? '' : 'display: none;' %>"><%= error %></div>
-
-      <% if (googleClientId) { %>
-        <div id="google-signin-btn" style="display: flex; justify-content: center; margin-bottom: 14px;"></div>
-        <div style="display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--ink-soft); margin: 14px 0;">
-          <span style="flex: 1; height: 1px; background: var(--line);"></span>
-          or
-          <span style="flex: 1; height: 1px; background: var(--line);"></span>
-        </div>
-      <% } %>
+      <div class="auth-error" id="error-box" style="<%= error ? '' : 'display: none;' %>"><%= error %></div>
 
       <form method="POST" action="/signup">
         <input type="hidden" name="refCode" value="<%= typeof refCode !== 'undefined' ? refCode : '' %>" />
         <input type="hidden" name="next" value="<%= typeof next !== 'undefined' ? next : '' %>" />
         <input type="hidden" name="demo" value="<%= (typeof demo !== 'undefined' && demo) ? '1' : '' %>" />
-        <div class="field">
+        <div class="auth-field">
           <label for="ownerName">Your name</label>
           <input type="text" id="ownerName" name="ownerName" required autofocus />
         </div>
-        <div class="field">
+        <div class="auth-field">
           <label for="businessName">Business name</label>
           <input type="text" id="businessName" name="businessName" required />
         </div>
-        <div class="field">
+        <div class="auth-field">
           <label for="email">Email</label>
-          <input type="email" id="email" name="email" required />
+          <input type="email" id="email" name="email" value="<%= typeof prefillEmail !== 'undefined' ? prefillEmail : '' %>" required />
         </div>
-        <div class="field">
-          <label for="password">Password</label>
+        <div class="auth-field">
+          <label for="password">Create password</label>
           <input type="password" id="password" name="password" required minlength="8" />
         </div>
-
-        <div style="display:flex; flex-direction:column; gap:8px; margin: 14px 0 18px;">
-          <div style="display:flex; align-items:flex-start; gap:8px;">
-            <input type="checkbox" id="acceptAll" name="acceptAll" required style="margin-top:2px;" />
-            <label for="acceptAll" style="font-size:13px; color:var(--ink-soft); line-height:1.4; font-weight:400;">
-              I agree to the <a href="/legal/terms" target="_blank" rel="noopener" style="color:var(--teal-deep); font-weight:600; text-decoration:none;">Terms of Service</a>, which include the <a href="/legal/dpa" target="_blank" rel="noopener" style="color:var(--teal-deep); font-weight:600; text-decoration:none;">Data Processing Agreement</a>, and I have read the <a href="/legal/privacy" target="_blank" rel="noopener" style="color:var(--teal-deep); font-weight:600; text-decoration:none;">Privacy Policy</a>.
-            </label>
-          </div>
+        <div class="auth-field">
+          <label for="confirmPassword">Confirm password</label>
+          <input type="password" id="confirmPassword" name="confirmPassword" required minlength="8" />
         </div>
 
-        <button type="submit" class="btn btn-primary"><%= (typeof demo !== 'undefined' && demo) ? 'Start free demo' : 'Create account' %></button>
+        <div class="consent-row">
+          <input type="checkbox" id="acceptAll" name="acceptAll" required />
+          <label for="acceptAll">
+            I agree to the <a href="/legal/terms" target="_blank" rel="noopener">Terms of Service</a>, which include the <a href="/legal/dpa" target="_blank" rel="noopener">Data Processing Agreement</a>, and I have read the <a href="/legal/privacy" target="_blank" rel="noopener">Privacy Policy</a>.
+          </label>
+        </div>
+
+        <button type="submit" class="auth-pill-btn"><%= (typeof demo !== 'undefined' && demo) ? 'Start free demo' : 'Create account' %></button>
       </form>
 
-      <p style="font-size: 13px; color: var(--ink-soft); margin-top: 20px; text-align: center;">
-        Already have an account? <a href="/login" style="color: var(--teal-deep); font-weight: 600; text-decoration: none;">Log in</a>
+      <% if (googleClientId || appleClientId || microsoftClientId) { %>
+        <div class="auth-divider"><span class="line"></span>Or continue with<span class="line"></span></div>
+      <% } %>
+
+      <% if (googleClientId) { %>
+        <div id="google-signin-btn"></div>
+      <% } %>
+      <% if (appleClientId) { %>
+        <a href="#" onclick="return startOAuth('apple', event)" class="auth-oauth-btn apple">
+          <svg width="16" height="16" viewBox="0 0 384 512" fill="#fff"><path d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 20.7-88.5 20.7-15 0-49.4-19.7-76.4-19.7C63.3 141.2 4 184.8 4 273.5q0 39.3 14.4 81.2c12.8 36.7 59 126.7 107.2 125.2 25.2-.6 43-17.9 75.8-17.9 31.8 0 48.3 17.9 76.4 17.9 48.6-.7 90.4-82.5 102.6-119.3-65.2-30.7-61.7-90-61.7-91.9zm-56.6-164.2c27.3-32.4 24.8-61.9 24-72.5-24.1 1.4-52 16.4-67.9 34.9-17.5 19.8-27.8 44.3-25.6 71.9 26.1 2 49.9-11.4 69.5-34.3z"/></svg>
+          Continue with Apple
+        </a>
+      <% } %>
+      <% if (microsoftClientId) { %>
+        <a href="#" onclick="return startOAuth('microsoft', event)" class="auth-oauth-btn microsoft">
+          <svg width="16" height="16" viewBox="0 0 21 21"><rect x="1" y="1" width="9" height="9" fill="#f25022"/><rect x="11" y="1" width="9" height="9" fill="#7fba00"/><rect x="1" y="11" width="9" height="9" fill="#00a4ef"/><rect x="11" y="11" width="9" height="9" fill="#ffb900"/></svg>
+          Continue with Microsoft
+        </a>
+      <% } %>
+
+      <p style="font-size: 13px; color: var(--ms-ink-soft); margin-top: 18px;">
+        Already have an account? <a href="/login" style="color: var(--ms-accent); font-weight: 600; text-decoration: none;">Log in</a>
       </p>
     </div>
   </div>
 
+  <script>
+    const REF_CODE = '<%= typeof refCode !== 'undefined' ? refCode : '' %>';
+    const NEXT_PATH = '<%= typeof next !== 'undefined' ? next : '' %>';
+    const DEMO_MODE = <%= (typeof demo !== 'undefined' && demo) ? 'true' : 'false' %>;
+
+    // None of Google/Apple/Microsoft's buttons submit our own <form> (each
+    // navigates or fires its own callback instead), so the "required"
+    // checkbox never gets a chance to block them the normal browser way --
+    // checked by hand here instead. This is a convenience check only; every
+    // one of /merchant/google, /merchant/apple/callback, and
+    // /merchant/microsoft/callback enforces the same rule server-side for
+    // any NEW account, since a client-side check alone can always be
+    // bypassed.
+    function consentChecked() {
+      return document.getElementById('acceptAll').checked;
+    }
+
+    function showError(msg) {
+      const el = document.getElementById('error-box');
+      el.textContent = msg;
+      el.style.display = 'block';
+    }
+
+    // Apple/Microsoft are full-page redirects, not a same-page JS
+    // callback like Google's -- so unlike Google, the checkbox has to be
+    // read *before* navigating away, and acceptAll gets carried through
+    // the round trip via the connect URL's query string instead of a
+    // fetch body.
+    function startOAuth(provider, event) {
+      event.preventDefault();
+      if (!consentChecked()) {
+        showError("Please agree to the Terms of Service (which include the Data Processing Agreement), and confirm you've read the Privacy Policy, first.");
+        return false;
+      }
+      const params = new URLSearchParams({
+        from: 'signup',
+        next: NEXT_PATH,
+        refCode: REF_CODE,
+        demo: DEMO_MODE ? '1' : '',
+        acceptAll: '1',
+      });
+      window.location.href = '/merchant/' + provider + '/connect?' + params;
+      return false;
+    }
+  </script>
+
   <% if (googleClientId) { %>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script>
-      const REF_CODE = '<%= typeof refCode !== 'undefined' ? refCode : '' %>';
-      const NEXT_PATH = '<%= typeof next !== 'undefined' ? next : '' %>';
-      const DEMO_MODE = <%= (typeof demo !== 'undefined' && demo) ? 'true' : 'false' %>;
-
-      // Google's button skips our own <form> entirely (it's Google's widget,
-      // not a submit we control), so the "required" checkbox never gets a
-      // chance to block it the normal browser way -- checked by hand here
-      // instead. This is a convenience check only; /merchant/google enforces
-      // the same rule server-side for any NEW account, since a client-side
-      // check alone can always be bypassed.
-      function consentChecked() {
-        return document.getElementById('acceptAll').checked;
-      }
-
       async function handleGoogleSignIn(response) {
         if (!consentChecked()) {
-          const el = document.getElementById('error-box');
-          el.textContent = "Please agree to the Terms of Service (which include the Data Processing Agreement), and confirm you've read the Privacy Policy, first.";
-          el.style.display = 'block';
+          showError("Please agree to the Terms of Service (which include the Data Processing Agreement), and confirm you've read the Privacy Policy, first.");
           return;
         }
 
@@ -111,9 +208,7 @@
         });
         const data = await res.json();
         if (!res.ok) {
-          const el = document.getElementById('error-box');
-          el.textContent = data.error || 'Google sign-in failed.';
-          el.style.display = 'block';
+          showError(data.error || 'Google sign-in failed.');
           return;
         }
         window.location.href = data.redirect;
@@ -127,7 +222,7 @@
           });
           google.accounts.id.renderButton(
             document.getElementById('google-signin-btn'),
-            { theme: 'outline', size: 'large', width: 280 }
+            { theme: 'outline', size: 'large', shape: 'pill', width: 320 }
           );
         }
       };

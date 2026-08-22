@@ -11,6 +11,12 @@ const prisma = require('../lib/prisma');
 const { sendPasswordResetEmail, sendVerificationEmail } = require('../services/emailService');
 const { recordLegalAcceptances } = require('../services/legalAcceptanceService');
 const { safeNextPath } = require('../lib/safeRedirect');
+const { normalizeEmail } = require('../lib/normalizeEmail');
+const { resolveReferrer } = require('../lib/referralAttribution');
+const { getBaseUrl } = require('../lib/baseUrl');
+const { buildState, parseState } = require('../lib/oauthState');
+const appleAuthService = require('../services/appleAuthService');
+const microsoftAuthService = require('../services/microsoftAuthService');
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
@@ -22,21 +28,43 @@ router.get('/signup', (req, res) => res.render('signup', {
   refCode: req.query.ref || '',
   next: req.query.next || '',
   demo: req.query.demo === '1',
+  prefillEmail: req.query.email || '',
   googleClientId: process.env.GOOGLE_CLIENT_ID || '',
+  appleClientId: process.env.APPLE_CLIENT_ID || '',
+  microsoftClientId: process.env.MICROSOFT_CLIENT_ID || '',
 }));
 router.get('/login', (req, res) => res.render('login', {
   error: null,
   deactivated: req.query.deactivated === '1',
-  redirect: req.query.redirect || '/dashboard/receipts-hub',
+  // Default post-login destination is the wallet's dark Business section
+  // now, not the real navy-sidebar dashboard -- see routes/account-business.js.
+  // An explicit ?redirect= (e.g. a deep link back to a specific /dashboard/*
+  // page) is still honored as-is.
+  redirect: req.query.redirect || '/account/business',
   googleClientId: process.env.GOOGLE_CLIENT_ID || '',
+  appleClientId: process.env.APPLE_CLIENT_ID || '',
+  microsoftClientId: process.env.MICROSOFT_CLIENT_ID || '',
 }));
 
 router.post('/signup', async (req, res) => {
-  const { ownerName, businessName, email, password, refCode, next, demo, acceptAll } = req.body;
-  const demoFields = { refCode: refCode || '', next: next || '', demo: demo || '', googleClientId: process.env.GOOGLE_CLIENT_ID || '' };
+  const { ownerName, businessName, email: rawEmail, password, confirmPassword, refCode, next, demo, acceptAll } = req.body;
+  const email = normalizeEmail(rawEmail);
+  const demoFields = {
+    refCode: refCode || '',
+    next: next || '',
+    demo: demo || '',
+    googleClientId: process.env.GOOGLE_CLIENT_ID || '',
+    appleClientId: process.env.APPLE_CLIENT_ID || '',
+    microsoftClientId: process.env.MICROSOFT_CLIENT_ID || '',
+  };
 
   if (!ownerName || !businessName || !email || !password) {
     return res.render('signup', { error: 'All fields are required', ...demoFields });
+  }
+  // Client-side "required"/matching on the two password fields is UX
+  // only -- same as the checkbox below, this is the real gate.
+  if (password !== confirmPassword) {
+    return res.render('signup', { error: 'Passwords do not match.', ...demoFields });
   }
   // Client-side "required" on the checkbox is UX only -- this is the real
   // gate. A request without it never creates an account. One checkbox now
@@ -56,9 +84,10 @@ router.post('/signup', async (req, res) => {
 
     // Referral is best-effort -- an invalid/expired code shouldn't block signup,
     // it just means this merchant signs up without an attributed affiliate.
-    const referrer = refCode
-      ? await prisma.affiliate.findUnique({ where: { referralCode: refCode.trim().toUpperCase() } })
-      : null;
+    // Explicit ?ref beats the 90-day attribution cookie, which beats a wallet
+    // account on this email that a merchant's receipt introduced. See
+    // lib/referralAttribution.js.
+    const referrer = await resolveReferrer({ prisma, refCode, req, email });
 
     const isDemoAccount = Boolean(demo);
     const passwordHash = await bcrypt.hash(password, 10);
@@ -82,8 +111,9 @@ router.post('/signup', async (req, res) => {
     req.session.merchantId = merchant.id;
     // Demo accounts always land on receipt design -- it's the only page
     // they're allowed on (see middleware/demoAccountGate.js) -- rather than
-    // trusting `next`, which normally defaults to the full dashboard.
-    res.redirect(isDemoAccount ? '/dashboard/settings/receipt' : safeNextPath(next));
+    // trusting `next`, which now defaults to the wallet's Business section
+    // instead of the real dashboard (same default as GET/POST /login).
+    res.redirect(isDemoAccount ? '/dashboard/settings/receipt' : safeNextPath(next, '/account/business'));
   } catch (err) {
     console.error('Signup failed:', err);
     res.render('signup', { error: 'Something went wrong on our end — please try again in a moment.', ...demoFields });
@@ -91,29 +121,45 @@ router.post('/signup', async (req, res) => {
 });
 
 router.post('/login', async (req, res) => {
-  const { email, password } = req.body;
-  const redirect = req.body.redirect || '/dashboard/receipts-hub';
-  const googleClientId = process.env.GOOGLE_CLIENT_ID || '';
+  const { email: rawEmail, password } = req.body;
+  const email = normalizeEmail(rawEmail);
+  // Same default as GET /login above -- only reached if the form's own
+  // hidden redirect field is somehow missing. Passed through the shared
+  // allowlist: this value round-trips via ?redirect= and a hidden field, so
+  // without it a crafted link could bounce a merchant off-site immediately
+  // after they'd typed their password.
+  const redirect = safeNextPath(req.body.redirect, '/account/business');
+  const oauthFields = {
+    googleClientId: process.env.GOOGLE_CLIENT_ID || '',
+    appleClientId: process.env.APPLE_CLIENT_ID || '',
+    microsoftClientId: process.env.MICROSOFT_CLIENT_ID || '',
+  };
 
   try {
     const merchant = await prisma.merchant.findUnique({ where: { email } });
     if (!merchant || !merchant.passwordHash || !(await bcrypt.compare(password, merchant.passwordHash))) {
-      return res.render('login', { error: 'Invalid email or password', redirect, googleClientId });
+      return res.render('login', { error: 'Invalid email or password', redirect, ...oauthFields });
     }
     if (!merchant.isActive) {
-      return res.render('login', { error: 'This account has been deactivated.', redirect, googleClientId });
+      return res.render('login', { error: 'This account has been deactivated.', redirect, ...oauthFields });
     }
 
     req.session.merchantId = merchant.id;
     res.redirect(redirect);
   } catch (err) {
     console.error('Login failed:', err);
-    res.render('login', { error: 'Something went wrong on our end — please try again in a moment.', redirect, googleClientId });
+    res.render('login', { error: 'Something went wrong on our end — please try again in a moment.', redirect, ...oauthFields });
   }
 });
 
+// Clears only the merchant session. session.destroy() would take the whole
+// session with it, including customerId -- and the same browser can legitimately
+// be signed in as both a merchant and a shopper (CLAUDE.md: never clear one when
+// logging out the other). Mirrors POST /account/logout, which already does this
+// correctly for the customer side.
 router.post('/logout', (req, res) => {
-  req.session.destroy(() => res.redirect('/login'));
+  delete req.session.merchantId;
+  res.redirect('/login');
 });
 
 // --- Sign in with Google (doubles as signup — one step for both) ------------
@@ -138,7 +184,7 @@ router.post('/merchant/google', async (req, res) => {
   }
 
   if (!payload.email) return res.status(400).json({ error: 'Google account has no email' });
-  const email = payload.email.toLowerCase();
+  const email = normalizeEmail(payload.email);
 
   try {
     let merchant = await prisma.merchant.findUnique({ where: { email } });
@@ -156,9 +202,7 @@ router.post('/merchant/google', async (req, res) => {
         return res.status(400).json({ error: "Please agree to the Terms of Service (which include the Data Processing Agreement), and confirm you've read the Privacy Policy, first." });
       }
 
-      const referrer = refCode
-        ? await prisma.affiliate.findUnique({ where: { referralCode: refCode.trim().toUpperCase() } })
-        : null;
+      const referrer = await resolveReferrer({ prisma, refCode, req, email });
 
       // Google already verified this email before handing it to us -- a demo
       // account created this way skips the token/link flow entirely and is
@@ -184,17 +228,199 @@ router.post('/merchant/google', async (req, res) => {
     // actual isDemoAccount (not just this request's `demo` flag), so an
     // existing demo merchant logging back in still lands correctly even if
     // `demo` wasn't part of this particular request.
-    res.json({ success: true, redirect: merchant.isDemoAccount ? '/dashboard/settings/receipt' : safeNextPath(next) });
+    res.json({ success: true, redirect: merchant.isDemoAccount ? '/dashboard/settings/receipt' : safeNextPath(next, '/account/business') });
   } catch (err) {
     console.error('Google sign-in failed:', err);
     res.status(500).json({ error: 'Something went wrong on our end — please try again in a moment.' });
   }
 });
 
+// Shared by the Apple and Microsoft merchant callbacks below -- same
+// find-or-create shape as the Google handler above (existing merchant ->
+// backfill the provider id; no merchant -> gate on acceptAll, same as the
+// plain signup form), just parametrized by provider so it isn't written
+// out twice. Google's handler above is left as its own inline block
+// rather than refactored onto this, since it already works and isn't part
+// of this change.
+async function findOrCreateMerchantFromOAuth({ providerIdField, sub, email: rawEmail, name, refCode, demo, acceptAll, req }) {
+  const email = normalizeEmail(rawEmail);
+  let merchant = await prisma.merchant.findUnique({ where: { email } });
+
+  if (merchant) {
+    if (!merchant.isActive) throw Object.assign(new Error('This account has been deactivated.'), { status: 403 });
+    if (!merchant[providerIdField]) {
+      merchant = await prisma.merchant.update({ where: { id: merchant.id }, data: { [providerIdField]: sub } });
+    }
+    return merchant;
+  }
+
+  if (!acceptAll) {
+    throw Object.assign(
+      new Error("Please agree to the Terms of Service (which include the Data Processing Agreement), and confirm you've read the Privacy Policy, first."),
+      { status: 400 }
+    );
+  }
+
+  const referrer = await resolveReferrer({ prisma, refCode, req, email });
+
+  merchant = await prisma.merchant.create({
+    data: {
+      email,
+      [providerIdField]: sub,
+      ownerName: name || null,
+      businessName: name ? `${name.split(' ')[0]}'s Business` : 'My Business',
+      referredByAffiliateId: referrer?.id || null,
+      isDemoAccount: Boolean(demo),
+      // Apple and Microsoft both only hand us a verified email in the
+      // first place -- same reasoning as the Google handler skipping the
+      // token/link verification flow.
+      emailVerifiedAt: new Date(),
+    },
+  });
+  await recordLegalAcceptances(merchant.id, req);
+  return merchant;
+}
+
+// Renders back whichever page (login or signup) the merchant actually
+// started from, reconstructed from `state` -- an OAuth callback has no
+// natural "go back" the way a same-page form submission does, so state is
+// what carries that context across the round trip to Apple/Microsoft.
+function renderOAuthError(req, res, parsedState, error) {
+  const status = error.status || 500;
+  if (error.status === undefined) console.error('OAuth merchant sign-in failed:', error);
+  const common = {
+    googleClientId: process.env.GOOGLE_CLIENT_ID || '',
+    appleClientId: process.env.APPLE_CLIENT_ID || '',
+    microsoftClientId: process.env.MICROSOFT_CLIENT_ID || '',
+  };
+  const message = error.status ? error.message : 'Something went wrong on our end — please try again in a moment.';
+
+  if (parsedState?.from === 'signup') {
+    return res.status(status).render('signup', {
+      error: message,
+      refCode: parsedState.refCode || '',
+      next: parsedState.next || '',
+      demo: Boolean(parsedState.demo),
+      ...common,
+    });
+  }
+  return res.status(status).render('login', {
+    error: message,
+    deactivated: false,
+    redirect: parsedState?.next || '/account/business',
+    ...common,
+  });
+}
+
+router.get('/merchant/apple/connect', (req, res) => {
+  const { nonce, state } = buildState({
+    from: req.query.from === 'signup' ? 'signup' : 'login',
+    next: req.query.next || '',
+    refCode: req.query.refCode || '',
+    demo: req.query.demo === '1',
+    acceptAll: req.query.acceptAll === '1',
+  });
+  req.session.appleOauthNonce = nonce;
+  const redirectUri = `${getBaseUrl(req)}/merchant/apple/callback`;
+  res.redirect(appleAuthService.buildAuthorizeUrl(redirectUri, state));
+});
+
+// Apple POSTs here (response_mode=form_post), not a GET like Microsoft/most
+// OAuth providers -- express.urlencoded is already mounted app-wide in
+// server.js, which is what makes req.body.code/state readable below.
+router.post('/merchant/apple/callback', async (req, res) => {
+  const parsedState = parseState(req.body.state);
+  const nonceOk = parsedState && parsedState.nonce === req.session.appleOauthNonce;
+  delete req.session.appleOauthNonce;
+
+  if (!req.body.code || !nonceOk) {
+    return renderOAuthError(req, res, parsedState, Object.assign(new Error('Could not verify Apple sign-in.'), { status: 400 }));
+  }
+
+  try {
+    const redirectUri = `${getBaseUrl(req)}/merchant/apple/callback`;
+    const tokens = await appleAuthService.exchangeCodeForToken(req.body.code, redirectUri);
+    const identity = await appleAuthService.verifyIdToken(tokens.id_token);
+    if (!identity.email) throw Object.assign(new Error('Apple account has no email'), { status: 400 });
+
+    // Apple only ever sends the user's name once, as a JSON blob in
+    // `req.body.user`, on the very first authorization -- never available
+    // on repeat sign-ins, so this is best-effort only.
+    let name = null;
+    try {
+      name = req.body.user ? JSON.parse(req.body.user).name?.firstName : null;
+    } catch {
+      // malformed/missing -- fine, ownerName just stays unset
+    }
+
+    const merchant = await findOrCreateMerchantFromOAuth({
+      providerIdField: 'appleId',
+      sub: identity.sub,
+      email: normalizeEmail(identity.email),
+      name,
+      refCode: parsedState.refCode,
+      demo: parsedState.demo,
+      acceptAll: parsedState.acceptAll,
+      req,
+    });
+
+    req.session.merchantId = merchant.id;
+    res.redirect(merchant.isDemoAccount ? '/dashboard/settings/receipt' : safeNextPath(parsedState.next, '/account/business'));
+  } catch (err) {
+    renderOAuthError(req, res, parsedState, err);
+  }
+});
+
+router.get('/merchant/microsoft/connect', (req, res) => {
+  const { nonce, state } = buildState({
+    from: req.query.from === 'signup' ? 'signup' : 'login',
+    next: req.query.next || '',
+    refCode: req.query.refCode || '',
+    demo: req.query.demo === '1',
+    acceptAll: req.query.acceptAll === '1',
+  });
+  req.session.microsoftOauthNonce = nonce;
+  const redirectUri = `${getBaseUrl(req)}/merchant/microsoft/callback`;
+  res.redirect(microsoftAuthService.buildAuthorizeUrl(redirectUri, state));
+});
+
+router.get('/merchant/microsoft/callback', async (req, res) => {
+  const parsedState = parseState(req.query.state);
+  const nonceOk = parsedState && parsedState.nonce === req.session.microsoftOauthNonce;
+  delete req.session.microsoftOauthNonce;
+
+  if (!req.query.code || !nonceOk) {
+    return renderOAuthError(req, res, parsedState, Object.assign(new Error('Could not verify Microsoft sign-in.'), { status: 400 }));
+  }
+
+  try {
+    const redirectUri = `${getBaseUrl(req)}/merchant/microsoft/callback`;
+    const tokens = await microsoftAuthService.exchangeCodeForToken(req.query.code, redirectUri);
+    const identity = await microsoftAuthService.verifyIdToken(tokens.id_token);
+    if (!identity.email) throw Object.assign(new Error('Microsoft account has no email'), { status: 400 });
+
+    const merchant = await findOrCreateMerchantFromOAuth({
+      providerIdField: 'microsoftId',
+      sub: identity.sub,
+      email: normalizeEmail(identity.email),
+      name: null, // Microsoft's id_token doesn't reliably include a given name in this scope set
+      refCode: parsedState.refCode,
+      demo: parsedState.demo,
+      acceptAll: parsedState.acceptAll,
+      req,
+    });
+
+    req.session.merchantId = merchant.id;
+    res.redirect(merchant.isDemoAccount ? '/dashboard/settings/receipt' : safeNextPath(parsedState.next, '/account/business'));
+  } catch (err) {
+    renderOAuthError(req, res, parsedState, err);
+  }
+});
+
 router.get('/forgot-password', (req, res) => res.render('forgot-password', { error: null, sent: false }));
 
 router.post('/forgot-password', async (req, res) => {
-  const { email } = req.body;
+  const email = normalizeEmail(req.body.email);
 
   try {
     const merchant = email ? await prisma.merchant.findUnique({ where: { email } }) : null;
@@ -247,7 +473,7 @@ router.post('/reset-password/:token', async (req, res) => {
   });
 
   req.session.merchantId = merchant.id;
-  res.redirect('/dashboard/receipts-hub');
+  res.redirect('/account/business');
 });
 
 // Demo-tier email verification (see the isDemoAccount branch in POST

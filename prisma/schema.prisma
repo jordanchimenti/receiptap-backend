@@ -652,7 +652,16 @@ model ShopperIdentifier {
 }
 
 enum IdentifierType {
-  CARD_FINGERPRINT
+  CARD_FINGERPRINT // the only one in use -- Square's card_details.card.fingerprint
+  // EMAIL and PHONE are modelled but NOTHING WRITES THEM, deliberately. The
+  // obvious source is a customer a POS attaches to a sale, and that was
+  // considered and turned down: it depends on a cashier having looked the
+  // person up (so coverage is patchy and unpredictable), the consent basis is
+  // weaker -- the merchant's system hands us an identity the shopper gave the
+  // SHOP, not us -- and an email is the same person everywhere, so scoping it
+  // by sourcePlatform would split one identity across several rows while not
+  // scoping it breaks the rule every other lookup follows.
+  // Left here as named intent; wiring either up needs those three answered.
   EMAIL
   PHONE
 }

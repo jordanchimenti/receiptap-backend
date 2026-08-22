@@ -72,6 +72,16 @@ async function recordIdentifier(shopperId, identifierType, rawValue, sourcePlatf
  * The shopper this identifier belongs to, or null.
  * Returns null for a revoked link, and never matches across platforms.
  */
+// Identifier types whose value means the same thing everywhere. An email is
+// an email regardless of which POS reported it, so scoping a lookup by
+// platform would split one person across rows and match none of them.
+//
+// A deliberate, narrow exception to the platform-scoping rule -- which exists
+// to stop one platform's opaque TOKEN being matched against another's, where
+// equal strings would mean different cards. That risk doesn't exist for an
+// address the shopper typed themselves.
+const GLOBAL_IDENTIFIER_TYPES = new Set(['EMAIL', 'PHONE']);
+
 async function findShopperByIdentifierHash(identifierType, identifierValueHash, sourcePlatform) {
   assertValid(identifierType, sourcePlatform);
   if (!identifierValueHash) return null;
@@ -80,7 +90,9 @@ async function findShopperByIdentifierHash(identifierType, identifierValueHash, 
     where: {
       identifierType,
       identifierValueHash,
-      sourcePlatform,
+      // Card fingerprints stay strictly platform-scoped; global types match
+      // wherever they were recorded.
+      ...(GLOBAL_IDENTIFIER_TYPES.has(identifierType) ? {} : { sourcePlatform }),
       revokedAt: null, // revoked links recognise nobody
     },
     include: { shopper: true },
@@ -137,6 +149,7 @@ async function listIdentifiersForShopper(shopperId, { includeRevoked = false } =
 
 module.exports = {
   IDENTIFIER_TYPES,
+  GLOBAL_IDENTIFIER_TYPES,
   SOURCE_PLATFORMS,
   recordIdentifier,
   recordIdentifierByHash,

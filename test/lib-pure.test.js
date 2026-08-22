@@ -83,3 +83,31 @@ test('referral attribution expires at the stated window', () => {
   assert.equal(isWithinWindow(days(91)), false);
   assert.equal(isWithinWindow(null), false);
 });
+
+// --- POS customer extraction, per provider ------------------------------
+// Recognition on Clover/Lightspeed/Shopify depends entirely on reading the
+// customer a till attached to a sale. The shapes differ per provider and a
+// missing customer is the NORMAL case, so this must never throw.
+const path = require('node:path');
+const fs = require('node:fs');
+const webhookSrc = fs.readFileSync(path.join(__dirname, '..', 'routes', 'webhooks.js'), 'utf8');
+// eslint-disable-next-line no-eval
+eval(webhookSrc.match(/function posCustomerEmailFrom[\s\S]*?\n}/)[0]);
+
+test('POS customer email is read per provider, and absence is normal', () => {
+  assert.equal(
+    posCustomerEmailFrom('clover', { customers: { elements: [{ emailAddresses: { elements: [{ emailAddress: 'a@x.com' }] } }] } }),
+    'a@x.com'
+  );
+  assert.equal(posCustomerEmailFrom('shopify', { customer: { email: 'b@x.com' } }), 'b@x.com');
+  assert.equal(posCustomerEmailFrom('shopify', { email: 'c@x.com' }), 'c@x.com');
+  assert.equal(posCustomerEmailFrom('lightspeed', { customer: { email: 'd@x.com' } }), 'd@x.com');
+});
+
+test('a sale with no customer attached yields null rather than throwing', () => {
+  for (const provider of ['clover', 'shopify', 'lightspeed', 'square', 'toast']) {
+    assert.equal(posCustomerEmailFrom(provider, {}), null);
+    assert.equal(posCustomerEmailFrom(provider, null), null);
+    assert.equal(posCustomerEmailFrom(provider, { customers: { elements: [] } }), null);
+  }
+});

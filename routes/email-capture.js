@@ -16,7 +16,7 @@ const prisma = require('../lib/prisma');
 const { attributeCustomerToMerchant } = require('../lib/referralAttribution');
 const { SHOPPER_CONSENT } = require('../config/legal');
 const { ensureMerchantAffiliate } = require('./affiliates');
-const { recordIdentifierByHash } = require('../services/shopperIdentity');
+const { recordIdentifierByHash, recordIdentifier } = require('../services/shopperIdentity');
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
@@ -50,8 +50,23 @@ const PLATFORM_BY_POS_PROVIDER = {
   toast: 'TOAST',
 };
 
-async function linkShopperIdentifier({ transaction, customerId, crossMerchantGranted }) {
+async function linkShopperIdentifier({ transaction, customerId, customerEmail, crossMerchantGranted }) {
   if (!crossMerchantGranted) return;
+
+  // Their own email, recorded as MANUAL because it came from the shopper
+  // directly -- not from any POS. This is what makes recognition possible on
+  // platforms that expose no card identifier: when Clover or Shopify reports
+  // the customer attached to a sale, that reported address is only ever a
+  // LOOKUP KEY against an identity the shopper gave us themselves. We never
+  // accept an identity handed over by a merchant.
+  if (customerEmail) {
+    try {
+      await recordIdentifier(customerId, 'EMAIL', customerEmail, 'MANUAL');
+    } catch (err) {
+      console.error('Email identifier link failed (receipt save continued):', err.message);
+    }
+  }
+
   if (!transaction.cardFingerprintHash) return;
 
   const sourcePlatform = PLATFORM_BY_POS_PROVIDER[transaction.posProvider];
@@ -117,7 +132,7 @@ router.post('/receipt/:transactionId/capture-email', async (req, res) => {
   }
 
   req.session.customerId = customer.id;
-  await linkShopperIdentifier({ transaction, customerId: customer.id, crossMerchantGranted: crossMerchantOptIn });
+  await linkShopperIdentifier({ transaction, customerId: customer.id, customerEmail: customer.email, crossMerchantGranted: crossMerchantOptIn });
   // This merchant just introduced someone to ReceipTap. Credit them, so if
   // that person ever signs their own business up the commission follows.
   // Best-effort: a failure here must never break saving a receipt.
@@ -176,7 +191,7 @@ router.post('/receipt/:transactionId/capture-email-google', async (req, res) => 
   }
 
   req.session.customerId = customer.id;
-  await linkShopperIdentifier({ transaction, customerId: customer.id, crossMerchantGranted: crossMerchantOptIn });
+  await linkShopperIdentifier({ transaction, customerId: customer.id, customerEmail: customer.email, crossMerchantGranted: crossMerchantOptIn });
   // This merchant just introduced someone to ReceipTap. Credit them, so if
   // that person ever signs their own business up the commission follows.
   // Best-effort: a failure here must never break saving a receipt.

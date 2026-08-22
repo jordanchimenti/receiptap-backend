@@ -12,6 +12,28 @@ const { autoSaveReceiptForKnownShopper } = require('../services/receiptAutoSave'
 const { incrementLoyaltyPunch } = require('./loyalty');
 const { categorizeInBackground } = require('../services/categorize-receipt');
 
+// The email a POS attached to a sale, if any. Only ever used as a lookup key
+// against an identifier the shopper recorded themselves -- never stored, and
+// an unrecognised address links nothing. Shapes differ per provider, so each
+// is read defensively and absence is the normal case.
+function posCustomerEmailFrom(provider, payload) {
+  try {
+    if (provider === 'clover') {
+      const c = payload?.customers?.elements?.[0];
+      return c?.emailAddresses?.elements?.[0]?.emailAddress || null;
+    }
+    if (provider === 'shopify') {
+      return payload?.customer?.email || payload?.email || null;
+    }
+    if (provider === 'lightspeed') {
+      return payload?.customer?.email || payload?.customer_email || null;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
 // POS payloads report cash amounts inconsistently (Square in cents, Clover in
 // cents, some fields absent entirely). Normalises to an integer number of
 // cents, or null -- never 0, which would render as a real "$0.00 change" line.
@@ -311,6 +333,18 @@ async function handleCloverOrderEvent(cloverMerchantId, orderId) {
     },
   });
 
+    // Recognition for a POS with no card identifier: if the till had a
+    // customer attached, that address is matched against an EMAIL identifier
+    // the shopper recorded from their own wallet. No customer, no match, no
+    // change -- exactly as before.
+    await autoSaveReceiptForKnownShopper(transaction, {
+      posCustomerEmail: posCustomerEmailFrom('clover', order),
+      onLinked: async ({ transaction: txn, shopper }) => {
+        await incrementLoyaltyPunch(txn.merchantId, shopper.id);
+        if (!txn.aiCategorizedAt) categorizeInBackground(txn, merchant.businessName);
+      },
+    });
+
   // A Clover connection is a single location -- no device-level lanes to
   // disambiguate between, unlike Square's multi-register handling.
   const puck = await prisma.puck.findFirst({
@@ -417,6 +451,18 @@ router.post('/webhooks/pos/lightspeed', async (req, res) => {
       },
     });
 
+    // Recognition for a POS with no card identifier: if the till had a
+    // customer attached, that address is matched against an EMAIL identifier
+    // the shopper recorded from their own wallet. No customer, no match, no
+    // change -- exactly as before.
+    await autoSaveReceiptForKnownShopper(transaction, {
+      posCustomerEmail: posCustomerEmailFrom('lightspeed', sale),
+      onLinked: async ({ transaction: txn, shopper }) => {
+        await incrementLoyaltyPunch(txn.merchantId, shopper.id);
+        if (!txn.aiCategorizedAt) categorizeInBackground(txn, merchant.businessName);
+      },
+    });
+
     // A Lightspeed (X-Series) connection is a single retailer -- no
     // device-level lanes to disambiguate between, same as Clover.
     const puck = await prisma.puck.findFirst({
@@ -515,6 +561,18 @@ router.post('/webhooks/pos/shopify', async (req, res) => {
         // webhook doesn't receive, so they stay null.
         cardBrand: order.payment_details?.credit_card_company || null,
         cardLast4: order.payment_details?.credit_card_last_four || null,
+      },
+    });
+
+    // Recognition for a POS with no card identifier: if the till had a
+    // customer attached, that address is matched against an EMAIL identifier
+    // the shopper recorded from their own wallet. No customer, no match, no
+    // change -- exactly as before.
+    await autoSaveReceiptForKnownShopper(transaction, {
+      posCustomerEmail: posCustomerEmailFrom('shopify', order),
+      onLinked: async ({ transaction: txn, shopper }) => {
+        await incrementLoyaltyPunch(txn.merchantId, shopper.id);
+        if (!txn.aiCategorizedAt) categorizeInBackground(txn, merchant.businessName);
       },
     });
 

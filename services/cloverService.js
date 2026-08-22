@@ -75,11 +75,13 @@ async function getValidAccessToken(merchant) {
 
 // Webhook notifications carry only an object ID and event type -- no order
 // data -- so this fetches the real thing, same role as squareService's
-// fetchOrder. expand=lineItems,payments pulls in what Square gives for free
+// fetchOrder. expand=lineItems,payments,customers pulls in what Square gives for free
+// -- customers is what makes recognition possible on Clover at all, since
+// Clover exposes no card identifier (see services/receiptAutoSave.js).
 // on the payment webhook payload itself.
 async function fetchOrder(accessToken, cloverMerchantId, orderId) {
   const res = await fetch(
-    `${CLOVER_API_BASE_URL}/v3/merchants/${cloverMerchantId}/orders/${orderId}?expand=lineItems,payments`,
+    `${CLOVER_API_BASE_URL}/v3/merchants/${cloverMerchantId}/orders/${orderId}?expand=lineItems,payments,customers`,
     { headers: { Authorization: `Bearer ${accessToken}` } }
   );
   if (!res.ok) throw new Error(`Failed to fetch Clover order ${orderId}: ${res.status}`);

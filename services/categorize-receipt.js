@@ -7,6 +7,7 @@
 // called from — a categorization failure should be invisible to the customer.
 
 const Anthropic = require('@anthropic-ai/sdk');
+const prisma = require('../lib/prisma');
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -69,4 +70,32 @@ Respond with ONLY a JSON object, no other text, in this exact shape:
   }
 }
 
-module.exports = { categorizeTransaction, CATEGORIES };
+/**
+ * Fire-and-forget categorisation: kicks off the AI call and writes the result
+ * when it lands, without making the caller wait. Every path that saves a
+ * receipt wants this, so it lives here rather than being redefined per route
+ * -- it existed as two identical private copies in routes/customer-account.js
+ * and routes/email-capture.js, which is how a third caller ended up importing
+ * a name this module never exported.
+ *
+ * Best-effort by design: a failed categorisation leaves the ai* fields null
+ * and is never retried, rather than blocking or failing the save.
+ */
+function categorizeInBackground(transaction, merchantName) {
+  categorizeTransaction({ merchantName, lineItems: transaction.lineItems })
+    .then((result) => {
+      if (!result) return;
+      return prisma.transaction.update({
+        where: { id: transaction.id },
+        data: {
+          aiCategory: result.category,
+          aiTaxDeductible: result.taxDeductible,
+          aiReasoning: result.reasoning,
+          aiCategorizedAt: new Date(),
+        },
+      });
+    })
+    .catch((err) => console.error('[categorize] background categorization failed:', err.message));
+}
+
+module.exports = { categorizeTransaction, categorizeInBackground, CATEGORIES };

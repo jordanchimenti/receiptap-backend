@@ -8,7 +8,7 @@
 const express = require('express');
 const router = express.Router();
 const { OAuth2Client } = require('google-auth-library');
-const { categorizeTransaction } = require('../services/categorize-receipt');
+const { categorizeInBackground } = require('../services/categorize-receipt');
 const { incrementLoyaltyPunch } = require('./loyalty');
 const { recordShopperConsent } = require('../services/shopperConsentService');
 const { deleteShopperByEmail } = require('../services/dataRetentionService');
@@ -23,22 +23,6 @@ const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 // Fire-and-forget: kicks off categorization without making the save/print
 // flow wait on an AI call. Result is written to the DB whenever it finishes;
 // the wallet just won't show a category badge until the next page load.
-function categorizeInBackground(transaction, merchantName) {
-  categorizeTransaction({ merchantName, lineItems: transaction.lineItems })
-    .then((result) => {
-      if (!result) return; // categorization skipped or failed — leave fields null, no retry storm
-      return prisma.transaction.update({
-        where: { id: transaction.id },
-        data: {
-          aiCategory: result.category,
-          aiTaxDeductible: result.taxDeductible,
-          aiReasoning: result.reasoning,
-          aiCategorizedAt: new Date(),
-        },
-      });
-    })
-    .catch((err) => console.error('[categorize-receipt] background update failed:', err.message));
-}
 
 function requireMerchantAuth(req, res, next) {
   if (!req.session?.merchantId) return res.redirect('/login');

@@ -8,6 +8,7 @@ const router = express.Router();
 const prisma = require('../lib/prisma');
 const { SHOPPER_CONSENT } = require('../config/legal');
 const { getBaseUrl } = require('../lib/baseUrl');
+const { claimReceiptForShopper } = require('../services/claimReceipt');
 
 router.get('/receipt/:transactionId', async (req, res) => {
   const transaction = await prisma.transaction.findUnique({
@@ -22,6 +23,23 @@ router.get('/receipt/:transactionId', async (req, res) => {
   // else requesting ?copy=merchant just silently gets the normal customer
   // copy instead of the flag being honored.
   const isMerchantCopy = req.query.copy === 'merchant' && req.session.merchantId === transaction.merchantId;
+
+  // Tapping the puck IS the save, for anyone already signed in. The modal on
+  // this page has always promised "every receipt you tap for saves itself",
+  // but until now nothing linked the receipt unless they also pressed a
+  // button -- so a shopper who tapped and pocketed their phone got nothing.
+  //
+  // Skipped for the merchant copy (a merchant reading their own record isn't
+  // a shopper saving it), and claimReceiptForShopper refuses a receipt that
+  // already belongs to someone else. Best-effort: a failure here must never
+  // stop the receipt rendering, which is the thing the customer is waiting for.
+  if (!isMerchantCopy && req.session.customerId) {
+    try {
+      await claimReceiptForShopper(transaction.id, req.session.customerId);
+    } catch (err) {
+      console.error('[receipt] auto-claim on view failed (receipt still shown):', err.message);
+    }
+  }
 
   // Everything below only depends on transaction.merchantId (already known)
   // or the customer's session -- nothing here depends on anything else in

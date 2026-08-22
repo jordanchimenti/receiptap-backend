@@ -12,7 +12,7 @@ const multer = require('multer');
 const bcrypt = require('bcrypt');
 const crypto = require('crypto');
 const { OAuth2Client } = require('google-auth-library');
-const { categorizeTransaction, CATEGORIES } = require('../services/categorize-receipt');
+const { categorizeInBackground, CATEGORIES } = require('../services/categorize-receipt');
 const { extractReceiptData } = require('../services/scanReceiptService');
 const { incrementLoyaltyPunch } = require('./loyalty');
 const { sendPasswordResetEmail } = require('../services/emailService');
@@ -20,6 +20,7 @@ const { deleteShopperEverywhere } = require('../services/dataRetentionService');
 const prisma = require('../lib/prisma');
 const { REFERRAL_WINDOW_DAYS } = require('../lib/referralAttribution');
 const { listIdentifiersForShopper, revokeIdentifierByHash } = require('../services/shopperIdentity');
+const { claimReceiptForShopper } = require('../services/claimReceipt');
 const { getBaseUrl } = require('../lib/baseUrl');
 const { buildState, parseState } = require('../lib/oauthState');
 const appleAuthService = require('../services/appleAuthService');
@@ -65,22 +66,6 @@ function handleReceiptScanUpload(req, res, next) {
   });
 }
 
-function categorizeInBackground(transaction, merchantName) {
-  categorizeTransaction({ merchantName, lineItems: transaction.lineItems })
-    .then((result) => {
-      if (!result) return;
-      return prisma.transaction.update({
-        where: { id: transaction.id },
-        data: {
-          aiCategory: result.category,
-          aiTaxDeductible: result.taxDeductible,
-          aiReasoning: result.reasoning,
-          aiCategorizedAt: new Date(),
-        },
-      });
-    })
-    .catch((err) => console.error('[categorize-receipt] background update failed:', err.message));
-}
 
 function requireCustomerAuth(req, res, next) {
   if (!req.session?.customerId) {
@@ -365,24 +350,19 @@ router.post('/account/reset-password/:token', async (req, res) => {
 // guard here since the caller only invokes this after confirming a session
 // exists; a first-time visitor goes through the email-capture flow instead,
 // which creates the session and links the transaction in one step.
+// Kept for the Save/Print/Join buttons, which still call it -- and for anyone
+// whose session began after the page loaded. Routed through the shared claim
+// so it can't drift from the on-view path, and so it inherits the guard that
+// used to be missing here: this endpoint previously reassigned the receipt
+// unconditionally, meaning a signed-in shopper opening someone else's receipt
+// URL took it from them.
 router.post('/receipt/:transactionId/save', requireCustomerAuth, async (req, res) => {
-  const transaction = await prisma.transaction.findUnique({
-    where: { id: req.params.transactionId },
-    include: { merchant: true },
-  });
-  if (!transaction) return res.status(404).json({ error: 'Receipt not found' });
-
-  await prisma.transaction.update({
-    where: { id: transaction.id },
-    data: { customerId: req.session.customerId },
-  });
-  await incrementLoyaltyPunch(transaction.merchantId, req.session.customerId);
-
-  if (!transaction.aiCategorizedAt) {
-    categorizeInBackground(transaction, transaction.merchant.businessName);
+  const outcome = await claimReceiptForShopper(req.params.transactionId, req.session.customerId);
+  if (outcome === 'not-found') return res.status(404).json({ error: 'Receipt not found' });
+  if (outcome === 'owned-by-other') {
+    return res.status(409).json({ error: 'This receipt is already saved to another wallet.' });
   }
-
-  res.json({ success: true });
+  res.json({ success: true, outcome });
 });
 
 // --- The wallet itself ------------------------------------------------------

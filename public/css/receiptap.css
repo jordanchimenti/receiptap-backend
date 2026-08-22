@@ -16,7 +16,11 @@
   --teal: #056BFE;
   --teal-deep: #0350BE;
   --teal-wash: #DCE7F4;
-  --amber: #C97A2B;
+  /* --amber used to be a distinct warm accent for "needs attention" states
+     -- collapsed onto the brand blue so blue is the only accent color in
+     the app besides --danger (red stays red on purpose: it's the one
+     color that has to keep meaning "stop/destructive," not brand). */
+  --amber: var(--teal);
   --danger: #B4433A;
   --danger-wash: #FBEAE8;
 
@@ -81,6 +85,7 @@ input, select, textarea, button { font-family: var(--font-body); }
   border: 1px solid var(--line);
   border-radius: 16px;
   padding: 36px 32px;
+  text-align: center;
 }
 
 .app-shell {
@@ -136,7 +141,7 @@ input, select, textarea, button { font-family: var(--font-body); }
 
 /* ---- Forms ---------------------------------------------------------------- */
 
-.field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+.field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; text-align: left; }
 .field label { font-size: 13px; font-weight: 500; color: var(--ink-soft); }
 .field input, .field select, .field textarea {
   font-size: 14px; padding: 10px 12px; border: 1px solid var(--line);
@@ -155,6 +160,22 @@ input, select, textarea, button { font-family: var(--font-body); }
 .btn-primary:hover { background: var(--teal-deep); }
 .btn-secondary { background: var(--paper); color: var(--ink); border: 1px solid var(--line); }
 .btn-disabled { background: var(--line); color: var(--ink-soft); cursor: not-allowed; }
+
+/* Sign in with Apple / Microsoft -- plain link-buttons (a full-page
+   redirect, not a JS SDK widget the way Google's button is), sized to
+   match Google's rendered button (280px) so all three sit consistently
+   when they appear together on the auth pages. */
+.oauth-btn {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  width: 280px; max-width: 100%; margin: 0 auto 10px; padding: 10px 16px;
+  border-radius: 4px; font-size: 14px; font-weight: 600; text-decoration: none;
+  border: 1px solid var(--line);
+}
+.oauth-btn svg { flex-shrink: 0; }
+.oauth-btn-apple { background: #000; color: #fff; border-color: #000; }
+.oauth-btn-apple:hover { background: #1a1a1a; }
+.oauth-btn-microsoft { background: #fff; color: var(--ink); }
+.oauth-btn-microsoft:hover { background: var(--paper); }
 
 .error-box {
   font-size: 13px; color: var(--danger); background: var(--danger-wash);
@@ -177,7 +198,7 @@ input, select, textarea, button { font-family: var(--font-body); }
   font-size: 11.5px; font-weight: 600; padding: 3px 9px; border-radius: 999px;
 }
 .badge-teal { background: var(--teal-wash); color: var(--teal-deep); }
-.badge-amber { background: #FAEEDD; color: var(--amber); }
+.badge-amber { background: var(--teal-wash); color: var(--teal-deep); }
 
 .empty-state {
   background: var(--paper-raised); border: 1px dashed var(--line); border-radius: 16px;
@@ -220,11 +241,15 @@ input, select, textarea, button { font-family: var(--font-body); }
   --rail-line: #262C42;
   --rail-text: #9AA2BC;
   --card-line: #E7EAF2;
-  --ok: #17915C;
-  --ok-wash: #E4F4EC;
-  --warn-wash: #FBF0E2;
-  --indigo: #5B57D8;
-  --indigo-wash: #E8E7FB;
+  /* --ok (green, "linked"/"success") and --indigo (a second stat-tile
+     accent) both used to be their own hue -- collapsed onto the brand
+     blue, same reasoning as --amber above. --ok-wash/--warn-wash/
+     --indigo-wash all become the same light blue wash as --teal-wash. */
+  --ok: var(--teal);
+  --ok-wash: var(--teal-wash);
+  --warn-wash: var(--teal-wash);
+  --indigo: var(--teal);
+  --indigo-wash: var(--teal-wash);
   --rail-w: 236px;
 }
 
@@ -235,7 +260,10 @@ input, select, textarea, button { font-family: var(--font-body); }
   padding: 22px 14px 16px; overflow-y: auto;
 }
 .rail-brand { display: flex; align-items: center; padding: 0 8px 22px; }
-.rail-brand img { height: 60px; filter: brightness(0) invert(1); }
+/* Logo is a wide horizontal lockup (~5:1) -- height is capped low enough
+   that it fits the fixed --rail-w sidebar without clipping, rather than
+   the old logo's ~2.8:1 ratio which had more headroom at a taller height. */
+.rail-brand img { height: 38px; filter: brightness(0) invert(1); }
 .rail-group { font-size: 10.5px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase;
   color: #5D6480; padding: 16px 10px 7px; }
 .rail a {
@@ -418,9 +446,9 @@ body.app > h1, body.app > .subtitle, body.app > div:not(.rail):not(.topbar):not(
 .stackbar span { display: block; height: 100%; }
 .status-note {
   margin: 4px 20px 18px; background: var(--ok-wash); border-radius: 10px; padding: 12px 14px;
-  font-size: 12.5px; color: #10714A; line-height: 1.5;
+  font-size: 12.5px; color: var(--teal-deep); line-height: 1.5;
 }
-.status-note.warn { background: var(--warn-wash); color: #8A5316; }
+.status-note.warn { background: var(--warn-wash); color: var(--teal-deep); }
 
 /* --- Quick actions ------------------------------------------------------- */
 .qa { padding: 12px; }
@@ -463,12 +491,13 @@ body.app > h1, body.app > .subtitle, body.app > div:not(.rail):not(.topbar):not(
   .app-body, .topbar { padding-left: 16px; padding-right: 16px; }
 }
 
-/* Owner-only affordances. Amber, distinct from the merchant blue, so it's
-   always obvious when you're stepping outside your own store's data. */
-.rail a.rail-owner { color: #F0B45F; }
-.rail a.rail-owner:hover { background: #2A2416; color: #FFD79A; }
-.rail a.rail-owner.active { background: #F0B45F; color: #131829; }
-.plan-chip.owner-chip { color: #8A5316; border-color: #EBD5AE; background: var(--warn-wash); }
+/* Owner-only affordances. Used to be amber to set it apart from the
+   merchant blue -- now uses the same brand blue as everything else (see
+   --amber above), distinguished by weight/fill instead of a separate hue. */
+.rail a.rail-owner { color: var(--teal); }
+.rail a.rail-owner:hover { background: rgba(5,107,254,0.12); color: var(--teal); }
+.rail a.rail-owner.active { background: var(--teal); color: #fff; }
+.plan-chip.owner-chip { color: var(--teal-deep); border-color: var(--teal-wash); background: var(--warn-wash); }
 
 /* ---------------------------------------------------------------------------
    Analytics page
@@ -507,4 +536,4 @@ body.app > h1, body.app > .subtitle, body.app > div:not(.rail):not(.topbar):not(
   width: 15px; height: 15px; stroke: var(--ink-soft); stroke-width: 1.8; fill: none; pointer-events: none;
 }
 .search-field input { padding-left: 34px; }
-.plan-chip.owner-chip:hover { border-color: #D9A65C; }
+.plan-chip.owner-chip:hover { border-color: var(--teal); }

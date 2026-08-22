@@ -45,6 +45,13 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
+// NOTE: sessions are in-memory again for now. Moving them to Postgres with
+// connect-pg-simple is the right fix -- a restart currently signs everyone
+// out -- but its pool plus Prisma's exceeded Supabase's session-mode cap of
+// 15 clients, and session writes started failing with EMAXCONNSESSION, which
+// silently broke login: the redirect succeeded and the session was never
+// stored. Revisit using the transaction pooler (port 6543) or a store that
+// shares Prisma's single connection, rather than opening a second pool.
 app.use(
   session({
     secret: process.env.SESSION_SECRET || 'dev-secret-change-in-production',
@@ -53,10 +60,11 @@ app.use(
     cookie: {
       secure: process.env.NODE_ENV === 'production',
       maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+      httpOnly: true,
+      sameSite: 'lax',
     },
   })
 );
-
 // --- Route modules built across this project -------------------------------
 const { ownerFlag } = require('./middleware/ownerFlag');
 app.use(ownerFlag);
@@ -78,12 +86,19 @@ app.use('/dashboard', (req, res, next) => {
 });
 
 // Subscription gate: every /dashboard/* page requires a valid subscription,
-// EXCEPT /dashboard/billing itself (blocked merchants need it to re-subscribe)
-// and pos-setup's oauth callback flow. Customer wallet (/account/*) is never
+// EXCEPT /dashboard/billing itself (blocked merchants need it to re-subscribe),
+// /dashboard/referrals (the Partner Program is free -- see below), and
+// pos-setup's oauth callback flow. Customer wallet (/account/*) is never
 // gated — shoppers aren't the ones paying us.
 const { requireActiveSubscription } = require('./middleware/subscriptionGate');
 app.use('/dashboard', (req, res, next) => {
   if (req.path.startsWith('/billing')) return next(); // billing page always reachable
+  // The Partner Program costs nothing to join and nothing to earn from, so a
+  // merchant whose own subscription lapsed still reaches their referral link
+  // and commission history instead of being bounced to billing. The wallet's
+  // equivalent (/account/business/referrals) needs the same exception on its
+  // own gate below -- /account/business has its own copy of these three gates.
+  if (req.path.startsWith('/referrals')) return next();
   if (!req.session?.merchantId) return next();        // let each route's own requireAuth redirect to login
   return requireActiveSubscription(req, res, next);
 });
@@ -95,6 +110,29 @@ app.use('/dashboard', (req, res, next) => {
 const { requireCurrentLegalAcceptance } = require('./middleware/legalReacceptance');
 app.use('/dashboard', (req, res, next) => {
   if (req.path.startsWith('/billing')) return next();
+  if (!req.session?.merchantId) return next();
+  return requireCurrentLegalAcceptance(req, res, next);
+});
+
+// Same three gates as /dashboard above, wrapped around /account/business
+// (the wallet's dark reskin of the dashboard, routes/account-business.js)
+// so this second entry point into merchant data can't show a demo or
+// canceled-subscription merchant anything the real dashboard wouldn't.
+// No /billing exception here -- Phase 1 has no billing page in the wallet
+// yet, so a blocked merchant lands on the real /dashboard/billing instead.
+app.use('/account/business', (req, res, next) => {
+  if (!req.session?.merchantId) return next();
+  return requireDemoAccess(req, res, next);
+});
+app.use('/account/business', (req, res, next) => {
+  // Partner Program exception, matching /dashboard/referrals above: it's free
+  // to join and free to earn from, so a lapsed merchant still reaches their
+  // referral link and commission history here instead of being sent to billing.
+  if (req.path.startsWith('/referrals')) return next();
+  if (!req.session?.merchantId) return next();
+  return requireActiveSubscription(req, res, next);
+});
+app.use('/account/business', (req, res, next) => {
   if (!req.session?.merchantId) return next();
   return requireCurrentLegalAcceptance(req, res, next);
 });
@@ -112,6 +150,7 @@ app.use(require('./routes/theme-settings'));       // /dashboard/settings/receip
 app.use(require('./routes/account-settings'));    // /dashboard/settings/account (business info, password, POS disconnect, deactivate)
 app.use(require('./routes/email-capture'));         // email/Google capture gate before receipt save, merchant email list
 app.use(require('./routes/customer-account'));    // consumer wallet: /account/*
+app.use(require('./routes/account-business'));    // wallet's dark reskin of the merchant dashboard: /account/business/*
 app.use(require('./routes/loyalty'));               // punch cards: join/earn/self-serve redeem, /account/loyalty
 app.use(require('./routes/billing'));               // ReceipTap's own subscription billing (Stripe)
 app.use(require('./routes/affiliates'));             // referral program: /dashboard/referrals (merchant-affiliates), /affiliate/* (regular affiliates)

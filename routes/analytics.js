@@ -45,7 +45,9 @@ function pctDelta(cur, prev) {
 }
 
 const POS_LABELS = { square: 'Square', shopify: 'Shopify', clover: 'Clover', toast: 'Toast' };
-const POS_COLORS = { square: '#056BFE', shopify: '#5B57D8', clover: '#17915C', toast: '#C97A2B' };
+// One brand blue, varied in shade only -- so the POS-source doughnut chart's
+// segments stay distinguishable without introducing a non-blue color.
+const POS_COLORS = { square: '#056BFE', shopify: '#3D8BFF', clover: '#0350BE', toast: '#8AB8FF' };
 
 // Recent receipts + recently-first-seen customers, merged and sorted by
 // recency. Shared by the initial page render and the polling endpoint below
@@ -88,9 +90,10 @@ async function getRecentActivity(merchantId, limit = 10) {
     .map((e) => ({ text: e.text, when: timeAgo(e.at) }));
 }
 
-router.get('/dashboard/analytics', requireAuth, async (req, res) => {
-  const merchantId = req.session.merchantId;
-  const days = [7, 30, 90].includes(parseInt(req.query.days, 10)) ? parseInt(req.query.days, 10) : 30;
+// Shared by GET /dashboard/analytics and GET /account/business/analytics
+// (the wallet's dark reskin) -- see routes/account-business.js.
+async function computeAnalyticsData(merchantId, daysParam) {
+  const days = [7, 30, 90].includes(parseInt(daysParam, 10)) ? parseInt(daysParam, 10) : 30;
 
   const now = new Date();
   const since = new Date(now);
@@ -199,7 +202,7 @@ router.get('/dashboard/analytics', requireAuth, async (req, res) => {
 
   const activity = await getRecentActivity(merchantId);
 
-  res.render('analytics', {
+  return {
     merchant,
     days,
     dayLabels,
@@ -210,7 +213,11 @@ router.get('/dashboard/analytics', requireAuth, async (req, res) => {
     weekLabels,
     weekBuckets,
     activity,
-  });
+  };
+}
+
+router.get('/dashboard/analytics', requireAuth, async (req, res) => {
+  res.render('analytics', await computeAnalyticsData(req.session.merchantId, req.query.days));
 });
 
 // Polled every ~20s by the page's client-side script. Scoped strictly to the
@@ -249,3 +256,4 @@ router.get('/dashboard/analytics/export', requireAuth, async (req, res) => {
 });
 
 module.exports = router;
+module.exports.computeAnalyticsData = computeAnalyticsData;

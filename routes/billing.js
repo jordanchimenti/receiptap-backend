@@ -14,6 +14,7 @@ const {
   createCheckoutSession,
   getSubscriptionPrice,
   createPortalSession,
+  listPaymentMethods,
   handleWebhookEvent,
   hasAccess,
   mapStripeStatus,
@@ -68,32 +69,40 @@ function handlePhotoUpload(req, res, next) {
   });
 }
 
-// GET /dashboard/billing — shows real subscription/payment/invoice data from
-// Stripe, plus real usage numbers from our own DB. Every Stripe call is
-// wrapped so a hiccup degrades that one section to an empty state instead of
-// taking down the whole page.
-router.get('/dashboard/billing', requireAuth, async (req, res) => {
-  let merchant = await prisma.merchant.findUnique({ where: { id: req.session.merchantId } });
+// Coming back from a successful Checkout — sync the subscription right now
+// instead of waiting on the /webhooks/stripe event. No webhook secret is
+// configured yet, and Stripe can't reach a local dev server anyway, so
+// without this, subscriptionStatus would never leave INCOMPLETE. Both
+// GET /dashboard/billing and GET /account/business/billing (a demo account
+// starting their trial from the wallet, see routes/account-business.js)
+// land here with ?success=1.
+async function syncSubscriptionFromStripe(merchantId) {
+  const merchant = await prisma.merchant.findUnique({ where: { id: merchantId } });
+  if (!stripe || !merchant.stripeCustomerId) return;
 
-  // Coming back from a successful Checkout — sync the subscription right now
-  // instead of waiting on the /webhooks/stripe event. No webhook secret is
-  // configured yet, and Stripe can't reach a local dev server anyway, so
-  // without this, subscriptionStatus would never leave INCOMPLETE.
-  if (req.query.success === '1' && stripe && merchant.stripeCustomerId) {
-    const subs = await stripe.subscriptions.list({ customer: merchant.stripeCustomerId, limit: 1 });
-    const sub = subs.data[0];
-    if (sub) {
-      const status = mapStripeStatus(sub.status);
-      merchant = await prisma.merchant.update({
-        where: { id: merchant.id },
-        data: { stripeSubscriptionId: sub.id, subscriptionStatus: status },
-      });
-      await syncPuckReturnWindows(merchant.id, status);
-    }
-  }
+  const subs = await stripe.subscriptions.list({ customer: merchant.stripeCustomerId, limit: 1 });
+  const sub = subs.data[0];
+  if (!sub) return;
+
+  const status = mapStripeStatus(sub.status);
+  await prisma.merchant.update({
+    where: { id: merchant.id },
+    data: { stripeSubscriptionId: sub.id, subscriptionStatus: status },
+  });
+  await syncPuckReturnWindows(merchant.id, status);
+}
+
+// Shared by GET /dashboard/billing and GET /account/business/billing (the
+// wallet's dark reskin) -- see routes/account-business.js. Every Stripe call
+// is wrapped so a hiccup degrades that one section to an empty state instead
+// of taking down the whole page.
+async function computeBillingData(merchantId) {
+  const merchant = await prisma.merchant.findUnique({ where: { id: merchantId } });
 
   let subscription = null;
   let paymentMethod = null;
+  let paymentMethods = [];
+  let defaultPaymentMethodId = null;
   let invoices = [];
   let upcoming = null;
   let activeReceiptTaps = 0;
@@ -104,11 +113,12 @@ router.get('/dashboard/billing', requireAuth, async (req, res) => {
   const price = await getSubscriptionPrice();
 
   if (stripe && merchant.stripeCustomerId) {
-    const [subResult, pmResult, invResult, upcomingResult, puckCount] = await Promise.all([
+    const [subResult, pmResult, customerResult, invResult, upcomingResult, puckCount] = await Promise.all([
       merchant.stripeSubscriptionId
         ? stripe.subscriptions.retrieve(merchant.stripeSubscriptionId).catch(() => null)
         : null,
       stripe.paymentMethods.list({ customer: merchant.stripeCustomerId, type: 'card' }).catch(() => ({ data: [] })),
+      stripe.customers.retrieve(merchant.stripeCustomerId).catch(() => null),
       stripe.invoices.list({ customer: merchant.stripeCustomerId, limit: 5 }).catch(() => ({ data: [] })),
       // Passing `subscription` explicitly matters: without it, Stripe previews
       // the customer's next invoice generically and silently ignores any
@@ -122,7 +132,9 @@ router.get('/dashboard/billing', requireAuth, async (req, res) => {
       }),
     ]);
     subscription = subResult;
-    paymentMethod = pmResult.data[0] || null; // first card on file -- no "default" is set on this account
+    paymentMethod = pmResult.data[0] || null; // first card on file -- kept as-is, only views/billing.ejs (real dashboard) still reads this single-card field
+    paymentMethods = pmResult.data; // every card on file -- the wallet's Payment Method panel manages all of them, not just the first
+    defaultPaymentMethodId = customerResult?.invoice_settings?.default_payment_method || null;
     invoices = invResult.data;
     upcoming = upcomingResult;
     activeReceiptTaps = puckCount;
@@ -134,7 +146,7 @@ router.get('/dashboard/billing', requireAuth, async (req, res) => {
   const trialFirstChargeDate = new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000)
     .toLocaleDateString('en-US', { dateStyle: 'medium' });
 
-  res.render('billing', {
+  return {
     merchant,
     access: hasAccess(merchant),
     price,
@@ -145,14 +157,16 @@ router.get('/dashboard/billing', requireAuth, async (req, res) => {
     // the isFirstTimeSubscriber comment on createCheckoutSession() in
     // services/stripeService.js for why that's deliberate, not an oversight.
     chargesShipping: merchant.subscriptionStatus !== 'CANCELED',
-    error: req.query.error || null,
-    blocked: req.query.blocked === '1',
-    success: req.query.success === '1',
-    discountApplied: req.query.discount === '1',
-    justCanceled: req.query.canceled === '1' && Boolean(subscription?.cancel_at_period_end),
-    justResumed: req.query.resumed === '1',
     subscription,
     paymentMethod,
+    paymentMethods: paymentMethods.map((pm) => ({
+      id: pm.id,
+      brand: pm.card.brand,
+      last4: pm.card.last4,
+      expMonth: pm.card.exp_month,
+      expYear: pm.card.exp_year,
+      isDefault: pm.id === defaultPaymentMethodId,
+    })),
     invoices: invoices.map((inv) => ({
       id: inv.number || inv.id,
       date: new Date(inv.created * 1000).toLocaleDateString('en-US', { dateStyle: 'medium' }),
@@ -178,7 +192,34 @@ router.get('/dashboard/billing', requireAuth, async (req, res) => {
       subscription && (subscription.trial_end || subscription.current_period_end)
         ? new Date((subscription.trial_end || subscription.current_period_end) * 1000).toLocaleDateString('en-US', { dateStyle: 'medium' })
         : null,
+    // When this subscription actually began (trial or not) -- a Stripe
+    // subscription always has this, unlike an invoice history, which is
+    // empty for the entire length of a trial (nothing's been charged yet).
+    subscriptionStartDate:
+      subscription && subscription.start_date
+        ? new Date(subscription.start_date * 1000).toLocaleDateString('en-US', { dateStyle: 'medium' })
+        : null,
     cancelAtPeriodEnd: Boolean(subscription?.cancel_at_period_end),
+  };
+}
+
+// GET /dashboard/billing — shows real subscription/payment/invoice data from
+// Stripe, plus real usage numbers from our own DB.
+router.get('/dashboard/billing', requireAuth, async (req, res) => {
+  if (req.query.success === '1') {
+    await syncSubscriptionFromStripe(req.session.merchantId);
+  }
+
+  const data = await computeBillingData(req.session.merchantId);
+
+  res.render('billing', {
+    ...data,
+    error: req.query.error || null,
+    blocked: req.query.blocked === '1',
+    success: req.query.success === '1',
+    discountApplied: req.query.discount === '1',
+    justCanceled: req.query.canceled === '1' && Boolean(data.subscription?.cancel_at_period_end),
+    justResumed: req.query.resumed === '1',
   });
 });
 
@@ -288,3 +329,13 @@ router.post('/webhooks/stripe', async (req, res) => {
 });
 
 module.exports = router;
+module.exports.computeBillingData = computeBillingData;
+// The raw multer instance, not handlePhotoUpload -- that wrapper's error
+// redirect is hardcoded to /dashboard/billing, which isn't right for a
+// caller elsewhere. routes/account-settings.js wraps this one with its own
+// destination instead.
+module.exports.uploadProfilePhoto = uploadProfilePhoto;
+// Needed by GET /account/business/billing too now -- a demo account can
+// start a trial from the wallet's own Billing page (routes/account-business.js),
+// so that page needs the same post-Checkout sync this one already does.
+module.exports.syncSubscriptionFromStripe = syncSubscriptionFromStripe;

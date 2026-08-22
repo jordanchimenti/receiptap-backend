@@ -93,7 +93,8 @@ Solo founder, first-time coder. Explain in plain language, one step at a time.
   Clover both), not just sandbox — `verifySquareSignature()` in
   `routes/webhooks.js` does real HMAC-SHA256 verification against
   `SQUARE_WEBHOOK_SIGNATURE_KEY`, not a placeholder.
-- NFC puck lifecycle: batch IDs, claim codes, QR activation
+- NFC puck lifecycle: batch IDs, claim codes, tap-to-activate (NFC only — no
+  QR code; a merchant taps the puck, then types the printed claim code)
 - "Assign to next sale" pairing — merchant arms a puck, rings one test sale,
   the webhook binds puck to register. Merchant never sees an ID.
 - Receipt themes, Google review card, email capture modal
@@ -151,8 +152,9 @@ Solo founder, first-time coder. Explain in plain language, one step at a time.
 - **Passive NFC.** The puck has no power and no radio. It can never report
   "online" or "offline". Any device-status UI must be about setup state
   (linked / pairing / needs linking), never connectivity.
-- **Deletion FK order.** `ShopperConsent.receiptId -> Transaction` and
-  `LoyaltyCard.customerId -> Customer` are both `ON DELETE RESTRICT` —
+- **Deletion FK order.** `ShopperConsent.receiptId -> Transaction`,
+  `LoyaltyCard.customerId -> Customer`, and `ScannedReceipt.customerId ->
+  Customer` are all `ON DELETE RESTRICT` —
   delete the child rows before the parent or Postgres rejects it.
   `LegalAcceptance.merchantId`, `ReceiptTheme.merchantId`,
   `LoyaltyProgram.merchantId`, and `Commission.merchantId` are ALSO
@@ -171,9 +173,12 @@ Solo founder, first-time coder. Explain in plain language, one step at a time.
   merchant-receipts, pos-setup, theme-settings, merchant-expenses.
 - Not deployed yet — in version control and pushed to GitHub
   (jordanchimenti/receiptap-backend) now, just not hosted anywhere real yet.
-- `/legal/terms`, `/legal/privacy`, and `/legal/dpa` are all drafted now
-  (real content, not stubs — see `views/partials/legal-*-content.ejs`), and
-  the retention windows from `config/retention.js` are stated on them. But
+- `/legal/terms`, `/legal/privacy`, and `/legal/dpa` (for merchants), plus
+  `/legal/wallet-terms` and `/legal/wallet-privacy` (a separate pair for an
+  individual wallet-account holder — no wallet-side DPA, since an
+  individual isn't a data controller) are all drafted now (real content,
+  not stubs — see `views/partials/legal-*-content.ejs`), and the retention
+  windows from `config/retention.js` are stated on them. But
   none is launch-ready: each has open `[[REVIEW: ...]]` markers for
   business/legal decisions not yet made (registered address, tax treatment,
   refund policy, audit rights, whether live purging is actually on, etc.)

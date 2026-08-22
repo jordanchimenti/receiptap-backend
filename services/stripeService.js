@@ -118,6 +118,122 @@ async function createPortalSession(merchant, returnUrl) {
 }
 
 /**
+ * The wallet's native "Add payment method" card (business-billing.ejs) --
+ * a SetupIntent is Stripe's mechanism for saving a card for future use
+ * without charging it, which is exactly what "add a backup card" needs.
+ * The client secret this returns goes straight to Stripe.js in the
+ * browser, which is what actually collects the card number -- our server
+ * never sees it, same PCI-scope reasoning as Checkout/Portal.
+ */
+async function createSetupIntent(merchant) {
+  if (!stripe) throw new Error('Stripe is not configured yet (missing STRIPE_SECRET_KEY).');
+  if (!merchant.stripeCustomerId) {
+    throw new Error('This merchant has no Stripe customer yet — they need to subscribe first.');
+  }
+  const setupIntent = await stripe.setupIntents.create({
+    customer: merchant.stripeCustomerId,
+    payment_method_types: ['card'],
+  });
+  return setupIntent.client_secret;
+}
+
+/**
+ * Every card currently on file for a merchant, plus which one is the
+ * default (the one Stripe actually charges) -- computeBillingData() in
+ * routes/billing.js uses this so the wallet's Payment Method panel can
+ * show more than just the first card. Wrapped the same way every other
+ * best-effort Stripe read in this file is: a hiccup here degrades to an
+ * empty list rather than crashing the whole billing page.
+ */
+async function listPaymentMethods(merchant) {
+  if (!stripe || !merchant.stripeCustomerId) return { paymentMethods: [], defaultPaymentMethodId: null };
+  try {
+    const [pmResult, customer] = await Promise.all([
+      stripe.paymentMethods.list({ customer: merchant.stripeCustomerId, type: 'card' }),
+      stripe.customers.retrieve(merchant.stripeCustomerId),
+    ]);
+    return {
+      paymentMethods: pmResult.data,
+      defaultPaymentMethodId: customer.invoice_settings?.default_payment_method || null,
+    };
+  } catch (err) {
+    return { paymentMethods: [], defaultPaymentMethodId: null };
+  }
+}
+
+/**
+ * Attaches a card (already tokenized client-side by Stripe.js, see
+ * createSetupIntent above) to the merchant's Stripe customer, and makes it
+ * their default if they don't have one yet -- someone adding their very
+ * first card this way should have it actually usable for billing without
+ * an extra "set as default" click.
+ */
+async function attachPaymentMethod(merchant, paymentMethodId) {
+  if (!stripe) throw new Error('Stripe is not configured yet (missing STRIPE_SECRET_KEY).');
+  await stripe.paymentMethods.attach(paymentMethodId, { customer: merchant.stripeCustomerId });
+
+  const customer = await stripe.customers.retrieve(merchant.stripeCustomerId);
+  if (!customer.invoice_settings?.default_payment_method) {
+    await stripe.customers.update(merchant.stripeCustomerId, {
+      invoice_settings: { default_payment_method: paymentMethodId },
+    });
+  }
+}
+
+/**
+ * Marks an already-attached card as the one Stripe should actually charge.
+ * Verifies the card is actually this merchant's own before touching
+ * anything -- paymentMethodId comes straight from a route param, and
+ * Stripe's detach/update calls operate on a payment method by ID alone
+ * with no implicit customer scoping, so without this check a merchant
+ * could set (or, in removePaymentMethod below, delete) a card that
+ * belongs to a completely different Stripe customer.
+ */
+async function setDefaultPaymentMethod(merchant, paymentMethodId) {
+  if (!stripe) throw new Error('Stripe is not configured yet (missing STRIPE_SECRET_KEY).');
+  const pm = await stripe.paymentMethods.retrieve(paymentMethodId).catch(() => null);
+  if (!pm || pm.customer !== merchant.stripeCustomerId) {
+    throw new Error('That payment method is not on this account.');
+  }
+  await stripe.customers.update(merchant.stripeCustomerId, {
+    invoice_settings: { default_payment_method: paymentMethodId },
+  });
+}
+
+/**
+ * Removes a card -- but never the merchant's last one. An active/trialing
+ * subscription needs a payment method on file for the auto-charge at
+ * trial end to work at all, so "at least one must remain" isn't just a UX
+ * nicety here, it's what keeps billing itself from silently breaking.
+ * Same ownership check as setDefaultPaymentMethod above, for the same
+ * reason -- detach() has no implicit customer scoping either.
+ */
+async function removePaymentMethod(merchant, paymentMethodId) {
+  if (!stripe) throw new Error('Stripe is not configured yet (missing STRIPE_SECRET_KEY).');
+  const existing = await stripe.paymentMethods.list({ customer: merchant.stripeCustomerId, type: 'card' });
+  const owned = existing.data.some((pm) => pm.id === paymentMethodId);
+  if (!owned) {
+    throw new Error('That payment method is not on this account.');
+  }
+  if (existing.data.length <= 1) {
+    throw new Error('At least one payment method has to stay on file — add a new one before removing this one.');
+  }
+  await stripe.paymentMethods.detach(paymentMethodId);
+
+  // If the removed card was the default, promote whichever one is left so
+  // the account is never left without a usable default.
+  const customer = await stripe.customers.retrieve(merchant.stripeCustomerId);
+  if (customer.invoice_settings?.default_payment_method === paymentMethodId) {
+    const remaining = existing.data.find((pm) => pm.id !== paymentMethodId);
+    if (remaining) {
+      await stripe.customers.update(merchant.stripeCustomerId, {
+        invoice_settings: { default_payment_method: remaining.id },
+      });
+    }
+  }
+}
+
+/**
  * Cancellation retention offer: a merchant clicking "Cancel Subscription" is
  * shown a 50%-off-next-month offer before the cancellation goes through.
  * RETENTION50 is a real Stripe coupon (50% off, one-time) created for this.
@@ -231,16 +347,18 @@ async function recordAffiliateCommission(invoice) {
 
   const affiliate = await prisma.affiliate.findUnique({
     where: { id: merchant.referredByAffiliateId },
-    include: { merchant: true }, // the affiliate's OWN merchant account, if type MERCHANT
   });
   if (!affiliate) return;
 
   const rate = affiliate.type === 'MERCHANT' ? MERCHANT_AFFILIATE_RATE : REGULAR_AFFILIATE_RATE;
 
-  // Merchant-affiliates only accrue new commissions while their own
-  // subscription is active -- commissions already earned are unaffected,
-  // this only blocks new ones from being created while lapsed.
-  if (affiliate.type === 'MERCHANT' && affiliate.merchant?.subscriptionStatus !== 'ACTIVE') return;
+  // No eligibility check on the affiliate's own account, deliberately: the
+  // Partner Program is free to join and free to earn from, so a merchant
+  // whose own subscription lapsed (or who never subscribed at all) still
+  // accrues on everyone they referred. The commission is funded by the
+  // REFERRED merchant's payment, which is what this invoice already proves
+  // happened -- gating it on the referrer's own billing meant we kept the
+  // full payment from someone who'd done the work of bringing that customer in.
 
   const amountCents = Math.round(invoice.amount_paid * (rate / 100));
 
@@ -402,6 +520,11 @@ module.exports = {
   createCheckoutSession,
   getSubscriptionPrice,
   createPortalSession,
+  createSetupIntent,
+  listPaymentMethods,
+  attachPaymentMethod,
+  setDefaultPaymentMethod,
+  removePaymentMethod,
   handleWebhookEvent,
   syncPuckReturnWindows,
   hasAccess,

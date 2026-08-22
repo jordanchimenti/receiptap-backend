@@ -6,11 +6,9 @@
 // Outputs:
 //   output/nfc-manifest.csv       -> send to your NFC supplier (chip encoding)
 //   output/insert-card-data.csv   -> send to your print shop / packaging supplier
-//   output/qr-codes/*.png         -> QR images, if you're generating them yourself
 //   + inserts every puck as UNCLAIMED directly into your database
 
 const { customAlphabet } = require('nanoid');
-const QRCode = require('qrcode');
 const fs = require('fs');
 const path = require('path');
 const { PrismaClient } = require('@prisma/client');
@@ -21,7 +19,7 @@ const BASE_URL = 'https://receiptap.com';
 
 // Excludes visually ambiguous characters: 0/O, 1/I/l
 const ALPHABET = '23456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz';
-const generatePuckId = customAlphabet(ALPHABET, 10);   // long, never typed by a human — read via NFC/QR only
+const generatePuckId = customAlphabet(ALPHABET, 10);   // long, never typed by a human — read via NFC only
 const generateClaimCode = customAlphabet(ALPHABET, 6); // short, may be typed manually
 
 async function generateBatch(count) {
@@ -47,7 +45,6 @@ async function generateBatch(count) {
       id,
       claimCode,
       nfcUrl: `${BASE_URL}/r/${id}`,
-      qrUrl: `${BASE_URL}/claim/${id}?code=${claimCode}`,
     });
   }
 
@@ -71,17 +68,9 @@ function exportNfcManifest(batch, outDir) {
 
 function exportInsertCardData(batch, outDir) {
   const csv =
-    'puck_id,claim_code,qr_url,qr_file\n' +
-    batch.map((p) => `${p.id},${p.claimCode},${p.qrUrl},${p.id}.png`).join('\n');
+    'puck_id,claim_code\n' +
+    batch.map((p) => `${p.id},${p.claimCode}`).join('\n');
   fs.writeFileSync(path.join(outDir, 'insert-card-data.csv'), csv);
-}
-
-async function generateQrImages(batch, outDir) {
-  const qrDir = path.join(outDir, 'qr-codes');
-  fs.mkdirSync(qrDir, { recursive: true });
-  for (const puck of batch) {
-    await QRCode.toFile(path.join(qrDir, `${puck.id}.png`), puck.qrUrl, { width: 300, margin: 2 });
-  }
 }
 
 async function main() {
@@ -106,14 +95,10 @@ async function main() {
   console.log('Writing insert card data...');
   exportInsertCardData(batch, outDir);
 
-  console.log('Generating QR code images...');
-  await generateQrImages(batch, outDir);
-
   console.log(`\nDone. ${batch.length} pucks generated and saved to the database.`);
   console.log(`Files written to: ${outDir}`);
   console.log('  - nfc-manifest.csv       (send to NFC supplier)');
   console.log('  - insert-card-data.csv   (send to print/packaging supplier)');
-  console.log('  - qr-codes/              (QR images, if generating yourself)');
 
   await prisma.$disconnect();
 }

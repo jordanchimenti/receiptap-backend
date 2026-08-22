@@ -17,8 +17,7 @@ function requireAuth(req, res, next) {
 // GET /r/:puckId
 // This is the URL permanently encoded (and locked) on every NFC chip.
 // Same URL forever — what it does depends on the puck's current status.
-// Also reached via QR scan during activation (QR encodes /claim/:puckId directly,
-// but leaving this route's logic documented here for clarity on the full lifecycle).
+// NFC only — there is no QR code path.
 // ---------------------------------------------------------------------------
 router.get('/r/:puckId', async (req, res) => {
   const puck = await prisma.puck.findUnique({ where: { id: req.params.puckId } });
@@ -72,8 +71,10 @@ router.get('/merchant/:id', async (req, res) => {
 
 // ---------------------------------------------------------------------------
 // GET /claim/:puckId
-// Loaded either by tapping an unclaimed puck, or by scanning the QR code
-// on the insert card (QR = /claim/:puckId?code=XXXXXX, code pre-fills the form)
+// Loaded by tapping an unclaimed puck. `?code=` is accepted to pre-fill the
+// activation code field but nothing currently links here with it set (no QR
+// path exists) — the merchant types the 6-character code from the insert
+// card by hand.
 // ---------------------------------------------------------------------------
 router.get('/claim/:puckId', requireAuth, async (req, res) => {
   const puck = await prisma.puck.findUnique({ where: { id: req.params.puckId } });

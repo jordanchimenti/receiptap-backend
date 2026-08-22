@@ -66,17 +66,23 @@ async function getRepeatCustomers(merchantId) {
     .sort((a, b) => b.visitCount - a.visitCount);
 }
 
-router.get('/dashboard/repeat-customers', requireAuth, async (req, res) => {
-  const merchant = await prisma.merchant.findUnique({ where: { id: req.session.merchantId } });
-  const customers = await getRepeatCustomers(req.session.merchantId);
+// Shared by GET /dashboard/repeat-customers and GET /account/business/customers
+// (the wallet's dark reskin) -- see routes/account-business.js.
+async function computeRepeatCustomersData(merchantId) {
+  const merchant = await prisma.merchant.findUnique({ where: { id: merchantId } });
+  const customers = await getRepeatCustomers(merchantId);
 
-  res.render('repeat-customers', {
+  return {
     businessName: merchant.businessName,
     customers: customers.map((c) => ({
       ...c,
       lastVisit: c.lastVisit.toLocaleDateString('en-US', { dateStyle: 'medium' }),
     })),
-  });
+  };
+}
+
+router.get('/dashboard/repeat-customers', requireAuth, async (req, res) => {
+  res.render('repeat-customers', await computeRepeatCustomersData(req.session.merchantId));
 });
 
 // CSV export — designed to drop straight into an email platform's contact
@@ -97,3 +103,4 @@ router.get('/dashboard/repeat-customers/export', requireAuth, async (req, res) =
 });
 
 module.exports = router;
+module.exports.computeRepeatCustomersData = computeRepeatCustomersData;

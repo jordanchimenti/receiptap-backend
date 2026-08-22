@@ -189,7 +189,7 @@ Customers get a "Save Receipt (PDF / Files)" button on their receipt. Clicking i
 
 1. Merchant signs up (`/signup`) → connects Square (`/oauth/square/connect`) → assigns pucks to registers (`/dashboard/pos-setup`)
 2. You generate a puck batch (`scripts/generate-batch.js`) → send manifest to NFC supplier → pucks ship pre-encoded and locked
-3. Merchant unboxes, taps or scans QR → `/claim/:puckId` → enters claim code → puck linked to their account
+3. Merchant unboxes, taps the puck → `/claim/:puckId` → enters claim code → puck linked to their account
 4. Customer buys something → Square fires a webhook → `/webhooks/pos/square` saves the `Transaction` and updates the puck
 5. Customer taps the puck → `/r/:puckId` → sees their live receipt → optionally saves it to their own wallet or (if they're a merchant buying elsewhere) as a business expense
 6. Merchant reviews everything in `/dashboard/receipts-hub` — sales issued and expenses received, side by side

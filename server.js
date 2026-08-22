@@ -56,7 +56,11 @@ app.use(express.static(path.join(__dirname, 'public')));
 // That cap was hit, session writes failed with EMAXCONNSESSION, and login
 // broke silently -- express-session treats a failed save as non-fatal, so the
 // redirect succeeded and the session simply wasn't there on the next request.
-const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+// 400 days -- the ceiling browsers actually honour. Chrome clamps any cookie
+// expiry beyond 400 days (RFC 6265bis), so asking for longer just gets
+// silently truncated. Paired with `rolling` below, this means "stay signed in
+// as long as you use ReceipTap at least once a year".
+const SESSION_TTL_MS = 400 * 24 * 60 * 60 * 1000;
 const { PrismaSessionStore } = require('./lib/prismaSessionStore');
 app.use(
   session({
@@ -64,6 +68,11 @@ app.use(
     secret: process.env.SESSION_SECRET || 'dev-secret-change-in-production',
     resave: false,
     saveUninitialized: false,
+    // Without this, the clock starts at FIRST login and never restarts -- a
+    // shopper tapping every week was still signed out on day 30. Rolling
+    // re-issues the cookie on each visit, so the window is measured from last
+    // use, which is what "stay signed in" is supposed to mean.
+    rolling: true,
     cookie: {
       secure: process.env.NODE_ENV === 'production',
       maxAge: SESSION_TTL_MS,

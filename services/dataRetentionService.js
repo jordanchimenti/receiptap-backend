@@ -99,7 +99,7 @@ async function purgeExpiredReceipts({ dryRun = true } = {}) {
   const startedAt = new Date();
   const receiptCutoff = monthsAgo(SHOPPER_RECEIPT_MONTHS);
   const accountCutoff = monthsAgo(SHOPPER_ACCOUNT_MONTHS);
-  const details = { Transaction: 0, ShopperConsent: 0, Customer: 0, LoyaltyCard: 0 };
+  const details = { Transaction: 0, ShopperConsent: 0, Customer: 0, LoyaltyCard: 0, ShopperIdentifier: 0 };
   let error = null;
 
   try {
@@ -146,13 +146,19 @@ async function purgeExpiredReceipts({ dryRun = true } = {}) {
       const batch = idleCustomerIds.slice(i, i + BATCH_SIZE);
       if (dryRun) {
         details.LoyaltyCard += await prisma.loyaltyCard.count({ where: { customerId: { in: batch } } });
+        details.ShopperIdentifier += await prisma.shopperIdentifier.count({ where: { shopperId: { in: batch } } });
         details.Customer += batch.length;
       } else {
-        const [loyaltyResult, customerResult] = await prisma.$transaction([
+        // ShopperIdentifier.shopperId is ON DELETE RESTRICT, so it has to be
+        // cleared before the Customer rows -- without this, this scheduled job
+        // starts throwing the first time an idle shopper has a card link.
+        const [loyaltyResult, identifierResult, customerResult] = await prisma.$transaction([
           prisma.loyaltyCard.deleteMany({ where: { customerId: { in: batch } } }),
+          prisma.shopperIdentifier.deleteMany({ where: { shopperId: { in: batch } } }),
           prisma.customer.deleteMany({ where: { id: { in: batch } } }),
         ]);
         details.LoyaltyCard += loyaltyResult.count;
+        details.ShopperIdentifier += identifierResult.count;
         details.Customer += customerResult.count;
       }
     }
@@ -286,6 +292,13 @@ async function purgeDeactivatedMerchants({ dryRun = true } = {}) {
  * this merchant. The Customer account itself is untouched (they may have a
  * wallet relationship with other merchants too) -- see deleteShopperEverywhere
  * for full-account erasure.
+ *
+ * ShopperIdentifier rows are deliberately NOT touched here. An identifier is
+ * shopper-to-platform, not shopper-to-merchant: one merchant asking to erase
+ * their own copy of a shopper's data has no claim over a link that shopper
+ * holds with every other ReceipTap business. Deleting it would silently break
+ * recognition elsewhere on one merchant's say-so. Full erasure of identifiers
+ * belongs to the shopper's own request -- deleteShopperEverywhere.
  */
 async function deleteShopperByEmail(email, merchantId, { dryRun = true } = {}) {
   const startedAt = new Date();
@@ -359,7 +372,7 @@ async function deleteShopperByEmail(email, merchantId, { dryRun = true } = {}) {
  */
 async function deleteShopperEverywhere(email, { dryRun = true, initiatedByMerchantId = null } = {}) {
   const startedAt = new Date();
-  const details = { Transaction_unlinked: 0, ShopperConsent: 0, LoyaltyCard: 0, Customer: 0 };
+  const details = { Transaction_unlinked: 0, ShopperConsent: 0, LoyaltyCard: 0, ScannedReceipt: 0, ShopperIdentifier: 0, Customer: 0 };
   let error = null;
   let found = false;
 
@@ -378,22 +391,38 @@ async function deleteShopperEverywhere(email, { dryRun = true, initiatedByMercha
       const merchantIds = [...new Set(txns.map((t) => t.merchantId))];
       const consentCount = await prisma.shopperConsent.count({ where: { receiptId: { in: txnIds } } });
       const loyaltyCardCount = await prisma.loyaltyCard.count({ where: { customerId: customer.id } });
+      const scannedReceiptCount = await prisma.scannedReceipt.count({ where: { customerId: customer.id } });
+      // Every passive identifier that could still recognise this person --
+      // revoked ones included. A revoked row is kept for audit while the
+      // shopper exists, but a full erasure means nothing about them survives,
+      // so this counts and deletes both.
+      const identifierCount = await prisma.shopperIdentifier.count({ where: { shopperId: customer.id } });
 
       if (dryRun) {
         details.Transaction_unlinked = txnIds.length;
         details.ShopperConsent = consentCount;
         details.LoyaltyCard = loyaltyCardCount;
+        details.ScannedReceipt = scannedReceiptCount;
+        details.ShopperIdentifier = identifierCount;
         details.Customer = 1;
       } else {
+        // ScannedReceipt.customerId and ShopperIdentifier.shopperId are both
+        // ON DELETE RESTRICT (see prisma/schema.prisma) -- those rows have to
+        // go before the Customer delete below or Postgres rejects the whole
+        // transaction. Order matters here, not just membership.
         const results = await prisma.$transaction([
           prisma.shopperConsent.deleteMany({ where: { receiptId: { in: txnIds } } }),
           prisma.transaction.updateMany({ where: { id: { in: txnIds } }, data: { customerId: null } }),
           prisma.loyaltyCard.deleteMany({ where: { customerId: customer.id } }),
+          prisma.scannedReceipt.deleteMany({ where: { customerId: customer.id } }),
+          prisma.shopperIdentifier.deleteMany({ where: { shopperId: customer.id } }),
           prisma.customer.delete({ where: { id: customer.id } }),
         ]);
         details.ShopperConsent = results[0].count;
         details.Transaction_unlinked = results[1].count;
         details.LoyaltyCard = results[2].count;
+        details.ScannedReceipt = results[3].count;
+        details.ShopperIdentifier = results[4].count;
         details.Customer = 1;
 
         for (const mId of merchantIds) {

@@ -13,6 +13,10 @@ const { incrementLoyaltyPunch } = require('./loyalty');
 const { recordShopperConsent } = require('../services/shopperConsentService');
 const { deleteShopperByEmail } = require('../services/dataRetentionService');
 const prisma = require('../lib/prisma');
+const { attributeCustomerToMerchant } = require('../lib/referralAttribution');
+const { SHOPPER_CONSENT } = require('../config/legal');
+const { ensureMerchantAffiliate } = require('./affiliates');
+const { recordIdentifierByHash } = require('../services/shopperIdentity');
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
@@ -43,8 +47,54 @@ function requireMerchantAuth(req, res, next) {
 
 // --- Plain email capture (no password — this is a quick capture gate, ---
 // --- not a full account signup. Upgrading to a real login is optional. ---
+
+// Links a passive identifier to this shopper, but ONLY with their explicit
+// cross-merchant recognition consent. Every early return below is a case where
+// we must not create a link:
+//   - consent not given (or not given on THIS receipt)
+//   - no fingerprint captured -- a cash sale, or a platform that doesn't
+//     expose one, which is every platform except Square today
+// Platform is taken from the transaction itself and stored on the row, so a
+// Square fingerprint can never be matched against another platform's value.
+//
+// Best-effort by design: a failure here must never break saving a receipt.
+const PLATFORM_BY_POS_PROVIDER = {
+  square: 'SQUARE',
+  clover: 'CLOVER',
+  shopify: 'SHOPIFY',
+  lightspeed: 'LIGHTSPEED',
+  toast: 'TOAST',
+};
+
+async function linkShopperIdentifier({ transaction, customerId, crossMerchantGranted }) {
+  if (!crossMerchantGranted) return;
+  if (!transaction.cardFingerprintHash) return;
+
+  const sourcePlatform = PLATFORM_BY_POS_PROVIDER[transaction.posProvider];
+  if (!sourcePlatform) return;
+
+  try {
+    // The hash is all we have -- the raw fingerprint was discarded at the
+    // webhook -- so this uses the *ByHash entry point. Idempotent: the same
+    // card at the same shop doesn't pile up rows, and re-consenting revives a
+    // previously revoked link rather than duplicating it.
+    await recordIdentifierByHash(
+      customerId,
+      'CARD_FINGERPRINT',
+      transaction.cardFingerprintHash,
+      sourcePlatform
+    );
+  } catch (err) {
+    console.error('Shopper identifier link failed (receipt save continued):', err.message);
+  }
+}
+
 router.post('/receipt/:transactionId/capture-email', async (req, res) => {
-  const { email, marketingOptIn } = req.body;
+  const { name, email, marketingOptIn, crossMerchantOptIn } = req.body;
+  const trimmedName = (name || '').trim();
+  if (!trimmedName) {
+    return res.status(400).json({ error: 'Enter your name' });
+  }
   if (!email || !isValidEmail(email)) {
     return res.status(400).json({ error: 'Enter a valid email address' });
   }
@@ -55,12 +105,18 @@ router.post('/receipt/:transactionId/capture-email', async (req, res) => {
   });
   if (!transaction) return res.status(404).json({ error: 'Receipt not found' });
 
-  // Find or create the customer record by email — no password required for this path
+  // Find or create the customer record by email — no password required for this path.
+  // On an existing account the name is only filled in when it's still blank:
+  // whatever they told us before (or Google told us) is the better record, and
+  // a typo at someone else's counter shouldn't rewrite it.
   const customer = await prisma.customer.upsert({
     where: { email: email.toLowerCase() },
     update: {},
-    create: { email: email.toLowerCase() },
+    create: { email: email.toLowerCase(), name: trimmedName },
   });
+  if (!customer.name && trimmedName) {
+    await prisma.customer.update({ where: { id: customer.id }, data: { name: trimmedName } });
+  }
 
   // Link this transaction to them — same field the wallet feature uses,
   // which is what makes it visible to the merchant's customer-emails list too
@@ -69,7 +125,7 @@ router.post('/receipt/:transactionId/capture-email', async (req, res) => {
     data: { customerId: customer.id },
   });
   await incrementLoyaltyPunch(transaction.merchantId, customer.id);
-  await recordShopperConsent({ receiptId: transaction.id, merchantId: transaction.merchantId, email, marketingGranted: marketingOptIn }, req);
+  await recordShopperConsent({ receiptId: transaction.id, merchantId: transaction.merchantId, email, marketingGranted: marketingOptIn, crossMerchantGranted: crossMerchantOptIn }, req);
 
   // Kick off AI categorization — doesn't block this response
   if (!transaction.aiCategorizedAt) {
@@ -77,7 +133,17 @@ router.post('/receipt/:transactionId/capture-email', async (req, res) => {
   }
 
   req.session.customerId = customer.id;
-  res.json({ success: true, email: customer.email });
+  await linkShopperIdentifier({ transaction, customerId: customer.id, crossMerchantGranted: crossMerchantOptIn });
+  // This merchant just introduced someone to ReceipTap. Credit them, so if
+  // that person ever signs their own business up the commission follows.
+  // Best-effort: a failure here must never break saving a receipt.
+  try {
+    const affiliate = await ensureMerchantAffiliate(transaction.merchantId);
+    await attributeCustomerToMerchant({ prisma, customerId: customer.id, affiliate, req, res });
+  } catch (err) {
+    console.error('Referral attribution failed (receipt save continued):', err.message);
+  }
+  res.json({ success: true, email: customer.email, redirect: '/account/welcome' });
 });
 
 // --- Google Sign-In capture -------------------------------------------------
@@ -85,7 +151,7 @@ router.post('/receipt/:transactionId/capture-email', async (req, res) => {
 // server-side and pull the email out — never trust an email the client
 // claims directly, only what Google's signed token confirms.
 router.post('/receipt/:transactionId/capture-email-google', async (req, res) => {
-  const { credential, marketingOptIn } = req.body;
+  const { credential, marketingOptIn, crossMerchantOptIn } = req.body;
   if (!credential) return res.status(400).json({ error: 'Missing Google credential' });
 
   let payload;
@@ -119,14 +185,24 @@ router.post('/receipt/:transactionId/capture-email-google', async (req, res) => 
     data: { customerId: customer.id },
   });
   await incrementLoyaltyPunch(transaction.merchantId, customer.id);
-  await recordShopperConsent({ receiptId: transaction.id, merchantId: transaction.merchantId, email, marketingGranted: marketingOptIn }, req);
+  await recordShopperConsent({ receiptId: transaction.id, merchantId: transaction.merchantId, email, marketingGranted: marketingOptIn, crossMerchantGranted: crossMerchantOptIn }, req);
 
   if (!transaction.aiCategorizedAt) {
     categorizeInBackground(transaction, transaction.merchant.businessName);
   }
 
   req.session.customerId = customer.id;
-  res.json({ success: true, email: customer.email });
+  await linkShopperIdentifier({ transaction, customerId: customer.id, crossMerchantGranted: crossMerchantOptIn });
+  // This merchant just introduced someone to ReceipTap. Credit them, so if
+  // that person ever signs their own business up the commission follows.
+  // Best-effort: a failure here must never break saving a receipt.
+  try {
+    const affiliate = await ensureMerchantAffiliate(transaction.merchantId);
+    await attributeCustomerToMerchant({ prisma, customerId: customer.id, affiliate, req, res });
+  } catch (err) {
+    console.error('Referral attribution failed (receipt save continued):', err.message);
+  }
+  res.json({ success: true, email: customer.email, redirect: '/account/welcome' });
 });
 
 function isValidEmail(email) {
@@ -173,20 +249,22 @@ async function getSegmentedCustomers(merchantId) {
   });
 }
 
-router.get('/dashboard/customer-emails', requireMerchantAuth, async (req, res) => {
-  const allCustomers = await getSegmentedCustomers(req.session.merchantId);
-  const filter = ['new', 'repeat', 'lapsed'].includes(req.query.segment) ? req.query.segment : 'all';
+// Shared by GET /dashboard/customer-emails and GET /account/business/emails
+// (the wallet's dark reskin) -- see routes/account-business.js.
+async function computeCustomerEmailsData(merchantId, query = {}) {
+  const allCustomers = await getSegmentedCustomers(merchantId);
+  const filter = ['new', 'repeat', 'lapsed'].includes(query.segment) ? query.segment : 'all';
   const filtered = filter === 'all' ? allCustomers : allCustomers.filter((c) => c.segment === filter);
 
   // Shopper data-request lookup -- a merchant checking what a specific
   // deletion request would actually remove, before confirming it. Always a
   // dry run: this route never deletes anything itself, only previews.
-  const lookupEmail = typeof req.query.lookupEmail === 'string' ? req.query.lookupEmail.trim() : '';
+  const lookupEmail = typeof query.lookupEmail === 'string' ? query.lookupEmail.trim() : '';
   const lookupResult = lookupEmail
-    ? await deleteShopperByEmail(lookupEmail, req.session.merchantId, { dryRun: true })
+    ? await deleteShopperByEmail(lookupEmail, merchantId, { dryRun: true })
     : null;
 
-  res.render('customer-emails', {
+  return {
     emails: filtered.map((c) => ({
       ...c,
       firstSeen: c.firstSeen.toLocaleDateString('en-US', { dateStyle: 'medium' }),
@@ -201,8 +279,12 @@ router.get('/dashboard/customer-emails', requireMerchantAuth, async (req, res) =
     activeFilter: filter,
     lookupEmail,
     lookupResult,
-    deleted: req.query.deleted === '1',
-  });
+    deleted: query.deleted === '1',
+  };
+}
+
+router.get('/dashboard/customer-emails', requireMerchantAuth, async (req, res) => {
+  res.render('customer-emails', await computeCustomerEmailsData(req.session.merchantId, req.query));
 });
 
 // Confirms and executes what the lookup above only previewed. Deliberately
@@ -234,3 +316,4 @@ router.get('/dashboard/customer-emails/export', requireMerchantAuth, async (req,
 });
 
 module.exports = router;
+module.exports.computeCustomerEmailsData = computeCustomerEmailsData;

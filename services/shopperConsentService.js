@@ -17,17 +17,43 @@ const { isEmailSuppressed } = require('./emailSuppressionService');
 // value). The checkbox's actual state is still what gets logged when
 // nobody's suppressed -- this only ever forces true toward false, never
 // the reverse.
-async function recordShopperConsent({ receiptId, merchantId, email, marketingGranted }, req) {
+async function recordShopperConsent(
+  { receiptId, merchantId, email, marketingGranted, crossMerchantGranted },
+  req
+) {
   const ipAddress = req.ip || null;
   let granted = Boolean(marketingGranted);
   if (granted && (await isEmailSuppressed(email, merchantId))) {
     granted = false;
   }
 
+  // Cross-merchant recognition is a separate purpose, so it carries its own
+  // flag and its own timestamp rather than being inferred from either row
+  // above. Only stamped when actually granted -- a null timestamp means "never
+  // consented", which is different from "consented then withdrew".
+  const crossMerchant = Boolean(crossMerchantGranted);
+  const crossMerchantAt = crossMerchant ? new Date() : null;
+
   await prisma.shopperConsent.createMany({
     data: [
-      { receiptId, consentType: 'TRANSACTIONAL', granted: true, consentTextVersion: SHOPPER_CONSENT.version, ipAddress },
-      { receiptId, consentType: 'MARKETING', granted, consentTextVersion: SHOPPER_CONSENT.version, ipAddress },
+      {
+        receiptId,
+        consentType: 'TRANSACTIONAL',
+        granted: true,
+        consentTextVersion: SHOPPER_CONSENT.version,
+        ipAddress,
+        crossMerchantRecognition: crossMerchant,
+        crossMerchantRecognitionAt: crossMerchantAt,
+      },
+      {
+        receiptId,
+        consentType: 'MARKETING',
+        granted,
+        consentTextVersion: SHOPPER_CONSENT.version,
+        ipAddress,
+        crossMerchantRecognition: crossMerchant,
+        crossMerchantRecognitionAt: crossMerchantAt,
+      },
     ],
   });
 }

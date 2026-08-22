@@ -7,6 +7,19 @@ const express = require('express');
 const crypto = require('crypto');
 const router = express.Router();
 const prisma = require('../lib/prisma');
+const { hashIdentifier } = require('../lib/hashIdentifier');
+const { autoSaveReceiptForKnownShopper } = require('../services/receiptAutoSave');
+const { incrementLoyaltyPunch } = require('./loyalty');
+const { categorizeInBackground } = require('../services/categorize-receipt');
+
+// POS payloads report cash amounts inconsistently (Square in cents, Clover in
+// cents, some fields absent entirely). Normalises to an integer number of
+// cents, or null -- never 0, which would render as a real "$0.00 change" line.
+function toCents(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? Math.round(n) : null;
+}
 const { fetchOrder } = require('../services/squareService');
 const { fetchOrder: fetchCloverOrder, getValidAccessToken: getValidCloverAccessToken } = require('../services/cloverService');
 const {
@@ -80,6 +93,35 @@ router.post('/webhooks/pos/square', async (req, res) => {
         paymentMethod: payment.card_details?.card
           ? `${payment.card_details.card.card_brand} ••••${payment.card_details.card.last_4}`
           : null,
+        // Square reports all of these directly on the Payment object. Optional
+        // chaining throughout: a cash sale has no card_details, a card sale has
+        // no cash_details, and either way the missing side stays null.
+        cardBrand: payment.card_details?.card?.card_brand || null,
+        cardLast4: payment.card_details?.card?.last_4 || null,
+        // Square's fingerprint is a stable per-card id, consistent across this
+        // application's locations. Hashed immediately -- the raw value is used
+        // here and nowhere else. Absent on cash sales and on any other
+        // platform, which is why the shopper-identity feature is Square-only
+        // and everyone else keeps tapping. No shopper is linked at this point;
+        // that only happens on explicit consent (routes/email-capture.js).
+        cardFingerprintHash: hashIdentifier(payment.card_details?.card?.fingerprint),
+        authCode: payment.card_details?.auth_result_code || null,
+        amountTenderedCents: toCents(payment.cash_details?.buyer_supplied_money?.amount),
+        changeDueCents: toCents(payment.cash_details?.change_back_money?.amount),
+      },
+    });
+
+    // Card recognition: if this card belongs to a shopper who opted in, the
+    // receipt joins their wallet now, with no tap. A match can only exist
+    // where consent was given and hasn't been withdrawn -- see
+    // services/receiptAutoSave.js. Non-Square sales and unrecognised cards
+    // fall straight through and behave exactly as before.
+    await autoSaveReceiptForKnownShopper(transaction, {
+      onLinked: async ({ transaction: txn, shopper }) => {
+        await incrementLoyaltyPunch(txn.merchantId, shopper.id);
+        if (!txn.aiCategorizedAt) {
+          categorizeInBackground(txn, merchant.businessName);
+        }
       },
     });
 
@@ -212,10 +254,20 @@ async function handleCloverOrderEvent(cloverMerchantId, orderId) {
   });
 
   const paymentElements = order.payments?.elements || [];
-  const cardTransaction = paymentElements[0]?.cardTransaction;
+  const firstPayment = paymentElements[0];
+  const cardTransaction = firstPayment?.cardTransaction;
   const paymentMethod = cardTransaction
     ? `${cardTransaction.cardType || 'Card'} ••••${cardTransaction.last4 || ''}`
     : null;
+  // Clover puts card detail on the payment's cardTransaction, and cash
+  // tendered/back on the payment itself. Both are best-effort in the same
+  // sense as the tax/discount mapping above -- absent fields stay null
+  // rather than being guessed at.
+  const cardBrand = cardTransaction?.cardType || null;
+  const cardLast4 = cardTransaction?.last4 || null;
+  const authCode = cardTransaction?.authCode || null;
+  const amountTenderedCents = toCents(firstPayment?.cashTendered);
+  const changeDueCents = toCents(firstPayment?.cashBackAmount);
 
   // Best-effort -- each line item can carry its own `discounts` array;
   // exact field names haven't been verified against a real sandbox order yet
@@ -251,6 +303,11 @@ async function handleCloverOrderEvent(cloverMerchantId, orderId) {
       discountTotal,
       total: order.total,
       paymentMethod,
+      cardBrand,
+      cardLast4,
+      authCode,
+      amountTenderedCents,
+      changeDueCents,
     },
   });
 
@@ -354,7 +411,8 @@ router.post('/webhooks/pos/lightspeed', async (req, res) => {
         total,
         // sale.payments was an empty array on a real confirmed Cash sale --
         // genuinely no payment-method data available from this endpoint as
-        // observed, not a mapping guess.
+        // observed, not a mapping guess. The card/auth/tender columns are
+        // left unset for the same reason; the receipt simply omits them.
         paymentMethod: null,
       },
     });
@@ -450,6 +508,13 @@ router.post('/webhooks/pos/shopify', async (req, res) => {
         paymentMethod: Array.isArray(order.payment_gateway_names) && order.payment_gateway_names.length
           ? order.payment_gateway_names[0]
           : null,
+        // payment_details is present on orders paid by card and absent
+        // otherwise, so this is read defensively. Shopify doesn't put an
+        // approval code or cash tendered/change on the order payload at all
+        // -- those live on the separate transactions resource, which this
+        // webhook doesn't receive, so they stay null.
+        cardBrand: order.payment_details?.credit_card_company || null,
+        cardLast4: order.payment_details?.credit_card_last_four || null,
       },
     });
 

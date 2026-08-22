@@ -8,9 +8,18 @@ not a replacement for reading the page.
 Covers: **Privacy Policy** (`/legal/privacy`, rendered from
 `views/partials/legal-privacy-content.ejs`, version `2026-08-05.2`),
 **Terms of Service** (`/legal/terms`, rendered from
-`views/partials/legal-terms-content.ejs`, version `2026-08-06.2`), and
+`views/partials/legal-terms-content.ejs`, version `2026-08-06.2`),
 **Data Processing Agreement** (`/legal/dpa`, rendered from
-`views/partials/legal-dpa-content.ejs`, version `2026-08-06.1`).
+`views/partials/legal-dpa-content.ejs`, version `2026-08-06.1`), **Wallet
+Terms of Service** (`/legal/wallet-terms`, rendered from
+`views/partials/legal-shopper-terms-content.ejs`, version `2026-08-19.1`),
+and **Wallet Privacy Policy** (`/legal/wallet-privacy`, rendered from
+`views/partials/legal-shopper-privacy-content.ejs`, version `2026-08-19.1`)
+— the last two are the separate pair for an individual wallet-holder
+account (`views/account-login.ejs`, `account-signup.ejs`,
+`customer-settings.ejs`), distinct from the merchant/business Terms and
+Privacy Policy above. See "Wallet Terms of Service / Wallet Privacy
+Policy" near the end of this file for their open items.
 
 ---
 
@@ -586,6 +595,55 @@ the purge clock once the paid period actually ends. Either way, this
 should be reconciled in the product (button copy, confirmation flow, or
 the underlying Stripe call), not left as something only the Terms page
 explains correctly.
+
+---
+
+## Wallet Terms of Service / Wallet Privacy Policy
+
+New as of `2026-08-19.1`. Written for an individual with a ReceipTap
+Wallet account, separate from the merchant/business Terms and Privacy
+Policy above — a wallet account isn't a business and doesn't sign the DPA
+(there's no controller/processor relationship for an individual holder,
+so no wallet-side DPA exists). Open items:
+
+**25. No dollar figure for the liability cap.**
+**Where:** Wallet Terms, "Limitation of liability."
+**Issue:** the merchant Terms cap liability at 12 months of subscription
+fees paid — there's no equivalent number for a free wallet account.
+**Needed:** a lawyer-reviewed number or a different liability structure
+for this free product.
+
+**26. No re-acceptance interstitial for wallet accounts.**
+**Where:** Wallet Terms, "Changes to these Terms."
+**Issue:** merchants are redirected to `/legal/reaccept` when a document
+they've accepted goes stale (`middleware/legalReacceptance.js`,
+`services/legalAcceptanceService.js`); no equivalent exists for wallet
+accounts, which also have no `LegalAcceptance` rows written at all today
+(signup uses passive "By continuing..." text, not a checkbox — see
+`views/account-signup.ejs`).
+**Needed:** decide whether a wallet-side acceptance/re-acceptance
+mechanism should be built, or whether passive linking is acceptable for
+this product.
+
+**27. Scanned receipt photo storage — same interim-storage gap as elsewhere.**
+**Where:** Wallet Privacy Policy, "Scanning a receipt."
+**Issue:** `routes/customer-account.js`'s `handleReceiptScanUpload` writes
+uploaded receipt photos to the application server's local disk
+(`public/uploads/receipt-scans/`), the same interim pattern already noted
+elsewhere in this app (`routes/billing.js`, `routes/theme-settings.js`) —
+not real object storage, no dedicated access control.
+**Needed:** move to real object storage before this feature is relied on
+at scale; revisit this paragraph once it does.
+
+**28. No scheduled purge for `ScannedReceipt` rows individually.**
+**Where:** Wallet Privacy Policy, "How long we keep your data."
+**Issue:** `Transaction` rows (tap receipts) age out automatically after
+`SHOPPER_RECEIPT_MONTHS` (once live purging is turned on — see item 2).
+`ScannedReceipt` rows have no equivalent scheduled purge; they're only
+ever removed by deleting the whole account (`deleteShopperEverywhere()`
+in `services/dataRetentionService.js`) or by hand.
+**Needed:** decide whether scanned receipts should age out the same way
+tap receipts do, and build that if so.
 
 ---
 

@@ -73,7 +73,13 @@ router.post('/legal/reaccept', requireAuth, async (req, res) => {
   res.redirect(safeNext);
 });
 
-const SLUG_TO_TYPE = { terms: 'TERMS', privacy: 'PRIVACY', dpa: 'DPA' };
+const SLUG_TO_TYPE = {
+  terms: 'TERMS',
+  privacy: 'PRIVACY',
+  dpa: 'DPA',
+  'wallet-terms': 'SHOPPER_TERMS',
+  'wallet-privacy': 'SHOPPER_PRIVACY',
+};
 
 // Entity facts shared by every legal document (Privacy, Terms, DPA) -- kept
 // here rather than in config/legal.js, since that file is versioning

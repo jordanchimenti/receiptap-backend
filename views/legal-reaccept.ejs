@@ -7,7 +7,8 @@
      one changed -- ticking it is still acceptance of all three, same
      reasoning as signup (see legalAcceptanceService.js). Only the
      document(s) that were actually stale get a new LegalAcceptance row on
-     submit, though -- see routes/legal.js. -->
+     submit, though -- see routes/legal.js. Dark theme, self-contained same
+     as login.ejs/signup.ejs -- see those for why it's not shared. -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -15,35 +16,68 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Updated Terms - ReceipTap</title>
   <link rel="stylesheet" href="/css/receiptap.css" />
+  <style>
+    :root {
+      --lr-bg: #0a0a0a;
+      --lr-card: #161616;
+      --lr-card-raised: #1c1c1c;
+      --lr-line: #2a2a2a;
+      --lr-ink: #ffffff;
+      --lr-ink-soft: #8d8d8d;
+      --lr-accent: #056BFE;
+      --lr-accent-deep: #0350BE;
+      --lr-danger: #ff453a;
+    }
+    body { background: var(--lr-bg); color: var(--lr-ink); font-family: var(--font-body); margin: 0; }
+    .auth-shell { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+    .auth-card { width: 100%; max-width: 380px; background: var(--lr-card); border: 1px solid var(--lr-line); border-radius: 20px; padding: 36px 30px; text-align: center; }
+    .auth-title { font-family: var(--font-display); font-size: 22px; font-weight: 700; margin: 4px 0 6px; color: var(--lr-ink); }
+    .auth-sub { font-size: 13.5px; color: var(--lr-ink-soft); margin: 0 0 24px; line-height: 1.5; }
+    .consent-row { display: flex; align-items: flex-start; gap: 8px; text-align: left; margin: 6px 0 18px; }
+    .consent-row input[type="checkbox"] { margin-top: 3px; flex-shrink: 0; accent-color: var(--lr-accent); }
+    .consent-row label { font-size: 13px; color: var(--lr-ink-soft); line-height: 1.45; font-weight: 400; }
+    .consent-row label a { color: var(--lr-accent); font-weight: 600; text-decoration: none; }
+    .auth-pill-btn {
+      display: block; width: 100%; box-sizing: border-box; background: var(--lr-accent); color: #fff; border: none;
+      border-radius: 999px; padding: 14px 20px; font-size: 15px; font-weight: 700; cursor: pointer; font-family: inherit;
+    }
+    .auth-pill-btn:hover { background: var(--lr-accent-deep); }
+    .auth-error {
+      background: rgba(255, 69, 58, 0.12); border: 1px solid rgba(255, 69, 58, 0.35); color: var(--lr-danger);
+      border-radius: 10px; padding: 11px 14px; font-size: 13.5px; margin-bottom: 16px; text-align: left;
+    }
+    .logout-btn { background: none; border: none; padding: 0; font-size: 13px; color: var(--lr-accent); font-weight: 600; cursor: pointer; font-family: inherit; }
+    /* The logo's "Receip" wordmark is dark navy, meant for a light
+       background -- same paper-toned chip already used on login.ejs and
+       signup.ejs so it stays legible here. */
+    .logo-chip { display: inline-block; background: var(--paper); border-radius: 12px; padding: 10px 18px; margin-bottom: 22px; }
+    .logo-chip img { display: block; height: 32px; }
+  </style>
 </head>
 <body>
-  <div class="centered-shell">
+  <div class="auth-shell">
     <div class="auth-card">
-      <img src="/images/receiptap-logo.png" alt="ReceipTap" style="height: 48px; margin-bottom: 20px;" />
-      <h1 style="font-size: 22px; margin-bottom: 6px;">Our <%= changedLabel %> <%= changedLabel.includes(' and ') || changedLabel.includes(',') ? 'have' : 'has' %> been updated</h1>
-      <p style="font-size: 13.5px; color: var(--ink-soft); margin: 8px 0 24px; line-height: 1.5;">
-        Please review and agree below to keep using your dashboard.
-      </p>
+      <div class="logo-chip"><img src="/images/receiptap-logo.png" alt="ReceipTap" /></div>
+      <h1 class="auth-title">Our <%= changedLabel %> <%= changedLabel.includes(' and ') || changedLabel.includes(',') ? 'have' : 'has' %> been updated</h1>
+      <p class="auth-sub">Please review and agree below to keep using your dashboard.</p>
 
-      <div class="error-box" id="error-box" style="<%= error ? '' : 'display: none;' %>"><%= error %></div>
+      <div class="auth-error" id="error-box" style="<%= error ? '' : 'display: none;' %>"><%= error %></div>
 
       <form method="POST" action="/legal/reaccept">
         <input type="hidden" name="next" value="<%= next %>" />
 
-        <div style="display:flex; flex-direction:column; gap:8px; margin-bottom:18px;">
-          <div style="display:flex; align-items:flex-start; gap:8px;">
-            <input type="checkbox" id="acceptAll" name="acceptAll" required style="margin-top:2px;" />
-            <label for="acceptAll" style="font-size:13px; color:var(--ink-soft); line-height:1.4; font-weight:400;">
-              I agree to the <a href="/legal/terms" target="_blank" rel="noopener" style="color:var(--teal-deep); font-weight:600; text-decoration:none;">Terms of Service</a> (v<%= documents.TERMS.version %>), which include the <a href="/legal/dpa" target="_blank" rel="noopener" style="color:var(--teal-deep); font-weight:600; text-decoration:none;">Data Processing Agreement</a> (v<%= documents.DPA.version %>), and I have read the <a href="/legal/privacy" target="_blank" rel="noopener" style="color:var(--teal-deep); font-weight:600; text-decoration:none;">Privacy Policy</a> (v<%= documents.PRIVACY.version %>).
-            </label>
-          </div>
+        <div class="consent-row">
+          <input type="checkbox" id="acceptAll" name="acceptAll" required />
+          <label for="acceptAll">
+            I agree to the <a href="/legal/terms" target="_blank" rel="noopener">Terms of Service</a> (v<%= documents.TERMS.version %>), which include the <a href="/legal/dpa" target="_blank" rel="noopener">Data Processing Agreement</a> (v<%= documents.DPA.version %>), and I have read the <a href="/legal/privacy" target="_blank" rel="noopener">Privacy Policy</a> (v<%= documents.PRIVACY.version %>).
+          </label>
         </div>
 
-        <button type="submit" class="btn btn-primary">Continue to dashboard</button>
+        <button type="submit" class="auth-pill-btn">Continue to dashboard</button>
       </form>
 
       <form method="POST" action="/logout" style="margin-top: 20px; text-align: center;">
-        <button type="submit" style="background:none; border:none; padding:0; font-size:13px; color:var(--teal-deep); font-weight:600; cursor:pointer;">Log out instead</button>
+        <button type="submit" class="logout-btn">Log out instead</button>
       </form>
     </div>
   </div>

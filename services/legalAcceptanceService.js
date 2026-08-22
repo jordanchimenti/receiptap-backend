@@ -4,7 +4,7 @@
 // merchant to that interstitial) -- one place that reads/writes
 // LegalAcceptance rows, so all three call sites can't drift from each other.
 const prisma = require('../lib/prisma');
-const { LEGAL_DOCUMENTS, isNewerVersion } = require('../config/legal');
+const { LEGAL_DOCUMENTS, MERCHANT_DOCUMENT_TYPES, isNewerVersion } = require('../config/legal');
 
 // Which document types (TERMS/PRIVACY/DPA) this merchant's most recent
 // acceptance is behind on, or has never accepted at all. Shared by
@@ -13,7 +13,7 @@ const { LEGAL_DOCUMENTS, isNewerVersion } = require('../config/legal');
 // row for on submit) -- one query, not the same version-comparison loop
 // duplicated in three places.
 async function getStaleDocumentTypes(merchantId) {
-  const documentTypes = Object.keys(LEGAL_DOCUMENTS);
+  const documentTypes = MERCHANT_DOCUMENT_TYPES;
   const latestByType = await Promise.all(
     documentTypes.map((documentType) =>
       prisma.legalAcceptance.findFirst({
@@ -58,7 +58,7 @@ async function getStaleDocumentTypes(merchantId) {
 // signup: a merchant re-accepting because DPA changed already has current,
 // untouched TERMS and PRIVACY rows on file -- there's nothing to re-affirm
 // there, so no new row is written for them. Only DPA gets a fresh row.
-async function recordLegalAcceptances(merchantId, req, documentTypes = Object.keys(LEGAL_DOCUMENTS)) {
+async function recordLegalAcceptances(merchantId, req, documentTypes = MERCHANT_DOCUMENT_TYPES) {
   const ipAddress = req.ip || null;
   const userAgent = req.headers['user-agent'] || null;
   await prisma.legalAcceptance.createMany({

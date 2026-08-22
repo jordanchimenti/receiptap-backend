@@ -1,0 +1,296 @@
+<!-- views/partials/legal-shopper-terms-content.ejs -->
+<!-- The real Wallet Terms of Service body, for an individual who creates a
+     ReceipTap Wallet account (views/account-login.ejs, account-signup.ejs,
+     customer-settings.ejs). Included by views/legal-document.ejs only when
+     documentType === 'SHOPPER_TERMS'. Separate document, separate audience,
+     separate version from TERMS (the merchant/business Terms of Service,
+     legal-terms-content.ejs) -- a wallet holder isn't a business and isn't
+     bound by that document. Every [[REVIEW: ...]] marker below is also
+     collected in docs/LEGAL_REVIEW_NOTES.md -- if you resolve one here,
+     resolve it there too. -->
+<style>
+  .shopper-terms-doc { max-width: 720px; margin: 0 auto; padding: 28px 20px 80px; }
+  .shopper-terms-doc .logo-row { text-align: center; margin-bottom: 20px; }
+  .shopper-terms-doc .logo-row img { height: 40px; }
+  .shopper-terms-doc h1 { font-size: 24px; letter-spacing: -0.01em; margin: 0 0 6px; text-align: center; }
+  .shopper-terms-doc .meta { text-align: center; font-size: 12.5px; color: var(--ink-soft); margin-bottom: 28px; }
+  .shopper-terms-doc .intro { font-size: 15px; line-height: 1.6; color: var(--ink); margin-bottom: 22px; }
+  .shopper-terms-doc .jump-nav {
+    display: flex; flex-direction: column; gap: 6px; background: var(--paper-raised);
+    border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; margin-bottom: 32px;
+  }
+  .shopper-terms-doc .jump-nav .jump-label { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-soft); margin-bottom: 4px; }
+  .shopper-terms-doc .jump-nav a { font-size: 14px; font-weight: 600; color: var(--teal-deep); text-decoration: none; }
+  .shopper-terms-doc section { margin-bottom: 34px; }
+  .shopper-terms-doc .section-banner {
+    font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--teal-deep); background: var(--teal-wash); display: inline-block;
+    padding: 4px 10px; border-radius: 999px; margin-bottom: 10px;
+  }
+  .shopper-terms-doc h2 { font-size: 19px; margin: 0 0 14px; letter-spacing: -0.01em; }
+  .shopper-terms-doc h3 { font-size: 15px; margin: 20px 0 8px; }
+  .shopper-terms-doc p { font-size: 14.5px; line-height: 1.65; color: var(--ink); margin: 0 0 14px; }
+  .shopper-terms-doc ul { margin: 0 0 14px; padding-left: 20px; }
+  .shopper-terms-doc li { font-size: 14.5px; line-height: 1.65; color: var(--ink); margin-bottom: 6px; }
+  .shopper-terms-doc .review {
+    display: inline; background: #DCE7F4; color: #0350BE; padding: 1px 4px;
+    border-radius: 4px; font-size: 13.5px; font-weight: 600;
+  }
+  .shopper-terms-doc hr { border: none; border-top: 1px solid var(--line); margin: 30px 0; }
+  .shopper-terms-doc .contact-box {
+    background: var(--paper-raised); border: 1px solid var(--line); border-radius: 12px;
+    padding: 16px 18px; font-size: 14px; line-height: 1.6;
+  }
+  .shopper-terms-doc .back-top { font-size: 13px; }
+</style>
+
+<div class="shopper-terms-doc">
+  <div class="logo-row"><img src="/images/receiptap-logo.png" alt="ReceipTap" /></div>
+  <h1>ReceipTap Wallet Terms of Service</h1>
+  <p class="meta">Version <%= doc.version %> &middot; last updated <%= doc.lastUpdated %></p>
+
+  <p class="intro">
+    These Terms are between <strong><%= entity.legalName %></strong>
+    (<%- entity.registeredAddress || '<span class="review">[[REVIEW: address pending]]</span>' %>)
+    and you, an individual with a ReceipTap Wallet account ("you," "your
+    wallet"). They're written for shoppers who save receipts and use the
+    wallet — not for the businesses that use ReceipTap at their register,
+    who are covered by a separate
+    <a href="/legal/terms">Terms of Service</a> instead. By creating a
+    ReceipTap Wallet account, you agree to these Terms.
+  </p>
+
+  <div class="jump-nav">
+    <div class="jump-label">Jump to</div>
+    <a href="#who">Who this is for</a>
+    <a href="#service">What the wallet does</a>
+    <a href="#account">Your account</a>
+    <a href="#cost">Cost</a>
+    <a href="#scanning">Scanning or uploading a receipt</a>
+    <a href="#acceptable-use">Acceptable use</a>
+    <a href="#availability">Service availability</a>
+    <a href="#privacy">Data and privacy</a>
+    <a href="#termination">Ending your account</a>
+    <a href="#liability">Limitation of liability</a>
+    <a href="#changes">Changes to these Terms</a>
+    <a href="#law">Governing law</a>
+  </div>
+
+  <!-- =================== WHO THIS IS FOR =================== -->
+  <section id="who">
+    <h2>Who this is for</h2>
+    <p>
+      A ReceipTap Wallet account belongs to an individual, not a business —
+      it's where your own digital receipts live, from every business you've
+      tapped a ReceipTap puck at or added a receipt to yourself. You must be
+      at least 18 years old to create one.
+    </p>
+    <p>
+      You don't need a wallet account to get a receipt at all: tapping your
+      phone on a puck and viewing a receipt works without one. A wallet
+      account is only for choosing to save receipts in one place over time.
+    </p>
+    <p class="back-top"><a href="#who">↑ Back to top</a></p>
+  </section>
+
+  <hr />
+
+  <!-- =================== WHAT THE WALLET DOES =================== -->
+  <section id="service">
+    <h2>What the wallet does</h2>
+    <p>Once you have a wallet account, it:</p>
+    <ul>
+      <li>Keeps every receipt you save from a tap at a ReceipTap-connected business, in one place</li>
+      <li>Lets you photograph or upload a paper (or other-store) receipt so it becomes a digital entry in your wallet too</li>
+      <li>Automatically sorts what you buy into spending categories, and flags purchases that might be tax-deductible, using AI</li>
+      <li>Lets you export or download your receipts, for a return, a warranty claim, or your own records</li>
+    </ul>
+    <p class="back-top"><a href="#service">↑ Back to top</a></p>
+  </section>
+
+  <hr />
+
+  <!-- =================== YOUR ACCOUNT =================== -->
+  <section id="account">
+    <h2>Your account</h2>
+    <p>
+      You can create a wallet account with an email and password, or by
+      signing in with Google, Apple, or Microsoft. The information you give
+      us needs to be accurate, and kept accurate.
+    </p>
+    <p>
+      You're responsible for everything that happens under your account.
+      Keep your password to yourself, and tell us right away if you think
+      someone's gotten into your account without permission.
+    </p>
+    <p class="back-top"><a href="#account">↑ Back to top</a></p>
+  </section>
+
+  <hr />
+
+  <!-- =================== COST =================== -->
+  <section id="cost">
+    <h2>Cost</h2>
+    <p>
+      A ReceipTap Wallet account is free. We don't ask for a payment method
+      to create one, and nothing about using it — saving a tap receipt,
+      scanning one, exporting your data — is billed to you.
+    </p>
+    <p class="back-top"><a href="#cost">↑ Back to top</a></p>
+  </section>
+
+  <hr />
+
+  <!-- =================== SCANNING/UPLOADING A RECEIPT =================== -->
+  <section id="scanning">
+    <div class="section-banner">The important part</div>
+    <h2>Scanning or uploading a receipt</h2>
+    <p>
+      When you photograph or upload a receipt, we use an AI service to read
+      it and pull out the store name, date, total, and item list, so you can
+      review and correct anything before it's saved to your wallet. It's
+      never saved automatically without you confirming it — you always see
+      the extracted details first.
+    </p>
+    <p>
+      AI extraction isn't perfect. It can misread a blurry photo, a faded
+      receipt, or unusual formatting, and it can miss or misidentify a
+      field. You're responsible for checking what it fills in before you
+      confirm it, the same way you'd double-check anything you typed by
+      hand.
+    </p>
+    <p>
+      Only upload a receipt that's actually yours — a purchase you made.
+      Uploading a receipt as evidence of a purchase that isn't real, or that
+      isn't yours (for example, to falsely support a return, warranty claim,
+      or expense report), is a misuse of the wallet, not something we
+      guarantee the accuracy of, and not something we're responsible for if
+      you rely on it for a claim you make to someone else.
+    </p>
+    <p>
+      See <a href="/legal/wallet-privacy">Data and privacy</a> for exactly
+      what a scanned receipt photo is used for and how it's stored.
+    </p>
+    <p class="back-top"><a href="#scanning">↑ Back to top</a></p>
+  </section>
+
+  <hr />
+
+  <!-- =================== ACCEPTABLE USE =================== -->
+  <section id="acceptable-use">
+    <h2>Acceptable use</h2>
+    <p>You agree not to:</p>
+    <ul>
+      <li>Upload a photo that isn't actually a receipt, or isn't yours, as described above</li>
+      <li>Try to access another person's wallet account or receipts</li>
+      <li>Use the wallet for anything unlawful or to store content you don't have the right to</li>
+      <li>Try to get around any usage limit we've put in place</li>
+    </ul>
+    <p class="back-top"><a href="#acceptable-use">↑ Back to top</a></p>
+  </section>
+
+  <hr />
+
+  <!-- =================== SERVICE AVAILABILITY =================== -->
+  <section id="availability">
+    <h2>Service availability</h2>
+    <p>
+      ReceipTap is an actively developed, early-stage service. We work to
+      keep the wallet running reliably, but we don't currently guarantee any
+      specific uptime, and it may be unavailable from time to time — for
+      maintenance, an issue on our end, or an issue with a third-party
+      service we depend on (including the AI service used for scanning).
+    </p>
+    <p>
+      The wallet isn't a substitute for keeping your own copies of important
+      receipts (for taxes, warranties, or returns) if losing access to it
+      would cause you a problem.
+    </p>
+    <p class="back-top"><a href="#availability">↑ Back to top</a></p>
+  </section>
+
+  <hr />
+
+  <!-- =================== DATA AND PRIVACY =================== -->
+  <section id="privacy">
+    <h2>Data and privacy</h2>
+    <p>
+      Our <a href="/legal/wallet-privacy">Wallet Privacy Policy</a> explains
+      what we collect from your wallet account — including receipt photos
+      you scan or upload — and why. We won't repeat that here.
+    </p>
+    <p class="back-top"><a href="#privacy">↑ Back to top</a></p>
+  </section>
+
+  <hr />
+
+  <!-- =================== ENDING YOUR ACCOUNT =================== -->
+  <section id="termination">
+    <h2>Ending your account</h2>
+    <p>
+      You can delete your wallet account at any time from Settings, in one
+      step, without contacting us. Deleting your account is
+      <strong>immediate</strong> and removes your saved and scanned
+      receipts, your consent records, and your account itself — it isn't
+      held for a grace period first, unlike a merchant closing a business
+      account.
+    </p>
+    <p>
+      We may suspend or end your account if you breach these Terms — for
+      example, by misusing the receipt-scanning feature as described above.
+    </p>
+    <p class="back-top"><a href="#termination">↑ Back to top</a></p>
+  </section>
+
+  <hr />
+
+  <!-- =================== LIMITATION OF LIABILITY =================== -->
+  <section id="liability">
+    <h2>Limitation of liability</h2>
+    <p>
+      To the extent the law allows it, we aren't responsible for indirect,
+      incidental, or consequential damages arising from these Terms or your
+      use of the wallet — including damages from an AI misreading a
+      receipt, or from losing access to a receipt you didn't keep a copy of
+      elsewhere.
+    </p>
+    <p>
+      Because the wallet is free, and to the extent the law allows it, our
+      total liability to you for any claim relating to it is capped at
+      <span class="review">[[REVIEW: the merchant Terms cap liability at 12 months of subscription fees paid -- there's no equivalent dollar figure for a free wallet account. Needs a lawyer-reviewed number (e.g. a small fixed amount) or a different liability structure for this free-to-use product.]]</span>.
+    </p>
+    <p class="back-top"><a href="#liability">↑ Back to top</a></p>
+  </section>
+
+  <hr />
+
+  <!-- =================== CHANGES TO THESE TERMS =================== -->
+  <section id="changes">
+    <h2>Changes to these Terms</h2>
+    <p>
+      When we make a real change to these Terms, we publish the new version
+      here and update the "last updated" date at the top.
+      <span class="review">[[REVIEW: unlike the merchant Terms, there is currently no re-acceptance interstitial for wallet accounts -- a shopper isn't asked to review and re-accept a changed version the way a merchant is. Decide whether one should be built, or whether a silent date-stamp update plus this page being linked from Settings is an acceptable way to handle a wallet-account change.]]</span>
+    </p>
+    <p class="back-top"><a href="#changes">↑ Back to top</a></p>
+  </section>
+
+  <hr />
+
+  <!-- =================== GOVERNING LAW =================== -->
+  <section id="law">
+    <h2>Governing law</h2>
+    <p>
+      These Terms are governed by the laws of <%= entity.governingLaw %>,
+      and any dispute arising from them will be handled by the courts
+      there.
+    </p>
+
+    <h2>Contact us</h2>
+    <div class="contact-box">
+      <%= entity.legalName %><br />
+      <%= entity.registeredAddress || '[[REVIEW: address pending]]' %><br />
+      <a href="mailto:<%= entity.contactEmail %>"><%= entity.contactEmail %></a>
+    </div>
+  </section>
+</div>

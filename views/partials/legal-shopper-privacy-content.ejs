@@ -1,0 +1,229 @@
+<!-- views/partials/legal-shopper-privacy-content.ejs -->
+<!-- The real Wallet Privacy Policy body, for an individual who creates a
+     ReceipTap Wallet account. Included by views/legal-document.ejs only
+     when documentType === 'SHOPPER_PRIVACY'. Separate document, separate
+     audience, separate version from PRIVACY (the combined merchant+shopper
+     Privacy Policy, legal-privacy-content.ejs, still used by the anonymous
+     tap-a-puck flow that never involves a wallet account) -- this one
+     describes the wallet-account-specific data ReceipTap.js accounts add:
+     password storage, OAuth sign-in, and the receipt-scanning feature's
+     photo upload, none of which the older combined page's shopper section
+     was written to cover. Every [[REVIEW: ...]] marker below is also
+     collected in docs/LEGAL_REVIEW_NOTES.md -- if you resolve one here,
+     resolve it there too. -->
+<style>
+  .shopper-privacy-doc { max-width: 720px; margin: 0 auto; padding: 28px 20px 80px; }
+  .shopper-privacy-doc .logo-row { text-align: center; margin-bottom: 20px; }
+  .shopper-privacy-doc .logo-row img { height: 40px; }
+  .shopper-privacy-doc h1 { font-size: 24px; letter-spacing: -0.01em; margin: 0 0 6px; text-align: center; }
+  .shopper-privacy-doc .meta { text-align: center; font-size: 12.5px; color: var(--ink-soft); margin-bottom: 28px; }
+  .shopper-privacy-doc .intro { font-size: 15px; line-height: 1.6; color: var(--ink); margin-bottom: 22px; }
+  .shopper-privacy-doc section { margin-bottom: 34px; }
+  .shopper-privacy-doc .section-banner {
+    font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--teal-deep); background: var(--teal-wash); display: inline-block;
+    padding: 4px 10px; border-radius: 999px; margin-bottom: 10px;
+  }
+  .shopper-privacy-doc h2 { font-size: 19px; margin: 0 0 14px; letter-spacing: -0.01em; }
+  .shopper-privacy-doc h3 { font-size: 15px; margin: 20px 0 8px; }
+  .shopper-privacy-doc p { font-size: 14.5px; line-height: 1.65; color: var(--ink); margin: 0 0 14px; }
+  .shopper-privacy-doc ul { margin: 0 0 14px; padding-left: 20px; }
+  .shopper-privacy-doc li { font-size: 14.5px; line-height: 1.65; color: var(--ink); margin-bottom: 6px; }
+  .shopper-privacy-doc .review {
+    display: inline; background: #DCE7F4; color: #0350BE; padding: 1px 4px;
+    border-radius: 4px; font-size: 13.5px; font-weight: 600;
+  }
+  .shopper-privacy-doc hr { border: none; border-top: 1px solid var(--line); margin: 30px 0; }
+  .shopper-privacy-doc .contact-box {
+    background: var(--paper-raised); border: 1px solid var(--line); border-radius: 12px;
+    padding: 16px 18px; font-size: 14px; line-height: 1.6;
+  }
+  .shopper-privacy-doc .back-top { font-size: 13px; }
+</style>
+
+<div class="shopper-privacy-doc">
+  <div class="logo-row"><img src="/images/receiptap-logo.png" alt="ReceipTap" /></div>
+  <h1>ReceipTap Wallet Privacy Policy</h1>
+  <p class="meta">Version <%= doc.version %> &middot; last updated <%= doc.lastUpdated %></p>
+
+  <p class="intro">
+    This page explains what happens to your personal information once you
+    create a ReceipTap Wallet account — the account behind the wallet
+    login/signup pages and account Settings. It's published by
+    <strong><%= entity.legalName %></strong>
+    (<%- entity.registeredAddress || '<span class="review">[[REVIEW: address pending]]</span>' %>),
+    and is governed by the laws of <%= entity.governingLaw %>. Tapping a
+    puck and viewing a receipt without saving anything doesn't create an
+    account and isn't covered here — see our general
+    <a href="/legal/privacy">Privacy Policy</a> for that, and for how a
+    business using ReceipTap handles its own account data.
+  </p>
+
+  <!-- =================== WHAT WE COLLECT =================== -->
+  <section id="collect">
+    <h2>What we collect, and why</h2>
+    <ul>
+      <li><strong>Your email address</strong> — to identify your account and let you log in.</li>
+      <li><strong>A password</strong> — stored securely hashed, never in plain text, if you sign up with email and password rather than Google, Apple, or Microsoft.</li>
+      <li><strong>Your name</strong> — only if you sign in with Google, Apple, or Microsoft, and only if that provider gives it to us. Signing up with just an email and password doesn't ask for a name.</li>
+      <li><strong>The receipts you save from a tap</strong> — which business, what you bought, how much, and when — so we can show them to you in one place.</li>
+      <li><strong>Receipt photos you scan or upload</strong> — see "Scanning a receipt" below for exactly how these are used.</li>
+      <li><strong>The IP address your device connects from</strong> — only at the moment you tap a consent checkbox (like agreeing to receive marketing emails from a business at the tap screen). This is kept as proof of that specific choice, not to track you.</li>
+    </ul>
+    <p>
+      We use this to build your receipt wallet, automatically sort your
+      purchases into spending categories, and let you download a copy
+      whenever you need one.
+    </p>
+    <p class="back-top"><a href="#collect">↑ Back to top</a></p>
+  </section>
+
+  <hr />
+
+  <!-- =================== SCANNING A RECEIPT =================== -->
+  <section id="scanning">
+    <div class="section-banner">The important part</div>
+    <h2>Scanning a receipt</h2>
+    <p>
+      When you photograph or upload a receipt, the actual image is sent to
+      Anthropic, an AI company, so it can read the store name, date, total,
+      and item list off of it. This is different from how we categorize a
+      receipt that arrives through a tap: for a tap receipt, we only ever
+      send Anthropic the store name and a short item list, never an image —
+      scanning a receipt yourself is the one case where a photo you provide
+      is sent to a third party.
+    </p>
+    <p>
+      The extracted details are shown to you to review and correct — nothing
+      is saved to your wallet automatically. Once you confirm it, the photo
+      itself is kept (so you can still view the original later), along with
+      the details you confirmed.
+    </p>
+    <p>
+      <span class="review">[[REVIEW: scanned receipt photos are currently stored on the application server's own local disk (not a dedicated object-storage service), the same interim approach used elsewhere in this app for uploaded images -- this needs to move to real object storage with proper access controls before this feature is relied on at any real scale, and this paragraph should be revisited once it does, since where and how securely a photo is stored is a real disclosure, not a technicality.]]</span>
+    </p>
+    <p class="back-top"><a href="#scanning">↑ Back to top</a></p>
+  </section>
+
+  <hr />
+
+  <!-- =================== BUSINESS GETS YOUR EMAIL TOO =================== -->
+  <section id="business-email">
+    <h2>The business gets your email too, for a tap receipt</h2>
+    <p>
+      When you save a receipt from a tap, the business you bought from
+      receives your email address as well. They collected it through
+      ReceipTap, but once they have it, it's theirs to use — not ours.
+      Whether they email you about sales, loyalty offers, or anything else
+      is their decision, and following the law when they do is their
+      responsibility. If you'd rather a specific business not have your
+      email, contact them directly, or see "Deleting your data" below.
+    </p>
+    <p>
+      This doesn't apply to a receipt you scan or upload yourself — there's
+      no business on the other end of that one to receive your email.
+    </p>
+    <p class="back-top"><a href="#business-email">↑ Back to top</a></p>
+  </section>
+
+  <hr />
+
+  <!-- =================== HOW LONG WE KEEP YOUR DATA =================== -->
+  <section id="retention">
+    <h2>How long we keep your data</h2>
+    <p>
+      Our policy is to keep your saved tap receipts, and your account
+      itself, for <strong><%= retention.SHOPPER_RECEIPT_MONTHS %> months</strong>,
+      and then delete them.
+      <span class="review">[[REVIEW: automatic deletion on this schedule is built into our systems but has not been switched on in production as of the date above -- confirm live status before publishing this page, or adjust this paragraph to describe how deletion requests are being handled manually in the meantime.]]</span>
+    </p>
+    <p>
+      A receipt you scan or upload yourself doesn't age out on that same
+      automatic schedule — it's kept for as long as your account exists.
+      <span class="review">[[REVIEW: unlike Transaction rows (tap receipts), there is currently no scheduled purge job for ScannedReceipt rows individually -- a scanned receipt is only ever removed by deleting your whole account, or by hand on request. Decide whether scanned receipts should age out the same way tap receipts do, and if so, build that before this paragraph claims otherwise.]]</span>
+    </p>
+    <p class="back-top"><a href="#retention">↑ Back to top</a></p>
+  </section>
+
+  <hr />
+
+  <!-- =================== GETTING A COPY / DELETING =================== -->
+  <section id="deletion">
+    <h2>Getting a copy or deleting your data</h2>
+    <ul>
+      <li><strong>Get a copy:</strong> log into your wallet and export your receipts anytime.</li>
+      <li>
+        <strong>Delete your account:</strong> go to Settings and choose
+        Delete account. This is immediate and self-serve — it removes your
+        saved and scanned receipts, your consent records, and your account
+        itself right away, without needing to email us or wait for us to
+        act on a request.
+      </li>
+      <li>
+        <strong>Ask a specific business to delete your data with them:</strong>
+        contact that business directly — they can look you up by email and
+        remove your data from their own records, separate from your wallet
+        account.
+      </li>
+    </ul>
+    <p class="back-top"><a href="#deletion">↑ Back to top</a></p>
+  </section>
+
+  <hr />
+
+  <!-- =================== WHERE YOUR DATA IS STORED =================== -->
+  <section id="storage">
+    <h2>Where your data is stored</h2>
+    <p>
+      Your ReceipTap Wallet data is stored in Canada. A few features briefly
+      send part of it outside Canada: Google, Apple, or Microsoft, to
+      confirm your identity if you sign in with one of them; Anthropic, for
+      AI category suggestions and receipt scanning, as described above; and
+      Resend, if you ever request a password-reset email from us.
+      <span class="review">[[REVIEW: the region our own application server (Railway) runs in could not be confirmed from our codebase as of this policy's last-updated date -- confirm and update this paragraph once known, same open item as the general Privacy Policy.]]</span>
+    </p>
+    <p class="back-top"><a href="#storage">↑ Back to top</a></p>
+  </section>
+
+  <hr />
+
+  <!-- =================== SHARED / CLOSING =================== -->
+  <section id="shared">
+    <h2>Cookies and local storage</h2>
+    <p>
+      ReceipTap sets one cookie for your wallet: a session cookie that keeps
+      you logged in. It's marked secure in production and expires after 30
+      days. We don't set any advertising, tracking, or analytics cookies,
+      and we don't use your browser's local storage to store anything about
+      you.
+    </p>
+    <p>
+      If you sign in with Google, Apple, or Microsoft, that provider's own
+      sign-in flow may set its own cookies as part of it — governed by their
+      policies, not ours.
+    </p>
+
+    <h2>If something goes wrong</h2>
+    <p>
+      If a data breach happens that puts your personal information at risk,
+      we will notify you and any privacy regulator we are required to
+      notify, as required by Canadian law.
+      <span class="review">[[REVIEW: confirm the specific notification timeline/thresholds required under PIPEDA and any applicable provincial law before publishing -- same open item as the general Privacy Policy.]]</span>
+    </p>
+
+    <h2>Changes to this policy</h2>
+    <p>
+      When we change this policy, we'll update the "last updated" date at
+      the top of this page.
+      <span class="review">[[REVIEW: no mechanism exists today to email every wallet holder about a policy change -- ReceipTap doesn't send marketing/bulk email. Decide how a material change will be announced before publishing, same open item as the general Privacy Policy.]]</span>
+    </p>
+
+    <h2>Contact us</h2>
+    <div class="contact-box">
+      <%= entity.contactRole %><br />
+      <%= entity.legalName %><br />
+      <%= entity.registeredAddress || '[[REVIEW: address pending]]' %><br />
+      <a href="mailto:<%= entity.contactEmail %>"><%= entity.contactEmail %></a>
+    </div>
+  </section>
+</div>

@@ -72,7 +72,7 @@ const SHOPPER_CONSENT = {
   // verification). The email creates their wallet, which is where the receipt
   // actually goes, and it's also visible to the business on their customer-
   // emails list -- so both real uses are now stated.
-  version: '2026-08-21.2',
+  version: '2026-08-22.1',
   transactionalText: "We'll use your email to save this receipt to your ReceipTap wallet. The business you bought from can see it too.",
   marketingLabel: 'Also send me deals and updates by email. I can unsubscribe anytime.',
   // 2026-08-21.2 — added for cross-merchant recognition. Deliberately its own
@@ -81,8 +81,16 @@ const SHOPPER_CONSENT = {
   // PIPEDA a separate purpose needs separate, un-bundled consent. Worded to
   // say what actually happens (the card is recognised, not identified) and
   // left unchecked by default -- pre-ticking it would not be consent.
+  // 2026-08-22.1 — two corrections. It said receipts would "save
+  // automatically", which no longer distinguishes anything: tapping a puck
+  // already saves the receipt for anyone signed in. The thing being consented
+  // to is recognition WITHOUT tapping, so that's what it now says. And it
+  // promised recognition "at other ReceipTap businesses" without mentioning
+  // that only Square gives us a card identifier -- a shopper who opted in and
+  // then visited a Clover shop would have been quietly unrecognised with no
+  // explanation. The limit is now stated rather than discovered.
   crossMerchantLabel:
-    'Recognise me at other ReceipTap businesses so my receipts save automatically, without tapping. Uses your card, never your card number. I can turn this off anytime.',
+    'Recognise me at other ReceipTap businesses so my receipts save without me tapping at all. Works where the business uses Square — everywhere else I just tap as usual. Uses your card, never your card number. I can turn this off anytime.',
 };
 
 // Versions look like "2026-08-05.1" -- compare the date part first, then

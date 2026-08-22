@@ -10,9 +10,12 @@ const fs = require('fs');
 const crypto = require('crypto');
 const multer = require('multer');
 const QRCode = require('qrcode');
+const { toSvg: barcodeSvg } = require('../lib/code128');
+const { resolveBarcodeValue, normalizeBarcodeValue } = require('../lib/barcodeValue');
 const prisma = require('../lib/prisma');
 const { ensureMerchantAffiliate } = require('./affiliates');
 const { MERCHANT_AFFILIATE_RATE } = require('../services/affiliateRates');
+const { TAX_LABEL_GROUPS, TAX_LABEL_OPTIONS, CUSTOM_TAX_LABEL, isCustomTaxLabel, resolveTaxLabel } = require('../lib/taxLabels');
 const { SHOPPER_CONSENT } = require('../config/legal');
 const { getBaseUrl } = require('../lib/baseUrl');
 
@@ -60,43 +63,39 @@ const uploadLogo = multer({
   },
 }).single('logoFile');
 
-// Wraps multer so a bad upload re-renders the settings page with a real
-// error message instead of a generic Express error page.
+// Wraps multer so a bad upload doesn't hit a generic Express error page --
+// stashes the message on req instead of rendering directly, since this
+// middleware now runs ahead of two different routes (the real dashboard's
+// and the wallet's dark reskin, routes/account-business.js) that each
+// render their own template. Each route checks req.logoUploadError before
+// calling saveReceiptSettings below.
 function handleLogoUpload(req, res, next) {
-  uploadLogo(req, res, async (err) => {
-    if (!err) return next();
-
-    const [theme, merchant, loyalty] = await Promise.all([
-      prisma.receiptTheme.findUnique({ where: { merchantId: req.session.merchantId } }),
-      prisma.merchant.findUnique({ where: { id: req.session.merchantId } }),
-      prisma.loyaltyProgram.findUnique({ where: { merchantId: req.session.merchantId } }),
-    ]);
-    const message =
-      err.code === 'LIMIT_FILE_SIZE'
-        ? 'Logo file is too large (2MB max).'
-        : 'Please upload a valid image file (PNG, JPG, WEBP, or SVG).';
-
-    res.status(400).render('theme-settings', {
-      merchant,
-      theme: theme || { layoutId: 'classic', primaryColor: '#111111', accentColor: '#2563eb', showWalletSave: true, showPartnerProgram: false, taxLabel: 'Tax' },
-      loyalty: loyaltyForDisplay(loyalty),
-      merchantAffiliateRate: MERCHANT_AFFILIATE_RATE,
-      saved: false,
-      error: message,
-      resent: false,
-    });
+  uploadLogo(req, res, (err) => {
+    if (err) {
+      req.logoUploadError =
+        err.code === 'LIMIT_FILE_SIZE'
+          ? 'Logo file is too large (2MB max).'
+          : 'Please upload a valid image file (PNG, JPG, WEBP, or SVG).';
+    }
+    next();
   });
 }
 
-router.get('/dashboard/settings/receipt', requireAuth, async (req, res) => {
+// Shared by GET /dashboard/settings/receipt and GET /account/business/receipt-design
+// (the wallet's dark reskin) -- see routes/account-business.js.
+async function computeReceiptSettingsData(merchantId) {
   const [theme, merchant, loyalty] = await Promise.all([
-    prisma.receiptTheme.findUnique({ where: { merchantId: req.session.merchantId } }),
-    prisma.merchant.findUnique({ where: { id: req.session.merchantId } }),
-    prisma.loyaltyProgram.findUnique({ where: { merchantId: req.session.merchantId } }),
+    prisma.receiptTheme.findUnique({ where: { merchantId } }),
+    prisma.merchant.findUnique({ where: { id: merchantId } }),
+    prisma.loyaltyProgram.findUnique({ where: { merchantId } }),
   ]);
 
-  res.render('theme-settings', {
+  return {
     merchant,
+    taxLabelGroups: TAX_LABEL_GROUPS,
+    taxLabelOptions: TAX_LABEL_OPTIONS,
+    customTaxLabelValue: CUSTOM_TAX_LABEL,
+    taxLabelIsCustom: isCustomTaxLabel(theme && theme.taxLabel),
     theme: theme || {
       layoutId: 'classic',
       logoUrl: '',
@@ -115,6 +114,43 @@ router.get('/dashboard/settings/receipt', requireAuth, async (req, res) => {
       showWarranty: false,
       showWalletSave: true,
       showPartnerProgram: false,
+      showLogo: true,
+      showBusinessName: true,
+      showAddress: true,
+      showTaxNumber: true,
+      showPhone: true,
+      showWebsite: true,
+      showBusinessEmail: true,
+      showDateTime: true,
+      showReceiptNumber: true,
+      showRegister: false,
+      showItemQuantity: true,
+      showItemUnitPrice: true,
+      showItemLineTotal: true,
+      itemLayout: 'compact',
+      showSubtotal: true,
+      showDiscounts: true,
+      showTax: true,
+      showTotal: true,
+      totalProminent: true,
+      showPaymentMethod: true,
+      showCardTail: true,
+      showApprovalCode: false,
+      showTenderChange: true,
+      showBarcode: false,
+      barcodeValue: 'receiptNumber',
+      barcodeCustomValue: '',
+      showPromo: false,
+      promoTitle: '',
+      promoMessage: '',
+      promoButtonLabel: '',
+      promoButtonUrl: '',
+      promoExpiryText: '',
+      socialsHeading: '',
+      customLinkLabel: '',
+      customLinkUrl: '',
+      offerLine: '',
+      footerLegal: '',
       instagramUrl: '',
       facebookUrl: '',
       tiktokUrl: '',
@@ -126,8 +162,12 @@ router.get('/dashboard/settings/receipt', requireAuth, async (req, res) => {
     merchantAffiliateRate: MERCHANT_AFFILIATE_RATE,
     saved: false,
     error: null,
-    resent: req.query.resent === '1',
-  });
+  };
+}
+
+router.get('/dashboard/settings/receipt', requireAuth, async (req, res) => {
+  const data = await computeReceiptSettingsData(req.session.merchantId);
+  res.render('theme-settings', { ...data, resent: req.query.resent === '1' });
 });
 
 // Creates a real Transaction (sample line items, clearly not a real sale)
@@ -218,6 +258,45 @@ router.get('/dashboard/settings/receipt/preview/:layoutId', requireAuth, async (
     xUrl: req.query.xUrl || (savedTheme && savedTheme.xUrl) || '',
     youtubeUrl: req.query.youtubeUrl || (savedTheme && savedTheme.youtubeUrl) || '',
     linkedinUrl: req.query.linkedinUrl || (savedTheme && savedTheme.linkedinUrl) || '',
+    // Block toggles -- same query-param-overrides-saved-value contract as
+    // everything above, so the live preview reflects unsaved edits.
+    showLogo: bool(req.query.showLogo, savedTheme ? Boolean(savedTheme.showLogo) : true),
+    showBusinessName: bool(req.query.showBusinessName, savedTheme ? Boolean(savedTheme.showBusinessName) : true),
+    showAddress: bool(req.query.showAddress, savedTheme ? Boolean(savedTheme.showAddress) : true),
+    showTaxNumber: bool(req.query.showTaxNumber, savedTheme ? Boolean(savedTheme.showTaxNumber) : true),
+    showPhone: bool(req.query.showPhone, savedTheme ? Boolean(savedTheme.showPhone) : true),
+    showWebsite: bool(req.query.showWebsite, savedTheme ? Boolean(savedTheme.showWebsite) : true),
+    showBusinessEmail: bool(req.query.showBusinessEmail, savedTheme ? Boolean(savedTheme.showBusinessEmail) : true),
+    showDateTime: bool(req.query.showDateTime, savedTheme ? Boolean(savedTheme.showDateTime) : true),
+    showReceiptNumber: bool(req.query.showReceiptNumber, savedTheme ? Boolean(savedTheme.showReceiptNumber) : true),
+    showRegister: bool(req.query.showRegister, Boolean(savedTheme && savedTheme.showRegister)),
+    showItemQuantity: bool(req.query.showItemQuantity, savedTheme ? Boolean(savedTheme.showItemQuantity) : true),
+    showItemUnitPrice: bool(req.query.showItemUnitPrice, savedTheme ? Boolean(savedTheme.showItemUnitPrice) : true),
+    showItemLineTotal: bool(req.query.showItemLineTotal, savedTheme ? Boolean(savedTheme.showItemLineTotal) : true),
+    itemLayout: req.query.itemLayout || (savedTheme && savedTheme.itemLayout) || 'compact',
+    showSubtotal: bool(req.query.showSubtotal, savedTheme ? Boolean(savedTheme.showSubtotal) : true),
+    showDiscounts: bool(req.query.showDiscounts, savedTheme ? Boolean(savedTheme.showDiscounts) : true),
+    showTax: bool(req.query.showTax, savedTheme ? Boolean(savedTheme.showTax) : true),
+    showTotal: bool(req.query.showTotal, savedTheme ? Boolean(savedTheme.showTotal) : true),
+    totalProminent: bool(req.query.totalProminent, savedTheme ? Boolean(savedTheme.totalProminent) : true),
+    showPaymentMethod: bool(req.query.showPaymentMethod, savedTheme ? Boolean(savedTheme.showPaymentMethod) : true),
+    showCardTail: bool(req.query.showCardTail, savedTheme ? Boolean(savedTheme.showCardTail) : true),
+    showApprovalCode: bool(req.query.showApprovalCode, Boolean(savedTheme && savedTheme.showApprovalCode)),
+    showTenderChange: bool(req.query.showTenderChange, savedTheme ? Boolean(savedTheme.showTenderChange) : true),
+    showBarcode: bool(req.query.showBarcode, Boolean(savedTheme && savedTheme.showBarcode)),
+    barcodeValue: req.query.barcodeValue || (savedTheme && savedTheme.barcodeValue) || 'receiptNumber',
+    barcodeCustomValue: req.query.barcodeCustomValue || (savedTheme && savedTheme.barcodeCustomValue) || '',
+    showPromo: bool(req.query.showPromo, Boolean(savedTheme && savedTheme.showPromo)),
+    promoTitle: req.query.promoTitle || (savedTheme && savedTheme.promoTitle) || '',
+    promoMessage: req.query.promoMessage || (savedTheme && savedTheme.promoMessage) || '',
+    promoButtonLabel: req.query.promoButtonLabel || (savedTheme && savedTheme.promoButtonLabel) || '',
+    promoButtonUrl: req.query.promoButtonUrl || (savedTheme && savedTheme.promoButtonUrl) || '',
+    promoExpiryText: req.query.promoExpiryText || (savedTheme && savedTheme.promoExpiryText) || '',
+    socialsHeading: req.query.socialsHeading || (savedTheme && savedTheme.socialsHeading) || '',
+    customLinkLabel: req.query.customLinkLabel || (savedTheme && savedTheme.customLinkLabel) || '',
+    customLinkUrl: req.query.customLinkUrl || (savedTheme && savedTheme.customLinkUrl) || '',
+    offerLine: req.query.offerLine || (savedTheme && savedTheme.offerLine) || '',
+    footerLegal: req.query.footerLegal || (savedTheme && savedTheme.footerLegal) || '',
   };
 
   // Loyalty offer value travels as dollars for AMOUNT (matching what the
@@ -253,9 +332,22 @@ router.get('/dashboard/settings/receipt/preview/:layoutId', requireAuth, async (
     ? `${getBaseUrl(req)}/signup?ref=${existingAffiliate ? existingAffiliate.referralCode : 'PREVIEW'}`
     : null;
 
+  // Same resolver the real receipt uses, against the sample sale above -- so
+  // picking "Custom value" and leaving it blank shows the same empty state a
+  // customer would get, rather than a barcode that only exists in preview.
+  let previewBarcodeValue = null;
+  let previewBarcodeMarkup = null;
+  if (previewTheme.showBarcode) {
+    previewBarcodeValue = resolveBarcodeValue(previewTheme, { id: 'preview', orderNumber: 'PREVIEW-0001' });
+    previewBarcodeMarkup = previewBarcodeValue ? barcodeSvg(previewBarcodeValue) : null;
+  }
+
   res.render('receipt', {
     merchant,
     theme: previewTheme,
+    barcodeValue: previewBarcodeValue,
+    barcodeMarkup: previewBarcodeMarkup,
+    canRecogniseCard: false, // a preview has no real card behind it
     googleClientId: '', // no need to render a live Google button inside a preview thumbnail
     loyaltyProgram: previewLoyaltyProgram,
     loyaltyCard: previewLoyaltyCard,
@@ -272,9 +364,15 @@ router.get('/dashboard/settings/receipt/preview/:layoutId', requireAuth, async (
       ],
       subtotal: '13.50',
       tax: '1.76',
-      discount: '0.00',
+      discount: '1.00',
       total: '15.26',
       paymentMethod: 'Visa ••••4242',
+      posDeviceId: 'Register 2',
+      cardBrand: 'Visa',
+      cardLast4: '4242',
+      authCode: '04X219',
+      amountTenderedCents: null,
+      changeDueCents: null,
     },
     // This is a layout-picker preview, not a real receipt -- the merchant's
     // real logo/name still show once set (so the preview reflects reality),
@@ -284,19 +382,89 @@ router.get('/dashboard/settings/receipt/preview/:layoutId', requireAuth, async (
   });
 });
 
-router.post('/dashboard/settings/receipt', requireAuth, handleLogoUpload, async (req, res) => {
+// Shared by POST /dashboard/settings/receipt and POST /account/business/receipt-design
+// (the wallet's dark reskin) -- see routes/account-business.js. Same
+// validation/sanitization, same upserts either way; only which template
+// the caller renders afterward differs.
+async function saveReceiptSettings(merchantId, body, file) {
   const {
-    layoutId, primaryColor, accentColor, headerText, footerText, displayName, location, phone,
-    gstHstNumber, taxLabel, returnPolicy,
+    layoutId, primaryColor, accentColor, headerText, footerText, displayName, taxLabel, returnPolicy,
     googleReviewUrl, showGoogleReview, showWarranty, showWalletSave, showPartnerProgram,
     instagramUrl, facebookUrl, tiktokUrl, xUrl, youtubeUrl, linkedinUrl,
     loyaltyEnabled, loyaltyOfferType, loyaltyOfferValue, loyaltyRedemptionCode,
-  } = req.body;
+    itemLayout, barcodeValue,
+    promoTitle, promoMessage, promoButtonLabel, promoButtonUrl, promoExpiryText,
+    socialsHeading, customLinkLabel, customLinkUrl, offerLine, footerLegal,
+  } = body;
 
-  // "Tax" is a safe default, but an empty submission still shouldn't wipe out
-  // a merchant-chosen label like "GST/HST" -- same fallback pattern as the
-  // loyalty redemption code below.
-  const safeTaxLabel = (taxLabel || '').trim() || 'Tax';
+  // Every block toggle on the Receipt design page. Unchecked checkboxes
+  // aren't submitted at all, so `=== 'on'` is the whole test -- same
+  // convention the older showGoogleReview/showWarranty flags already use.
+  const blockFlags = {
+    showLogo: body.showLogo === 'on',
+    showBusinessName: body.showBusinessName === 'on',
+    showAddress: body.showAddress === 'on',
+    showTaxNumber: body.showTaxNumber === 'on',
+    showPhone: body.showPhone === 'on',
+    showWebsite: body.showWebsite === 'on',
+    showBusinessEmail: body.showBusinessEmail === 'on',
+    showDateTime: body.showDateTime === 'on',
+    showReceiptNumber: body.showReceiptNumber === 'on',
+    showRegister: body.showRegister === 'on',
+    showItemQuantity: body.showItemQuantity === 'on',
+    showItemUnitPrice: body.showItemUnitPrice === 'on',
+    showItemLineTotal: body.showItemLineTotal === 'on',
+    itemLayout: ['detailed', 'spacious'].includes(itemLayout) ? itemLayout : 'compact',
+    showSubtotal: body.showSubtotal === 'on',
+    showDiscounts: body.showDiscounts === 'on',
+    showTax: body.showTax === 'on',
+    showTotal: body.showTotal === 'on',
+    totalProminent: body.totalProminent === 'on',
+    showPaymentMethod: body.showPaymentMethod === 'on',
+    showCardTail: body.showCardTail === 'on',
+    showApprovalCode: body.showApprovalCode === 'on',
+    showTenderChange: body.showTenderChange === 'on',
+    showBarcode: body.showBarcode === 'on',
+    barcodeValue: normalizeBarcodeValue(barcodeValue),
+    barcodeCustomValue: body.barcodeCustomValue || null,
+    showPromo: body.showPromo === 'on',
+    promoTitle: promoTitle || null,
+    promoMessage: promoMessage || null,
+    promoButtonLabel: promoButtonLabel || null,
+    promoButtonUrl: sanitizeUrl(promoButtonUrl),
+    promoExpiryText: promoExpiryText || null,
+    socialsHeading: socialsHeading || null,
+    customLinkLabel: customLinkLabel || null,
+    customLinkUrl: sanitizeUrl(customLinkUrl),
+    offerLine: offerLine || null,
+    footerLegal: footerLegal || null,
+  };
+
+  // Picked from a dropdown now (lib/taxLabels.js); "Custom" carries the real
+  // wording in taxLabelCustom. Still falls back to "Tax" rather than printing
+  // an unlabelled tax line, same as when this was a free-text field.
+  const safeTaxLabel = resolveTaxLabel(taxLabel, body.taxLabelCustom);
+
+  // phone/gstHstNumber live on ReceiptTheme but are edited from Business
+  // Settings' "Business Profile" panel, NOT from Receipt design (they're
+  // business facts, not design). Receipt design's form therefore doesn't
+  // submit them at all -- so read them only when the key is actually
+  // present, or saving Receipt design would blank out the phone number and
+  // tax number Business Settings just set. Absent key = leave alone;
+  // present-but-empty = the merchant really did clear it.
+  const keepIfAbsent = (key, current) => (key in body ? (body[key] || null) : (current ?? null));
+
+  // website lives on Merchant, not ReceiptTheme, but it's edited from the
+  // Header block here (revealed by the "Show website" switch) rather than
+  // from Business Settings -- one field, one place. Only written when the
+  // form actually submitted it, so the navy dashboard's older Receipt design
+  // form, which has no such input, can't blank it.
+  if ('website' in body) {
+    await prisma.merchant.update({
+      where: { id: merchantId },
+      data: { website: sanitizeUrl(body.website) },
+    });
+  }
 
   const safeInstagramUrl = sanitizeUrl(instagramUrl);
   const safeFacebookUrl = sanitizeUrl(facebookUrl);
@@ -314,9 +482,9 @@ router.post('/dashboard/settings/receipt', requireAuth, handleLogoUpload, async 
     : Math.min(100, Math.round(safeOfferValueDisplay));
 
   const [existingTheme, merchant, existingLoyaltyProgram] = await Promise.all([
-    prisma.receiptTheme.findUnique({ where: { merchantId: req.session.merchantId } }),
-    prisma.merchant.findUnique({ where: { id: req.session.merchantId } }),
-    prisma.loyaltyProgram.findUnique({ where: { merchantId: req.session.merchantId } }),
+    prisma.receiptTheme.findUnique({ where: { merchantId } }),
+    prisma.merchant.findUnique({ where: { id: merchantId } }),
+    prisma.loyaltyProgram.findUnique({ where: { merchantId } }),
   ]);
 
   // An empty submission shouldn't wipe out a working code -- fall back to
@@ -327,47 +495,45 @@ router.post('/dashboard/settings/receipt', requireAuth, handleLogoUpload, async 
   // Turning the banner on needs a referral code to link to -- every merchant
   // is eligible, this just creates the row the first time it's actually used.
   if (showPartnerProgram === 'on') {
-    await ensureMerchantAffiliate(req.session.merchantId);
+    await ensureMerchantAffiliate(merchantId);
   }
 
   // A new upload wins; otherwise keep whatever was already saved -- a file
   // input never re-submits its old value, so leaving this alone would
   // silently wipe the logo on every save.
   let logoUrl = existingTheme ? existingTheme.logoUrl : null;
-  if (req.file) {
-    logoUrl = `/uploads/logos/${req.file.filename}`;
+  if (file) {
+    logoUrl = `/uploads/logos/${file.filename}`;
   }
 
   // If they've turned the review toggle on, require a real, well-formed URL —
   // this is the link customers will actually be sent to, so it has to work.
   if (showGoogleReview === 'on') {
     if (!googleReviewUrl || !isValidGoogleReviewUrl(googleReviewUrl)) {
-      return res.render('theme-settings', {
+      return {
         merchant,
         theme: { ...existingTheme, layoutId: safeLayoutId, logoUrl, displayName, location, phone, gstHstNumber, taxLabel: safeTaxLabel, returnPolicy, primaryColor, accentColor, headerText, footerText, googleReviewUrl, showGoogleReview: true, showWarranty: showWarranty === 'on', showWalletSave: showWalletSave === 'on', showPartnerProgram: showPartnerProgram === 'on', instagramUrl: safeInstagramUrl, facebookUrl: safeFacebookUrl, tiktokUrl: safeTiktokUrl, xUrl: safeXUrl, youtubeUrl: safeYoutubeUrl, linkedinUrl: safeLinkedinUrl },
         loyalty: { enabled: loyaltyEnabled === 'on', offerType: safeOfferType, offerValue: safeOfferValueDisplay, redemptionCode: safeRedemptionCode },
         merchantAffiliateRate: MERCHANT_AFFILIATE_RATE,
         saved: false,
         error: 'Enter a valid Google review link (should start with https:// and be a Google URL).',
-        resent: false,
-      });
+      };
     }
   }
 
   await Promise.all([
     prisma.receiptTheme.upsert({
-      where: { merchantId: req.session.merchantId },
+      where: { merchantId },
       update: {
         layoutId: safeLayoutId,
         logoUrl,
         displayName: displayName || null,
-        location: location || null,
-        phone: phone || null,
+        phone: keepIfAbsent('phone', existingTheme && existingTheme.phone),
         primaryColor: primaryColor || '#111111',
         accentColor: accentColor || '#2563eb',
         headerText: headerText || null,
         footerText: footerText || null,
-        gstHstNumber: gstHstNumber || null,
+        gstHstNumber: keepIfAbsent('gstHstNumber', existingTheme && existingTheme.gstHstNumber),
         taxLabel: safeTaxLabel,
         returnPolicy: returnPolicy || null,
         googleReviewUrl: googleReviewUrl || null,
@@ -375,6 +541,7 @@ router.post('/dashboard/settings/receipt', requireAuth, handleLogoUpload, async 
         showWarranty: showWarranty === 'on',
         showWalletSave: showWalletSave === 'on',
         showPartnerProgram: showPartnerProgram === 'on',
+        ...blockFlags,
         instagramUrl: safeInstagramUrl,
         facebookUrl: safeFacebookUrl,
         tiktokUrl: safeTiktokUrl,
@@ -383,17 +550,16 @@ router.post('/dashboard/settings/receipt', requireAuth, handleLogoUpload, async 
         linkedinUrl: safeLinkedinUrl,
       },
       create: {
-        merchantId: req.session.merchantId,
+        merchantId,
         layoutId: safeLayoutId,
         logoUrl,
         displayName: displayName || null,
-        location: location || null,
-        phone: phone || null,
+        phone: keepIfAbsent('phone', existingTheme && existingTheme.phone),
         primaryColor: primaryColor || '#111111',
         accentColor: accentColor || '#2563eb',
         headerText: headerText || null,
         footerText: footerText || null,
-        gstHstNumber: gstHstNumber || null,
+        gstHstNumber: keepIfAbsent('gstHstNumber', existingTheme && existingTheme.gstHstNumber),
         taxLabel: safeTaxLabel,
         returnPolicy: returnPolicy || null,
         googleReviewUrl: googleReviewUrl || null,
@@ -401,6 +567,7 @@ router.post('/dashboard/settings/receipt', requireAuth, handleLogoUpload, async 
         showWarranty: showWarranty === 'on',
         showWalletSave: showWalletSave === 'on',
         showPartnerProgram: showPartnerProgram === 'on',
+        ...blockFlags,
         instagramUrl: safeInstagramUrl,
         facebookUrl: safeFacebookUrl,
         tiktokUrl: safeTiktokUrl,
@@ -410,17 +577,40 @@ router.post('/dashboard/settings/receipt', requireAuth, handleLogoUpload, async 
       },
     }),
     prisma.loyaltyProgram.upsert({
-      where: { merchantId: req.session.merchantId },
+      where: { merchantId },
       update: { enabled: loyaltyEnabled === 'on', offerType: safeOfferType, offerValue: safeOfferValueStored, redemptionCode: safeRedemptionCode },
-      create: { merchantId: req.session.merchantId, enabled: loyaltyEnabled === 'on', offerType: safeOfferType, offerValue: safeOfferValueStored, redemptionCode: safeRedemptionCode },
+      create: { merchantId, enabled: loyaltyEnabled === 'on', offerType: safeOfferType, offerValue: safeOfferValueStored, redemptionCode: safeRedemptionCode },
     }),
   ]);
 
   const [theme, loyalty] = await Promise.all([
-    prisma.receiptTheme.findUnique({ where: { merchantId: req.session.merchantId } }),
-    prisma.loyaltyProgram.findUnique({ where: { merchantId: req.session.merchantId } }),
+    prisma.receiptTheme.findUnique({ where: { merchantId } }),
+    prisma.loyaltyProgram.findUnique({ where: { merchantId } }),
   ]);
-  res.render('theme-settings', { merchant, theme, loyalty: loyaltyForDisplay(loyalty), merchantAffiliateRate: MERCHANT_AFFILIATE_RATE, saved: true, error: null, resent: false });
+  return {
+    merchant,
+    theme,
+    loyalty: loyaltyForDisplay(loyalty),
+    merchantAffiliateRate: MERCHANT_AFFILIATE_RATE,
+    // Same locals computeReceiptSettingsData supplies -- this path renders the
+    // page directly after a save, so omitting them would throw on the tax
+    // label dropdown.
+    taxLabelGroups: TAX_LABEL_GROUPS,
+    taxLabelOptions: TAX_LABEL_OPTIONS,
+    customTaxLabelValue: CUSTOM_TAX_LABEL,
+    taxLabelIsCustom: isCustomTaxLabel(theme && theme.taxLabel),
+    saved: true,
+    error: null,
+  };
+}
+
+router.post('/dashboard/settings/receipt', requireAuth, handleLogoUpload, async (req, res) => {
+  if (req.logoUploadError) {
+    const data = await computeReceiptSettingsData(req.session.merchantId);
+    return res.status(400).render('theme-settings', { ...data, error: req.logoUploadError, resent: false });
+  }
+  const result = await saveReceiptSettings(req.session.merchantId, req.body, req.file);
+  res.render('theme-settings', { ...result, resent: false });
 });
 
 // Social links render as an href straight on the receipt page -- reject
@@ -449,3 +639,7 @@ function isValidGoogleReviewUrl(url) {
 }
 
 module.exports = router;
+// Exposed for routes/account-business.js -- see the comment on each above.
+module.exports.computeReceiptSettingsData = computeReceiptSettingsData;
+module.exports.saveReceiptSettings = saveReceiptSettings;
+module.exports.handleLogoUpload = handleLogoUpload;

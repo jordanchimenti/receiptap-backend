@@ -10,10 +10,10 @@
   }
   .layout-modern .brand-row { display: flex; margin-bottom: 10px; }
   .layout-modern .powered-by { display: inline-flex; align-items: center; gap: 5px; font-size: 10px; color: rgba(255,255,255,0.75); text-decoration: none; }
-  .layout-modern .powered-logo { height: 19px; width: auto; filter: brightness(0) invert(1); }
-  .layout-modern .merchant-logo { max-height: 36px; max-width: 120px; object-fit: contain; display: block; margin: 0 auto 10px; filter: brightness(0) invert(1); }
+  .layout-modern .powered-wordmark { font-weight: 700; font-size: 12px; letter-spacing: 0.01em; color: #fff; }
+  .layout-modern .merchant-logo { max-height: 60px; max-width: 190px; object-fit: contain; display: block; margin: 12px auto 12px; filter: brightness(0) invert(1); }
   .layout-modern .logo-placeholder {
-    height: 36px; width: 120px; margin: 0 auto 10px; display: flex; align-items: center; justify-content: center;
+    height: 36px; width: 120px; margin: 10px auto 10px; display: flex; align-items: center; justify-content: center;
     border: 1px dashed rgba(255,255,255,0.5); border-radius: 6px; background: rgba(255,255,255,0.1);
     font-size: 10px; color: rgba(255,255,255,0.8); text-transform: uppercase; letter-spacing: 0.04em;
   }
@@ -26,6 +26,7 @@
     display: flex; justify-content: space-between; padding: 8px 0;
     border-bottom: 1px solid #f2f2f2; font-size: 14px; color: var(--primary);
   }
+  .layout-modern .item-row.spacious { padding: 15px 0; }
   .layout-modern .item-name { font-weight: 500; }
   .layout-modern .item-qty { color: #999; font-size: 12px; }
   .layout-modern .totals-block { margin-top: 14px; }
@@ -46,57 +47,108 @@
     <div class="brand-row">
       <a class="powered-by" href="/">
         <span>Powered by</span>
-        <img class="powered-logo" src="/images/receiptap-logo.png" alt="ReceipTap" />
+        <span class="powered-wordmark">ReceipTap</span>
       </a>
     </div>
-    <% if (theme.logoUrl) { %>
+    <% if (theme.showLogo !== false && theme.logoUrl) { %>
       <img class="merchant-logo" src="<%= theme.logoUrl %>" alt="<%= merchant.businessName %>" />
     <% } else if (typeof isPreview !== 'undefined' && isPreview) { %>
       <div class="logo-placeholder"><%= typeof logoPlaceholderText !== 'undefined' ? logoPlaceholderText : 'Custom Logo' %></div>
     <% } %>
-    <div class="business-name"><%= theme.displayName || merchant.businessName %></div>
-    <% if (theme.location) { %>
-      <div class="location"><%= theme.location %></div>
+    <% if (theme.showBusinessName !== false) { %>
+      <div class="business-name"><%= theme.displayName || merchant.businessName %></div>
     <% } %>
-    <% if (theme.phone) { %>
+    <% if (theme.showPhone !== false && theme.phone) { %>
       <div class="location"><%= theme.phone %></div>
     <% } %>
-    <div class="meta-light"><%= transaction.date %></div>
-    <div class="meta-light">
-      Receipt #<%= transaction.id %><% if (transaction.orderNumber && transaction.orderNumber !== transaction.id) { %> &middot; Order #<%= transaction.orderNumber %><% } %>
-    </div>
+    <% if (theme.showBusinessEmail !== false && merchant.businessEmail) { %>
+      <div class="location"><%= merchant.businessEmail %></div>
+    <% } %>
+    <% if (theme.showWebsite !== false && merchant.website) { %>
+      <div class="location"><%= merchant.website %></div>
+    <% } %>
+    <% if (theme.showDateTime !== false) { %>
+      <div class="meta-light"><%= transaction.date %></div>
+    <% } %>
+    <% if (theme.showReceiptNumber !== false) { %>
+      <div class="meta-light">
+        Receipt #<%= transaction.id %><% if (transaction.orderNumber && transaction.orderNumber !== transaction.id) { %> &middot; Order #<%= transaction.orderNumber %><% } %>
+      </div>
+    <% } %>
+    <% if (theme.showRegister && transaction.posDeviceId) { %>
+      <div class="meta-light">Register <%= transaction.posDeviceId %></div>
+    <% } %>
     <% if (theme.headerText) { %>
       <div class="header-text"><%= theme.headerText %></div>
     <% } %>
   </div>
   <div class="body-content">
     <% transaction.lineItems.forEach(function(item) { %>
-      <div class="item-row">
+      <div class="item-row <%= theme.itemLayout === 'spacious' ? 'spacious' : '' %>">
         <div>
           <div class="item-name"><%= item.name %></div>
-          <div class="item-qty">
-            Qty <%= item.quantity %><% if (item.unitPrice !== undefined && item.quantity > 1) { %> &middot; $<%= (item.unitPrice / 100).toFixed(2) %> each<% } %>
-          </div>
+          <% var showQty = theme.showItemQuantity !== false;
+             var showUnit = theme.showItemUnitPrice !== false && item.unitPrice !== undefined
+                            && (theme.itemLayout === 'detailed' || theme.itemLayout === 'spacious' || item.quantity > 1); %>
+          <% if (showQty || showUnit) { %>
+            <div class="item-qty">
+              <% if (showQty) { %>Qty <%= item.quantity %><% } %><% if (showQty && showUnit) { %> &middot; <% } %><% if (showUnit) { %>$<%= (item.unitPrice / 100).toFixed(2) %> each<% } %>
+            </div>
+          <% } %>
         </div>
-        <div>$<%= (item.total / 100).toFixed(2) %></div>
+        <% if (theme.showItemLineTotal !== false) { %><div>$<%= (item.total / 100).toFixed(2) %></div><% } %>
       </div>
     <% }); %>
     <div class="totals-block">
-      <div class="totals-row"><span>Subtotal</span><span>$<%= transaction.subtotal %></span></div>
-      <% if (transaction.discount && parseFloat(transaction.discount) > 0) { %>
+      <% if (theme.showSubtotal !== false) { %>
+        <div class="totals-row"><span>Subtotal</span><span>$<%= transaction.subtotal %></span></div>
+      <% } %>
+      <% if (theme.showDiscounts !== false && transaction.discount && parseFloat(transaction.discount) > 0) { %>
         <div class="totals-row"><span>Discount</span><span>-$<%= transaction.discount %></span></div>
       <% } %>
-      <div class="totals-row"><span><%= theme.taxLabel || 'Tax' %></span><span>$<%= transaction.tax %></span></div>
-      <div class="total-big"><span class="label">Total</span><span class="amount">$<%= transaction.total %></span></div>
+      <% if (theme.showTax !== false) { %>
+        <div class="totals-row"><span><%= theme.taxLabel || 'Tax' %></span><span>$<%= transaction.tax %></span></div>
+      <% } %>
+      <% if (theme.showTotal !== false) { %>
+        <% if (theme.totalProminent === false) { %>
+          <div class="totals-row" style="font-weight:700; color:#111;"><span>Total</span><span>$<%= transaction.total %></span></div>
+        <% } else { %>
+          <div class="total-big"><span class="label">Total</span><span class="amount">$<%= transaction.total %></span></div>
+        <% } %>
+      <% } %>
     </div>
-    <div class="payment-pill">
-      <%= transaction.paymentMethod ? transaction.paymentMethod + ' — Paid' : 'Paid' %>
-    </div>
-    <% if (theme.gstHstNumber) { %>
+    <% if (theme.showPaymentMethod !== false) { %>
+      <div class="payment-pill">
+        <%= transaction.paymentMethod ? transaction.paymentMethod + ' — Paid' : 'Paid' %>
+      </div>
+    <% } %>
+    <%# Only ever rendered from what the POS actually reported -- each of these
+        is null unless the provider sent it, so a receipt never shows a card
+        tail or approval code that was inferred. %>
+    <% if (theme.showCardTail !== false && transaction.cardBrand && transaction.cardLast4 && !transaction.paymentMethod) { %>
+            <div style="font-size:12px; color:#888; margin-top:4px;"><%= transaction.cardBrand %> ••••<%= transaction.cardLast4 %></div>
+    <% } %>
+    <% if (theme.showApprovalCode && transaction.authCode) { %>
+            <div style="font-size:12px; color:#888; margin-top:4px;">Approval <%= transaction.authCode %></div>
+    <% } %>
+    <% if (theme.showTenderChange !== false && transaction.amountTenderedCents !== null && transaction.amountTenderedCents !== undefined) { %>
+            <div style="font-size:12px; color:#888; margin-top:4px;">Tendered $<%= (transaction.amountTenderedCents / 100).toFixed(2) %></div>
+    <% } %>
+    <% if (theme.showTenderChange !== false && transaction.changeDueCents !== null && transaction.changeDueCents !== undefined) { %>
+            <div style="font-size:12px; color:#888; margin-top:4px;">Change $<%= (transaction.changeDueCents / 100).toFixed(2) %></div>
+    <% } %>
+
+    <% if (theme.showTaxNumber !== false && theme.gstHstNumber) { %>
       <div style="font-size:12px; color:#888; margin-top:8px;">GST/HST #<%= theme.gstHstNumber %></div>
+    <% } %>
+    <% if (theme.showAddress !== false && businessAddressLines.length > 0) { %>
+      <div style="font-size:12px; color:#888; margin-top:6px;"><% businessAddressLines.forEach(function(line, i) { %><%= line %><% if (i < businessAddressLines.length - 1) { %><br /><% } %><% }); %></div>
     <% } %>
     <% if (theme.returnPolicy) { %>
       <div style="font-size:12px; color:#888; margin-top:6px;"><%= theme.returnPolicy %></div>
+    <% } %>
+    <% if (theme.footerLegal) { %>
+      <div style="font-size:12px; color:#888; margin-top:6px;"><%= theme.footerLegal %></div>
     <% } %>
     <div style="font-size:12px; font-weight:600; color:#666; margin-top:12px;">
       <% if (typeof isMerchantCopy !== 'undefined' && isMerchantCopy) { %>

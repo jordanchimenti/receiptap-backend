@@ -2,6 +2,8 @@
 // The final link in the chain: tap -> /r/:puckId -> /receipt/:transactionId -> this route
 
 const express = require('express');
+const { toSvg: barcodeSvg } = require('../lib/code128');
+const { resolveBarcodeValue } = require('../lib/barcodeValue');
 const router = express.Router();
 const prisma = require('../lib/prisma');
 const { SHOPPER_CONSENT } = require('../config/legal');
@@ -65,9 +67,26 @@ router.get('/receipt/:transactionId', async (req, res) => {
     ? `${getBaseUrl(req)}/signup?ref=${partnerAffiliate.referralCode}`
     : null;
 
+  // Scannable Code 128 of whichever identifier the merchant picked, so staff
+  // can pull the sale up from the customer's phone with the same gun they use
+  // on printed receipts. barcodeMarkup stays null when this sale has no such
+  // identifier -- the template shows an empty state instead of encoding a
+  // wrong or made-up value.
+  let barcodeValue = null;
+  let barcodeMarkup = null;
+  if (safeTheme.showBarcode) {
+    barcodeValue = resolveBarcodeValue(safeTheme, transaction);
+    barcodeMarkup = barcodeValue ? barcodeSvg(barcodeValue) : null;
+  }
+
   res.render('receipt', {
     merchant,
     theme: safeTheme,
+    barcodeValue,
+    barcodeMarkup,
+    // Only Square exposes a card fingerprint, and only card sales carry one.
+    // Drives whether the cross-merchant consent box is offered at all.
+    canRecogniseCard: Boolean(transaction.cardFingerprintHash),
     googleClientId: process.env.GOOGLE_CLIENT_ID || '',
     alreadySignedUp: Boolean(req.session.customerId),
     loyaltyProgram,

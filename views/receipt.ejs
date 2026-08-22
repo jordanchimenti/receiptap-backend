@@ -122,15 +122,29 @@
       background: #fff; border-radius: 12px; padding: 24px;
       max-width: 340px; width: 100%; box-sizing: border-box;
     }
-    .modal-title { font-size: 17px; font-weight: 700; margin-bottom: 4px; }
-    .modal-subtitle { font-size: 13px; color: #666; margin-bottom: 18px; }
-    .consent-transactional { font-size: 11.5px; color: #999; margin: -12px 0 16px; line-height: 1.4; }
+    /* The whole modal is centred: it's a ReceipTap sign-up sitting on top of
+       the merchant's receipt, so it reads as its own branded moment rather
+       than a form bolted to the page. */
+    .modal-box { text-align: center; }
+    .modal-logo { display: block; height: 30px; margin: 2px auto 16px; }
+    .modal-title { font-size: 22px; font-weight: 700; line-height: 1.22; letter-spacing: -0.015em; margin-bottom: 8px; }
+    .modal-subtitle { font-size: 13px; color: #666; margin-bottom: 18px; line-height: 1.5; }
+    /* The one deliberate exception: a checkbox and its label read as a single
+       line of text, and centring wraps them away from the box they belong to. */
     .consent-marketing-row { display: flex; align-items: flex-start; gap: 8px; margin: 2px 0 12px; text-align: left; }
     .consent-marketing-row input[type=checkbox] { margin-top: 2px; flex-shrink: 0; }
     .consent-marketing-row label { font-size: 12px; color: #666; line-height: 1.4; }
     #google-signin-btn { display: flex; justify-content: center; margin-bottom: 14px; }
+    #google-signin-btn { display: flex; justify-content: center; }
     .modal-divider { display: flex; align-items: center; gap: 10px; font-size: 12px; color: #999; margin: 14px 0; }
     .modal-divider::before, .modal-divider::after { content: ''; flex: 1; height: 1px; background: #eee; }
+    /* Left-aligned on purpose: the box is centred, but text you type into it
+       reads better starting at the left edge, and the caret doesn't jump. */
+    .modal-box input[type=email], .modal-box input[type=text] { text-align: left; }
+    .modal-box input[type=text] {
+      width: 100%; box-sizing: border-box; padding: 12px 14px; font-size: 15px;
+      border: 1px solid #ddd; border-radius: 8px; margin-bottom: 10px; font-family: inherit;
+    }
     .modal-box input[type=email] {
       width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px;
       box-sizing: border-box; font-size: 14px; margin-bottom: 10px;
@@ -141,6 +155,25 @@
     }
     .modal-error { color: #dc2626; font-size: 12px; margin-bottom: 8px; display: none; }
     .modal-close { text-align: center; margin-top: 14px; font-size: 12px; color: #999; cursor: pointer; }
+
+    .socials-heading { text-align: center; font-size: 12.5px; font-weight: 600; color: #666; margin-top: 12px; }
+    .offer-line { text-align: center; font-size: 12.5px; color: #555; margin-top: 8px; line-height: 1.5; }
+    .promo-card {
+      background: #fff; border: 1px dashed var(--accent); border-radius: 12px;
+      padding: 16px; text-align: center; margin-top: 10px;
+    }
+    .promo-card .promo-title { font-size: 15px; font-weight: 700; color: #111; margin-bottom: 4px; }
+    .promo-card .promo-message { font-size: 13px; color: #555; line-height: 1.5; }
+    .promo-card .promo-expiry { font-size: 11.5px; color: #999; margin-top: 8px; }
+    .promo-card .promo-btn {
+      display: inline-block; margin-top: 10px; background: var(--accent); color: #fff;
+      font-size: 13.5px; font-weight: 700; padding: 9px 18px; border-radius: 8px; text-decoration: none;
+    }
+    .scan-card { background: #fff; border-radius: 12px; padding: 16px; text-align: center; margin-top: 10px; }
+    .barcode-wrap { max-width: 260px; margin: 0 auto 8px; }
+    .barcode-wrap svg { display: block; width: 100%; height: auto; }
+    .scan-empty { font-size: 12.5px; color: #999; padding: 10px 0; }
+    .scan-card .scan-value { font-family: ui-monospace, monospace; font-size: 12px; color: #666; word-break: break-all; }
 
     .partner-banner {
       text-align: center;
@@ -177,7 +210,18 @@
       <a href="<%= partnerReferralUrl %>">Try ReceipTap FREE</a>
     </div>
   <% } %>
-  <%- include('receipt-layouts/' + (theme.layoutId || 'classic'), { merchant, theme, transaction, isPreview: typeof isPreview !== 'undefined' ? isPreview : false, isMerchantCopy, logoPlaceholderText: typeof logoPlaceholderText !== 'undefined' ? logoPlaceholderText : undefined }) %>
+  <%
+    // Business Settings' address fields (routes/account-settings.js), formatted
+    // for the receipt/PDF's compliance footer -- kept as separate lines here
+    // rather than baked into one string so each layout can join them with
+    // whatever spacing/line-break markup fits its own style.
+    const businessAddressLines = [
+      [merchant.addressLine1, merchant.addressLine2].filter(Boolean).join(', '),
+      [[merchant.addressCity, merchant.addressRegion].filter(Boolean).join(', '), merchant.addressPostalCode].filter(Boolean).join('  '),
+      merchant.addressCountry,
+    ].filter(Boolean);
+  %>
+  <%- include('receipt-layouts/' + (theme.layoutId || 'classic'), { merchant, theme, transaction, businessAddressLines, isPreview: typeof isPreview !== 'undefined' ? isPreview : false, isMerchantCopy, logoPlaceholderText: typeof logoPlaceholderText !== 'undefined' ? logoPlaceholderText : undefined }) %>
 
   <div class="actions" style="max-width:420px; margin: 10px auto 0;">
     <button class="action-button" style="border:none; cursor:pointer;" onclick="handleSaveClick('photo')">
@@ -186,6 +230,30 @@
     <button class="action-button save-receipt-btn" style="background:#111; border:none; cursor:pointer;" onclick="handleSaveClick('pdf')">
       Save as PDF
     </button>
+    <%# Merchant-authored promo. All free text -- no POS data behind it, so it
+        renders whenever the merchant switches it on and gives it a title. %>
+    <% if (!isMerchantCopy && theme.showPromo && theme.promoTitle) { %>
+      <div class="promo-card">
+        <div class="promo-title"><%= theme.promoTitle %></div>
+        <% if (theme.promoMessage) { %><div class="promo-message"><%= theme.promoMessage %></div><% } %>
+        <% if (theme.promoButtonLabel && theme.promoButtonUrl) { %>
+          <a class="promo-btn" href="<%= theme.promoButtonUrl %>"><%= theme.promoButtonLabel %></a>
+        <% } %>
+        <% if (theme.promoExpiryText) { %><div class="promo-expiry"><%= theme.promoExpiryText %></div><% } %>
+      </div>
+    <% } %>
+    <% if (theme.showBarcode) { %>
+      <div class="scan-card">
+        <% if (typeof barcodeMarkup !== 'undefined' && barcodeMarkup) { %>
+          <div class="barcode-wrap"><%- barcodeMarkup %></div>
+          <div class="scan-value"><%= barcodeValue %></div>
+        <% } else { %>
+          <%# No identifier on this sale for the chosen source -- an empty
+              state, never a barcode encoding a made-up value. %>
+          <div class="scan-empty">No barcode value on this receipt</div>
+        <% } %>
+      </div>
+    <% } %>
     <% if (!isMerchantCopy && theme.showGoogleReview && theme.googleReviewUrl) { %>
       <a class="google-review-card" href="<%= theme.googleReviewUrl %>">
         <svg class="google-g" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
@@ -229,6 +297,9 @@
       </div>
     <% } %>
     <% if (!isMerchantCopy && (theme.instagramUrl || theme.facebookUrl || theme.tiktokUrl || theme.xUrl || theme.youtubeUrl || theme.linkedinUrl)) { %>
+      <% if (theme.socialsHeading) { %>
+        <div class="socials-heading"><%= theme.socialsHeading %></div>
+      <% } %>
       <div class="social-links">
         <% if (theme.instagramUrl) { %>
           <a class="social-link" href="<%= theme.instagramUrl %>" target="_blank" rel="noopener noreferrer" aria-label="Instagram">
@@ -262,6 +333,12 @@
         <% } %>
       </div>
     <% } %>
+    <% if (!isMerchantCopy && theme.customLinkLabel && theme.customLinkUrl) { %>
+      <a class="action-button" href="<%= theme.customLinkUrl %>" target="_blank" rel="noopener noreferrer"><%= theme.customLinkLabel %></a>
+    <% } %>
+    <% if (!isMerchantCopy && theme.offerLine) { %>
+      <div class="offer-line"><%= theme.offerLine %></div>
+    <% } %>
     <% if (!isMerchantCopy && theme.showWarranty) { %>
       <a class="action-button" style="background:#555;" href="/receipt/<%= transaction.id %>/warranty">Register Warranty</a>
     <% } %>
@@ -273,23 +350,39 @@
   <!-- Email-gate modal: shown before the receipt can be saved as PDF/Files -->
   <div class="modal-overlay" id="save-modal">
     <div class="modal-box">
-      <div class="modal-title">Save Your Receipt</div>
-      <div class="modal-subtitle">Save this receipt and we'll automatically organize it by spending category and flag possible tax deductions — free, powered by AI.</div>
-      <div class="consent-transactional"><%= shopperConsentText.transactionalText %></div>
-
-      <div id="google-signin-btn"></div>
-
-      <div class="modal-divider">or</div>
+      <img class="modal-logo" src="/images/receiptap-logo.png" alt="ReceipTap" />
+      <div class="modal-title">Auto-save receipts to your ReceipTap wallet</div>
+      <div class="modal-subtitle">Every receipt you tap for saves itself, AI-organized by category with possible deductions flagged. Free, no app.</div>
 
       <div class="modal-error" id="modal-error"></div>
-      <input type="email" id="modal-email-input" placeholder="you@example.com" />
+      <input type="text" id="modal-name-input" placeholder="Your name" autocomplete="name" />
+      <input type="email" id="modal-email-input" placeholder="you@example.com" autocomplete="email" />
 
       <div class="consent-marketing-row">
         <input type="checkbox" id="marketing-opt-in" />
         <label for="marketing-opt-in"><%= shopperConsentText.marketingLabel %></label>
       </div>
 
+      <%# A separate purpose needs a separate, un-bundled decision -- its own
+          box, unticked, that can be refused without affecting the receipt.
+          Only shown where it can actually do something: Square is the only
+          platform that hands us a card fingerprint, so offering it elsewhere
+          would be asking for consent we could never act on. %>
+      <% if (typeof canRecogniseCard !== 'undefined' && canRecogniseCard) { %>
+        <div class="consent-marketing-row">
+          <input type="checkbox" id="cross-merchant-opt-in" />
+          <label for="cross-merchant-opt-in"><%= shopperConsentText.crossMerchantLabel %></label>
+        </div>
+      <% } %>
+
       <button class="primary" onclick="submitEmailCapture()">Continue</button>
+
+      <div class="modal-divider">or</div>
+
+      <%# The marketing checkbox sits above both paths on purpose: whichever
+          one they use reads its state at click time (see marketingOptIn()),
+          so the consent applies either way. %>
+      <div id="google-signin-btn"></div>
 
       <div class="modal-close" onclick="closeSaveModal()">Cancel</div>
     </div>
@@ -448,9 +541,16 @@
 
     // After email is captured (either path), close the modal and run
     // whichever action the customer actually clicked.
-    function proceedToSave() {
+    // `redirect` comes back from the capture endpoints as the thank-you page.
+    // The action they actually clicked runs first -- print and save-to-photos
+    // both open native UI, so we hand off only once that's had a moment to
+    // fire, and never before. Without a redirect we behave exactly as before.
+    function proceedToSave(redirect) {
       closeSaveModal();
       runAction(pendingAction);
+      if (!redirect) return;
+      const needsNativeUi = pendingAction === 'pdf' || pendingAction === 'photo';
+      setTimeout(() => { window.location.href = redirect; }, needsNativeUi ? 1500 : 400);
     }
 
     // Read once per submit, not cached -- the checkbox is a single shared
@@ -460,31 +560,40 @@
       return document.getElementById('marketing-opt-in').checked;
     }
 
+    // Absent whenever the box isn't rendered (non-Square sale), which reads as
+    // "not granted" -- never as an assumed yes.
+    function crossMerchantOptIn() {
+      const el = document.getElementById('cross-merchant-opt-in');
+      return el ? el.checked : false;
+    }
+
     async function submitEmailCapture() {
+      const name = document.getElementById('modal-name-input').value.trim();
       const email = document.getElementById('modal-email-input').value.trim();
+      if (!name) { showModalError('Enter your name to continue.'); return; }
       if (!email) { showModalError('Enter your email to continue.'); return; }
 
       const res = await fetch(`/receipt/${TRANSACTION_ID}/capture-email`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, marketingOptIn: marketingOptIn() }),
+        body: JSON.stringify({ name, email, marketingOptIn: marketingOptIn(), crossMerchantOptIn: crossMerchantOptIn() }),
       });
       const data = await res.json();
       if (!res.ok) { showModalError(data.error || 'Something went wrong.'); return; }
 
-      proceedToSave();
+      proceedToSave(data.redirect);
     }
 
     async function handleGoogleSignIn(response) {
       const res = await fetch(`/receipt/${TRANSACTION_ID}/capture-email-google`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ credential: response.credential, marketingOptIn: marketingOptIn() }),
+        body: JSON.stringify({ credential: response.credential, marketingOptIn: marketingOptIn(), crossMerchantOptIn: crossMerchantOptIn() }),
       });
       const data = await res.json();
       if (!res.ok) { showModalError(data.error || 'Google sign-in failed.'); return; }
 
-      proceedToSave();
+      proceedToSave(data.redirect);
     }
 
     window.onload = function () {

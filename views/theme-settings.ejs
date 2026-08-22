@@ -14,9 +14,9 @@
     .toggle-row label { margin: 0; font-weight: 500; }
     .hint { font-size: 12px; color: #888; margin-top: 4px; }
     .banner { padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 16px; }
-    .banner.success { background: #ecfdf5; color: #047857; }
+    .banner.success { background: var(--teal-wash); color: var(--teal-deep); }
     .banner.error { background: #fef2f2; color: #dc2626; }
-    button { margin-top: 24px; width: 100%; padding: 12px; background: #2563eb; color: #fff; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; }
+    button { margin-top: 24px; width: 100%; padding: 12px; background: var(--teal); color: #fff; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; }
     .google-section { background: #f9fafb; border-radius: 8px; padding: 14px; margin-top: 20px; }
     .google-g-small { width: 18px; height: 18px; vertical-align: middle; margin-right: 6px; }
 
@@ -26,7 +26,7 @@
       width: 100%; aspect-ratio: 420 / 620; border: 2px solid #e5e7eb; border-radius: 10px;
       overflow: hidden; position: relative; background: #f4f4f5;
     }
-    .layout-option.selected .layout-option-frame { border-color: #2563eb; box-shadow: 0 0 0 2px rgba(37,99,235,0.15); }
+    .layout-option.selected .layout-option-frame { border-color: #056BFE; box-shadow: 0 0 0 2px rgba(5,107,254,0.15); }
     .layout-option-frame iframe {
       width: 420px; height: 620px; border: none;
       transform-origin: top left;
@@ -79,15 +79,15 @@
   <div class="app-body">
 
   <% if (merchant.isDemoAccount && !merchant.emailVerifiedAt) { %>
-    <div style="background:#fffbeb; border-radius:10px; padding:14px 18px; margin-bottom:16px; display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap;">
+    <div style="background:var(--teal-wash); border-radius:10px; padding:14px 18px; margin-bottom:16px; display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap;">
       <div>
-        <strong style="font-size:13.5px; color:#92400e;">Verify your email to send test receipts</strong>
-        <div style="font-size:12.5px; color:#b45309; margin-top:2px;">
+        <strong style="font-size:13.5px; color:var(--teal-deep);">Verify your email to send test receipts</strong>
+        <div style="font-size:12.5px; color:var(--teal-deep); margin-top:2px;">
           We sent a link to <%= merchant.email %>. Click it, then come back here.
         </div>
       </div>
       <form method="POST" action="/verify-email/resend" style="margin:0;">
-        <button type="submit" style="width:auto; margin:0; padding:10px 18px; background:#b45309;">Resend link</button>
+        <button type="submit" style="width:auto; margin:0; padding:10px 18px; background:var(--teal);">Resend link</button>
       </form>
     </div>
     <% if (resent) { %><div class="banner success">Verification email resent — check your inbox.</div><% } %>
@@ -104,7 +104,7 @@
     <div id="test-sale-result" style="display:none; background:#f9fafb; border-radius:10px; padding:18px; margin-bottom:16px; text-align:center;">
       <img id="test-sale-qr" src="" alt="Scan to open your test receipt on your phone" style="width:160px; height:160px; border-radius:8px;" />
       <div style="font-size:12.5px; color:#888; margin-top:8px;">Scan with your phone, or</div>
-      <a id="test-sale-link" href="#" target="_blank" style="font-size:13.5px; color:#2563eb; font-weight:600; text-decoration:none;">open it in a new tab &rarr;</a>
+      <a id="test-sale-link" href="#" target="_blank" style="font-size:13.5px; color:#056BFE; font-weight:600; text-decoration:none;">open it in a new tab &rarr;</a>
     </div>
     <div id="test-sale-error" class="banner error" style="display:none;"></div>
   <% } %>
@@ -139,19 +139,16 @@
     <input type="color" name="primaryColor" value="<%= theme.primaryColor || '#111111' %>" />
 
     <label>Accent color</label>
-    <input type="color" name="accentColor" value="<%= theme.accentColor || '#2563eb' %>" />
+    <input type="color" name="accentColor" value="<%= theme.accentColor || '#056BFE' %>" />
 
-    <label>Business name on receipts</label>
-    <input type="text" name="displayName" value="<%= theme.displayName || '' %>" placeholder="<%= merchant.businessName %>" />
-    <div class="hint">Shown to customers on receipts instead of your account name (<%= merchant.businessName %>). Leave blank to just use your account name.</div>
 
-    <label>Business location</label>
-    <input type="text" name="location" value="<%= theme.location || '' %>" placeholder="123 Main St, Springfield" />
-    <div class="hint">Shown on receipts under your business name. Leave blank to not show a location.</div>
-
-    <label>Business phone</label>
-    <input type="text" name="phone" value="<%= theme.phone || '' %>" placeholder="(555) 123-4567" />
-    <div class="hint">Shown on receipts under your address. Leave blank to not show a phone number.</div>
+    <!-- Address and phone deliberately are NOT edited here -- they're business
+         facts, and they live on Business Settings so there's one place to
+         change them. This page is design only. -->
+    <div class="hint">
+      Your address and phone print on every receipt — edit them in
+      <a href="/dashboard/settings/account">Business Settings</a>.
+    </div>
 
     <label>Header message</label>
     <input type="text" name="headerText" value="<%= theme.headerText || '' %>" placeholder="Thanks for shopping with us!" />
@@ -162,15 +159,23 @@
     <div class="google-section">
       <h2 style="margin-top:0;">🍁 Tax &amp; Compliance</h2>
 
-      <label>GST/HST number</label>
-      <input type="text" name="gstHstNumber" value="<%= theme.gstHstNumber || '' %>" placeholder="123456789 RT0001" />
       <div class="hint">
-        Required on receipts for purchases of $30 or more if you want customers to be able to claim
-        an input tax credit. Leave blank if you're not GST/HST registered.
+        Your GST/HST number prints on receipts of $100 or more — edit it in
+        <a href="/dashboard/settings/account">Business Settings</a>.
       </div>
 
-      <label>Tax label</label>
-      <input type="text" name="taxLabel" value="<%= theme.taxLabel || 'Tax' %>" placeholder="GST/HST" style="max-width:220px;" />
+      <label for="taxLabel">Tax label</label>
+      <select name="taxLabel" id="taxLabel" class="themed-select">
+                <% taxLabelGroups.forEach(function (group) { %>
+                  <optgroup label="<%= group.region %>">
+                    <% group.labels.forEach(function (opt) { %>
+                      <option value="<%= opt %>" <%= (!taxLabelIsCustom && (theme.taxLabel || 'Tax') === opt) ? 'selected' : '' %>><%= opt %></option>
+                    <% }); %>
+                  </optgroup>
+                <% }); %>
+                <option value="<%= customTaxLabelValue %>" <%= taxLabelIsCustom ? 'selected' : '' %>>Custom…</option>
+              </select>
+      <input type="text" id="taxLabelCustom" name="taxLabelCustom" maxlength="40" value="<%= taxLabelIsCustom ? theme.taxLabel : '' %>" placeholder="e.g. TPS + TVQ" style="max-width:220px; margin-top:8px;" />
       <div class="hint">What the tax line on your receipt is called — e.g. "GST/HST" or "GST/HST + PST".</div>
 
       <label>Return/refund policy</label>
@@ -362,7 +367,6 @@
         accentColor: val('accentColor'),
         headerText: val('headerText'),
         footerText: val('footerText'),
-        displayName: val('displayName'),
         location: val('location'),
         phone: val('phone'),
         gstHstNumber: val('gstHstNumber'),
@@ -419,7 +423,7 @@
     }
 
     let refreshTimer;
-    ['primaryColor', 'accentColor', 'headerText', 'footerText', 'displayName', 'location', 'phone', 'gstHstNumber', 'taxLabel', 'returnPolicy', 'googleReviewUrl', 'instagramUrl', 'facebookUrl', 'tiktokUrl', 'xUrl', 'youtubeUrl', 'linkedinUrl', 'loyaltyOfferValue'].forEach(name => {
+    ['primaryColor', 'accentColor', 'headerText', 'footerText', 'taxLabel', 'returnPolicy', 'googleReviewUrl', 'instagramUrl', 'facebookUrl', 'tiktokUrl', 'xUrl', 'youtubeUrl', 'linkedinUrl', 'loyaltyOfferValue'].forEach(name => {
       document.querySelector(`[name=${name}]`).addEventListener('input', () => {
         clearTimeout(refreshTimer);
         refreshTimer = setTimeout(refreshPreviews, 400); // debounce so it doesn't refresh on every keystroke

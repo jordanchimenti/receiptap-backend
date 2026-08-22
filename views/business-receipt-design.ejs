@@ -1,0 +1,781 @@
+<!-- views/business-receipt-design.ejs -->
+<!-- Dark reskin of views/theme-settings.ejs's content. Same locals -- see
+     computeReceiptSettingsData()/saveReceiptSettings() in
+     routes/theme-settings.js. The demo-account banner/test-sale section
+     from the original is intentionally omitted: a demo account can never
+     reach /account/business/* at all (middleware/demoAccountGate.js's
+     allowed-path check doesn't match anything under this mount), so that
+     branch would be dead code here. The 3 live-updating iframe thumbnails
+     are simplified to a plain layout picker + one on-demand "Preview
+     receipt" modal (one iframe, refreshed when opened, not on every
+     keystroke) -- keeps this page light on mobile; still points at the
+     same, unchanged preview route the original page uses. -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Receipt Design - ReceipTap Business</title>
+  <link rel="stylesheet" href="/css/receiptap.css" />
+  <%- include('partials/wallet-dark-theme') %>
+  <style>
+    .biz-header { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+    .banner { padding: 11px 14px; border-radius: 10px; font-size: 13px; margin-bottom: 16px; }
+    .banner.success { background: rgba(5,107,254,0.12); border: 1px solid rgba(5,107,254,0.35); color: var(--w-accent); }
+    .banner.error { background: rgba(255,69,58,0.12); border: 1px solid rgba(255,69,58,0.35); color: var(--w-danger); }
+
+    .panel { padding: 18px; margin-bottom: 16px; }
+    .panel h2 { font-size: 14.5px; margin: 0 0 14px; }
+    .panel h2 .emoji { margin-right: 4px; }
+    .w-field { margin-bottom: 14px; }
+    .w-field:last-child { margin-bottom: 0; }
+    .w-field label { display: block; font-size: 12.5px; font-weight: 600; color: var(--w-ink-soft); margin-bottom: 6px; }
+    .w-field input[type="text"], .w-field input[type="url"], .w-field input[type="number"], .w-field select {
+      width: 100%; box-sizing: border-box; background: var(--w-card-raised); border: 1px solid var(--w-line);
+      color: var(--w-ink); border-radius: 10px; padding: 11px 13px; font-size: 14.5px; font-family: inherit;
+    }
+    .w-field input[type="color"] { width: 56px; height: 38px; border: 1px solid var(--w-line); border-radius: 8px; padding: 2px; background: var(--w-card-raised); }
+    .w-field input[type="file"] { font-size: 13px; color: var(--w-ink-soft); }
+    .hint { font-size: 11.5px; color: var(--w-ink-soft); margin-top: 5px; line-height: 1.5; }
+    .hint code { font-family: ui-monospace, monospace; background: rgba(255,255,255,0.07); padding: 1px 4px; border-radius: 4px; }
+    .color-row { display: flex; gap: 20px; }
+    .color-row .w-field { flex: 1; }
+    .panel-sub { font-size: 12px; color: var(--w-ink-soft); line-height: 1.55; margin: -8px 0 14px; }
+
+    /* ---- Blocks list -------------------------------------------------
+       One row per receipt section: name, one-line summary, and (where the
+       setting actually persists) a switch. Rows expand in place via
+       <details> so there's no JS holding the open/closed state. */
+    .blk { border: 1px solid var(--w-line); border-radius: 14px; background: var(--w-card-raised); margin-bottom: 10px; overflow: hidden; }
+    .blk:last-of-type { margin-bottom: 0; }
+    .blk[open] { border-color: rgba(5,107,254,0.4); }
+    .blk > summary {
+      list-style: none; cursor: pointer; padding: 14px 15px; display: flex; align-items: center; gap: 12px;
+    }
+    .blk > summary::-webkit-details-marker { display: none; }
+    .blk-text { flex: 1; min-width: 0; }
+    .blk-name { font-size: 14px; font-weight: 700; color: var(--w-ink); display: flex; align-items: center; gap: 8px; }
+    .blk-sub { font-size: 11.5px; color: var(--w-ink-soft); margin-top: 2px; line-height: 1.45; }
+    .blk-chev { width: 14px; height: 14px; flex: none; color: var(--w-ink-soft); transition: transform 0.15s ease; }
+    .blk[open] .blk-chev { transform: rotate(90deg); }
+    .blk-body { padding: 2px 15px 16px; border-top: 1px solid var(--w-line); margin-top: 2px; padding-top: 14px; }
+    /* ---- Themed dropdown ------------------------------------------------
+       A native <select>'s open list is drawn by the OS, so CSS can't reach
+       it -- on macOS it renders light grey regardless of the page. This
+       paints our own list over the top while leaving the real <select> in
+       the form, so submission, validation and the existing change listeners
+       are untouched and everything still works if the JS never runs. */
+    .cs { position: relative; }
+    .cs select.themed-select { position: absolute; opacity: 0; pointer-events: none; width: 100%; height: 100%; }
+    .cs-button {
+      width: 100%; box-sizing: border-box; display: flex; align-items: center; gap: 10px; text-align: left;
+      background: var(--w-card-raised); border: 1px solid var(--w-line); color: var(--w-ink);
+      border-radius: 10px; padding: 11px 13px; font-size: 14.5px; font-family: inherit; cursor: pointer;
+    }
+    .cs-button:hover { border-color: #3a3a3a; }
+    .cs.open .cs-button { border-color: var(--w-accent); }
+    .cs-button .cs-value { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .cs-button .cs-chev { width: 14px; height: 14px; flex: none; color: var(--w-ink-soft); transition: transform 0.15s ease; }
+    .cs.open .cs-button .cs-chev { transform: rotate(180deg); }
+    .cs-panel {
+      display: none; position: absolute; z-index: 60; left: 0; right: 0; top: calc(100% + 6px);
+      background: var(--w-card); border: 1px solid var(--w-line); border-radius: 12px;
+      box-shadow: 0 12px 32px rgba(0,0,0,0.55); max-height: 300px; overflow-y: auto; padding: 6px;
+    }
+    .cs.open .cs-panel { display: block; }
+    .cs-group {
+      font-size: 10px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase;
+      color: var(--w-ink-soft); padding: 10px 10px 5px;
+    }
+    .cs-opt {
+      display: flex; align-items: center; gap: 8px; padding: 9px 10px; border-radius: 8px;
+      font-size: 14px; color: var(--w-ink); cursor: pointer;
+    }
+    .cs-opt:hover, .cs-opt.active { background: var(--w-card-raised); }
+    .cs-opt.selected { color: var(--w-accent); font-weight: 600; }
+    .cs-opt .cs-check { width: 14px; flex: none; opacity: 0; }
+    .cs-opt.selected .cs-check { opacity: 1; }
+
+    /* A setting row inside an open block: label left, switch right. */
+    .opt { display: flex; align-items: center; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--w-line); }
+    .opt:last-child { border-bottom: none; }
+    .opt label { flex: 1; font-size: 13.5px; font-weight: 500; color: var(--w-ink); cursor: pointer; }
+    .opt-note { font-size: 11px; font-weight: 400; color: var(--w-ink-soft); margin-top: 2px; }
+    /* An inline link out of a block, sized like a settings row rather than a button. */
+    .blk-link {
+      display: flex; align-items: center; gap: 6px; margin-top: 12px; text-decoration: none;
+      font-size: 13.5px; font-weight: 600; color: var(--w-accent);
+    }
+    .blk-link.subtle { color: var(--w-ink-soft); font-weight: 500; margin-top: 8px; }
+    .blk-link svg { width: 13px; height: 13px; flex: none; }
+    .blk-link:hover { text-decoration: underline; }
+    .blk-tag {
+      font-size: 9.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
+      color: var(--w-ink-soft); background: rgba(255,255,255,0.06); border-radius: 999px; padding: 3px 7px;
+    }
+
+    /* iOS-style switch. It IS the checkbox -- same name/id the form and the
+       preview JS already use -- so nothing downstream changes. */
+    .sw { position: relative; flex: none; width: 44px; height: 26px; }
+    .sw input {
+      appearance: none; -webkit-appearance: none; margin: 0; cursor: pointer;
+      width: 44px; height: 26px; border-radius: 999px; background: #3a3a3a; border: none;
+      transition: background 0.18s ease;
+    }
+    .sw input:checked { background: var(--w-accent); }
+    .sw input::after {
+      content: ''; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%;
+      background: #fff; transition: transform 0.18s ease;
+    }
+    .sw input:checked::after { transform: translateX(18px); }
+    .sw input:focus-visible { outline: 2px solid var(--w-accent); outline-offset: 2px; }
+
+    .layout-picker { display: flex; gap: 10px; margin-bottom: 14px; }
+    .layout-option {
+      flex: 1; text-align: center; padding: 14px 8px; border-radius: 12px; border: 1px solid var(--w-line);
+      background: var(--w-card-raised); cursor: pointer; font-size: 13px; font-weight: 700; color: var(--w-ink-soft);
+    }
+    .layout-option.selected { border-color: var(--w-accent); background: var(--w-accent-wash); color: var(--w-accent); }
+    .preview-btn {
+      display: block; width: 100%; text-align: center; padding: 11px; border-radius: 10px; margin-bottom: 18px;
+      background: var(--w-card-raised); border: 1px solid var(--w-line); color: var(--w-ink); font-size: 13.5px;
+      font-weight: 700; cursor: pointer; font-family: inherit;
+    }
+
+    .loyalty-value-row { display: flex; gap: 10px; align-items: center; }
+    .loyalty-value-row select { flex-shrink: 0; width: auto; }
+    .loyalty-value-row input { flex: 1; }
+
+    .save-bar {
+      position: sticky; bottom: 0; padding: 12px 0 max(12px, env(safe-area-inset-bottom));
+      background: linear-gradient(to top, var(--w-bg) 62%, transparent);
+    }
+
+    .preview-modal-overlay {
+      display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 200;
+      align-items: center; justify-content: center; padding: 16px;
+    }
+    .preview-modal-overlay.open { display: flex; }
+    .preview-modal-box { background: #fff; border-radius: 16px; padding: 14px 14px 18px; width: 100%; max-width: 420px; max-height: 90vh; display: flex; flex-direction: column; position: relative; }
+    .preview-modal-title { font-size: 14px; font-weight: 700; color: #111; margin-bottom: 10px; }
+    .preview-modal-close {
+      position: absolute; top: 10px; right: 10px; width: 36px; height: 36px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center; border: none; background: #f4f4f5;
+      cursor: pointer; color: #555; z-index: 2;
+    }
+    .preview-modal-frame-wrap { flex: 1; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 10px; }
+    .preview-modal-frame-wrap iframe { width: 100%; height: 620px; border: none; }
+  </style>
+</head>
+<body>
+  <div class="w-shell">
+    <div class="biz-header">
+      <a href="/account/business/more" class="w-btn-icon" aria-label="Back">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      </a>
+      <div>
+        <div class="w-eyebrow">Business</div>
+        <h1 class="w-title" style="font-size:20px;">Receipt design</h1>
+      </div>
+    </div>
+
+    <% if (saved) { %><div class="banner success">Settings saved.</div><% } %>
+    <% if (error) { %><div class="banner error"><%= error %></div><% } %>
+
+    <form method="POST" action="/account/business/receipt-design" enctype="multipart/form-data">
+      <div class="w-card panel">
+        <h2>Receipt layout</h2>
+        <div class="layout-picker">
+          <% ['classic', 'modern', 'minimal'].forEach(function(id) { %>
+            <div class="layout-option <%= (theme.layoutId || 'classic') === id ? 'selected' : '' %>" data-layout-id="<%= id %>" onclick="selectLayout('<%= id %>')">
+              <%= id.charAt(0).toUpperCase() + id.slice(1) %>
+            </div>
+          <% }); %>
+        </div>
+        <input type="hidden" name="layoutId" id="layoutId-input" value="<%= theme.layoutId || 'classic' %>" />
+        <button type="button" class="preview-btn" onclick="openPreviewModal();">Preview receipt</button>
+      </div>
+
+      <div class="w-card panel">
+        <h2>Theme</h2>
+        <p class="panel-sub">Colours and logo, applied to whichever layout you picked above.</p>
+        <div class="color-row">
+          <div class="w-field"><label>Primary color</label><input type="color" name="primaryColor" value="<%= theme.primaryColor || '#111111' %>" /></div>
+          <div class="w-field"><label>Accent color</label><input type="color" name="accentColor" value="<%= theme.accentColor || '#056BFE' %>" /></div>
+        </div>
+        <div class="w-field">
+          <label>Logo (optional)</label>
+          <input type="file" name="logoFile" accept="image/png,image/jpeg,image/webp,image/svg+xml" />
+          <div class="hint">PNG, JPG, WEBP, or SVG — up to 2MB. Shown at the top of your receipts.</div>
+        </div>
+      </div>
+
+      <div class="w-card panel">
+        <h2>Blocks</h2>
+        <p class="panel-sub">
+          Every section of your receipt, top to bottom. Tap one to open its settings, and use the
+          switch to show or hide it. Sections without a switch appear whenever you fill them in.
+        </p>
+
+        <details class="blk">
+          <summary>
+            <svg class="blk-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 6l6 6-6 6"/></svg>
+            <div class="blk-text">
+              <div class="blk-name">Partner Program</div>
+              <div class="blk-sub">Earn <%= merchantAffiliateRate %>% on businesses who sign up from your receipts</div>
+            </div>
+            <span class="sw"><input type="checkbox" id="showPartnerProgram" name="showPartnerProgram" onclick="event.stopPropagation();" <%= theme.showPartnerProgram ? 'checked' : '' %> /></span>
+          </summary>
+          <div class="blk-body">
+            <div class="hint" style="margin-top:0;">
+              Shows a "Try ReceipTap FREE" banner at the top of your customers' receipts, carrying your own
+              referral link. If someone signs up through it you earn a
+              <strong><%= merchantAffiliateRate %>% recurring commission</strong> on their subscription,
+              for as long as they stay subscribed.
+            </div>
+            <!-- Two destinations on purpose: the dashboard is where a merchant
+                 who just switched this on goes next (their link, earnings and
+                 payout setup), while the public page explains the programme. -->
+            <a class="blk-link" href="/account/business/referrals">
+              Your referral link &amp; earnings
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 6l6 6-6 6"/></svg>
+            </a>
+            <a class="blk-link subtle" href="/partner-program?from=%2Faccount%2Fbusiness%2Freferrals">
+              How the Partner Program works
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 6l6 6-6 6"/></svg>
+            </a>
+          </div>
+        </details>
+        <details class="blk" open>
+          <summary>
+            <svg class="blk-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 6l6 6-6 6"/></svg>
+            <div class="blk-text">
+              <div class="blk-name">Header <span class="blk-tag">Always on</span></div>
+              <div class="blk-sub">Logo, business name and contact details</div>
+            </div>
+          </summary>
+          <div class="blk-body">
+            <div class="opt"><label for="showLogo">Show logo</label><span class="sw"><input type="checkbox" id="showLogo" name="showLogo" <%= theme.showLogo ? 'checked' : '' %> /></span></div>
+            <div class="opt"><label for="showBusinessName">Show business name<div class="opt-note">Your account name, <%= merchant.businessName %></div></label><span class="sw"><input type="checkbox" id="showBusinessName" name="showBusinessName" <%= theme.showBusinessName ? 'checked' : '' %> /></span></div>
+            <div class="opt"><label for="showAddress">Show address</label><span class="sw"><input type="checkbox" id="showAddress" name="showAddress" <%= theme.showAddress ? 'checked' : '' %> /></span></div>
+            <div class="opt"><label for="showPhone">Show phone</label><span class="sw"><input type="checkbox" id="showPhone" name="showPhone" <%= theme.showPhone ? 'checked' : '' %> /></span></div>
+            <div class="opt"><label for="showBusinessEmail">Show business email</label><span class="sw"><input type="checkbox" id="showBusinessEmail" name="showBusinessEmail" <%= theme.showBusinessEmail ? 'checked' : '' %> /></span></div>
+            <div class="opt"><label for="showWebsite">Show website</label><span class="sw"><input type="checkbox" id="showWebsite" name="showWebsite" <%= theme.showWebsite ? 'checked' : '' %> /></span></div>
+            <div class="w-field" id="header-website-field" style="margin-top:12px;">
+              <label for="website">Website URL</label>
+              <input type="url" name="website" id="website" value="<%= merchant.website || '' %>" placeholder="https://yourbusiness.com" />
+              <div class="hint">Needs the full https:// address. Leave blank to print no website.</div>
+            </div>
+            <div class="opt"><label for="showTaxNumber">Show GST/HST number</label><span class="sw"><input type="checkbox" id="showTaxNumber" name="showTaxNumber" <%= theme.showTaxNumber ? 'checked' : '' %> /></span></div>
+            <!-- Only the show/hide switches live here. The VALUES are business
+                 facts and stay on Business Settings, so each one has exactly one
+                 place to be changed -- see the de-duplication pass on this page. -->
+            <div class="hint" style="margin-top:10px;">
+              These switch what prints. The values themselves — address, phone, business email
+              and GST/HST number — are edited in
+              <a href="/account/business/settings" style="color:var(--w-accent); font-weight:600;">Business Settings</a>.
+              A row that's switched on but empty simply doesn't print.
+            </div>
+            <div class="w-field" style="margin-top:14px;">
+              <label>Header message</label>
+              <input type="text" name="headerText" value="<%= theme.headerText || '' %>" placeholder="Thanks for shopping with us!" />
+            </div>
+          </div>
+        </details>
+        <details class="blk">
+          <summary>
+            <svg class="blk-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 6l6 6-6 6"/></svg>
+            <div class="blk-text">
+              <div class="blk-name">Receipt details <span class="blk-tag">Always on</span></div>
+              <div class="blk-sub">Date, receipt number, register</div>
+            </div>
+          </summary>
+          <div class="blk-body">
+            <div class="opt"><label for="showDateTime">Show date &amp; time</label><span class="sw"><input type="checkbox" id="showDateTime" name="showDateTime" <%= theme.showDateTime ? 'checked' : '' %> /></span></div>
+            <div class="opt"><label for="showReceiptNumber">Show receipt number</label><span class="sw"><input type="checkbox" id="showReceiptNumber" name="showReceiptNumber" <%= theme.showReceiptNumber ? 'checked' : '' %> /></span></div>
+            <div class="opt"><label for="showRegister">Show register / terminal</label><span class="sw"><input type="checkbox" id="showRegister" name="showRegister" <%= theme.showRegister ? 'checked' : '' %> /></span></div>
+            <div class="hint">Register only appears when your POS sends one with the sale.</div>
+          </div>
+        </details>
+        <details class="blk">
+          <summary>
+            <svg class="blk-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 6l6 6-6 6"/></svg>
+            <div class="blk-text">
+              <div class="blk-name">Items <span class="blk-tag">Always on</span></div>
+              <div class="blk-sub">How each line item is shown</div>
+            </div>
+          </summary>
+          <div class="blk-body">
+            <div class="opt"><label for="showItemQuantity">Show quantity</label><span class="sw"><input type="checkbox" id="showItemQuantity" name="showItemQuantity" <%= theme.showItemQuantity ? 'checked' : '' %> /></span></div>
+            <div class="opt"><label for="showItemUnitPrice">Show unit price</label><span class="sw"><input type="checkbox" id="showItemUnitPrice" name="showItemUnitPrice" <%= theme.showItemUnitPrice ? 'checked' : '' %> /></span></div>
+            <div class="opt"><label for="showItemLineTotal">Show line total</label><span class="sw"><input type="checkbox" id="showItemLineTotal" name="showItemLineTotal" <%= theme.showItemLineTotal ? 'checked' : '' %> /></span></div>
+            <div class="w-field" style="margin-top:14px;">
+              <label for="itemLayout">Layout</label>
+              <select name="itemLayout" id="itemLayout" class="themed-select">
+                <option value="compact" <%= (theme.itemLayout || 'compact') === 'compact' ? 'selected' : '' %>>Compact</option>
+                <option value="detailed" <%= theme.itemLayout === 'detailed' ? 'selected' : '' %>>Detailed</option>
+                <option value="spacious" <%= theme.itemLayout === 'spacious' ? 'selected' : '' %>>Spacious</option>
+              </select>
+              <div class="hint">
+                <strong style="color:var(--w-ink);">Compact</strong> — tight rows; the unit price is hidden when it just repeats the line total.<br />
+                <strong style="color:var(--w-ink);">Detailed</strong> — same spacing, but always shows the unit price.<br />
+                <strong style="color:var(--w-ink);">Spacious</strong> — always shows the unit price, with extra room and a divider between items. Easiest to read on a long order.
+              </div>
+            </div>
+          </div>
+        </details>
+        <details class="blk">
+          <summary>
+            <svg class="blk-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 6l6 6-6 6"/></svg>
+            <div class="blk-text">
+              <div class="blk-name">Totals <span class="blk-tag">Always on</span></div>
+              <div class="blk-sub">Subtotal, discounts, tax and total</div>
+            </div>
+          </summary>
+          <div class="blk-body">
+            <div class="opt"><label for="showSubtotal">Show subtotal</label><span class="sw"><input type="checkbox" id="showSubtotal" name="showSubtotal" <%= theme.showSubtotal ? 'checked' : '' %> /></span></div>
+            <div class="opt"><label for="showDiscounts">Show discounts</label><span class="sw"><input type="checkbox" id="showDiscounts" name="showDiscounts" <%= theme.showDiscounts ? 'checked' : '' %> /></span></div>
+            <div class="opt"><label for="showTax">Show tax</label><span class="sw"><input type="checkbox" id="showTax" name="showTax" <%= theme.showTax ? 'checked' : '' %> /></span></div>
+            <div class="opt"><label for="showTotal">Show total</label><span class="sw"><input type="checkbox" id="showTotal" name="showTotal" <%= theme.showTotal ? 'checked' : '' %> /></span></div>
+            <div class="opt"><label for="totalProminent">Make total prominent</label><span class="sw"><input type="checkbox" id="totalProminent" name="totalProminent" <%= theme.totalProminent ? 'checked' : '' %> /></span></div>
+            <div class="hint">Discounts only appear on sales that actually had one.</div>
+          </div>
+        </details>
+        <details class="blk">
+          <summary>
+            <svg class="blk-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 6l6 6-6 6"/></svg>
+            <div class="blk-text">
+              <div class="blk-name">Tax &amp; compliance <span class="blk-tag">Always on</span></div>
+              <div class="blk-sub">What the tax line is called, and your return policy</div>
+            </div>
+          </summary>
+          <div class="blk-body">
+            <div class="w-field">
+              <label for="taxLabel">Tax label</label>
+              <select name="taxLabel" id="taxLabel" class="themed-select">
+                <% taxLabelGroups.forEach(function (group) { %>
+                  <optgroup label="<%= group.region %>">
+                    <% group.labels.forEach(function (opt) { %>
+                      <option value="<%= opt %>" <%= (!taxLabelIsCustom && (theme.taxLabel || 'Tax') === opt) ? 'selected' : '' %>><%= opt %></option>
+                    <% }); %>
+                  </optgroup>
+                <% }); %>
+                <option value="<%= customTaxLabelValue %>" <%= taxLabelIsCustom ? 'selected' : '' %>>Custom…</option>
+              </select>
+              <div class="hint">What the tax line is called on your receipt.</div>
+            </div>
+            <div class="w-field" id="tax-label-custom-field">
+              <label for="taxLabelCustom">Custom tax label</label>
+              <input type="text" id="taxLabelCustom" name="taxLabelCustom" maxlength="40" value="<%= taxLabelIsCustom ? theme.taxLabel : '' %>" placeholder="e.g. TPS + TVQ" />
+            </div>
+            <div class="w-field"><label>Return / refund policy</label><input type="text" name="returnPolicy" value="<%= theme.returnPolicy || '' %>" placeholder="Returns accepted within 30 days with receipt." /></div>
+            <div class="hint">
+              Your GST/HST number prints on receipts of $100+ — edit it in
+              <a href="/account/business/settings" style="color:var(--w-accent); font-weight:600;">Business Settings</a>.
+            </div>
+          </div>
+        </details>
+        <details class="blk">
+          <summary>
+            <svg class="blk-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 6l6 6-6 6"/></svg>
+            <div class="blk-text">
+              <div class="blk-name">Payment</div>
+              <div class="blk-sub">Tender, card tail, approval code and change</div>
+            </div>
+            <span class="sw"><input type="checkbox" id="showPaymentMethod" name="showPaymentMethod" onclick="event.stopPropagation();" <%= theme.showPaymentMethod ? 'checked' : '' %> /></span>
+          </summary>
+          <div class="blk-body">
+            <div class="opt"><label for="showCardTail">Show card brand &amp; last 4<div class="opt-note">Square, Clover and Shopify</div></label><span class="sw"><input type="checkbox" id="showCardTail" name="showCardTail" <%= theme.showCardTail ? 'checked' : '' %> /></span></div>
+            <div class="opt"><label for="showApprovalCode">Show approval code<div class="opt-note">Square and Clover — useful for disputes</div></label><span class="sw"><input type="checkbox" id="showApprovalCode" name="showApprovalCode" <%= theme.showApprovalCode ? 'checked' : '' %> /></span></div>
+            <div class="opt"><label for="showTenderChange">Show cash tendered &amp; change<div class="opt-note">Square and Clover</div></label><span class="sw"><input type="checkbox" id="showTenderChange" name="showTenderChange" <%= theme.showTenderChange ? 'checked' : '' %> /></span></div>
+            <div class="hint">
+              Each line prints only when your POS actually reports it — Lightspeed doesn't send payment
+              detail with a sale, and Shopify sends the card brand and last 4 but not an approval code or
+              change due. Nothing here is ever inferred: if it wasn't reported, it isn't printed.
+            </div>
+          </div>
+        </details>
+        <details class="blk">
+          <summary>
+            <svg class="blk-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 6l6 6-6 6"/></svg>
+            <div class="blk-text">
+              <div class="blk-name">Save to wallet</div>
+              <div class="blk-sub">Lets customers keep the receipt in their ReceipTap wallet</div>
+            </div>
+            <span class="sw"><input type="checkbox" id="showWalletSave" name="showWalletSave" onclick="event.stopPropagation();" <%= theme.showWalletSave ? 'checked' : '' %> /></span>
+          </summary>
+          <div class="blk-body">
+            <div class="hint" style="margin-top:0;">On by default. Turning this off removes the save-to-wallet action from your receipts.</div>
+          </div>
+        </details>
+        <details class="blk">
+          <summary>
+            <svg class="blk-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 6l6 6-6 6"/></svg>
+            <div class="blk-text">
+              <div class="blk-name">Promo</div>
+              <div class="blk-sub">An offer card under the receipt</div>
+            </div>
+            <span class="sw"><input type="checkbox" id="showPromo" name="showPromo" onclick="event.stopPropagation();" <%= theme.showPromo ? 'checked' : '' %> /></span>
+          </summary>
+          <div class="blk-body">
+            <div class="w-field"><label>Title</label><input type="text" name="promoTitle" value="<%= theme.promoTitle || '' %>" placeholder="10% off your next visit" /></div>
+            <div class="w-field"><label>Message</label><input type="text" name="promoMessage" value="<%= theme.promoMessage || '' %>" placeholder="Show this receipt on your next order." /></div>
+            <div class="w-field"><label>Button label (optional)</label><input type="text" name="promoButtonLabel" value="<%= theme.promoButtonLabel || '' %>" placeholder="Order online" /></div>
+            <div class="w-field"><label>Button URL (optional)</label><input type="url" name="promoButtonUrl" value="<%= theme.promoButtonUrl || '' %>" placeholder="https://…" /></div>
+            <div class="w-field"><label>Expiry text (optional)</label><input type="text" name="promoExpiryText" value="<%= theme.promoExpiryText || '' %>" placeholder="Expires 30 June" /></div>
+            <div class="hint">The card needs a title to appear. The button only shows when it has both a label and a URL.</div>
+          </div>
+        </details>
+        <details class="blk">
+          <summary>
+            <svg class="blk-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 6l6 6-6 6"/></svg>
+            <div class="blk-text">
+              <div class="blk-name">Barcode</div>
+              <div class="blk-sub">Scannable code for looking the sale up at the counter</div>
+            </div>
+            <span class="sw"><input type="checkbox" id="showBarcode" name="showBarcode" onclick="event.stopPropagation();" <%= theme.showBarcode ? 'checked' : '' %> /></span>
+          </summary>
+          <div class="blk-body">
+            <div class="w-field">
+              <label for="barcodeValue">Barcode value</label>
+              <select name="barcodeValue" id="barcodeValue" class="themed-select">
+                <option value="receiptNumber" <%= (theme.barcodeValue || 'receiptNumber') === 'receiptNumber' ? 'selected' : '' %>>Receipt number</option>
+                <option value="transactionId" <%= theme.barcodeValue === 'transactionId' ? 'selected' : '' %>>Transaction ID</option>
+                <option value="bestAvailable" <%= theme.barcodeValue === 'bestAvailable' ? 'selected' : '' %>>Best available (receipt / txn)</option>
+                <option value="custom" <%= theme.barcodeValue === 'custom' ? 'selected' : '' %>>Custom value</option>
+              </select>
+              <div class="hint">If no value exists on a receipt, the barcode shows an empty state.</div>
+            </div>
+            <div class="w-field" id="barcode-custom-field">
+              <label for="barcodeCustomValue">Custom value</label>
+              <input type="text" name="barcodeCustomValue" id="barcodeCustomValue" value="<%= theme.barcodeCustomValue || '' %>" maxlength="60" placeholder="STORE-99" />
+              <div class="hint">The same value on every receipt — e.g. a store or loyalty identifier your scanner expects.</div>
+            </div>
+            <div class="hint">
+              Encoded as Code 128, the format retail scanners read. Letters, digits and standard
+              punctuation only; anything else falls back to the empty state rather than scanning wrong.
+            </div>
+          </div>
+        </details>
+        <details class="blk">
+          <summary>
+            <svg class="blk-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 6l6 6-6 6"/></svg>
+            <div class="blk-text">
+              <div class="blk-name">Google review</div>
+              <div class="blk-sub">"Rate us on Google" card</div>
+            </div>
+            <span class="sw"><input type="checkbox" id="showGoogleReview" name="showGoogleReview" onclick="event.stopPropagation();" <%= theme.showGoogleReview ? 'checked' : '' %> /></span>
+          </summary>
+          <div class="blk-body">
+            <div class="w-field">
+              <label>Your Google review link</label>
+              <input type="url" name="googleReviewUrl" value="<%= theme.googleReviewUrl || '' %>" placeholder="https://g.page/r/your-business/review" />
+              <div class="hint">Search your business on Google → Business Profile → "Ask for reviews" → copy the link.</div>
+            </div>
+          </div>
+        </details>
+        <details class="blk">
+          <summary>
+            <svg class="blk-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 6l6 6-6 6"/></svg>
+            <div class="blk-text">
+              <div class="blk-name">Loyalty punch card</div>
+              <div class="blk-sub">Reward customers after 5 punches, unlocked by your staff code</div>
+            </div>
+            <span class="sw"><input type="checkbox" id="loyaltyEnabled" name="loyaltyEnabled" onclick="event.stopPropagation();" <%= loyalty.enabled ? 'checked' : '' %> /></span>
+          </summary>
+          <div class="blk-body">
+            <div class="w-field">
+              <label>Reward after 5 punches</label>
+              <div class="loyalty-value-row">
+                <select name="loyaltyOfferType" id="loyaltyOfferType" class="themed-select">
+                  <option value="PERCENT" <%= loyalty.offerType === 'PERCENT' ? 'selected' : '' %>>% off</option>
+                  <option value="AMOUNT" <%= loyalty.offerType === 'AMOUNT' ? 'selected' : '' %>>$ off</option>
+                </select>
+                <input type="number" name="loyaltyOfferValue" id="loyaltyOfferValue" min="1" step="<%= loyalty.offerType === 'AMOUNT' ? '0.01' : '1' %>" value="<%= loyalty.offerValue %>" />
+              </div>
+              <div class="hint">Example: "10" with "% off" gives 10% off once a customer collects all 5 punches.</div>
+            </div>
+            <div class="w-field">
+              <label>Redemption code</label>
+              <input type="text" name="loyaltyRedemptionCode" value="<%= loyalty.redemptionCode %>" maxlength="40" placeholder="e.g. REWARD5" />
+              <div class="hint">
+                <strong style="color:var(--w-ink);">Your staff's code for cashing in a full card.</strong>
+                Once a customer collects all 5 punches, their wallet asks for this code before the reward
+                is released — your cashier enters it or reads it out at the counter, and the card resets
+                to zero so they can start collecting again.
+              </div>
+              <div class="hint" style="margin-top:8px;">
+                <strong style="color:var(--w-ink);">Keep it to your team.</strong>
+                It's the only thing stopping a customer redeeming from home without buying anything —
+                so don't print it on receipts or signage. Change it here any time; the new code takes
+                effect immediately and old cards keep their punches.
+              </div>
+              <div class="hint" style="margin-top:8px;">
+                It's yours alone — every business sets its own, and customers never see another
+                merchant's. Capitalisation doesn't matter (<code>REWARD</code> and <code>reward</code>
+                both work), up to 40 characters. Leave it blank to keep your current code.
+              </div>
+            </div>
+          </div>
+        </details>
+        <details class="blk">
+          <summary>
+            <svg class="blk-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 6l6 6-6 6"/></svg>
+            <div class="blk-text">
+              <div class="blk-name">Links &amp; socials <span class="blk-tag">Shown when filled in</span></div>
+              <div class="blk-sub">Clickable icons on the receipt</div>
+            </div>
+          </summary>
+          <div class="blk-body">
+            <div class="w-field"><label>Heading (optional)</label><input type="text" name="socialsHeading" value="<%= theme.socialsHeading || '' %>" placeholder="Follow us" /></div>
+            <div class="w-field"><label>Instagram</label><input type="url" name="instagramUrl" value="<%= theme.instagramUrl || '' %>" placeholder="https://instagram.com/yourbusiness" /></div>
+            <div class="w-field"><label>Facebook</label><input type="url" name="facebookUrl" value="<%= theme.facebookUrl || '' %>" placeholder="https://facebook.com/yourbusiness" /></div>
+            <div class="w-field"><label>TikTok</label><input type="url" name="tiktokUrl" value="<%= theme.tiktokUrl || '' %>" placeholder="https://tiktok.com/@yourbusiness" /></div>
+            <div class="w-field"><label>X (Twitter)</label><input type="url" name="xUrl" value="<%= theme.xUrl || '' %>" placeholder="https://x.com/yourbusiness" /></div>
+            <div class="w-field"><label>YouTube</label><input type="url" name="youtubeUrl" value="<%= theme.youtubeUrl || '' %>" placeholder="https://youtube.com/@yourbusiness" /></div>
+            <div class="w-field"><label>LinkedIn</label><input type="url" name="linkedinUrl" value="<%= theme.linkedinUrl || '' %>" placeholder="https://linkedin.com/company/yourbusiness" /></div>
+            <div class="w-field"><label>Custom link label (optional)</label><input type="text" name="customLinkLabel" value="<%= theme.customLinkLabel || '' %>" placeholder="Order online" /></div>
+            <div class="w-field"><label>Custom link URL (optional)</label><input type="url" name="customLinkUrl" value="<%= theme.customLinkUrl || '' %>" placeholder="https://…" /></div>
+            <div class="w-field"><label>Offer line (optional)</label><input type="text" name="offerLine" value="<%= theme.offerLine || '' %>" placeholder="Show this for 10% off your next visit" /></div>
+            <div class="hint">
+              Empty fields are hidden. Your website and Google review link live in
+              <a href="/account/business/settings" style="color:var(--w-accent); font-weight:600;">Business Settings</a>
+              and the Google review block.
+            </div>
+          </div>
+        </details>
+        <details class="blk">
+          <summary>
+            <svg class="blk-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 6l6 6-6 6"/></svg>
+            <div class="blk-text">
+              <div class="blk-name">Register warranty</div>
+              <div class="blk-sub">"Register Warranty" action on the receipt</div>
+            </div>
+            <span class="sw"><input type="checkbox" id="showWarranty" name="showWarranty" onclick="event.stopPropagation();" <%= theme.showWarranty ? 'checked' : '' %> /></span>
+          </summary>
+          <div class="blk-body">
+            <div class="hint" style="margin-top:0;">Useful if you sell products with a warranty period. Off for most businesses.</div>
+          </div>
+        </details>
+        <details class="blk">
+          <summary>
+            <svg class="blk-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 6l6 6-6 6"/></svg>
+            <div class="blk-text">
+              <div class="blk-name">Footer <span class="blk-tag">Shown when filled in</span></div>
+              <div class="blk-sub">Closing message at the bottom</div>
+            </div>
+          </summary>
+          <div class="blk-body">
+            <div class="w-field"><label>Thank-you message</label><input type="text" name="footerText" value="<%= theme.footerText || '' %>" placeholder="Thank you for your business" /></div>
+            <div class="w-field"><label>Legal / footer notes</label><input type="text" name="footerLegal" value="<%= theme.footerLegal || '' %>" placeholder="All sales final on clearance items." /></div>
+            <div class="hint">Your return policy is set in the Tax &amp; compliance block and prints just above these.</div>
+          </div>
+        </details>
+      </div>
+
+      <div class="save-bar"><button type="submit" class="w-btn">Save changes</button></div>
+    </form>
+  </div>
+
+  <div class="preview-modal-overlay" id="preview-modal" onclick="if (event.target === this) closePreviewModal();">
+    <div class="preview-modal-box">
+      <button type="button" class="preview-modal-close" onclick="closePreviewModal();">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
+      </button>
+      <div class="preview-modal-title" id="preview-modal-title">Preview</div>
+      <div class="preview-modal-frame-wrap"><iframe id="preview-modal-frame" scrolling="yes"></iframe></div>
+    </div>
+  </div>
+
+  <script>
+    function selectLayout(id) {
+      document.getElementById('layoutId-input').value = id;
+      document.querySelectorAll('.layout-option').forEach(el => el.classList.remove('selected'));
+      document.querySelector(`.layout-option[data-layout-id="${id}"]`).classList.add('selected');
+    }
+
+    function updateLoyaltyValueConstraints() {
+      const type = document.getElementById('loyaltyOfferType').value;
+      const valueInput = document.getElementById('loyaltyOfferValue');
+      if (type === 'PERCENT') { valueInput.step = '1'; valueInput.max = '100'; }
+      else { valueInput.step = '0.01'; valueInput.removeAttribute('max'); }
+    }
+    document.getElementById('loyaltyOfferType').addEventListener('change', updateLoyaltyValueConstraints);
+    updateLoyaltyValueConstraints();
+
+    // The custom-value input is only meaningful for the "Custom value" source.
+    function updateBarcodeCustomField() {
+      const isCustom = document.getElementById('barcodeValue').value === 'custom';
+      document.getElementById('barcode-custom-field').style.display = isCustom ? '' : 'none';
+    }
+    document.getElementById('barcodeValue').addEventListener('change', updateBarcodeCustomField);
+    updateBarcodeCustomField();
+
+    // The URL field only matters when the website is actually being printed.
+    function updateHeaderWebsiteField() {
+      const on = document.getElementById('showWebsite').checked;
+      document.getElementById('header-website-field').style.display = on ? '' : 'none';
+    }
+    document.getElementById('showWebsite').addEventListener('change', updateHeaderWebsiteField);
+    updateHeaderWebsiteField();
+
+    // The free-text box only appears for "Custom…".
+    function updateTaxLabelCustomField() {
+      const isCustom = document.getElementById('taxLabel').value === '<%= customTaxLabelValue %>';
+      document.getElementById('tax-label-custom-field').style.display = isCustom ? '' : 'none';
+    }
+    document.getElementById('taxLabel').addEventListener('change', updateTaxLabelCustomField);
+    updateTaxLabelCustomField();
+
+    // The preview needs the label that will actually print, not the sentinel.
+    function effectiveTaxLabel() {
+      const sel = document.getElementById('taxLabel').value;
+      return sel === '<%= customTaxLabelValue %>'
+        ? (document.getElementById('taxLabelCustom').value.trim() || 'Tax')
+        : sel;
+    }
+
+
+    // Paint a themed dropdown over every .themed-select. The <select> itself
+    // stays in the DOM and stays authoritative -- we only mirror it -- so the
+    // form posts exactly what it always did, and any code already listening
+    // for 'change' on it (the tax-label custom box, the barcode custom box)
+    // keeps working without knowing this exists.
+    function enhanceSelect(select) {
+      const wrap = document.createElement('div');
+      wrap.className = 'cs';
+      select.parentNode.insertBefore(wrap, select);
+      wrap.appendChild(select);
+
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'cs-button';
+      button.setAttribute('aria-haspopup', 'listbox');
+      button.setAttribute('aria-expanded', 'false');
+      button.innerHTML = '<span class="cs-value"></span>' +
+        '<svg class="cs-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg>';
+      wrap.appendChild(button);
+
+      const panel = document.createElement('div');
+      panel.className = 'cs-panel';
+      panel.setAttribute('role', 'listbox');
+      wrap.appendChild(panel);
+
+      const opts = [];
+      Array.from(select.children).forEach((child) => {
+        const build = (optionEl) => {
+          const row = document.createElement('div');
+          row.className = 'cs-opt';
+          row.setAttribute('role', 'option');
+          row.dataset.value = optionEl.value;
+          row.innerHTML = '<svg class="cs-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M4 12l6 6L20 6"/></svg>' +
+            '<span></span>';
+          row.lastChild.textContent = optionEl.textContent;
+          row.addEventListener('click', () => { choose(optionEl.value); });
+          panel.appendChild(row);
+          opts.push(row);
+        };
+        if (child.tagName === 'OPTGROUP') {
+          const head = document.createElement('div');
+          head.className = 'cs-group';
+          head.textContent = child.label;
+          panel.appendChild(head);
+          Array.from(child.children).forEach(build);
+        } else {
+          build(child);
+        }
+      });
+
+      function sync() {
+        const value = select.value;
+        const chosen = Array.from(select.options).find((o) => o.value === value);
+        button.querySelector('.cs-value').textContent = chosen ? chosen.textContent : '';
+        opts.forEach((o) => o.classList.toggle('selected', o.dataset.value === value));
+      }
+      function choose(value) {
+        select.value = value;
+        // Dispatch so existing listeners on the real <select> still fire.
+        select.dispatchEvent(new Event('change', { bubbles: true }));
+        sync();
+        close();
+      }
+      function open() { wrap.classList.add('open'); button.setAttribute('aria-expanded', 'true'); }
+      function close() { wrap.classList.remove('open'); button.setAttribute('aria-expanded', 'false'); }
+
+      button.addEventListener('click', (e) => {
+        e.stopPropagation();
+        document.querySelectorAll('.cs.open').forEach((el) => { if (el !== wrap) el.classList.remove('open'); });
+        wrap.classList.contains('open') ? close() : open();
+      });
+      button.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') close();
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+          e.preventDefault();
+          const values = opts.map((o) => o.dataset.value);
+          const i = values.indexOf(select.value);
+          const next = e.key === 'ArrowDown' ? Math.min(i + 1, values.length - 1) : Math.max(i - 1, 0);
+          choose(values[next]);
+          open();
+        }
+      });
+      select.addEventListener('change', sync);
+      sync();
+    }
+    document.querySelectorAll('select.themed-select').forEach(enhanceSelect);
+    document.addEventListener('click', () => {
+      document.querySelectorAll('.cs.open').forEach((el) => el.classList.remove('open'));
+    });
+
+    // Same query-param contract the real settings page's JS builds --
+    // GET /dashboard/settings/receipt/preview/:layoutId (routes/theme-settings.js)
+    // is reused unchanged.
+    function buildPreviewParams() {
+      const val = (name) => document.querySelector(`[name=${name}]`).value;
+      const checked = (id) => document.getElementById(id).checked;
+      return new URLSearchParams({
+        primaryColor: val('primaryColor'), accentColor: val('accentColor'),
+        headerText: val('headerText'), footerText: val('footerText'),
+        taxLabel: effectiveTaxLabel(), returnPolicy: val('returnPolicy'),
+        googleReviewUrl: val('googleReviewUrl'), showGoogleReview: checked('showGoogleReview'),
+        showWarranty: checked('showWarranty'), showPartnerProgram: checked('showPartnerProgram'),
+        instagramUrl: val('instagramUrl'), facebookUrl: val('facebookUrl'), tiktokUrl: val('tiktokUrl'),
+        xUrl: val('xUrl'), youtubeUrl: val('youtubeUrl'), linkedinUrl: val('linkedinUrl'),
+        loyaltyEnabled: checked('loyaltyEnabled'), loyaltyOfferType: val('loyaltyOfferType'),
+        loyaltyOfferValue: val('loyaltyOfferValue'), showWalletSave: checked('showWalletSave'),
+        showLogo: checked('showLogo'), showBusinessName: checked('showBusinessName'),
+        showAddress: checked('showAddress'), showPhone: checked('showPhone'),
+        showBusinessEmail: checked('showBusinessEmail'), showWebsite: checked('showWebsite'),
+        showTaxNumber: checked('showTaxNumber'), website: val('website'),
+        showDateTime: checked('showDateTime'), showReceiptNumber: checked('showReceiptNumber'),
+        showRegister: checked('showRegister'), showItemQuantity: checked('showItemQuantity'),
+        showItemUnitPrice: checked('showItemUnitPrice'), showItemLineTotal: checked('showItemLineTotal'),
+        itemLayout: val('itemLayout'), showSubtotal: checked('showSubtotal'),
+        showDiscounts: checked('showDiscounts'), showTax: checked('showTax'),
+        showTotal: checked('showTotal'), totalProminent: checked('totalProminent'),
+        showPaymentMethod: checked('showPaymentMethod'), showCardTail: checked('showCardTail'),
+        showApprovalCode: checked('showApprovalCode'), showTenderChange: checked('showTenderChange'),
+        showBarcode: checked('showBarcode'),
+        barcodeValue: val('barcodeValue'), barcodeCustomValue: val('barcodeCustomValue'),
+        showPromo: checked('showPromo'),
+        promoTitle: val('promoTitle'), promoMessage: val('promoMessage'),
+        promoButtonLabel: val('promoButtonLabel'), promoButtonUrl: val('promoButtonUrl'),
+        promoExpiryText: val('promoExpiryText'), socialsHeading: val('socialsHeading'),
+        customLinkLabel: val('customLinkLabel'), customLinkUrl: val('customLinkUrl'),
+        offerLine: val('offerLine'), footerLegal: val('footerLegal'),
+      });
+    }
+
+    function openPreviewModal() {
+      const layoutId = document.getElementById('layoutId-input').value;
+      const params = buildPreviewParams();
+      const frame = document.getElementById('preview-modal-frame');
+      frame.src = `/dashboard/settings/receipt/preview/${layoutId}?${params}`;
+      document.getElementById('preview-modal-title').textContent = layoutId.charAt(0).toUpperCase() + layoutId.slice(1) + ' layout';
+      document.getElementById('preview-modal').classList.add('open');
+    }
+    function closePreviewModal() {
+      document.getElementById('preview-modal').classList.remove('open');
+    }
+  </script>
+</body>
+</html>

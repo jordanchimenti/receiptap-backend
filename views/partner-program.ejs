@@ -1,0 +1,350 @@
+<!-- views/partner-program.ejs — public landing page for the ReceipTap Partner Program.
+     One program, one flat rate. There is no separate merchant vs. standalone
+     affiliate page: merchants already have a referral link in their dashboard,
+     everyone else signs up as an affiliate, and both earn the same commission. -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Partner Program — ReceipTap</title>
+  <meta name="description" content="Refer businesses to ReceipTap and earn a recurring commission for as long as they stay subscribed. One flat rate for every partner — merchant or not." />
+  <meta property="og:title" content="ReceipTap Partner Program" />
+  <meta property="og:description" content="Refer businesses to ReceipTap and earn a recurring commission for as long as they stay subscribed." />
+  <meta property="og:type" content="website" />
+  <meta property="og:image" content="/images/receiptap-logo.png" />
+  <link rel="stylesheet" href="/css/receiptap.css" />
+  <style>
+    /* Same dark palette as views/login.ejs, views/signup.ejs, views/claim.ejs
+       and the affiliate auth pages this page hands off to -- self-contained
+       here for the same reason those are, so it stays isolated from the
+       light marketing/`--paper` classes still used elsewhere. */
+    :root {
+      --ms-bg: #0a0a0a;
+      --ms-card: #161616;
+      --ms-card-raised: #1c1c1c;
+      --ms-line: #2a2a2a;
+      --ms-ink: #ffffff;
+      --ms-ink-soft: #8d8d8d;
+      --ms-accent: #056BFE;
+      --ms-accent-deep: #0350BE;
+    }
+    /* receiptap.css sets html/body height:100% for the dashboard's sidebar
+       layout -- that caps body at viewport height here too, which breaks
+       position:sticky for the nav. */
+    body { background: var(--ms-bg); color: var(--ms-ink); font-family: var(--font-body); margin: 0; height: auto; min-height: 100%; }
+
+    .nav {
+      display: flex; align-items: center; justify-content: space-between; padding: 18px 6vw;
+      position: sticky; top: 0; z-index: 50; background: rgba(10,10,10,0.86); backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--ms-line);
+    }
+    /* The logo's "Receip" wordmark is dark navy, meant for a light background
+       -- same paper-toned chip used on the auth pages so it stays legible. */
+    .logo-chip { display: inline-block; background: var(--paper); border-radius: 10px; padding: 7px 12px; }
+    .logo-chip img { display: block; height: 24px; }
+    .nav-links { display: flex; align-items: center; gap: 18px; }
+    .nav-links a { font-size: 14px; font-weight: 500; text-decoration: none; color: var(--ms-ink-soft); }
+    .nav-links a:hover { color: var(--ms-ink); }
+    .nav-cta { background: var(--ms-accent); color: #fff !important; padding: 9px 18px; border-radius: 999px; font-weight: 600; }
+    .nav-cta:hover { background: var(--ms-accent-deep); }
+
+    .hero {
+      padding: 9vh 6vw 8vh; max-width: 760px; margin: 0 auto; text-align: center;
+      background-image: radial-gradient(circle, rgba(255,255,255,0.06) 1px, transparent 1.4px);
+      background-size: 24px 24px;
+    }
+    .eyebrow { font-size: 12px; font-weight: 700; color: var(--ms-accent); text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 12px; }
+    .hero h1 { font-family: var(--font-display); font-size: clamp(30px, 4.6vw, 50px); line-height: 1.08; letter-spacing: -0.02em; margin: 0 0 18px; color: var(--ms-ink); }
+    .hero h1 em { font-style: normal; color: var(--ms-accent); }
+    .hero-sub { font-size: 16.5px; color: var(--ms-ink-soft); line-height: 1.6; max-width: 540px; margin: 0 auto 30px; }
+    .cta-row { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+    .cta-main {
+      display: inline-block; background: var(--ms-accent); color: #fff; font-size: 15.5px; font-weight: 700;
+      padding: 15px 30px; border-radius: 999px; text-decoration: none;
+    }
+    .cta-main:hover { background: var(--ms-accent-deep); }
+    .cta-secondary {
+      display: inline-block; background: var(--ms-card-raised); color: var(--ms-ink); font-size: 15.5px; font-weight: 700;
+      padding: 15px 30px; border-radius: 999px; text-decoration: none; border: 1px solid var(--ms-line);
+    }
+    .cta-secondary:hover { border-color: var(--ms-ink-soft); }
+
+    .rate-band { background: var(--ms-card); border-top: 1px solid var(--ms-line); border-bottom: 1px solid var(--ms-line); padding: 52px 6vw; text-align: center; }
+    .rate-value { font-family: var(--font-mono); font-size: clamp(44px, 7vw, 62px); font-weight: 600; color: var(--ms-accent); line-height: 1; }
+    .rate-band p { font-size: 14.5px; color: var(--ms-ink-soft); max-width: 480px; margin: 14px auto 0; line-height: 1.6; }
+    .flat-rate-tag {
+      display: inline-block; margin-top: 16px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.03em;
+      color: var(--ms-accent); background: rgba(5,107,254,0.15); border-radius: 999px; padding: 5px 12px;
+    }
+
+    /* Earnings projection table -- numbers are tabular/mono so the columns
+       line up down the page as the magnitudes grow. */
+    .maths { padding-top: 64px; padding-bottom: 64px; max-width: 720px; }
+    .maths-scroll { overflow-x: auto; }
+    .maths-table { width: 100%; min-width: 420px; border-collapse: collapse; }
+    .maths-table th {
+      text-align: right; font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+      color: var(--ms-ink-soft); padding: 0 0 12px; border-bottom: 1px solid var(--ms-line);
+    }
+    .maths-table th:first-child, .maths-table td:first-child { text-align: left; }
+    .maths-table td { padding: 16px 0; border-bottom: 1px solid var(--ms-line); text-align: right; }
+    .maths-table tr:last-child td { border-bottom: none; }
+    .m-count { font-size: 15px; font-weight: 700; }
+    .m-count span { font-size: 13px; font-weight: 500; color: var(--ms-ink-soft); }
+    .m-period, .m-year {
+      font-family: var(--font-mono); font-variant-numeric: tabular-nums;
+      font-size: 16px; font-weight: 600; padding-left: 18px;
+    }
+    .m-year { color: var(--ms-accent); }
+    /* Currency code rides along in the header so the numbers below can stay
+       clean symbols without "$" being ambiguous between USD/CAD/AUD. */
+    .m-cur { color: var(--ms-accent); letter-spacing: 0.06em; }
+    .maths-fine { font-size: 12.5px; color: var(--ms-ink-soft); line-height: 1.6; margin: 22px 0 0; }
+
+    .section { padding: 72px 6vw; max-width: 960px; margin: 0 auto; }
+    .section h2 { font-family: var(--font-display); font-size: clamp(23px, 3vw, 32px); letter-spacing: -0.015em; margin: 0 0 10px; text-align: center; }
+    .section-lead { font-size: 14.5px; color: var(--ms-ink-soft); line-height: 1.6; text-align: center; max-width: 520px; margin: 0 auto 36px; }
+    .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+    .step { background: var(--ms-card); border: 1px solid var(--ms-line); border-radius: 18px; padding: 26px; }
+    .step .s-num {
+      width: 32px; height: 32px; border-radius: 50%; background: var(--ms-accent); color: #fff;
+      font-weight: 700; font-size: 14px; display: flex; align-items: center; justify-content: center; margin-bottom: 16px;
+    }
+    .step h3 { font-size: 15.5px; margin: 0 0 7px; }
+    .step p { font-size: 13.5px; color: var(--ms-ink-soft); line-height: 1.6; margin: 0; }
+
+    /* The receipt-banner loop: every customer receipt carries the merchant's
+       own referral link, so referrals arrive from foot traffic they already
+       have. Laid out as chips with arrows to read as a cycle, not a list. */
+    /* Same chip treatment as .flat-rate-tag, but this one marks a limit
+       rather than a perk -- the banner needs a live subscription, unlike the
+       program itself. Centered on its own line under the heading. */
+    .loop-req {
+      display: block; text-align: center; margin: -4px 0 18px;
+    }
+    .loop-req span {
+      display: inline-block; font-size: 10.5px; font-weight: 700; letter-spacing: 0.03em;
+      color: var(--ms-accent); background: rgba(5,107,254,0.15); border-radius: 999px; padding: 5px 12px;
+    }
+    .loop-band { background: var(--ms-card); border-top: 1px solid var(--ms-line); border-bottom: 1px solid var(--ms-line); }
+    .loop-chain { display: flex; align-items: stretch; gap: 12px; margin-top: 36px; flex-wrap: wrap; justify-content: center; }
+    .loop-step {
+      flex: 1 1 190px; background: var(--ms-bg); border: 1px solid var(--ms-line); border-radius: 16px;
+      padding: 20px; min-width: 0;
+    }
+    .loop-step h3 { font-size: 14.5px; margin: 0 0 6px; }
+    .loop-step p { font-size: 13px; color: var(--ms-ink-soft); line-height: 1.55; margin: 0; }
+    .loop-arrow { align-self: center; color: var(--ms-accent); font-size: 20px; font-weight: 700; flex: 0 0 auto; }
+    .loop-arrow.wrap-hide { display: block; }
+    .loop-payoff {
+      margin-top: 28px; background: var(--ms-bg); border: 1px solid rgba(5,107,254,0.35); border-radius: 18px;
+      padding: 28px; text-align: center;
+      background-image: radial-gradient(120% 160% at 50% 0%, rgba(5,107,254,0.16) 0%, transparent 70%);
+    }
+    /* margin auto, not 0: this is a <p>, so it picks up the max-width from
+       the .loop-payoff p rule below and would otherwise sit pinned to the
+       left edge with its text merely centered inside that narrower box. */
+    .loop-payoff .lp-big { font-family: var(--font-display); font-size: clamp(20px, 2.6vw, 27px); letter-spacing: -0.015em; margin: 0 auto 10px; max-width: 640px; }
+    .loop-payoff .lp-big em { font-style: normal; color: var(--ms-accent); }
+    .loop-payoff p { font-size: 14px; color: var(--ms-ink-soft); line-height: 1.6; margin: 0 auto; max-width: 520px; }
+
+    /* Two ways in, one program -- the split is about how you get your link,
+       not about which program you're in or what you earn. */
+    .paths-band { background: var(--ms-card); border-top: 1px solid var(--ms-line); border-bottom: 1px solid var(--ms-line); }
+    .paths { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; margin-top: 36px; }
+    .path { background: var(--ms-bg); border: 1px solid var(--ms-line); border-radius: 18px; padding: 28px; }
+    .path h3 { font-size: 17px; margin: 0 0 8px; }
+    .path p { font-size: 13.5px; color: var(--ms-ink-soft); line-height: 1.6; margin: 0 0 20px; }
+    .path a { display: inline-block; font-size: 14px; font-weight: 700; text-decoration: none; }
+    .path .path-cta { background: var(--ms-accent); color: #fff; padding: 12px 22px; border-radius: 999px; }
+    .path .path-cta:hover { background: var(--ms-accent-deep); }
+    .path .path-alt { color: var(--ms-accent); margin-left: 14px; }
+
+    footer { padding: 32px 6vw; display: flex; justify-content: space-between; align-items: center; gap: 14px; flex-wrap: wrap; font-size: 12.5px; color: var(--ms-ink-soft); }
+    footer a { color: inherit; text-decoration: none; }
+    footer a:hover { color: var(--ms-ink); }
+
+    @media (max-width: 760px) {
+      .steps, .paths { grid-template-columns: 1fr; }
+      .nav-links a:not(.nav-cta) { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+  <nav class="nav">
+    <a href="<%= isMerchant ? dashboardPath : '/' %>" class="logo-chip"><img src="/images/receiptap-logo.png" alt="ReceipTap" /></a>
+    <div class="nav-links">
+      <% if (isMerchant) { %>
+        <a href="<%= dashboardPath %>" class="nav-cta">Your referral link</a>
+      <% } else { %>
+        <a href="/">Home</a>
+        <a href="/affiliate/login">Partner log in</a>
+        <a href="/affiliate/signup" class="nav-cta">Become a partner</a>
+      <% } %>
+    </div>
+  </nav>
+
+  <header class="hero">
+    <div class="eyebrow">Partner Program</div>
+    <h1>Refer businesses to ReceipTap.<br /><em>Earn on every payment they make.</em></h1>
+    <p class="hero-sub">
+      Share your link with business owners. When they subscribe, you earn a recurring
+      commission for as long as they stay a customer.
+    </p>
+    <div class="cta-row">
+      <% if (isMerchant) { %>
+        <a class="cta-main" href="<%= dashboardPath %>">Get your referral link</a>
+      <% } else { %>
+        <a class="cta-main" href="/affiliate/signup">Become a partner</a>
+        <a class="cta-secondary" href="/affiliate/login">Already a partner? Log in</a>
+      <% } %>
+    </div>
+  </header>
+
+  <section class="rate-band">
+    <div class="rate-value"><%= rate %>%</div>
+    <p>Recurring commission on every referred merchant's subscription payment, for as long as they stay subscribed.</p>
+    <div class="flat-rate-tag">Free to join — no ReceipTap subscription required</div>
+  </section>
+
+  <% if (earnings) { %>
+    <section class="section maths">
+      <h2>Your calculated earning potential</h2>
+      <p class="section-lead">
+        ReceipTap is <%= earnings.subscriptionPrice %> <%= earnings.currency %> a <%= earnings.interval %>,
+        so every merchant who subscribes through your link pays you
+        <strong><%= earnings.perReferral %> <%= earnings.currency %></strong> a
+        <%= earnings.interval %> — again and again, not once.
+      </p>
+      <div class="maths-scroll">
+        <table class="maths-table">
+          <thead>
+            <tr>
+              <th scope="col">Merchants referred</th>
+              <th scope="col">Per <%= earnings.interval %> <span class="m-cur"><%= earnings.currency %></span></th>
+              <th scope="col">Per year <span class="m-cur"><%= earnings.currency %></span></th>
+            </tr>
+          </thead>
+          <tbody>
+            <% earnings.rows.forEach(function (row) { %>
+              <tr>
+                <td class="m-count"><%= row.count %> <span>subscribed</span></td>
+                <td class="m-period"><%= row.perPeriod %></td>
+                <td class="m-year"><%= row.perYear %></td>
+              </tr>
+            <% }); %>
+          </tbody>
+        </table>
+      </div>
+      <p class="maths-fine">
+        Figures assume every referred merchant stays subscribed for the full year — you earn for as
+        long as they stay, and stop if they cancel, so real earnings track your referrals' retention.
+        Calculated from ReceipTap's current subscription price at <%= rate %>%, and shown in
+        <%= earnings.currency %> — the currency ReceipTap bills and pays commission in. If that price
+        changes, so does this.
+      </p>
+    </section>
+  <% } %>
+
+  <section class="section">
+    <h2>How it works</h2>
+    <p class="section-lead">Three steps, then it runs itself.</p>
+    <div class="steps">
+      <div class="step">
+        <div class="s-num">1</div>
+        <h3>Get your link</h3>
+        <p>Sign up as a partner in under a minute — free, with no ReceipTap subscription, hardware, or merchant account needed. Already a merchant? Your link is already waiting in your dashboard.</p>
+      </div>
+      <div class="step">
+        <div class="s-num">2</div>
+        <h3>Share it</h3>
+        <p>Send it to business owners. When they sign up through your link, they're tracked as your referral automatically.</p>
+      </div>
+      <div class="step">
+        <div class="s-num">3</div>
+        <h3>Get paid</h3>
+        <p>Connect a payout account once with Stripe, and your commission is sent automatically every time they pay their subscription.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="loop-band">
+    <div class="section">
+      <h2>Your receipts do the referring</h2>
+      <div class="loop-req"><span>Requires an active ReceipTap subscription</span></div>
+      <p class="section-lead">
+        Switch on the Partner Program banner in Receipt design and your referral link rides along on
+        every customer receipt: an infinite sales loop running on foot traffic you already have,
+        with no selling left to do.
+      </p>
+      <div class="loop-chain">
+        <div class="loop-step">
+          <h3>A business owner taps</h3>
+          <p>Other owners shop too. When one taps for a receipt at your counter, they're holding a receipt with your link on it.</p>
+        </div>
+        <div class="loop-arrow">→</div>
+        <div class="loop-step">
+          <h3>They see ReceipTap working</h3>
+          <p>Not an ad — the actual product, doing the thing they'd be buying it for, on their own phone.</p>
+        </div>
+        <div class="loop-arrow">→</div>
+        <div class="loop-step">
+          <h3>They sign up, you earn</h3>
+          <p>Their signup is attributed to you automatically, <%= rate %>% of every payment comes back to you — and their receipts start the loop again one counter over.</p>
+        </div>
+      </div>
+
+      <% if (earnings && earnings.breakEvenCount) { %>
+        <div class="loop-payoff">
+          <p class="lp-big"><em><%= earnings.breakEvenCount %> signups</em> and ReceipTap has paid for itself.</p>
+          <p>
+            <%= earnings.breakEvenCount %> referred businesses pay you <%= earnings.breakEvenEarnings %> a
+            <%= earnings.interval %> — more than the <%= earnings.subscriptionPrice %> you pay for ReceipTap.
+            Past that, it isn't a cost any more; it's income.
+          </p>
+        </div>
+      <% } %>
+    </div>
+  </section>
+
+  <section class="paths-band">
+    <div class="section">
+      <h2>Two ways in, one program</h2>
+      <p class="section-lead">The only difference is where your referral link lives. The commission is identical.</p>
+      <div class="paths">
+        <div class="path">
+          <h3>You're already a ReceipTap merchant</h3>
+          <p>Nothing to sign up for. Your referral link is already in your account under Partner Program — open it and start sharing. You earn on everyone you refer whether or not your own subscription is active.</p>
+          <% if (isMerchant) { %>
+            <a class="path-cta" href="<%= dashboardPath %>">Open your referral link</a>
+          <% } else { %>
+            <a class="path-cta" href="/login">Log in to your dashboard</a>
+          <% } %>
+        </div>
+        <div class="path">
+          <h3>You're not a merchant</h3>
+          <p>No storefront, no hardware, no subscription, no fee. Create a partner account, connect a payout method, and start referring businesses today.</p>
+          <a class="path-cta" href="/affiliate/signup">Become a partner</a>
+          <a class="path-alt" href="/affiliate/login">Log in</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <span>© 2026 ReceipTap</span>
+    <span>
+      <% if (isMerchant) { %>
+        <a href="<%= dashboardPath %>">Your referral link</a>
+      <% } else { %>
+        <a href="/affiliate/login">Partner log in</a> ·
+        <a href="/login">Merchant log in</a> ·
+        <a href="/">Home</a>
+      <% } %>
+    </span>
+  </footer>
+
+</body>
+</html>

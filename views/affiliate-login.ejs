@@ -6,34 +6,70 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Affiliate Log In - ReceipTap</title>
   <link rel="stylesheet" href="/css/receiptap.css" />
+  <style>
+    /* Same dark pill-button design as views/affiliate-signup.ejs -- see the
+       comment there for why this stays self-contained rather than shared. */
+    :root {
+      --ms-bg: #0a0a0a;
+      --ms-card: #161616;
+      --ms-card-raised: #1c1c1c;
+      --ms-line: #2a2a2a;
+      --ms-ink: #ffffff;
+      --ms-ink-soft: #8d8d8d;
+      --ms-accent: #056BFE;
+      --ms-accent-deep: #0350BE;
+      --ms-danger: #ff453a;
+    }
+    body { background: var(--ms-bg); color: var(--ms-ink); font-family: var(--font-body); margin: 0; }
+    .auth-shell { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+    .auth-card { width: 100%; max-width: 380px; background: var(--ms-card); border: 1px solid var(--ms-line); border-radius: 20px; padding: 36px 30px; text-align: center; }
+    .auth-title { font-family: var(--font-display); font-size: 22px; font-weight: 700; margin: 4px 0 6px; color: var(--ms-ink); }
+    .auth-sub { font-size: 13.5px; color: var(--ms-ink-soft); margin: 0 0 24px; line-height: 1.5; }
+    .auth-field { text-align: left; margin-bottom: 16px; }
+    .auth-field label { display: block; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ms-ink-soft); margin-bottom: 6px; }
+    .auth-field input {
+      width: 100%; box-sizing: border-box; background: var(--ms-card-raised); border: 1px solid var(--ms-line);
+      color: var(--ms-ink); border-radius: 12px; padding: 13px 16px; font-size: 15px; font-family: inherit;
+    }
+    .auth-field input:focus { outline: 2px solid var(--ms-accent); outline-offset: 1px; border-color: var(--ms-accent); }
+    .auth-pill-btn {
+      display: block; width: 100%; box-sizing: border-box; background: var(--ms-accent); color: #fff; border: none;
+      border-radius: 999px; padding: 14px 20px; font-size: 15px; font-weight: 700; cursor: pointer; font-family: inherit;
+    }
+    .auth-pill-btn:hover { background: var(--ms-accent-deep); }
+    .auth-error {
+      background: rgba(255, 69, 58, 0.12); border: 1px solid rgba(255, 69, 58, 0.35); color: var(--ms-danger);
+      border-radius: 10px; padding: 11px 14px; font-size: 13.5px; margin-bottom: 16px; text-align: left;
+    }
+    .auth-footer { font-size: 13px; color: var(--ms-ink-soft); margin-top: 20px; text-align: center; }
+    .auth-footer a { color: var(--ms-accent); font-weight: 600; text-decoration: none; }
+    .logo-chip { display: inline-block; background: var(--paper); border-radius: 12px; padding: 10px 18px; margin-bottom: 22px; }
+    .logo-chip img { display: block; height: 32px; }
+  </style>
 </head>
 <body>
-  <div class="centered-shell">
+  <div class="auth-shell">
     <div class="auth-card">
-      <img src="/images/receiptap-logo.png" alt="ReceipTap" style="height: 60px; margin-bottom: 20px;" />
-      <h1 style="font-size: 22px; margin-bottom: 6px;">Affiliate Log In</h1>
-      <p style="font-size: 13.5px; color: var(--ink-soft); margin: 8px 0 24px; line-height: 1.5;">
-        See your referral link, referred merchants, and commissions.
-      </p>
+      <div class="logo-chip"><img src="/images/receiptap-logo.png" alt="ReceipTap" /></div>
+      <h1 class="auth-title">Affiliate Log In</h1>
+      <p class="auth-sub">See your referral link, referred merchants, and commissions.</p>
 
-      <% if (error) { %><div class="error-box"><%= error %></div><% } %>
+      <% if (error) { %><div class="auth-error"><%= error %></div><% } %>
 
       <form method="POST" action="/affiliate/login">
         <input type="hidden" name="redirect" value="<%= redirect %>" />
-        <div class="field">
+        <div class="auth-field">
           <label for="email">Email</label>
           <input type="email" id="email" name="email" required autofocus />
         </div>
-        <div class="field">
+        <div class="auth-field">
           <label for="password">Password</label>
           <input type="password" id="password" name="password" required />
         </div>
-        <button type="submit" class="btn btn-primary">Log in</button>
+        <button class="auth-pill-btn" type="submit">Log in</button>
       </form>
 
-      <p style="font-size: 13px; color: var(--ink-soft); margin-top: 20px; text-align: center;">
-        New here? <a href="/affiliate/signup" style="color: var(--teal-deep); font-weight: 600; text-decoration: none;">Become an affiliate</a>
-      </p>
+      <p class="auth-footer">New here? <a href="/affiliate/signup">Become an affiliate</a></p>
     </div>
   </div>
 </body>

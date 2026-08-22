@@ -6,39 +6,86 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Become an Affiliate - ReceipTap</title>
   <link rel="stylesheet" href="/css/receiptap.css" />
+  <style>
+    /* Same dark pill-button design as views/login.ejs, views/signup.ejs, and
+       views/claim.ejs -- self-contained here for the same reason those are:
+       stays isolated from the light `.auth-card`/`.field` classes still used
+       by the other merchant pages that haven't moved to this look yet. */
+    :root {
+      --ms-bg: #0a0a0a;
+      --ms-card: #161616;
+      --ms-card-raised: #1c1c1c;
+      --ms-line: #2a2a2a;
+      --ms-ink: #ffffff;
+      --ms-ink-soft: #8d8d8d;
+      --ms-accent: #056BFE;
+      --ms-accent-deep: #0350BE;
+      --ms-danger: #ff453a;
+    }
+    body { background: var(--ms-bg); color: var(--ms-ink); font-family: var(--font-body); margin: 0; }
+    .auth-shell { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+    .auth-card { width: 100%; max-width: 380px; background: var(--ms-card); border: 1px solid var(--ms-line); border-radius: 20px; padding: 36px 30px; text-align: center; }
+    .auth-title { font-family: var(--font-display); font-size: 22px; font-weight: 700; margin: 4px 0 6px; color: var(--ms-ink); }
+    .auth-sub { font-size: 13.5px; color: var(--ms-ink-soft); margin: 0 0 24px; line-height: 1.5; }
+    .auth-field { text-align: left; margin-bottom: 16px; }
+    .auth-field label { display: block; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ms-ink-soft); margin-bottom: 6px; }
+    .auth-field input {
+      width: 100%; box-sizing: border-box; background: var(--ms-card-raised); border: 1px solid var(--ms-line);
+      color: var(--ms-ink); border-radius: 12px; padding: 13px 16px; font-size: 15px; font-family: inherit;
+    }
+    .auth-field input:focus { outline: 2px solid var(--ms-accent); outline-offset: 1px; border-color: var(--ms-accent); }
+    .auth-pill-btn {
+      display: block; width: 100%; box-sizing: border-box; background: var(--ms-accent); color: #fff; border: none;
+      border-radius: 999px; padding: 14px 20px; font-size: 15px; font-weight: 700; cursor: pointer; font-family: inherit;
+    }
+    .auth-pill-btn:hover { background: var(--ms-accent-deep); }
+    .auth-error {
+      background: rgba(255, 69, 58, 0.12); border: 1px solid rgba(255, 69, 58, 0.35); color: var(--ms-danger);
+      border-radius: 10px; padding: 11px 14px; font-size: 13.5px; margin-bottom: 16px; text-align: left;
+    }
+    .flat-rate-tag {
+      display: inline-block; margin: -8px 0 20px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.03em;
+      color: var(--ms-accent); background: rgba(5,107,254,0.15); border-radius: 999px; padding: 4px 10px;
+    }
+    .auth-footer { font-size: 13px; color: var(--ms-ink-soft); margin-top: 20px; text-align: center; }
+    .auth-footer a { color: var(--ms-accent); font-weight: 600; text-decoration: none; }
+    .auth-footer.small { font-size: 12px; margin-top: 8px; }
+    /* The logo's "Receip" wordmark is dark navy, meant for a light
+       background -- same paper-toned chip already used on login.ejs/
+       signup.ejs/claim.ejs so it stays legible here. */
+    .logo-chip { display: inline-block; background: var(--paper); border-radius: 12px; padding: 10px 18px; margin-bottom: 22px; }
+    .logo-chip img { display: block; height: 32px; }
+  </style>
 </head>
 <body>
-  <div class="centered-shell">
+  <div class="auth-shell">
     <div class="auth-card">
-      <img src="/images/receiptap-logo.png" alt="ReceipTap" style="height: 60px; margin-bottom: 20px;" />
-      <h1 style="font-size: 22px; margin-bottom: 6px;">Become a ReceipTap Affiliate</h1>
-      <p style="font-size: 13.5px; color: var(--ink-soft); margin: 8px 0 24px; line-height: 1.5;">
-        Earn <%= rate %>% of every merchant you refer, for as long as they stay subscribed.
-      </p>
+      <div class="logo-chip"><img src="/images/receiptap-logo.png" alt="ReceipTap" /></div>
+      <h1 class="auth-title">Become a ReceipTap Affiliate</h1>
+      <p class="auth-sub">Earn <%= rate %>% of every merchant you refer, for as long as they stay subscribed. Free to join — no ReceipTap subscription needed.</p>
+      <div class="flat-rate-tag">One flat rate for every ReceipTap partner — no tiers</div>
 
-      <% if (error) { %><div class="error-box"><%= error %></div><% } %>
+      <% if (error) { %><div class="auth-error"><%= error %></div><% } %>
 
       <form method="POST" action="/affiliate/signup">
-        <div class="field">
+        <div class="auth-field">
           <label for="name">Your name</label>
           <input type="text" id="name" name="name" required autofocus />
         </div>
-        <div class="field">
+        <div class="auth-field">
           <label for="email">Email</label>
           <input type="email" id="email" name="email" required />
         </div>
-        <div class="field">
+        <div class="auth-field">
           <label for="password">Password</label>
           <input type="password" id="password" name="password" required minlength="8" />
         </div>
-        <button type="submit" class="btn btn-primary">Create affiliate account</button>
+        <button class="auth-pill-btn" type="submit">Create affiliate account</button>
       </form>
 
-      <p style="font-size: 13px; color: var(--ink-soft); margin-top: 20px; text-align: center;">
-        Already an affiliate? <a href="/affiliate/login" style="color: var(--teal-deep); font-weight: 600; text-decoration: none;">Log in</a>
-      </p>
-      <p style="font-size: 12px; color: var(--ink-soft); margin-top: 8px; text-align: center;">
-        A ReceipTap merchant? <a href="/login" style="color: var(--teal-deep); font-weight: 600; text-decoration: none;">Log in to your merchant account</a> instead — your referral link lives under "Partner Program" in your dashboard.
+      <p class="auth-footer">Already an affiliate? <a href="/affiliate/login">Log in</a></p>
+      <p class="auth-footer small">
+        A ReceipTap merchant? <a href="/login">Log in to your merchant account</a> instead — your referral link lives under "Partner Program" in your dashboard.
       </p>
     </div>
   </div>

@@ -1,0 +1,101 @@
+<!-- views/affiliate-invoice-pdf.ejs -->
+<!-- A standalone, letter-sized invoice document for one PAID Commission --
+     rendered to PDF by services/generate-affiliate-invoice-pdf.js (same
+     Playwright page.pdf() pattern as services/generate-receipt-pdf.js).
+     Never shown live in a browser tab -- only ever set as the content of a
+     headless page before being converted to a PDF buffer, so this can use
+     plain print-friendly styling instead of the app's usual design system. -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Invoice <%= invoiceNumber %></title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+      color: #111827; margin: 0; padding: 56px 60px; font-size: 14px;
+    }
+    .head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 48px; }
+    .logo { height: 26px; }
+    .doc-title { font-size: 22px; font-weight: 700; text-align: right; }
+    .doc-number { font-size: 13px; color: #6b7280; text-align: right; margin-top: 4px; }
+
+    .meta-grid { display: flex; justify-content: space-between; margin-bottom: 40px; gap: 40px; }
+    .meta-block h3 { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #9ca3af; margin: 0 0 6px; }
+    .meta-block div { font-size: 14px; line-height: 1.5; }
+    .meta-block strong { font-weight: 600; }
+
+    table { width: 100%; border-collapse: collapse; margin-bottom: 28px; }
+    th { text-align: left; font-size: 11px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: #9ca3af; padding: 10px 0; border-bottom: 2px solid #e5e7eb; }
+    th.num, td.num { text-align: right; }
+    td { padding: 14px 0; border-bottom: 1px solid #f3f4f6; font-size: 14px; }
+    .desc-sub { font-size: 12.5px; color: #6b7280; margin-top: 3px; }
+
+    .totals { display: flex; justify-content: flex-end; margin-bottom: 48px; }
+    .totals-box { width: 260px; }
+    .totals-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 14px; }
+    .totals-row.grand { border-top: 2px solid #111827; margin-top: 6px; padding-top: 12px; font-size: 16px; font-weight: 700; }
+
+    .status-pill {
+      display: inline-block; font-size: 11.5px; font-weight: 700; padding: 3px 11px; border-radius: 999px;
+      background: #DCE7F4; color: #0350BE;
+    }
+
+    .footer { border-top: 1px solid #e5e7eb; padding-top: 20px; font-size: 12px; color: #9ca3af; line-height: 1.6; }
+  </style>
+</head>
+<body>
+  <div class="head">
+    <img class="logo" src="<%= logoDataUri %>" alt="ReceipTap" />
+    <div>
+      <div class="doc-title">Commission Invoice</div>
+      <div class="doc-number"><%= invoiceNumber %></div>
+    </div>
+  </div>
+
+  <div class="meta-grid">
+    <div class="meta-block">
+      <h3>Paid to</h3>
+      <div><strong><%= affiliateName %></strong></div>
+      <div><%= affiliateEmail %></div>
+    </div>
+    <div class="meta-block">
+      <h3>Payment details</h3>
+      <div>Date paid: <strong><%= paidDate %></strong></div>
+      <div>Status: <span class="status-pill">Paid</span></div>
+    </div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Description</th>
+        <th class="num">Rate</th>
+        <th class="num">Amount</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>
+          Referral commission
+          <div class="desc-sub">On <%= merchantName %>'s subscription payment</div>
+        </td>
+        <td class="num"><%= rate %>%</td>
+        <td class="num">$<%= amount %></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="totals">
+    <div class="totals-box">
+      <div class="totals-row grand"><span>Total paid</span><span>$<%= amount %></span></div>
+    </div>
+  </div>
+
+  <div class="footer">
+    Paid via Stripe Connect direct transfer<% if (transferId) { %> — reference <%= transferId %><% } %>.
+    This document is a record of a commission payout from ReceipTap and is not a tax form.
+  </div>
+</body>
+</html>

@@ -4,6 +4,7 @@
 const express = require('express');
 const router = express.Router();
 const prisma = require('../lib/prisma');
+const { MERCHANT_AFFILIATE_RATE } = require('../services/affiliateRates');
 
 function requireAuth(req, res, next) {
   if (!req.session?.merchantId) return res.redirect('/login');
@@ -89,12 +90,18 @@ router.get('/dashboard/receipts/export', requireAuth, async (req, res) => {
   res.send(csv);
 });
 
-// GET /dashboard/receipts-hub?from=&to=&tab= — combined view: both collections,
-// tab-switched client-side, both filterable by the same date range
-router.get('/dashboard/receipts-hub', requireAuth, async (req, res) => {
-  const merchantId = req.session.merchantId;
-  const pageSize = 25;
-  const { from, to } = req.query;
+// Shared by GET /dashboard/receipts-hub and GET /account/business/receipts
+// (the wallet's dark reskin) -- see routes/account-business.js. Keeping the
+// query/shaping logic here means both pages read the exact same numbers,
+// never two independently-derived versions of "your receipts."
+//
+// page/pageSize are optional -- the real dashboard doesn't pass either
+// (page defaults to 1, pageSize to 25), which reproduces exactly what this
+// function returned before pagination existed: the most recent 25 rows,
+// no page info. The wallet's Receipts page passes both to page 5 at a time.
+async function computeReceiptsHubData(merchantId, { from, to, tab, page, pageSize = 25 } = {}) {
+  const currentPage = Math.max(1, parseInt(page, 10) || 1);
+  const activeTab = tab === 'merchant' ? 'merchant' : 'customer';
 
   const dateRange =
     from || to
@@ -107,66 +114,95 @@ router.get('/dashboard/receipts-hub', requireAuth, async (req, res) => {
         }
       : {};
 
-  const [issued, received] = await Promise.all([
+  const [issuedCount, receivedCount] = await Promise.all([
+    prisma.transaction.count({ where: { merchantId, ...dateRange } }),
+    prisma.transaction.count({ where: { collectedByMerchantId: merchantId, ...dateRange } }),
+  ]);
+
+  // Customer Receipts tab: a single ordered source -- a normal skip/take
+  // lands on the right page.
+  const customerTotalPages = Math.max(1, Math.ceil(issuedCount / pageSize));
+  const issuedPage = await prisma.transaction.findMany({
+    where: { merchantId, ...dateRange },
+    orderBy: { createdAt: 'desc' },
+    skip: (currentPage - 1) * pageSize,
+    take: pageSize,
+  });
+  const customerReceipts = issuedPage.map((t) => ({
+    ...t,
+    total: (t.total / 100).toFixed(2),
+    date: t.createdAt.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }),
+  }));
+
+  // Merchant Receipts = this business's own copy of every sale it made
+  // (for its records -- same transaction as the Customer Receipts tab, just
+  // a merchant-facing copy), PLUS anything this business itself bought at
+  // another ReceipTap merchant. Two sources merged by date, so a plain
+  // skip/take on either one alone can't land on the right window -- fetch
+  // enough of both (everything through the end of the requested page) and
+  // slice the merged, re-sorted list instead.
+  const merchantTotalPages = Math.max(1, Math.ceil((issuedCount + receivedCount) / pageSize));
+  const throughThisPage = currentPage * pageSize;
+  const [issuedForMerchantTab, received] = await Promise.all([
     prisma.transaction.findMany({
       where: { merchantId, ...dateRange },
       orderBy: { createdAt: 'desc' },
-      take: pageSize,
+      take: throughThisPage,
     }),
     prisma.transaction.findMany({
       where: { collectedByMerchantId: merchantId, ...dateRange },
       include: { merchant: true },
       orderBy: { createdAt: 'desc' },
-      take: pageSize,
+      take: throughThisPage,
     }),
   ]);
-
-  // Merchant Receipts = this business's own copy of every sale it made
-  // (for its records -- same transaction as the Customer Receipts tab, just
-  // a merchant-facing copy), PLUS anything this business itself bought at
-  // another ReceipTap merchant.
   const merchantReceipts = [
-    ...issued.map((t) => ({
-      ...t,
-      total: (t.total / 100).toFixed(2),
-      date: t.createdAt.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }),
-      kind: 'own-sale',
-    })),
-    ...received.map((t) => ({
-      ...t,
-      total: (t.total / 100).toFixed(2),
-      date: t.createdAt.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }),
-      soldByName: t.merchant.businessName,
-      kind: 'purchased',
-    })),
+    ...issuedForMerchantTab.map((t) => ({ ...t, kind: 'own-sale' })),
+    ...received.map((t) => ({ ...t, soldByName: t.merchant.businessName, kind: 'purchased' })),
   ]
     .sort((a, b) => b.createdAt - a.createdAt)
-    .slice(0, pageSize);
-
-  res.render('receipts-hub', {
-    customerReceipts: issued.map((t) => ({
+    .slice((currentPage - 1) * pageSize, currentPage * pageSize)
+    .map((t) => ({
       ...t,
       total: (t.total / 100).toFixed(2),
       date: t.createdAt.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }),
-    })),
+    }));
+
+  return {
+    customerReceipts,
+    customerTotalPages,
     merchantReceipts,
+    merchantTotalPages,
     filters: { from: from || '', to: to || '' },
-    activeTab: req.query.tab === 'merchant' ? 'merchant' : 'customer',
+    activeTab,
+    page: currentPage,
+  };
+}
+
+// GET /dashboard/receipts-hub?from=&to=&tab= — combined view: both collections,
+// tab-switched client-side, both filterable by the same date range
+router.get('/dashboard/receipts-hub', requireAuth, async (req, res) => {
+  const data = await computeReceiptsHubData(req.session.merchantId, {
+    from: req.query.from,
+    to: req.query.to,
+    tab: req.query.tab,
   });
+  res.render('receipts-hub', data);
 });
 
 // ---------------------------------------------------------------------------
 // GET /dashboard — Overview. Every number here is computed from real rows;
-// nothing on this page is a placeholder.
+// nothing on this page is a placeholder. Shared with GET /account/business
+// (routes/account-business.js) the same way computeReceiptsHubData is above.
 // ---------------------------------------------------------------------------
-router.get('/dashboard', requireAuth, async (req, res) => {
-  const merchantId = req.session.merchantId;
+async function computeOverviewData(merchantId) {
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const d7 = new Date(Date.now() - 7 * 864e5);
   const d14 = new Date(Date.now() - 14 * 864e5);
 
-  const [merchant, pucks, recent, allTx, last7, prev7] = await Promise.all([
+  const [merchant, pucks, recent, allTx, last7, prev7, receiptTheme] = await Promise.all([
     prisma.merchant.findUnique({ where: { id: merchantId } }),
     prisma.puck.findMany({ where: { merchantId }, orderBy: { claimedAt: 'asc' } }),
     prisma.transaction.findMany({
@@ -181,12 +217,46 @@ router.get('/dashboard', requireAuth, async (req, res) => {
     }),
     prisma.transaction.count({ where: { merchantId, createdAt: { gte: d7 } } }),
     prisma.transaction.count({ where: { merchantId, createdAt: { gte: d14, lt: d7 } } }),
+    // Only existence matters here (the "customize your receipt" setup-progress
+    // step below) -- the real theme content is read separately, where it's
+    // actually used (routes/theme-settings.js).
+    prisma.receiptTheme.findUnique({ where: { merchantId } }),
   ]);
 
   const monthCents = allTx
     .filter((t) => t.createdAt >= monthStart)
     .reduce((s, t) => s + t.total, 0);
+  const todayTx = allTx.filter((t) => t.createdAt >= todayStart);
+  const todayCents = todayTx.reduce((s, t) => s + t.total, 0);
   const customerCount = new Set(allTx.filter((t) => t.customerId).map((t) => t.customerId)).size;
+
+  // Setup progress -- shown on the wallet's dark Overview reskin
+  // (views/business-overview.ejs) as a checklist. Every step here is
+  // derived from real account state, never a made-up tracker: an account
+  // always exists by the time this runs, billing is "added" once a trial
+  // has actually been started (subscriptionStatus moves off INCOMPLETE),
+  // a ReceipTap is "set up" once at least one has been claimed to this
+  // account, the receipt is "customized" once a ReceiptTheme row exists,
+  // and the Partner Program step is done once the receipt banner is
+  // actually switched on (ReceiptTheme.showPartnerProgram) -- that's the
+  // thing that starts earning, not merely visiting the page. No "connect
+  // to WiFi" step -- ReceipTap's pucks are passive NFC with no power or
+  // radio of their own (see CLAUDE.md), so unlike a WiFi-connected device
+  // there's nothing to "connect" before tapping it.
+  const setupSteps = {
+    accountCreated: true,
+    billingAdded: merchant.subscriptionStatus !== 'INCOMPLETE',
+    puckSetUp: pucks.length > 0,
+    receiptCustomized: Boolean(receiptTheme),
+    partnerProgramOn: Boolean(receiptTheme && receiptTheme.showPartnerProgram),
+  };
+  const setupDoneCount = Object.values(setupSteps).filter(Boolean).length;
+  // Divide by the actual step count so adding a step can't leave the
+  // percentage silently wrong (it was hardcoded to 4 before this one).
+  const setup = {
+    ...setupSteps,
+    percent: Math.round((setupDoneCount / Object.keys(setupSteps).length) * 100),
+  };
 
   // Percentage change only when there's a prior week to compare against
   let receiptsDelta = null;
@@ -207,8 +277,9 @@ router.get('/dashboard', requireAuth, async (req, res) => {
   const pairingCount = puckRows.filter((p) => !p.linked && p.pairing).length;
   const setupCount = puckRows.length - linkedCount - pairingCount;
 
-  res.render('dashboard-overview', {
+  return {
     merchant,
+    merchantAffiliateRate: MERCHANT_AFFILIATE_RATE,
     stats: {
       receipts: allTx.length,
       receiptsDelta,
@@ -217,7 +288,10 @@ router.get('/dashboard', requireAuth, async (req, res) => {
       monthRevenue: (monthCents / 100).toFixed(2),
       monthLabel: now.toLocaleDateString('en-US', { month: 'long' }),
       customers: customerCount,
+      todayRevenue: (todayCents / 100).toFixed(2),
+      todayReceipts: todayTx.length,
     },
+    setup,
     puckStatus: { linked: linkedCount, pairing: pairingCount, setup: setupCount, total: puckRows.length },
     pucks: puckRows.slice(0, 6),
     recent: recent.map((t) => ({
@@ -228,7 +302,11 @@ router.get('/dashboard', requireAuth, async (req, res) => {
       when: timeAgo(t.createdAt),
       method: t.paymentMethod || null,
     })),
-  });
+  };
+}
+
+router.get('/dashboard', requireAuth, async (req, res) => {
+  res.render('dashboard-overview', await computeOverviewData(req.session.merchantId));
 });
 
 // Resolves real Square location names for a merchant's own posLocationIds.
@@ -258,8 +336,8 @@ function displayLocation(locationId, names) {
 
 // GET /dashboard/pucks — every ReceipTap on this account: stats, search/filter,
 // a paginated table, and a details panel for whichever one is selected.
-router.get('/dashboard/pucks', requireAuth, async (req, res) => {
-  const merchantId = req.session.merchantId;
+// Shared with GET /account/business/pucks the same way computeOverviewData is above.
+async function computePucksData(merchantId, query = {}) {
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
@@ -290,15 +368,15 @@ router.get('/dashboard/pucks', requireAuth, async (req, res) => {
   };
 
   // --- Tabs: All ReceipTaps / By Location ------------------------------
-  const tab = req.query.tab === 'location' ? 'location' : 'list';
+  const tab = query.tab === 'location' ? 'location' : 'list';
 
   // --- Search + filter (status is derived, not a real column, so this
   // filters/paginates in JS rather than pushing status into a Prisma where) --
-  const page = parseInt(req.query.page, 10) || 1;
+  const page = parseInt(query.page, 10) || 1;
   const pageSize = 25;
-  const search = (req.query.search || '').trim().toLowerCase();
-  const locationFilter = req.query.location || '';
-  const statusFilter = req.query.status || '';
+  const search = (query.search || '').trim().toLowerCase();
+  const locationFilter = query.location || '';
+  const statusFilter = query.status || '';
 
   const filtered = pucks.filter((p) => {
     if (search && !p.id.toLowerCase().includes(search) && !p.claimCode.toLowerCase().includes(search)) return false;
@@ -327,7 +405,7 @@ router.get('/dashboard/pucks', requireAuth, async (req, res) => {
   }
 
   // --- Master-detail: whichever puck is selected, scoped to this merchant --
-  const selectedId = req.query.selected || (pageRows[0] && pageRows[0].id) || null;
+  const selectedId = query.selected || (pageRows[0] && pageRows[0].id) || null;
   const selectedPuck = selectedId
     ? await prisma.puck.findFirst({ where: { id: selectedId, merchantId } })
     : null;
@@ -347,11 +425,11 @@ router.get('/dashboard/pucks', requireAuth, async (req, res) => {
     claimedAt: p.claimedAt,
   });
 
-  res.render('pucks-list', {
+  return {
     merchant,
     stats,
     tab,
-    filters: { search: req.query.search || '', location: locationFilter, status: statusFilter },
+    filters: { search: query.search || '', location: locationFilter, status: statusFilter },
     locationOptions: locationIds.map((id) => ({ value: id, label: displayLocation(id, names) })),
     hasUnassigned,
     pucks: pageRows.map(toRow),
@@ -373,7 +451,11 @@ router.get('/dashboard/pucks', requireAuth, async (req, res) => {
         }
       : null,
     recentActivations: recentActivations.map((p) => ({ id: p.id, when: timeAgo(p.claimedAt) })),
-  });
+  };
+}
+
+router.get('/dashboard/pucks', requireAuth, async (req, res) => {
+  res.render('pucks-list', await computePucksData(req.session.merchantId, req.query));
 });
 
 // POST /dashboard/pucks/:id/unassign — clears a puck's register/location
@@ -400,3 +482,8 @@ function timeAgo(date) {
 }
 
 module.exports = router;
+// Exposed for routes/account-business.js -- see the comment on each
+// function above for why these are shared rather than re-derived.
+module.exports.computeOverviewData = computeOverviewData;
+module.exports.computeReceiptsHubData = computeReceiptsHubData;
+module.exports.computePucksData = computePucksData;

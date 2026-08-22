@@ -1,0 +1,255 @@
+<!-- views/business-referrals.ejs -->
+<!-- Dark reskin of views/affiliate-dashboard.ejs's 'merchant' portalType
+     content -- same buildAffiliateView() data (routes/affiliates.js), see
+     GET /account/business/referrals in routes/account-business.js. The
+     underlying account/actions are identical to the real dashboard's
+     /dashboard/referrals: same referral-code/payout-frequency/Stripe
+     Connect endpoints, just posting with redirectTo/next set to
+     /account/business/referrals (lib/affiliateReturnPath.js) so every
+     round trip -- including the Stripe Connect onboarding hop -- lands
+     back in the wallet instead of the real dashboard. -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Partner Program - ReceipTap Business</title>
+  <link rel="stylesheet" href="/css/receiptap.css" />
+  <%- include('partials/wallet-dark-theme') %>
+  <style>
+    .biz-header { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+    .panel { padding: 18px; margin-bottom: 16px; }
+    .panel h2 { font-size: 14.5px; margin: 0 0 4px; }
+    .panel-sub { font-size: 12.5px; color: var(--w-ink-soft); margin: 0 0 14px; line-height: 1.5; }
+    .banner { padding: 11px 14px; border-radius: 10px; font-size: 13px; margin-bottom: 16px; }
+    .banner.error { background: rgba(255,69,58,0.12); border: 1px solid rgba(255,69,58,0.35); color: var(--w-danger); }
+    .banner.success { background: rgba(5,107,254,0.12); border: 1px solid rgba(5,107,254,0.35); color: var(--w-accent); }
+
+    .link-row { display: flex; gap: 8px; margin-top: 10px; }
+    .link-row input {
+      flex: 1; min-width: 0; background: var(--w-card-raised); border: 1px solid var(--w-line); color: var(--w-ink);
+      border-radius: 10px; padding: 11px 13px; font-size: 12.5px; font-family: var(--font-mono);
+    }
+    .copy-btn {
+      flex-shrink: 0; background: var(--w-accent); color: #fff; border: none; border-radius: 10px;
+      padding: 0 16px; font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit;
+    }
+    .code-form { margin-top: 16px; }
+    .code-form label { display: block; font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--w-ink-soft); margin-bottom: 6px; }
+    .code-row { display: flex; align-items: center; gap: 6px; }
+    .code-prefix { font-size: 12px; color: var(--w-ink-soft); font-family: var(--font-mono); white-space: nowrap; }
+    .code-row input {
+      flex: 1; min-width: 0; background: var(--w-card-raised); border: 1px solid var(--w-line); color: var(--w-ink);
+      border-radius: 10px; padding: 10px 12px; font-size: 13px; font-family: var(--font-mono); text-transform: uppercase;
+    }
+    .code-save-btn {
+      flex-shrink: 0; background: var(--w-card-raised); border: 1px solid var(--w-line); color: var(--w-ink);
+      border-radius: 10px; padding: 10px 14px; font-size: 12.5px; font-weight: 700; cursor: pointer; font-family: inherit;
+    }
+
+    .rate-card { padding: 20px 22px; margin-bottom: 16px; }
+    .rate-card.eligible { background: radial-gradient(120% 140% at 100% 0%, rgba(5,107,254,0.35) 0%, var(--w-card) 65%); border-color: rgba(5,107,254,0.3); }
+    .rate-card.paused { background: radial-gradient(120% 140% at 100% 0%, rgba(255,69,58,0.22) 0%, var(--w-card) 65%); border-color: rgba(255,69,58,0.3); }
+    .rate-value { font-size: 22px; font-weight: 700; }
+    .rate-sub { font-size: 12.5px; color: var(--w-ink-soft); margin-top: 6px; line-height: 1.5; }
+    .flat-rate-tag {
+      display: inline-block; margin-top: 12px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.03em;
+      color: var(--w-accent); background: rgba(5,107,254,0.15); border-radius: 999px; padding: 4px 10px;
+    }
+
+    .mrc-card { padding: 18px 20px; margin-bottom: 16px; }
+    .mrc-label { font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--w-ink-soft); margin-bottom: 8px; }
+    .mrc-value { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 28px; font-weight: 700; }
+    .mrc-unit { font-size: 14px; font-weight: 600; color: var(--w-ink-soft); margin-left: 2px; }
+    .mrc-sub { font-size: 12.5px; color: var(--w-ink-soft); margin-top: 4px; }
+
+    .connect-btn {
+      display: inline-flex; align-items: center; justify-content: center; text-decoration: none;
+      background: var(--w-accent); color: #fff; border: none; border-radius: 999px; padding: 12px 20px;
+      font-size: 13.5px; font-weight: 700; font-family: inherit;
+    }
+    .connected-tag { color: var(--w-accent); font-weight: 700; }
+
+    .schedule-select {
+      background: var(--w-card-raised); border: 1px solid var(--w-line); color: var(--w-ink); border-radius: 10px;
+      padding: 10px 12px; font-size: 13.5px; font-family: inherit;
+    }
+
+    .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
+    .stat-box { padding: 16px; text-align: center; }
+    .stat-num { font-size: 19px; font-weight: 700; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+    .stat-label { font-size: 11.5px; color: var(--w-ink-soft); margin-top: 4px; }
+
+    .ref-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--w-line); gap: 10px; }
+    .ref-row:last-child { border-bottom: none; }
+    .ref-name { font-size: 13.5px; font-weight: 600; }
+    .ref-date { font-size: 11.5px; color: var(--w-ink-soft); margin-top: 2px; }
+    .pill { display: inline-block; font-size: 10.5px; font-weight: 700; padding: 2px 9px; border-radius: 999px; white-space: nowrap; }
+    .pill-active { background: rgba(5,107,254,0.2); color: var(--w-accent); }
+    .pill-other { background: var(--w-card-raised); color: var(--w-ink-soft); border: 1px solid var(--w-line); }
+
+    .comm-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--w-line); gap: 10px; }
+    .comm-row:last-child { border-bottom: none; }
+    .comm-date { font-size: 13px; font-weight: 600; }
+    .comm-rate { font-size: 11.5px; color: var(--w-ink-soft); margin-top: 2px; }
+    .comm-right { text-align: right; flex-shrink: 0; }
+    .comm-amt { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 13.5px; font-weight: 700; }
+    .invoice-dl { font-size: 11.5px; font-weight: 600; color: var(--w-accent); text-decoration: none; display: block; margin-top: 3px; }
+
+    .empty { text-align: center; padding: 20px 10px; color: var(--w-ink-soft); font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div class="w-shell">
+    <div class="biz-header">
+      <a href="/account/business/more" class="w-btn-icon" aria-label="Back">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      </a>
+      <div>
+        <div class="w-eyebrow">Business</div>
+        <h1 class="w-title" style="font-size:20px;">Partner Program</h1>
+      </div>
+    </div>
+
+    <% if (connectError) { %><div class="banner error">Couldn't start Stripe onboarding — please try again in a moment.</div><% } %>
+    <% if (codeError) { %><div class="banner error"><%= codeError %></div><% } %>
+    <% if (codeSuccess) { %><div class="banner success">Your link is updated.</div><% } %>
+
+    <div class="w-card panel">
+      <h2>Your referral link</h2>
+      <p class="panel-sub">Refer other businesses to ReceipTap and earn <%= rate %>% recurring commission on every payment they make — the same flat rate every ReceipTap partner earns, merchant or not.</p>
+      <div class="link-row">
+        <input type="text" id="referral-url" value="<%= referralUrl %>" readonly />
+        <button type="button" class="copy-btn" id="copy-referral-btn">Copy</button>
+      </div>
+
+      <form method="POST" action="/affiliate/referral-code" class="code-form">
+        <input type="hidden" name="redirectTo" value="/account/business/referrals" />
+        <label for="referralCode">Customize the code at the end of your link</label>
+        <div class="code-row">
+          <span class="code-prefix">/signup?ref=</span>
+          <input
+            type="text" id="referralCode" name="referralCode"
+            value="<%= referralCode %>" maxlength="20"
+            pattern="[A-Za-z0-9]{3,20}" title="Letters and numbers only, 3-20 characters"
+          />
+          <button type="submit" class="code-save-btn">Save</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="w-card rate-card eligible">
+      <div class="rate-value"><%= rate %>% commission</div>
+      <div class="rate-sub">
+        You're earning on every referral. The Partner Program is free — you keep earning on the
+        businesses you refer whether or not your own ReceipTap subscription is active.
+      </div>
+      <div class="flat-rate-tag">One flat rate for every ReceipTap partner — no tiers</div>
+    </div>
+
+    <div class="w-card mrc-card">
+      <div class="mrc-label">Monthly recurring commission</div>
+      <% if (monthlyRecurringCommission !== null) { %>
+        <div class="mrc-value">$<%= monthlyRecurringCommission %><span class="mrc-unit">/mo</span></div>
+        <div class="mrc-sub"><%= activeReferralCount %> active referral<%= activeReferralCount === 1 ? '' : 's' %> at <%= rate %>% each</div>
+      <% } else { %>
+        <div class="mrc-value">—</div>
+        <div class="mrc-sub">Not available right now.</div>
+      <% } %>
+    </div>
+
+    <div class="w-card panel">
+      <% if (stripeConnectOnboarded) { %>
+        <h2 class="connected-tag">✅ Payouts connected</h2>
+        <p class="panel-sub" style="margin-bottom:0;">
+          Commissions will be sent directly to your bank account via Stripe.
+          <a href="/affiliate/connect-stripe/start?next=%2Faccount%2Fbusiness%2Freferrals" style="color:var(--w-accent); font-weight:600;">Update details</a>
+        </p>
+      <% } else { %>
+        <h2>Connect a payout account</h2>
+        <p class="panel-sub">You'll need to connect a bank account with Stripe before any commission can be paid out. Stripe collects your details directly — this app never sees them.</p>
+        <a href="/affiliate/connect-stripe/start?next=%2Faccount%2Fbusiness%2Freferrals" class="connect-btn">Connect with Stripe</a>
+      <% } %>
+    </div>
+
+    <div class="w-card panel">
+      <h2>Payout schedule</h2>
+      <p class="panel-sub">Commissions accumulate as they come in and get paid out together on this schedule, rather than one at a time.</p>
+      <form method="POST" action="/affiliate/payout-frequency">
+        <input type="hidden" name="redirectTo" value="/account/business/referrals" />
+        <select name="payoutFrequency" onchange="this.form.submit()" class="schedule-select">
+          <option value="WEEKLY" <%= payoutFrequency === 'WEEKLY' ? 'selected' : '' %>>Weekly</option>
+          <option value="MONTHLY" <%= payoutFrequency === 'MONTHLY' ? 'selected' : '' %>>Monthly</option>
+        </select>
+      </form>
+    </div>
+
+    <div class="stats-grid">
+      <div class="w-card stat-box">
+        <div class="stat-num"><%= referredMerchants.length %></div>
+        <div class="stat-label">Referred merchants</div>
+      </div>
+      <div class="w-card stat-box">
+        <div class="stat-num">$<%= pendingTotal %></div>
+        <div class="stat-label">Pending</div>
+      </div>
+      <div class="w-card stat-box">
+        <div class="stat-num">$<%= paidTotal %></div>
+        <div class="stat-label">Paid out</div>
+      </div>
+      <div class="w-card stat-box">
+        <div class="stat-num"><%= churnRate !== null ? churnRate + '%' : '—' %></div>
+        <div class="stat-label">Churn rate</div>
+      </div>
+    </div>
+
+    <div class="w-card panel">
+      <h2>Referred merchants</h2>
+      <% if (referredMerchants.length === 0) { %>
+        <div class="empty">No referrals yet — share your link to get started.</div>
+      <% } else { %>
+        <% referredMerchants.forEach(function (m) { %>
+          <div class="ref-row">
+            <div>
+              <div class="ref-name"><%= m.businessName %></div>
+              <div class="ref-date">Joined <%= m.joinedAt %></div>
+            </div>
+            <span class="pill <%= m.subscriptionStatus === 'ACTIVE' ? 'pill-active' : 'pill-other' %>"><%= m.subscriptionStatus %></span>
+          </div>
+        <% }); %>
+      <% } %>
+    </div>
+
+    <div class="w-card panel">
+      <h2>Commissions</h2>
+      <% if (commissions.length === 0) { %>
+        <div class="empty">No commissions yet — these appear automatically once a referred merchant makes a payment.</div>
+      <% } else { %>
+        <% commissions.forEach(function (c) { %>
+          <div class="comm-row">
+            <div>
+              <div class="comm-date"><%= c.date %></div>
+              <div class="comm-rate"><%= c.merchantName %> — <%= c.rate %>% rate</div>
+            </div>
+            <div class="comm-right">
+              <div class="comm-amt">$<%= c.amount %></div>
+              <span class="pill <%= c.status === 'PAID' ? 'pill-active' : 'pill-other' %>"><%= c.status %></span>
+              <% if (c.status === 'PAID') { %>
+                <a href="/affiliate/commissions/<%= c.id %>/invoice" class="invoice-dl">Download invoice</a>
+              <% } %>
+            </div>
+          </div>
+        <% }); %>
+      <% } %>
+    </div>
+  </div>
+
+  <script>
+    document.getElementById('copy-referral-btn').addEventListener('click', function () {
+      var input = document.getElementById('referral-url');
+      input.select();
+      navigator.clipboard.writeText(input.value).catch(function () { document.execCommand('copy'); });
+    });
+  </script>
+</body>
+</html>

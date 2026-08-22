@@ -1,0 +1,295 @@
+<!-- views/scan-receipt.ejs -->
+<!-- Upload/photograph an existing receipt -- step 1 of 2. Claude reads the
+     image on submit; the customer reviews/corrects the result on the next
+     screen before anything gets saved.
+
+     "Scan with camera" opens a custom full-screen live camera view
+     (getUserMedia + <video>), not a native-app hand-off -- lets us draw the
+     frame-guide overlay and animated scan line directly on top of the live
+     feed. Falls back to a plain native file input with `capture` if
+     getUserMedia is unavailable/denied, so the feature still works either
+     way. getUserMedia requires a secure context (HTTPS, or localhost during
+     dev) -- fine for local testing now, and Railway gives HTTPS by default
+     once this is actually deployed.
+
+     "Upload file" stays a plain file picker, unrelated to any of that. -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Scan a Receipt - ReceipTap</title>
+  <link rel="stylesheet" href="/css/receiptap.css" />
+  <%- include('partials/wallet-dark-theme') %>
+  <style>
+    .scan-header { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
+
+    .option-row {
+      display: flex; align-items: center; gap: 16px; padding: 18px 20px; cursor: pointer;
+      background: none; border: none; width: 100%; text-align: left; font-family: inherit;
+      color: var(--w-ink); box-sizing: border-box;
+    }
+    .option-row + .option-row { margin-top: 10px; }
+    .option-icon {
+      width: 44px; height: 44px; border-radius: 12px; background: var(--w-card-raised);
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .option-title { font-size: 15.5px; font-weight: 700; }
+    .option-sub { font-size: 12.5px; color: var(--w-ink-soft); margin-top: 2px; }
+
+    input[type="file"] { display: none; }
+    .file-name { font-size: 13px; color: var(--w-accent); margin: 14px 2px 0; word-break: break-all; }
+
+    /* A card styled like real receipt paper -- deliberately using the
+       brand's actual light "paper" tone even inside this otherwise-dark
+       page, not just a gray card, since that's literally what it's
+       referencing. Zigzag top/bottom edges are a pure-CSS torn-paper
+       effect (two triangle strips via repeating gradients), not an image. */
+    .tips-card { background: var(--paper); color: var(--ink); margin-top: 22px; border: none; overflow: hidden; }
+    .tips-zigzag {
+      height: 10px;
+      background:
+        linear-gradient(-45deg, var(--paper) 5px, transparent 0) 0 0,
+        linear-gradient(45deg, var(--paper) 5px, transparent 0) 0 0;
+      background-size: 16px 10px;
+      background-repeat: repeat-x;
+      background-color: var(--w-bg);
+    }
+    .tips-zigzag.bottom { transform: rotate(180deg); }
+    .tips-body { padding: 18px 22px 22px; }
+    .tips-eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-align: center; color: var(--ink-soft); margin-bottom: 14px; }
+    .tips-row { display: flex; justify-content: space-between; align-items: center; font-size: 13.5px; padding: 7px 0; border-bottom: 1px dashed var(--line); }
+    .tips-row:last-child { border-bottom: none; }
+    .tips-check { color: var(--teal); font-weight: 700; }
+
+    /* --- Live camera overlay --- */
+    .camera-overlay {
+      display: none; position: fixed; inset: 0; background: #000; z-index: 1000;
+      flex-direction: column;
+    }
+    .camera-overlay.open { display: flex; }
+    .camera-video { flex: 1; width: 100%; object-fit: cover; background: #000; }
+    .camera-topbar {
+      position: absolute; top: 0; left: 0; right: 0; display: flex; justify-content: space-between;
+      padding: 18px; z-index: 2;
+    }
+    .camera-icon-btn {
+      width: 40px; height: 40px; border-radius: 50%; background: rgba(0,0,0,0.4);
+      border: none; color: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer;
+    }
+    .camera-frame {
+      position: absolute; top: 18%; left: 6%; right: 6%; bottom: 24%;
+      border: 2px dashed rgba(255,255,255,0.65); border-radius: 12px; pointer-events: none; overflow: hidden;
+    }
+    .scan-line {
+      position: absolute; left: 4%; right: 4%; height: 2px;
+      background: linear-gradient(90deg, transparent, var(--w-accent), transparent);
+      box-shadow: 0 0 8px 1px var(--w-accent);
+      animation: scan-sweep 2.2s ease-in-out infinite;
+    }
+    @keyframes scan-sweep {
+      0% { top: 4%; }
+      50% { top: 94%; }
+      100% { top: 4%; }
+    }
+    .camera-caption {
+      position: absolute; left: 0; right: 0; bottom: 15%; text-align: center;
+      color: rgba(255,255,255,0.85); font-size: 13.5px; z-index: 2;
+    }
+    .camera-controls {
+      position: absolute; left: 0; right: 0; bottom: 0; display: flex; align-items: center;
+      justify-content: space-between; padding: 24px 32px max(24px, env(safe-area-inset-bottom)); z-index: 2;
+    }
+    .camera-shutter {
+      width: 68px; height: 68px; border-radius: 50%; background: #fff; border: 4px solid rgba(255,255,255,0.4);
+      cursor: pointer;
+    }
+    .camera-side-btn {
+      width: 44px; height: 44px; border-radius: 50%; background: rgba(255,255,255,0.15); border: none;
+      color: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div class="w-shell">
+    <div class="scan-header">
+      <a href="/account/receipts" class="w-btn-icon" aria-label="Back">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      </a>
+      <div>
+        <div class="w-eyebrow">Capture</div>
+        <h1 class="w-title" style="font-size:24px;">Add a receipt</h1>
+      </div>
+    </div>
+    <p style="color:var(--w-ink-soft); font-size:13.5px; margin-top:-14px; margin-bottom:20px;">
+      Snap it, upload it, or tap a ReceipTap puck at checkout for an automatic one.
+    </p>
+
+    <% if (error) { %>
+      <div class="w-error"><%= error %></div>
+    <% } %>
+
+    <form class="w-card" method="POST" action="/account/receipts/scan" enctype="multipart/form-data" id="scan-form" style="padding: 8px;">
+      <button type="button" class="option-row" id="open-camera-btn" onclick="openCamera()">
+        <div class="option-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#8d8d8d" stroke-width="1.8"><path d="M4 7h3l2-2h6l2 2h3a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1Z"/><circle cx="12" cy="13" r="3.5"/></svg>
+        </div>
+        <div>
+          <div class="option-title">Scan with camera</div>
+          <div class="option-sub">Snap a photo of your paper receipt.</div>
+        </div>
+      </button>
+      <!-- Fallback only -- used if getUserMedia isn't available/denied, so
+           the feature still works via a native camera hand-off instead. -->
+      <input type="file" id="cameraFallbackInput" accept="image/png,image/jpeg,image/webp" capture="environment" />
+
+      <label class="option-row" for="fileInput">
+        <div class="option-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#8d8d8d" stroke-width="1.8"><path d="M12 15V4M8 8l4-4 4 4"/><path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>
+        </div>
+        <div>
+          <div class="option-title">Upload file</div>
+          <div class="option-sub">Pick an image from your device.</div>
+        </div>
+      </label>
+      <input type="file" id="fileInput" accept="image/png,image/jpeg,image/webp" />
+
+      <input type="file" id="receiptPhoto" name="receiptPhoto" style="display:none;" required />
+      <div class="file-name" id="file-name" style="padding: 0 12px;"></div>
+      <button type="submit" class="w-btn" id="submit-btn" style="margin:14px 12px 8px; width:calc(100% - 24px); display:none;">Continue</button>
+    </form>
+
+    <div class="w-card tips-card">
+      <div class="tips-zigzag"></div>
+      <div class="tips-body">
+        <div class="tips-eyebrow">Tips for the cleanest scan</div>
+        <div class="tips-row"><span>Even lighting</span><span class="tips-check">✓</span></div>
+        <div class="tips-row"><span>Flat on a dark surface</span><span class="tips-check">✓</span></div>
+        <div class="tips-row"><span>Whole receipt in frame</span><span class="tips-check">✓</span></div>
+      </div>
+      <div class="tips-zigzag bottom"></div>
+    </div>
+  </div>
+
+  <!-- Live camera overlay -->
+  <div class="camera-overlay" id="camera-overlay">
+    <video class="camera-video" id="camera-video" autoplay playsinline muted></video>
+    <div class="camera-topbar">
+      <button class="camera-icon-btn" onclick="closeCamera()" aria-label="Close">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+      <button class="camera-icon-btn" id="flash-btn" onclick="toggleFlash()" aria-label="Toggle flash">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z"/></svg>
+      </button>
+    </div>
+    <div class="camera-frame">
+      <div class="scan-line"></div>
+    </div>
+    <div class="camera-caption">Centre the receipt inside the frame</div>
+    <div class="camera-controls">
+      <label class="camera-side-btn" for="cameraFallbackInput" aria-label="Choose from library" title="Choose from library">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+      </label>
+      <button class="camera-shutter" onclick="capturePhoto()" aria-label="Take photo"></button>
+      <button class="camera-side-btn" onclick="flipCamera()" aria-label="Switch camera">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8"><path d="M17 2l4 4-4 4M3 12a9 9 0 0 1 15-6.7M7 22l-4-4 4-4M21 12a9 9 0 0 1-15 6.7"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <canvas id="capture-canvas" style="display:none;"></canvas>
+
+  <script>
+    const cameraFallbackInput = document.getElementById('cameraFallbackInput');
+    const fileInput = document.getElementById('fileInput');
+    const hiddenInput = document.getElementById('receiptPhoto');
+    const fileName = document.getElementById('file-name');
+    const submitBtn = document.getElementById('submit-btn');
+
+    // The visible form only ever submits the ONE hidden #receiptPhoto
+    // input the server expects -- however a photo was actually obtained
+    // (live camera capture, native camera fallback, or file picker) it
+    // gets copied in here via DataTransfer, since a plain form can't
+    // submit from several different sources at once.
+    function useFile(file) {
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      hiddenInput.files = dt.files;
+      fileName.textContent = file.name;
+      submitBtn.style.display = 'inline-flex';
+    }
+    cameraFallbackInput.addEventListener('change', () => { if (cameraFallbackInput.files[0]) useFile(cameraFallbackInput.files[0]); });
+    fileInput.addEventListener('change', () => { if (fileInput.files[0]) useFile(fileInput.files[0]); });
+
+    // --- Live camera overlay ---
+    const overlay = document.getElementById('camera-overlay');
+    const video = document.getElementById('camera-video');
+    const canvas = document.getElementById('capture-canvas');
+    let stream = null;
+    let facingMode = 'environment';
+    let torchOn = false;
+
+    async function openCamera() {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        // No live-camera support at all (old browser, insecure context) --
+        // fall back straight to the native camera hand-off instead.
+        cameraFallbackInput.click();
+        return;
+      }
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode }, audio: false });
+        video.srcObject = stream;
+        overlay.classList.add('open');
+      } catch (err) {
+        // Permission denied, no camera, etc. -- same fallback.
+        console.warn('Live camera unavailable, falling back to native capture:', err.message);
+        cameraFallbackInput.click();
+      }
+    }
+
+    function closeCamera() {
+      if (stream) stream.getTracks().forEach((t) => t.stop());
+      stream = null;
+      overlay.classList.remove('open');
+    }
+
+    async function flipCamera() {
+      facingMode = facingMode === 'environment' ? 'user' : 'environment';
+      if (stream) stream.getTracks().forEach((t) => t.stop());
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode }, audio: false });
+        video.srcObject = stream;
+      } catch (err) {
+        console.warn('Could not switch camera:', err.message);
+      }
+    }
+
+    // Torch (flash) support varies a lot by device/browser -- this is
+    // best-effort and silently does nothing where it isn't supported,
+    // rather than erroring out the whole camera view over a non-essential
+    // extra.
+    async function toggleFlash() {
+      if (!stream) return;
+      const track = stream.getVideoTracks()[0];
+      if (!track) return;
+      try {
+        torchOn = !torchOn;
+        await track.applyConstraints({ advanced: [{ torch: torchOn }] });
+      } catch (err) {
+        console.warn('Flash/torch not supported on this device:', err.message);
+      }
+    }
+
+    function capturePhoto() {
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+      canvas.toBlob((blob) => {
+        if (!blob) return;
+        useFile(new File([blob], `receipt-${Date.now()}.jpg`, { type: 'image/jpeg' }));
+        closeCamera();
+      }, 'image/jpeg', 0.92);
+    }
+  </script>
+</body>
+</html>

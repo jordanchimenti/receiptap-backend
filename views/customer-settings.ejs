@@ -1,0 +1,180 @@
+<!-- views/customer-settings.ejs -->
+<!-- Customer-side account settings: display name and password only.
+     Distinct from views/account-settings.ejs, which is the MERCHANT
+     version (business info, POS disconnect, deactivation) -- entirely
+     separate identity system, separate page. -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Settings - ReceipTap</title>
+  <link rel="stylesheet" href="/css/receiptap.css" />
+  <%- include('partials/wallet-dark-theme') %>
+  <style>
+    .settings-header { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
+    .settings-card { padding: 20px; margin-bottom: 18px; }
+    .recognition-list { list-style: none; margin: 0 0 14px; padding: 0; }
+    .recognition-list li {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      padding: 10px 0; border-bottom: 1px solid var(--w-line); font-size: 13.5px;
+    }
+    .recognition-list li:last-child { border-bottom: none; }
+    .recognition-platform { font-weight: 600; color: var(--w-ink); }
+    .recognition-date { font-size: 12px; color: var(--w-ink-soft); }
+    .recognition-off {
+      width: 100%; padding: 12px; border-radius: 999px; cursor: pointer; font-family: inherit;
+      font-size: 13.5px; font-weight: 700; background: var(--w-card-raised);
+      border: 1px solid rgba(255,69,58,0.4); color: var(--w-danger);
+    }
+    .recognition-off:hover { background: rgba(255,69,58,0.10); }
+
+    .settings-card h2 { font-size: 15px; margin: 0 0 4px; }
+    .settings-card .sub { font-size: 12.5px; color: var(--w-ink-soft); margin: 0 0 16px; }
+    .success-note {
+      background: rgba(5,107,254,0.12); border: 1px solid rgba(5,107,254,0.35); color: #a7c8ff;
+      border-radius: 10px; padding: 11px 14px; font-size: 13.5px; margin-bottom: 16px;
+    }
+    .section-label { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--w-ink-soft); margin: 26px 4px 10px; }
+    .legal-row { display: flex; justify-content: space-between; align-items: center; padding: 14px 18px; text-decoration: none; color: var(--w-ink); border-bottom: 1px solid var(--w-line); font-size: 14px; font-weight: 500; }
+    .legal-row:last-child { border-bottom: none; }
+
+    .delete-modal-overlay {
+      display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 100;
+      align-items: center; justify-content: center; padding: 20px;
+    }
+    .delete-modal-overlay.open { display: flex; }
+    .delete-modal-box { background: var(--w-card-raised); border: 1px solid var(--w-line); border-radius: 16px; padding: 26px; width: 420px; max-width: 100%; }
+    .delete-modal-box h2 { font-size: 17px; margin: 0 0 12px; color: var(--w-danger); }
+    .delete-modal-box li { font-size: 13.5px; color: var(--w-ink-soft); margin-bottom: 8px; line-height: 1.5; }
+    .delete-modal-box li strong { color: var(--w-ink); }
+  </style>
+</head>
+<body>
+  <div class="w-shell">
+    <div class="settings-header">
+      <a href="/account/more" class="w-btn-icon" aria-label="Back">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      </a>
+      <div>
+        <div class="w-eyebrow">Menu</div>
+        <h1 class="w-title" style="font-size:24px;">Settings</h1>
+      </div>
+    </div>
+
+    <div class="w-card settings-card">
+      <h2>Profile</h2>
+      <p class="sub"><%= customer.email %></p>
+      <% if (profileSuccess) { %><div class="success-note">Name updated.</div><% } %>
+      <% if (profileError) { %><div class="w-error"><%= profileError %></div><% } %>
+      <form method="POST" action="/account/settings/profile">
+        <div class="w-field">
+          <label>Display name</label>
+          <input type="text" name="name" value="<%= customer.name || '' %>" placeholder="Your name" />
+        </div>
+        <button type="submit" class="w-btn">Save name</button>
+      </form>
+    </div>
+
+    <%# Cross-merchant recognition. Shown only when a link actually exists --
+        a shopper who has never consented shouldn't be told about a feature
+        that isn't touching them. Never renders the hash itself. %>
+    <% if (recognitionLinks && recognitionLinks.length) { %>
+      <div class="w-card settings-card">
+        <h2>Card recognition</h2>
+        <p class="sub">
+          Your receipts save automatically when you pay at another ReceipTap business with the same
+          card — no tapping. We match a code your card issuer gives us, never your card number.
+        </p>
+        <% if (recognitionRevoked) { %><div class="success-note">Card recognition is off.</div><% } %>
+        <ul class="recognition-list">
+          <% recognitionLinks.forEach(function (link) { %>
+            <li>
+              <span class="recognition-platform"><%= link.platform.charAt(0) + link.platform.slice(1).toLowerCase() %></span>
+              <span class="recognition-date">linked <%= link.linkedOn %></span>
+            </li>
+          <% }); %>
+        </ul>
+        <form method="POST" action="/account/settings/recognition/revoke" style="margin:0;"
+              onsubmit="return confirm('Turn off card recognition? Your receipts will still save when you tap — you just won\'t be recognised automatically.');">
+          <button type="submit" class="recognition-off">Turn off card recognition</button>
+        </form>
+      </div>
+    <% } else if (recognitionRevoked) { %>
+      <div class="w-card settings-card">
+        <h2>Card recognition</h2>
+        <p class="sub" style="margin:0;">Card recognition is off. Your receipts still save whenever you tap.</p>
+      </div>
+    <% } %>
+
+    <div class="w-card settings-card">
+      <h2><%= customer.passwordHash ? 'Change password' : 'Set a password' %></h2>
+      <p class="sub">
+        <% if (customer.passwordHash) { %>
+          Update the password you use to log in.
+        <% } else { %>
+          You signed in with Google, Apple, or Microsoft and don't have a password yet — set one if you'd also like to log in with your email.
+        <% } %>
+      </p>
+      <% if (passwordSuccess) { %><div class="success-note">Password updated.</div><% } %>
+      <% if (passwordError) { %><div class="w-error"><%= passwordError %></div><% } %>
+      <form method="POST" action="/account/settings/password">
+        <% if (customer.passwordHash) { %>
+          <div class="w-field">
+            <label>Current password</label>
+            <input type="password" name="currentPassword" required />
+          </div>
+        <% } %>
+        <div class="w-field">
+          <label>New password</label>
+          <input type="password" name="newPassword" minlength="8" required />
+        </div>
+        <div class="w-field">
+          <label>Confirm new password</label>
+          <input type="password" name="confirmNewPassword" minlength="8" required />
+        </div>
+        <button type="submit" class="w-btn"><%= customer.passwordHash ? 'Update password' : 'Set password' %></button>
+      </form>
+    </div>
+
+    <div class="section-label">Legal</div>
+    <div class="w-card">
+      <a class="legal-row" href="/legal/wallet-privacy" target="_blank" rel="noopener">
+        Privacy Policy
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17 17 7M8 7h9v9"/></svg>
+      </a>
+      <a class="legal-row" href="/legal/wallet-terms" target="_blank" rel="noopener">
+        Terms of Service
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17 17 7M8 7h9v9"/></svg>
+      </a>
+    </div>
+
+    <div class="section-label">Account deletion</div>
+    <div class="w-card" style="padding: 16px 18px;">
+      <button type="button" onclick="document.getElementById('delete-modal').classList.add('open')"
+        style="width:100%; background:none; border:none; text-align:left; cursor:pointer; font-family:inherit; padding:0; color:var(--w-danger); font-size:14.5px; font-weight:700;">
+        Delete account
+      </button>
+      <div style="font-size:12.5px; color:var(--w-ink-soft); margin-top:4px;">Permanently remove your account and receipts.</div>
+    </div>
+  </div>
+
+  <div class="delete-modal-overlay" id="delete-modal" onclick="if (event.target === this) this.classList.remove('open')">
+    <div class="delete-modal-box">
+      <h2>Delete your account?</h2>
+      <ul style="padding-left:20px; margin:0 0 16px;">
+        <li><strong>This happens immediately, not after a grace period</strong> — your account and saved receipts are permanently deleted the moment you confirm.</li>
+        <li><strong>You're logged out right away</strong> and there's no self-serve way to undo this.</li>
+        <li>Past purchases stay on file with the businesses you shopped at, but are no longer linked to you or visible in this wallet.</li>
+      </ul>
+      <form method="POST" action="/account/settings/delete" style="margin:0 0 10px;">
+        <button type="submit" class="w-btn" style="background: var(--w-danger);">Yes, delete my account</button>
+      </form>
+      <button type="button" onclick="document.getElementById('delete-modal').classList.remove('open')"
+        style="width:100%; background:none; border:none; padding:10px; font-size:13px; font-weight:600; color:var(--w-ink-soft); cursor:pointer; font-family:inherit;">
+        Never mind, take me back
+      </button>
+    </div>
+  </div>
+</body>
+</html>

@@ -9,72 +9,92 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>My Rewards - ReceipTap</title>
   <link rel="stylesheet" href="/css/receiptap.css" />
+  <%- include('partials/wallet-dark-theme') %>
   <style>
-    .wallet-shell { max-width: 520px; margin: 0 auto; padding: 24px 16px 48px; }
-    .wallet-header { display: flex; align-items: center; justify-content: space-between; }
-    .wallet-logo { height: 36px; }
-    .back-link { font-size: 13px; color: var(--ink-soft); text-decoration: none; display: inline-block; margin: 18px 0 4px; }
+    .biz-header { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
 
-    .loyalty-card {
-      background: var(--paper-raised); border: 1px solid var(--line); border-radius: 14px;
-      padding: 18px; margin-top: 16px; text-align: center;
-    }
-    .loyalty-merchant { font-weight: 700; font-size: 15px; }
-    .loyalty-sub { font-size: 12.5px; color: var(--ink-soft); margin-top: 4px; line-height: 1.4; }
-    .punch-row { display: flex; justify-content: center; gap: 8px; margin-top: 12px; }
+    .loyalty-card { padding: 20px 18px; margin-bottom: 12px; text-align: center; }
+    .loyalty-merchant { font-weight: 700; font-size: 15.5px; color: var(--w-ink); }
+    .loyalty-sub { font-size: 12.5px; color: var(--w-ink-soft); margin-top: 8px; line-height: 1.45; }
+    .loyalty-sub strong { color: var(--w-accent); }
+    .punch-row { display: flex; justify-content: center; gap: 9px; margin-top: 14px; }
     .punch-hole {
-      width: 34px; height: 34px; border-radius: 50%; border: 2px dashed var(--line);
-      display: flex; align-items: center; justify-content: center; font-size: 15px; color: #fff;
-      box-sizing: border-box;
+      width: 36px; height: 36px; border-radius: 50%; border: 2px dashed var(--w-line);
+      display: flex; align-items: center; justify-content: center; font-size: 15px;
+      color: var(--w-ink-soft); box-sizing: border-box;
     }
-    .punch-hole.filled { border-style: solid; border-color: var(--teal); background: var(--teal); }
+    .punch-hole.filled { border-style: solid; border-color: var(--w-accent); background: var(--w-accent); color: #fff; }
     .loyalty-btn {
-      display: inline-block; margin-top: 12px; padding: 10px 18px; border-radius: 8px;
-      border: none; font-weight: 600; font-size: 13.5px; cursor: pointer;
+      display: inline-block; margin-top: 14px; padding: 11px 22px; border-radius: 999px;
+      border: none; background: var(--w-accent); color: #fff; font-weight: 700; font-size: 13.5px;
+      cursor: pointer; font-family: inherit;
     }
-    .loyalty-error { color: var(--danger); font-size: 12px; margin-top: 6px; min-height: 14px; }
-    .empty-state { text-align: center; color: var(--ink-soft); font-size: 13.5px; margin-top: 60px; }
+    .loyalty-btn:hover { background: var(--w-accent-deep); }
+    .loyalty-error { color: var(--w-danger); font-size: 12px; margin-top: 6px; min-height: 14px; }
+
+    /* Empty state, in the same dashed-card language the light page used. */
+    .empty-state {
+      border: 1px dashed var(--w-line); border-radius: 18px; padding: 40px 24px; margin-top: 8px;
+      text-align: center; color: var(--w-ink-soft); font-size: 13.5px; line-height: 1.6;
+    }
+    .empty-icon {
+      width: 46px; height: 46px; border-radius: 50%; margin: 0 auto 14px;
+      background: var(--w-card-raised); display: flex; align-items: center; justify-content: center;
+      color: var(--w-accent);
+    }
 
     /* --- Redemption modal --- */
     .modal-overlay {
-      display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+      display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7);
       align-items: center; justify-content: center; z-index: 100; padding: 16px;
     }
     .modal-overlay.open { display: flex; }
     .modal-box {
-      background: var(--paper-raised); border-radius: 12px; padding: 24px;
+      background: var(--w-card); border: 1px solid var(--w-line); border-radius: 18px; padding: 26px 22px;
       max-width: 340px; width: 100%; box-sizing: border-box; text-align: center;
     }
-    .modal-title { font-size: 17px; font-weight: 700; margin-bottom: 4px; }
-    .modal-subtitle { font-size: 13px; color: var(--ink-soft); margin-bottom: 14px; }
+    .modal-title { font-family: var(--font-display); font-size: 19px; font-weight: 700; margin-bottom: 6px; color: var(--w-ink); }
+    .modal-subtitle { font-size: 13px; color: var(--w-ink-soft); margin-bottom: 16px; line-height: 1.5; }
     .modal-box input[type=text] {
-      width: 100%; padding: 10px; border: 1px solid var(--line); border-radius: 8px;
-      box-sizing: border-box; font-size: 14px; margin-bottom: 10px; text-align: center;
-      letter-spacing: 2px; font-weight: 600;
+      width: 100%; padding: 12px; background: var(--w-card-raised); border: 1px solid var(--w-line);
+      color: var(--w-ink); border-radius: 10px; box-sizing: border-box; font-size: 15px;
+      margin-bottom: 10px; text-align: center; letter-spacing: 2px; font-weight: 600; font-family: inherit;
     }
+    .modal-box input[type=text]:focus { outline: 2px solid var(--w-accent); outline-offset: 1px; border-color: var(--w-accent); }
     .modal-box button.primary {
-      width: 100%; padding: 11px; background: var(--teal); color: #fff;
-      border: none; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 14px;
+      width: 100%; padding: 12px; background: var(--w-accent); color: #fff; border: none;
+      border-radius: 999px; font-weight: 700; cursor: pointer; font-size: 14px; font-family: inherit;
     }
-    .modal-close { text-align: center; margin-top: 14px; font-size: 12px; color: var(--ink-soft); cursor: pointer; }
+    .modal-box button.primary:hover { background: var(--w-accent-deep); }
+    .modal-box button.secondary {
+      background: var(--w-card-raised); color: var(--w-ink); border: 1px solid var(--w-line);
+    }
+    .modal-close { text-align: center; margin-top: 14px; font-size: 12px; color: var(--w-ink-soft); cursor: pointer; }
   </style>
 </head>
 <body>
-  <div class="wallet-shell">
-    <div class="wallet-header">
-      <img class="wallet-logo" src="/images/receiptap-logo.png" alt="ReceipTap" />
+  <div class="w-shell">
+    <div class="biz-header">
+      <a href="/account/more" class="w-btn-icon" aria-label="Back">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      </a>
+      <div>
+        <div class="w-eyebrow">Your rewards</div>
+        <h1 class="w-title" style="font-size:20px;">My Loyalty Cards</h1>
+      </div>
     </div>
-    <a class="back-link" href="/account/receipts">&larr; Back to receipts</a>
-
-    <div class="eyebrow" style="margin-top: 6px;">Your rewards</div>
-    <h1 style="font-size: 24px;">My Loyalty Cards</h1>
 
     <% if (cards.length === 0) { %>
-      <div class="empty-state">No loyalty cards yet — join one from a receipt at a participating business.</div>
+      <div class="empty-state">
+        <div class="empty-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 12v9H4v-9"/><path d="M2 7h20v5H2z"/><path d="M12 22V7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7Z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7Z"/></svg>
+        </div>
+        No loyalty cards yet — join one from a receipt at a participating business.
+      </div>
     <% } else { %>
       <% cards.forEach(function(card) { %>
         <% var offerText = card.offerType === 'PERCENT' ? (card.offerValue + '% off') : ('$' + (card.offerValue / 100).toFixed(2) + ' off'); %>
-        <div class="loyalty-card" data-card-id="<%= card.id %>">
+        <div class="w-card loyalty-card" data-card-id="<%= card.id %>">
           <div class="loyalty-merchant"><%= card.merchantName %></div>
 
           <div class="punch-row">
@@ -91,7 +111,7 @@
             <% } %>
           </div>
           <% if (card.punches >= 5) { %>
-            <button type="button" class="loyalty-btn" style="background:var(--teal); color:#fff;" onclick="openLoyaltyModal('<%= card.id %>')">Redeem Reward</button>
+            <button type="button" class="loyalty-btn" onclick="openLoyaltyModal('<%= card.id %>')">Redeem Reward</button>
           <% } %>
         </div>
       <% }); %>
@@ -106,7 +126,7 @@
 
       <div id="loyalty-choice-step">
         <button class="primary" onclick="startLoyaltyRedeem()">Redeem</button>
-        <button class="primary" style="background:#999; margin-top:8px;" onclick="closeLoyaltyModal()">Save</button>
+        <button class="primary secondary" style="margin-top:8px;" onclick="closeLoyaltyModal()">Save</button>
       </div>
 
       <div id="loyalty-code-step" style="display:none;">

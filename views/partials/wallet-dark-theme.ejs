@@ -1,0 +1,63 @@
+<!-- views/partials/wallet-dark-theme.ejs -->
+<!-- Shared dark theme for the customer-facing wallet pages ONLY
+     (customer-wallet.ejs, scan-receipt.ejs, scan-receipt-review.ejs) --
+     defined here rather than in public/css/receiptap.css's root tokens so
+     it stays contained to these three pages and never darkens the
+     merchant dashboard or marketing pages, which keep their existing
+     "warm paper"/"cool workspace" system untouched. ReceipTap's brand
+     blue stands in for green throughout. -->
+<style>
+  :root {
+    --w-bg: #0a0a0a;
+    --w-card: #161616;
+    --w-card-raised: #1c1c1c;
+    --w-line: #2a2a2a;
+    --w-ink: #ffffff;
+    --w-ink-soft: #8d8d8d;
+    --w-accent: #056BFE;
+    --w-accent-deep: #0350BE;
+    --w-accent-wash: rgba(5, 107, 254, 0.16);
+    --w-danger: #ff453a;
+  }
+  body { background: var(--w-bg); color: var(--w-ink); font-family: var(--font-body); margin: 0; }
+  .w-shell { max-width: 480px; margin: 0 auto; padding: 20px 16px 96px; }
+  .w-eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--w-ink-soft); }
+  .w-title { font-family: var(--font-display); font-size: 30px; font-weight: 700; margin: 2px 0 0; }
+  .w-card { background: var(--w-card); border: 1px solid var(--w-line); border-radius: 18px; }
+  .w-btn-icon {
+    width: 38px; height: 38px; border-radius: 50%; border: 1px solid var(--w-line);
+    background: var(--w-card-raised); color: var(--w-ink); display: flex; align-items: center;
+    justify-content: center; text-decoration: none; font-weight: 700; flex-shrink: 0;
+  }
+  .w-field label { display: block; font-size: 12.5px; font-weight: 600; color: var(--w-ink-soft); margin-bottom: 6px; }
+  .w-field input, .w-field select {
+    width: 100%; box-sizing: border-box; background: var(--w-card-raised); border: 1px solid var(--w-line);
+    color: var(--w-ink); border-radius: 10px; padding: 11px 13px; font-size: 15px; font-family: inherit;
+  }
+  .w-field input:focus, .w-field select:focus { outline: 2px solid var(--w-accent); outline-offset: 1px; border-color: var(--w-accent); }
+  .w-field { margin-bottom: 14px; }
+  .w-btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px; width: 100%;
+    background: var(--w-accent); color: #fff; border: none; border-radius: 12px; padding: 14px 20px;
+    font-size: 15px; font-weight: 700; text-decoration: none; cursor: pointer; box-sizing: border-box;
+  }
+  .w-btn:hover { background: var(--w-accent-deep); }
+  .w-btn-secondary { background: var(--w-card-raised); color: var(--w-ink); border: 1px solid var(--w-line); }
+  .w-error {
+    background: rgba(255, 69, 58, 0.12); border: 1px solid rgba(255, 69, 58, 0.35); color: var(--w-danger);
+    border-radius: 10px; padding: 11px 14px; font-size: 13.5px; margin-bottom: 16px;
+  }
+
+  /* Fixed bottom tab bar */
+  .w-tabbar {
+    position: fixed; left: 0; right: 0; bottom: 0; background: rgba(10,10,10,0.92); backdrop-filter: blur(12px);
+    border-top: 1px solid var(--w-line); display: flex; justify-content: space-around; padding: 10px 0 max(10px, env(safe-area-inset-bottom));
+  }
+  .w-tab {
+    display: flex; flex-direction: column; align-items: center; gap: 3px; text-decoration: none;
+    color: var(--w-ink-soft); font-size: 11px; font-weight: 600; background: none; border: none; cursor: pointer;
+    font-family: inherit;
+  }
+  .w-tab.active { color: var(--w-accent); }
+  .w-tab svg { width: 22px; height: 22px; }
+</style>

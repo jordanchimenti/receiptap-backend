@@ -1,6 +1,8 @@
 <!-- views/customer-wallet.ejs -->
 <!-- The customer's cross-merchant receipt wallet: monthly summary, category
-     filter chips, account menu, and every saved receipt from every store. -->
+     filter chips, account menu, and every saved receipt from every store --
+     both real POS-tap transactions and receipts the customer scanned/
+     uploaded themselves. -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -8,112 +10,177 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>My Receipts - ReceipTap</title>
   <link rel="stylesheet" href="/css/receiptap.css" />
+  <%- include('partials/wallet-dark-theme') %>
   <style>
-    .wallet-shell { max-width: 520px; margin: 0 auto; padding: 24px 16px 48px; }
-    .wallet-header { display: flex; align-items: center; justify-content: space-between; }
-    .wallet-logo { height: 36px; }
+    .wallet-header { display: flex; align-items: flex-start; justify-content: space-between; }
 
-    /* Account menu */
-    .account-menu-wrap { position: relative; }
-    .account-menu-btn {
-      width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--line);
-      background: var(--paper-raised); color: var(--teal-deep); font-weight: 700;
-      font-size: 14px; cursor: pointer; text-transform: uppercase;
-    }
-    .account-menu {
-      display: none; position: absolute; right: 0; top: 44px; z-index: 20;
-      background: var(--paper-raised); border: 1px solid var(--line); border-radius: 12px;
-      min-width: 220px; box-shadow: 0 6px 24px rgba(28,27,25,0.08); overflow: hidden;
-    }
-    .account-menu.open { display: block; }
-    .account-menu-email {
-      font-size: 12.5px; color: var(--ink-soft); padding: 12px 16px;
-      border-bottom: 1px solid var(--line); word-break: break-all;
-    }
-    .account-menu form { margin: 0; }
-    .account-menu button {
-      display: block; width: 100%; text-align: left; background: none; border: none;
-      font-size: 13.5px; padding: 12px 16px; cursor: pointer; color: var(--danger);
-      font-weight: 500;
-    }
-    .account-menu button:hover { background: var(--paper); }
-
-    /* Summary bar */
     .summary-card {
-      background: var(--paper-raised); border: 1px solid var(--line); border-radius: 14px;
-      padding: 18px 20px; margin: 18px 0 16px; display: flex; gap: 24px;
+      padding: 20px 22px; margin: 18px 0 20px; display: flex; align-items: center; justify-content: space-between;
+      background: radial-gradient(120% 140% at 100% 0%, var(--w-accent-wash) 0%, var(--w-card) 60%);
+      border-color: rgba(5,107,254,0.3);
     }
-    .summary-stat .summary-num {
-      font-family: var(--font-mono); font-variant-numeric: tabular-nums;
-      font-weight: 600; font-size: 20px;
-    }
-    .summary-stat .summary-label { font-size: 12px; color: var(--ink-soft); margin-top: 2px; }
+    .summary-eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--w-ink-soft); }
+    .summary-num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 700; font-size: 26px; margin-top: 4px; }
+    .summary-num.accent { color: var(--w-accent); }
+    .summary-stat:last-child { text-align: right; }
 
-    /* Category chips */
+    .section-row { display: flex; align-items: center; justify-content: space-between; margin: 4px 0 12px; }
+    .section-label { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--w-ink-soft); }
+    .export-pill {
+      display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600;
+      color: var(--w-ink); background: var(--w-card-raised); border: 1px solid var(--w-line);
+      border-radius: 999px; padding: 7px 14px; text-decoration: none;
+    }
+
     .chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
     .chip {
-      font-size: 12.5px; font-weight: 600; padding: 6px 13px; border-radius: 999px;
-      text-decoration: none; border: 1px solid var(--line); color: var(--ink-soft);
-      background: var(--paper-raised);
+      font-size: 12.5px; font-weight: 600; padding: 7px 14px; border-radius: 999px;
+      text-decoration: none; border: 1px solid var(--w-line); color: var(--w-ink-soft);
+      background: var(--w-card-raised);
     }
-    .chip.active { background: var(--teal); border-color: var(--teal); color: #fff; }
-    .chip:hover:not(.active) { border-color: var(--teal); color: var(--teal-deep); }
+    .chip.active { background: var(--w-accent); border-color: var(--w-accent); color: #fff; }
+    .chip-divider { width: 1px; align-self: stretch; background: var(--w-line); margin: 0 2px; }
+
+    .day-heading {
+      font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+      color: var(--w-ink-soft); padding: 14px 18px 6px;
+    }
+    .day-heading:first-child { padding-top: 0; }
 
     .receipt-row {
       display: flex; justify-content: space-between; align-items: flex-start;
-      padding: 15px 18px; text-decoration: none; color: var(--ink);
+      padding: 16px 18px; text-decoration: none; color: var(--w-ink);
+      border-bottom: 1px solid var(--w-line);
     }
-    .receipt-row:hover { background: var(--paper); }
-    .merchant-name { font-weight: 600; font-size: 14.5px; }
-    .receipt-date { font-size: 12.5px; color: var(--ink-soft); margin-top: 2px; }
-    .receipt-total { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 600; font-size: 15px; }
-    .badges { display: flex; gap: 6px; margin-top: 7px; flex-wrap: wrap; }
+    .receipt-row:last-child { border-bottom: none; }
+    .receipt-row:hover { background: var(--w-card-raised); }
+    .merchant-name { font-weight: 600; font-size: 15px; }
+    .receipt-date { font-size: 12.5px; color: var(--w-ink-soft); margin-top: 2px; }
+    .receipt-total {
+      font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 700; font-size: 15.5px;
+      border-top: none; margin-top: 0; padding-top: 0; color: var(--w-ink);
+    }
+    .badges { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+    .badge { font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 999px; }
+    .badge-category { background: var(--w-accent-wash); color: var(--w-accent); }
+    .badge-tax { background: rgba(5,107,254,0.15); color: var(--w-accent); }
+    .badge-scanned { background: var(--w-card-raised); color: var(--w-ink-soft); border: 1px solid var(--w-line); }
 
-    .search-card {
-      background: var(--paper-raised); border: 1px solid var(--line); border-radius: 14px;
-      padding: 16px; margin-bottom: 16px;
-    }
+    .search-card { padding: 16px; margin-bottom: 16px; }
     .search-row { display: flex; gap: 10px; }
-    .search-row .field { flex: 1; margin-bottom: 0; }
-    .search-card .field { margin-bottom: 12px; }
-    .search-card summary {
-      font-size: 13px; font-weight: 600; color: var(--ink-soft); cursor: pointer;
-      list-style: none; display: flex; align-items: center; gap: 6px;
-    }
-    .search-card details[open] summary { margin-bottom: 12px; }
+    .search-row .w-field { flex: 1; margin-bottom: 0; }
+    .search-card summary { font-size: 13px; font-weight: 600; color: var(--w-ink-soft); cursor: pointer; list-style: none; }
+    .search-card details[open] summary { margin-bottom: 14px; }
     .clear-search { text-align: center; font-size: 12.5px; margin-top: 10px; }
-    .clear-search a { color: var(--ink-soft); }
+    .clear-search a { color: var(--w-ink-soft); }
+
+    .empty-state {
+      text-align: center; padding: 48px 20px; background: var(--w-card); border: 1px solid var(--w-line);
+      color: var(--w-ink-soft);
+    }
+    .empty-icon {
+      width: 64px; height: 64px; border-radius: 16px; background: var(--w-card-raised);
+      display: flex; align-items: center; justify-content: center; margin: 0 auto 20px;
+    }
+    .empty-title { font-size: 18px; font-weight: 700; margin-bottom: 6px; color: var(--w-ink); }
+    .empty-sub { font-size: 13.5px; color: var(--w-ink-soft); line-height: 1.5; max-width: 300px; margin: 0 auto 22px; }
+
+    .fab {
+      position: fixed; right: 20px; bottom: 88px; width: 52px; height: 52px; border-radius: 50%;
+      background: var(--w-accent); color: #fff; display: flex; align-items: center; justify-content: center;
+      text-decoration: none; box-shadow: 0 6px 20px rgba(5,107,254,0.4); font-size: 24px; font-weight: 300;
+    }
+    /* ---- Setup progress (mirrors views/business-overview.ejs) ---------- */
+    .setup-card { padding: 18px; margin-bottom: 18px; }
+    .setup-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+    .setup-eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--w-accent); }
+    .setup-pct { font-size: 13px; font-weight: 700; color: var(--w-ink-soft); }
+    .setup-bar { height: 6px; border-radius: 999px; background: var(--w-card-raised); overflow: hidden; margin-bottom: 16px; }
+    .setup-bar-fill { height: 100%; background: var(--w-accent); border-radius: 999px; }
+    .setup-row { display: flex; align-items: flex-start; gap: 12px; padding: 9px 0; text-decoration: none; }
+    .setup-check {
+      width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0; margin-top: 1px;
+      display: flex; align-items: center; justify-content: center; border: 1.5px solid var(--w-line);
+    }
+    .setup-check svg { width: 12px; height: 12px; }
+    .setup-row.done .setup-check { background: rgba(5,107,254,0.15); border-color: transparent; color: var(--w-accent); }
+    .setup-row-body { flex: 1; min-width: 0; }
+    .setup-row-title { font-size: 13.5px; font-weight: 700; color: var(--w-ink); }
+    .setup-row.done .setup-row-title { color: var(--w-ink-soft); text-decoration: line-through; }
+    .setup-row-sub { font-size: 12px; color: var(--w-ink-soft); margin-top: 2px; line-height: 1.4; }
+    .setup-row-chevron { color: var(--w-ink-soft); flex-shrink: 0; margin-top: 3px; }
+    .badge-auto { background: rgba(5,107,254,0.14); color: var(--w-accent); }
   </style>
 </head>
 <body>
-  <div class="wallet-shell">
+  <div class="w-shell">
     <div class="wallet-header">
-      <img class="wallet-logo" src="/images/receiptap-logo.png" alt="ReceipTap" />
-      <div class="account-menu-wrap">
-        <button class="account-menu-btn" id="account-btn" aria-label="Account menu">
-          <%= (customerEmail || '?').charAt(0) %>
-        </button>
-        <div class="account-menu" id="account-menu">
-          <div class="account-menu-email"><%= customerEmail %></div>
-          <a href="/account/loyalty" style="display:block; padding:12px 16px; font-size:13.5px; font-weight:500; color:var(--ink); text-decoration:none;">🎁 My Rewards</a>
-          <form method="POST" action="/account/logout">
-            <button type="submit">Log out</button>
-          </form>
-        </div>
+      <div>
+        <div class="w-eyebrow">ReceipTap</div>
+        <h1 class="w-title">Receipts</h1>
       </div>
+      <a class="w-btn-icon" href="/account/settings" aria-label="Profile settings" style="text-transform:uppercase;">
+        <%= (customerEmail || '?').charAt(0) %>
+      </a>
     </div>
 
-    <div class="eyebrow" style="margin-top: 18px;">Your wallet</div>
-    <h1 style="font-size: 24px;">My Receipts</h1>
+    <div class="w-card setup-card">
+      <div class="setup-head">
+        <div class="setup-eyebrow">Setup progress</div>
+        <div class="setup-pct"><%= setup.percent %>%</div>
+      </div>
+      <div class="setup-bar"><div class="setup-bar-fill" style="width: <%= setup.percent %>%;"></div></div>
 
-    <div class="summary-card">
+      <a class="setup-row <%= setup.walletCreated ? 'done' : '' %>" href="/account/settings">
+        <% if (setup.walletCreated) { %><div class="setup-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div><% } else { %><div class="setup-check"></div><% } %>
+        <div class="setup-row-body">
+          <div class="setup-row-title">Create your wallet</div>
+          <div class="setup-row-sub"><%= setup.walletCreated ? "View your account details." : "View your account details." %></div>
+        </div>
+        <div class="setup-row-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg></div>
+      </a>
+      <a class="setup-row <%= setup.canSignInAnywhere ? 'done' : '' %>" href="/account/settings">
+        <% if (setup.canSignInAnywhere) { %><div class="setup-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div><% } else { %><div class="setup-check"></div><% } %>
+        <div class="setup-row-body">
+          <div class="setup-row-title">Set a password</div>
+          <div class="setup-row-sub"><%= setup.canSignInAnywhere ? "You can sign in from any device." : "So you can sign in on any device, not just this one." %></div>
+        </div>
+        <div class="setup-row-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg></div>
+      </a>
+      <a class="setup-row <%= setup.receiptSaved ? 'done' : '' %>" href="/account/receipts">
+        <% if (setup.receiptSaved) { %><div class="setup-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div><% } else { %><div class="setup-check"></div><% } %>
+        <div class="setup-row-body">
+          <div class="setup-row-title">Save your first receipt</div>
+          <div class="setup-row-sub"><%= setup.receiptSaved ? "Tapped receipts land here automatically." : "Tap a ReceipTap at checkout and it saves itself." %></div>
+        </div>
+        <div class="setup-row-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg></div>
+      </a>
+      <a class="setup-row <%= setup.receiptScanned ? 'done' : '' %>" href="/account/receipts/scan">
+        <% if (setup.receiptScanned) { %><div class="setup-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div><% } else { %><div class="setup-check"></div><% } %>
+        <div class="setup-row-body">
+          <div class="setup-row-title">Scan a paper receipt</div>
+          <div class="setup-row-sub"><%= setup.receiptScanned ? "Paper receipts are in your wallet too." : "Snap an old paper receipt to keep it with the rest." %></div>
+        </div>
+        <div class="setup-row-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg></div>
+      </a>
+      <a class="setup-row <%= setup.loyaltyJoined ? 'done' : '' %>" href="/account/loyalty">
+        <% if (setup.loyaltyJoined) { %><div class="setup-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div><% } else { %><div class="setup-check"></div><% } %>
+        <div class="setup-row-body">
+          <div class="setup-row-title">Join a loyalty program</div>
+          <div class="setup-row-sub"><%= setup.loyaltyJoined ? "Collecting punches toward a reward." : "Collect punches at shops you already visit." %></div>
+        </div>
+        <div class="setup-row-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg></div>
+      </a>
+    </div>
+
+    <div class="w-card summary-card">
       <div class="summary-stat">
+        <div class="summary-eyebrow">This month</div>
         <div class="summary-num">$<%= summary.monthTotal %></div>
-        <div class="summary-label">spent in <%= summary.monthName %></div>
       </div>
       <div class="summary-stat">
-        <div class="summary-num"><%= summary.monthStores %></div>
-        <div class="summary-label"><%= summary.monthStores === 1 ? 'store' : 'stores' %> this month</div>
+        <div class="summary-eyebrow">Receipts</div>
+        <div class="summary-num accent"><%= summary.receiptCount %></div>
       </div>
     </div>
 
@@ -124,83 +191,112 @@
           <a class="chip <%= filters.category === cat ? 'active' : '' %>"
              href="/account/receipts?category=<%= encodeURIComponent(cat) %>"><%= cat %></a>
         <% }); %>
+        <div class="chip-divider"></div>
+        <a class="chip <%= (filters.from === quickFilters.today.from && filters.to === quickFilters.today.to) ? 'active' : '' %>"
+           href="/account/receipts?from=<%= quickFilters.today.from %>&to=<%= quickFilters.today.to %>">Today</a>
+        <a class="chip <%= (filters.from === quickFilters.thisWeek.from && filters.to === quickFilters.thisWeek.to) ? 'active' : '' %>"
+           href="/account/receipts?from=<%= quickFilters.thisWeek.from %>&to=<%= quickFilters.thisWeek.to %>">This week</a>
       </div>
     <% } %>
 
-    <form class="search-card" method="GET" action="/account/receipts">
+    <form class="w-card search-card" method="GET" action="/account/receipts">
       <details <%= (filters.search || filters.from || filters.to) ? 'open' : '' %>>
         <summary>Search by store or date</summary>
-        <div class="field">
+        <div class="w-field">
           <label>Business name</label>
           <input type="text" name="search" placeholder="e.g. Tip Top Tint" value="<%= filters.search %>" />
         </div>
         <div class="search-row">
-          <div class="field">
+          <div class="w-field">
             <label>From</label>
             <input type="date" name="from" value="<%= filters.from %>" />
           </div>
-          <div class="field">
+          <div class="w-field">
             <label>To</label>
             <input type="date" name="to" value="<%= filters.to %>" />
           </div>
         </div>
-        <button class="btn btn-primary" type="submit" style="margin-top: 12px;">Search</button>
+        <button class="w-btn" type="submit" style="margin-top: 12px;">Search</button>
         <% if (filters.search || filters.from || filters.to) { %>
           <div class="clear-search"><a href="/account/receipts">Clear search</a></div>
         <% } %>
       </details>
     </form>
 
-    <div style="text-align:right; margin-top:-8px; margin-bottom:12px;">
-      <a href="/account/receipts/export?search=<%= encodeURIComponent(filters.search) %>&from=<%= encodeURIComponent(filters.from) %>&to=<%= encodeURIComponent(filters.to) %>&category=<%= encodeURIComponent(filters.category) %>" style="font-size:13px; font-weight:600; color:var(--teal);">
-        Export CSV<%= (filters.search || filters.from || filters.to || filters.category) ? ' (filtered)' : '' %>
-      </a>
-    </div>
-
     <% if (receipts.length === 0 && (filters.search || filters.from || filters.to || filters.category)) { %>
-      <div class="empty-state">
+      <div class="w-card empty-state">
         <div class="empty-title">No receipts match</div>
-        <div style="font-size: 13.5px; line-height: 1.5;">Try a different filter, store name, or date range.</div>
+        <div class="empty-sub">Try a different filter, store name, or date range.</div>
       </div>
     <% } else if (receipts.length === 0) { %>
-      <div class="empty-state">
-        <div class="empty-mark">⌁</div>
-        <div class="empty-title">No saved receipts yet</div>
-        <div style="font-size: 13.5px; line-height: 1.5; max-width: 320px; margin: 0 auto;">
-          Tap a ReceipTap puck at checkout and save your receipt to start building your history.
+      <div class="w-card empty-state">
+        <div class="empty-icon">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#8d8d8d" stroke-width="1.8"><path d="M6 2h12v20l-3-2-3 2-3-2-3 2Z"/><path d="M9 8h6M9 12h6"/></svg>
         </div>
+        <div class="empty-title">No receipts yet</div>
+        <div class="empty-sub">Tap a ReceipTap puck at checkout, or scan a paper receipt, to start building your history.</div>
+        <a href="/account/receipts/scan" class="w-btn" style="width:auto; padding:12px 24px;">+ Add first receipt</a>
       </div>
     <% } else { %>
-      <div class="card-list">
-        <% receipts.forEach(function(r) { %>
-          <a class="receipt-row perforated" href="/receipt/<%= r.id %>">
-            <div>
-              <div class="merchant-name"><%= r.merchantName %></div>
-              <div class="receipt-date"><%= r.date %></div>
-              <% if (r.aiCategory) { %>
-                <div class="badges">
-                  <span class="badge badge-teal"><%= r.aiCategory %></span>
-                  <% if (r.aiTaxDeductible) { %>
-                    <span class="badge badge-amber" title="<%= r.aiReasoning %>">Possibly deductible</span>
-                  <% } %>
-                </div>
-              <% } %>
-            </div>
-            <div class="receipt-total">$<%= r.total %></div>
-          </a>
-        <% }); %>
+      <div class="section-row">
+        <div class="section-label">All receipts</div>
+        <a class="export-pill" href="/account/receipts/export?search=<%= encodeURIComponent(filters.search) %>&from=<%= encodeURIComponent(filters.from) %>&to=<%= encodeURIComponent(filters.to) %>&category=<%= encodeURIComponent(filters.category) %>">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12M7 10l5 5 5-5M4 21h16"/></svg>
+          Export<%= (filters.search || filters.from || filters.to || filters.category) ? ' (filtered)' : '' %>
+        </a>
       </div>
+
+      <%
+        // Group consecutive receipts by day so each date only prints one
+        // heading -- r.date is already formatted per-item with the right
+        // UTC/local basis for its kind (see the merge step in the route),
+        // so grouping just has to compare that same string, not re-derive it.
+        let lastDayLabel = null;
+      %>
+      <% receipts.forEach(function(r, i) { %>
+        <% if (r.date !== lastDayLabel) { lastDayLabel = r.date; %>
+          <div class="day-heading"><%= r.date.toUpperCase() %></div>
+          <div class="w-card" style="margin-bottom: 14px;">
+        <% } %>
+            <a class="receipt-row" href="<%= r.link %>" <%= r.kind === 'scanned' ? 'target="_blank" rel="noopener"' : '' %>>
+              <div>
+                <div class="merchant-name"><%= r.merchantName %></div>
+                <div class="receipt-date"><%= r.date %></div>
+                <% if (r.aiCategory || r.kind === 'scanned') { %>
+                  <div class="badges">
+                    <% if (r.aiCategory) { %><span class="badge badge-category"><%= r.aiCategory %></span><% } %>
+                    <% if (r.aiTaxDeductible) { %><span class="badge badge-tax" title="<%= r.aiReasoning %>">Possibly deductible</span><% } %>
+                    <%# Told, not hidden: this receipt is here because their card
+                        was recognised, not because they tapped. %>
+                    <% if (r.autoSaved) { %><span class="badge badge-auto" title="Saved automatically — your card was recognised at this business. You can turn this off in Settings.">Saved automatically</span><% } %>
+                    <% if (r.kind === 'scanned') { %><span class="badge badge-scanned">Scanned</span><% } %>
+                  </div>
+                <% } %>
+              </div>
+              <div class="receipt-total">$<%= r.total %></div>
+            </a>
+        <% if (i === receipts.length - 1 || receipts[i + 1].date !== r.date) { %>
+          </div>
+        <% } %>
+      <% }); %>
     <% } %>
   </div>
 
-  <script>
-    const btn = document.getElementById('account-btn');
-    const menu = document.getElementById('account-menu');
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      menu.classList.toggle('open');
-    });
-    document.addEventListener('click', () => menu.classList.remove('open'));
-  </script>
+  <a href="/account/receipts/scan" class="fab" aria-label="Scan a receipt">+</a>
+
+  <div class="w-tabbar">
+    <a class="w-tab active" href="/account/receipts">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 2h12v20l-3-2-3 2-3-2-3 2Z"/><path d="M9 8h6M9 12h6"/></svg>
+      Receipts
+    </a>
+    <a class="w-tab" href="/account/receipts/scan">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 8V6a2 2 0 0 1 2-2h2M4 16v2a2 2 0 0 0 2 2h2M20 8V6a2 2 0 0 0-2-2h-2M20 16v2a2 2 0 0 1-2 2h-2"/><circle cx="12" cy="12" r="3.5"/></svg>
+      Scan
+    </a>
+    <a class="w-tab" href="/account/more">
+      <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
+      More
+    </a>
+  </div>
 </body>
 </html>

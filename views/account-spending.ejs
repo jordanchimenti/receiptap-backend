@@ -1,0 +1,143 @@
+<!-- views/account-spending.ejs -->
+<!-- Real spending analytics for a wallet customer: this month's total, a
+     6-month trend chart, and a category breakdown -- all computed from the
+     customer's own Transaction/ScannedReceipt rows (see GET
+     /account/spending in routes/customer-account.js). Reached from
+     More > General > Track your spending. -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Track Your Spending - ReceipTap</title>
+  <link rel="stylesheet" href="/css/receiptap.css" />
+  <%- include('partials/wallet-dark-theme') %>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+  <style>
+    .spending-header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+
+    .summary-card {
+      padding: 20px 22px; margin-bottom: 18px; display: flex; align-items: center; justify-content: space-between;
+      background: radial-gradient(120% 140% at 100% 0%, var(--w-accent-wash) 0%, var(--w-card) 60%);
+      border-color: rgba(5,107,254,0.3);
+    }
+    .summary-eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--w-ink-soft); }
+    .summary-num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 700; font-size: 26px; margin-top: 4px; }
+    .summary-stat:last-child { text-align: right; }
+
+    .panel { padding: 20px; margin-bottom: 18px; }
+    .panel-eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--w-ink-soft); }
+    .panel-title { font-family: var(--font-display); font-size: 17px; font-weight: 700; margin: 2px 0 16px; }
+
+    .chart-pad { height: 170px; }
+
+    .empty-panel {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      padding: 30px 10px; color: var(--w-ink-soft); text-align: center;
+    }
+    .empty-panel svg { margin-bottom: 10px; opacity: 0.5; }
+    .empty-panel .sub { font-size: 12.5px; margin-top: 2px; }
+
+    .category-row { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+    .category-row:last-child { margin-bottom: 0; }
+    .category-name { font-size: 13.5px; font-weight: 600; width: 120px; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .category-bar-track { flex: 1; height: 8px; border-radius: 999px; background: var(--w-card-raised); overflow: hidden; }
+    .category-bar-fill { height: 100%; background: var(--w-accent); border-radius: 999px; }
+    .category-amount { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 13px; font-weight: 700; width: 64px; text-align: right; flex-shrink: 0; }
+  </style>
+</head>
+<body>
+  <div class="w-shell">
+    <div class="spending-header">
+      <a href="/account/more" class="w-btn-icon" aria-label="Back">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      </a>
+      <div>
+        <div class="w-eyebrow">Analytics</div>
+        <h1 class="w-title" style="font-size:22px;">Track your spending</h1>
+      </div>
+    </div>
+
+    <div class="w-card summary-card">
+      <div class="summary-stat">
+        <div class="summary-eyebrow">This month</div>
+        <div class="summary-num">$<%= summary.monthTotal %></div>
+      </div>
+      <div class="summary-stat">
+        <div class="summary-eyebrow">Receipts</div>
+        <div class="summary-num"><%= summary.receiptCount %></div>
+      </div>
+    </div>
+
+    <div class="w-card panel">
+      <div class="panel-eyebrow">Monthly spending</div>
+      <div class="panel-title">Last 6 months</div>
+      <% if (hasMonthlyData) { %>
+        <div class="chart-pad"><canvas id="monthly-chart"></canvas></div>
+      <% } else { %>
+        <div class="empty-panel">
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 20V10M12 20V4M20 20v-7"/></svg>
+          <div>No spending data yet</div>
+          <div class="sub">Add receipts to see your trends</div>
+        </div>
+      <% } %>
+    </div>
+
+    <div class="w-card panel">
+      <div class="panel-eyebrow">By category</div>
+      <div class="panel-title">Where it's going</div>
+      <% if (byCategory.length > 0) { %>
+        <% byCategory.forEach(function(c) { %>
+          <div class="category-row">
+            <div class="category-name"><%= c.name %></div>
+            <div class="category-bar-track"><div class="category-bar-fill" style="width: <%= c.pct %>%;"></div></div>
+            <div class="category-amount">$<%= c.total %></div>
+          </div>
+        <% }); %>
+      <% } else { %>
+        <div class="empty-panel">
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/></svg>
+          <div>No category data yet</div>
+        </div>
+      <% } %>
+    </div>
+  </div>
+
+  <div class="w-tabbar">
+    <a class="w-tab" href="/account/receipts">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 2h12v20l-3-2-3 2-3-2-3 2Z"/><path d="M9 8h6M9 12h6"/></svg>
+      Receipts
+    </a>
+    <a class="w-tab" href="/account/receipts/scan">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 8V6a2 2 0 0 1 2-2h2M4 16v2a2 2 0 0 0 2 2h2M20 8V6a2 2 0 0 0-2-2h-2M20 16v2a2 2 0 0 1-2 2h-2"/><circle cx="12" cy="12" r="3.5"/></svg>
+      Scan
+    </a>
+    <a class="w-tab active" href="/account/more">
+      <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
+      More
+    </a>
+  </div>
+
+  <% if (hasMonthlyData) { %>
+    <script>
+      const monthlySpending = <%- JSON.stringify(monthlySpending) %>;
+      new Chart(document.getElementById('monthly-chart'), {
+        type: 'bar',
+        data: {
+          labels: monthlySpending.map((m) => m.label),
+          datasets: [{ label: 'Spending', data: monthlySpending.map((m) => parseFloat(m.total)), backgroundColor: '#056BFE', borderRadius: 4 }],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx) => '$' + ctx.parsed.y.toFixed(2) } } },
+          scales: {
+            y: { beginAtZero: true, ticks: { color: '#8d8d8d', callback: (v) => '$' + v }, grid: { color: '#2a2a2a' } },
+            x: { ticks: { color: '#8d8d8d' }, grid: { display: false } },
+          },
+        },
+      });
+    </script>
+  <% } %>
+</body>
+</html>

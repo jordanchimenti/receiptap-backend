@@ -1,0 +1,188 @@
+<!-- views/account-more.ejs -->
+<!-- The wallet's "More" page, reached from the bottom tab bar / top-right
+     avatar. Mostly lists things that are real for a customer today
+     (spending, rewards, settings, support, log out). The Personal/Business
+     toggle below is modeled on a reference design where one account has a
+     switchable "mode" -- ReceipTap doesn't work that way (Customer and
+     Merchant are two entirely separate logins/sessions), so "Business"
+     here is a real navigation shortcut instead of a fake unlockable mode:
+     see the merchantStatus branches below and the comment on GET
+     /account/more in routes/customer-account.js. "Projects" and
+     "Subscriptions" from that same reference still don't exist on this
+     side of the app and aren't here. -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>More - ReceipTap</title>
+  <link rel="stylesheet" href="/css/receiptap.css" />
+  <%- include('partials/wallet-dark-theme') %>
+  <style>
+    .section-label { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--w-ink-soft); margin: 26px 4px 10px; }
+    .menu-row {
+      display: flex; align-items: center; gap: 14px; padding: 16px 18px; text-decoration: none;
+      color: var(--w-ink); border-bottom: 1px solid var(--w-line);
+    }
+    .menu-row:last-child { border-bottom: none; }
+    .menu-row-icon {
+      width: 36px; height: 36px; border-radius: 10px; background: var(--w-accent-wash); color: var(--w-accent);
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .menu-row-label { flex: 1; font-size: 14.5px; font-weight: 600; }
+    .menu-row-chevron { color: var(--w-ink-soft); }
+    .menu-row.danger .menu-row-icon { background: rgba(255,69,58,0.12); color: var(--w-danger); }
+    .menu-row.danger .menu-row-label { color: var(--w-danger); }
+    .email-note { font-size: 12.5px; color: var(--w-ink-soft); padding: 0 4px; margin-top: 4px; word-break: break-all; }
+
+    .view-toggle {
+      display: flex; background: var(--w-card-raised); border: 1px solid var(--w-line); border-radius: 999px;
+      padding: 4px; margin-top: 18px; gap: 4px;
+    }
+    .view-toggle a {
+      flex: 1; display: flex; align-items: center; justify-content: center; gap: 7px; text-decoration: none;
+      color: var(--w-ink-soft); font-size: 13.5px; font-weight: 700; padding: 9px 0; border-radius: 999px;
+    }
+    .view-toggle a.active { background: var(--w-accent); color: #fff; }
+
+    .business-card { padding: 22px 20px; margin: 18px 0; }
+    .business-card-icon {
+      width: 40px; height: 40px; border-radius: 12px; background: var(--w-accent-wash); color: var(--w-accent);
+      display: flex; align-items: center; justify-content: center; margin-bottom: 14px;
+    }
+    .business-card h2 { font-size: 16px; margin: 0 0 6px; }
+    .business-card p { font-size: 13.5px; color: var(--w-ink-soft); line-height: 1.5; margin: 0 0 18px; }
+    .business-card .w-btn { width: auto; padding: 12px 22px; display: inline-flex; }
+  </style>
+</head>
+<body>
+  <div class="w-shell">
+    <div class="w-eyebrow">Menu</div>
+    <h1 class="w-title">More</h1>
+    <div class="email-note"><%= customerEmail %></div>
+
+    <div class="view-toggle">
+      <a href="/account/more" class="<%= view === 'personal' ? 'active' : '' %>">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>
+        Personal
+      </a>
+      <a href="/account/more?view=business" class="<%= view === 'business' ? 'active' : '' %>">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21V9l9-6 9 6v12"/><path d="M9 21v-6h6v6"/></svg>
+        Business
+      </a>
+    </div>
+
+    <% if (view === 'business') { %>
+      <% if (merchantStatus.exists && merchantStatus.loggedIn && ['INCOMPLETE', 'CANCELED'].includes(merchantStatus.subscriptionStatus)) { %>
+        <div class="w-card business-card">
+          <div class="business-card-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+          </div>
+          <h2>Unlock your business tools</h2>
+          <p>You're signed into your ReceipTap merchant account (<%= merchantStatus.email %>), but it doesn't have an active subscription yet. Add a card to start your 30-day free trial and get access to your dashboard, ReceipTaps, and receipt design.</p>
+          <a class="w-btn" href="/dashboard/billing">Add your card</a>
+        </div>
+      <% } else if (merchantStatus.exists && merchantStatus.loggedIn) { %>
+        <div class="w-card business-card">
+          <div class="business-card-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 21V9l9-6 9 6v12"/><path d="M9 21v-6h6v6"/></svg>
+          </div>
+          <h2>You're signed in as a merchant</h2>
+          <p>This wallet account and your ReceipTap merchant account (<%= merchantStatus.email %>) are separate logins, but you're already signed into both in this browser.</p>
+          <a class="w-btn" href="/account/business">Go to your business</a>
+        </div>
+      <% } else if (merchantStatus.exists) { %>
+        <div class="w-card business-card">
+          <div class="business-card-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 21V9l9-6 9 6v12"/><path d="M9 21v-6h6v6"/></svg>
+          </div>
+          <h2>You have a merchant account</h2>
+          <p>There's a ReceipTap merchant account at <%= merchantStatus.email %>. Log in separately to manage it — it's a different account from this wallet.</p>
+          <a class="w-btn" href="/login">Log in to merchant account</a>
+        </div>
+      <% } else { %>
+        <div class="w-card business-card">
+          <div class="business-card-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 21V9l9-6 9 6v12"/><path d="M9 21v-6h6v6"/></svg>
+          </div>
+          <h2>Set up a merchant account</h2>
+          <p>Run a business? Create a separate ReceipTap merchant account — design your custom digital receipt and send yourself a test one, free, no card required.</p>
+          <a class="w-btn" href="/signup?email=<%= encodeURIComponent(customerEmail) %>&demo=1">Get started</a>
+        </div>
+      <% } %>
+    <% } %>
+
+    <% if (view === 'personal') { %>
+    <div class="section-label">General</div>
+    <div class="w-card">
+      <a class="menu-row" href="/account/spending">
+        <div class="menu-row-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20V10M12 20V4M20 20v-7"/></svg>
+        </div>
+        <div class="menu-row-label">Track your spending</div>
+        <div class="menu-row-chevron">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>
+        </div>
+      </a>
+      <a class="menu-row" href="/account/loyalty">
+        <div class="menu-row-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="8" width="18" height="13" rx="2"/><path d="M12 8v13M3 13h18"/><path d="M12 8c-2 0-3-1.3-3-2.5S10 3 12 3s3 1.3 3 2.5S14 8 12 8Z"/></svg>
+        </div>
+        <div class="menu-row-label">My Rewards</div>
+        <div class="menu-row-chevron">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>
+        </div>
+      </a>
+      <a class="menu-row" href="/account/settings">
+        <div class="menu-row-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>
+        </div>
+        <div class="menu-row-label">Settings</div>
+        <div class="menu-row-chevron">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>
+        </div>
+      </a>
+    </div>
+    <% } %>
+
+    <div class="section-label">Help and feedback</div>
+    <div class="w-card">
+      <a class="menu-row" href="mailto:support@receiptap.com">
+        <div class="menu-row-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 0 1 5 0c0 1.5-2.5 2-2.5 3.5"/><circle cx="12" cy="17" r="0.6" fill="currentColor"/></svg>
+        </div>
+        <div class="menu-row-label">Help &amp; support</div>
+        <div class="menu-row-chevron">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>
+        </div>
+      </a>
+    </div>
+
+    <div class="w-card" style="margin-top: 26px;">
+      <form method="POST" action="/account/logout" style="margin:0;">
+        <button type="submit" class="menu-row danger" style="width:100%; border:none; background:none; cursor:pointer; font-family:inherit;">
+          <div class="menu-row-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>
+          </div>
+          <div class="menu-row-label">Log out</div>
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <div class="w-tabbar">
+    <a class="w-tab" href="/account/receipts">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 2h12v20l-3-2-3 2-3-2-3 2Z"/><path d="M9 8h6M9 12h6"/></svg>
+      Receipts
+    </a>
+    <a class="w-tab" href="/account/receipts/scan">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 8V6a2 2 0 0 1 2-2h2M4 16v2a2 2 0 0 0 2 2h2M20 8V6a2 2 0 0 0-2-2h-2M20 16v2a2 2 0 0 1-2 2h-2"/><circle cx="12" cy="12" r="3.5"/></svg>
+      Scan
+    </a>
+    <a class="w-tab active" href="/account/more">
+      <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
+      More
+    </a>
+  </div>
+</body>
+</html>

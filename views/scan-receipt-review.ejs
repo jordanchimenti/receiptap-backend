@@ -1,0 +1,191 @@
+<!-- views/scan-receipt-review.ejs -->
+<!-- Step 2 of 2: shows what Claude read off the photo (or a blank form if
+     it couldn't read it, or the upload has no data yet) for the customer
+     to confirm or correct. Nothing is saved until this form submits to
+     POST /account/receipts/scan/confirm. locals: imageUrl, couldNotRead,
+     merchantName, date, total, category, lineItems (JSON string, carried
+     through as a hidden field -- not editable in this version),
+     paymentMethod, receiptNumber (both optional -- only ever what the
+     receipt itself printed, never fabricated), categories (the fixed list
+     for the dropdown), error (optional, only set if confirm was submitted
+     with a missing required field). -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Confirm Receipt - ReceipTap</title>
+  <link rel="stylesheet" href="/css/receiptap.css" />
+  <%- include('partials/wallet-dark-theme') %>
+  <style>
+    .scan-header { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+    .preview-thumb {
+      width: 100%; max-height: 260px; object-fit: cover; border-radius: 14px;
+      border: 1px solid var(--w-line); margin-bottom: 20px; display: block;
+    }
+    .notice {
+      background: var(--w-accent-wash); border: 1px solid rgba(5,107,254,0.35); color: #a7c8ff;
+      border-radius: 10px; padding: 11px 14px; font-size: 13px; margin-bottom: 18px;
+    }
+    .merchant-input {
+      width: 100%; box-sizing: border-box; background: none; border: none; border-bottom: 1px solid var(--w-line);
+      color: var(--w-ink); font-family: var(--font-display); font-size: 22px; font-weight: 700;
+      padding: 4px 2px 10px; margin-bottom: 4px;
+    }
+    .merchant-input:focus { outline: none; border-bottom-color: var(--w-accent); }
+    .merchant-input::placeholder { color: var(--w-ink-soft); font-weight: 400; }
+    .category-row { margin-bottom: 20px; }
+    .category-select {
+      background: var(--w-card-raised); border: 1px solid var(--w-line); color: var(--w-ink-soft);
+      border-radius: 999px; padding: 7px 14px; font-size: 12.5px; font-weight: 700; letter-spacing: 0.02em;
+      font-family: inherit;
+    }
+    .total-card { background: var(--w-card); border: 1px solid var(--w-line); border-radius: 16px; padding: 18px 20px; margin-bottom: 18px; }
+    .total-label { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--w-ink-soft); margin-bottom: 8px; }
+    .total-input-row { display: flex; align-items: baseline; gap: 4px; margin-bottom: 10px; }
+    .total-currency { font-size: 26px; font-weight: 700; color: var(--w-ink); }
+    .total-input {
+      flex: 1; min-width: 0; background: none; border: none; color: var(--w-ink); font-family: var(--font-display);
+      font-size: 30px; font-weight: 700; padding: 0;
+    }
+    .total-input:focus { outline: none; }
+    .total-date-input {
+      background: none; border: none; color: var(--w-ink-soft); font-size: 13px; font-family: inherit; padding: 0;
+    }
+
+    .receipt-replica {
+      background: var(--w-card); border: 1px solid var(--w-line); border-radius: 16px;
+      padding: 22px 20px; margin-bottom: 18px; font-family: 'SF Mono', 'Courier New', monospace;
+    }
+    .replica-merchant { text-align: center; font-size: 14.5px; font-weight: 700; color: var(--w-ink); margin-bottom: 4px; word-break: break-word; }
+    .replica-sub { text-align: center; font-size: 11px; color: var(--w-ink-soft); margin-bottom: 2px; }
+    .replica-dash { border: none; border-top: 1px dashed var(--w-line); margin: 14px 0; }
+    .replica-line { display: flex; justify-content: space-between; gap: 12px; font-size: 12.5px; color: var(--w-ink-soft); margin-bottom: 6px; }
+    .replica-line span:last-child { color: var(--w-ink); flex-shrink: 0; }
+    .replica-empty { text-align: center; font-size: 12px; color: var(--w-ink-soft); padding: 4px 0; }
+    .replica-total-row { display: flex; justify-content: space-between; font-size: 14px; font-weight: 700; color: var(--w-ink); margin-top: 4px; }
+    .replica-field { margin-top: 16px; }
+    .replica-field label { display: block; font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--w-ink-soft); margin-bottom: 5px; }
+    .replica-field input {
+      width: 100%; box-sizing: border-box; background: var(--w-card-raised); border: 1px solid var(--w-line);
+      color: var(--w-ink); border-radius: 8px; padding: 9px 11px; font-size: 12.5px; font-family: inherit;
+    }
+    .replica-field input:focus { outline: 2px solid var(--w-accent); outline-offset: 1px; border-color: var(--w-accent); }
+
+    .original-note {
+      display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--w-ink-soft);
+      margin-bottom: 22px; padding: 0 2px;
+    }
+    .original-note a { color: var(--w-accent); font-weight: 600; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <div class="w-shell">
+    <div class="scan-header">
+      <a href="/account/receipts/scan" class="w-btn-icon" aria-label="Back">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      </a>
+      <h1 class="w-title" style="font-size:20px;">Confirm details</h1>
+    </div>
+
+    <img class="preview-thumb" src="<%= imageUrl %>" alt="Uploaded receipt" />
+
+    <% if (typeof error !== 'undefined' && error) { %>
+      <div class="w-error"><%= error %></div>
+    <% } else if (couldNotRead) { %>
+      <div class="notice">Couldn't read that automatically — fill in the details below.</div>
+    <% } %>
+
+    <%
+      let parsedLineItems = [];
+      try { parsedLineItems = JSON.parse(lineItems || '[]'); } catch { parsedLineItems = []; }
+      const totalNum = parseFloat(total);
+      const totalDisplay = !Number.isNaN(totalNum) ? totalNum.toFixed(2) : '0.00';
+    %>
+
+    <form method="POST" action="/account/receipts/scan/confirm">
+      <input type="hidden" name="imageUrl" value="<%= imageUrl %>" />
+      <input type="hidden" name="lineItems" value='<%- lineItems %>' />
+
+      <input
+        class="merchant-input" type="text" name="merchantName" id="merchantName"
+        value="<%= merchantName %>" placeholder="Merchant / store name" required autofocus
+      />
+
+      <div class="category-row">
+        <select class="category-select" name="category">
+          <option value="">Uncategorized</option>
+          <% categories.forEach(function(cat) { %>
+            <option value="<%= cat %>" <%= category === cat ? 'selected' : '' %>><%= cat %></option>
+          <% }); %>
+        </select>
+      </div>
+
+      <div class="total-card">
+        <div class="total-label">Total</div>
+        <div class="total-input-row">
+          <span class="total-currency">$</span>
+          <input class="total-input" id="total" type="number" step="0.01" min="0" name="total" value="<%= total %>" placeholder="0.00" required />
+        </div>
+        <input class="total-date-input" type="date" name="date" value="<%= date %>" />
+      </div>
+
+      <div class="receipt-replica">
+        <div class="replica-merchant" id="replica-merchant"><%= merchantName || 'Merchant name' %></div>
+        <% if (receiptNumber) { %><div class="replica-sub">RECEIPT #<%= receiptNumber %></div><% } %>
+
+        <hr class="replica-dash" />
+
+        <% if (parsedLineItems.length) { %>
+          <% parsedLineItems.forEach(function(item) { %>
+            <div class="replica-line">
+              <span><%= item.description %></span>
+              <span>$<%= (typeof item.amount === 'number' ? item.amount : 0).toFixed(2) %></span>
+            </div>
+          <% }); %>
+        <% } else { %>
+          <div class="replica-empty">No itemized breakdown available</div>
+        <% } %>
+
+        <hr class="replica-dash" />
+
+        <div class="replica-total-row"><span>TOTAL</span><span id="replica-total">$<%= totalDisplay %></span></div>
+
+        <div class="replica-field">
+          <label for="paymentMethod">Payment method (if shown on receipt)</label>
+          <input type="text" id="paymentMethod" name="paymentMethod" value="<%= paymentMethod %>" placeholder="e.g. Visa •••• 1234, Cash" maxlength="60" />
+        </div>
+        <div class="replica-field">
+          <label for="receiptNumber">Receipt # (if shown on receipt)</label>
+          <input type="text" id="receiptNumberInput" name="receiptNumber" value="<%= receiptNumber %>" placeholder="Optional" maxlength="60" />
+        </div>
+      </div>
+
+      <p class="original-note">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>
+        Original photo attached — <a href="<%= imageUrl %>" target="_blank" rel="noopener">view original</a>
+      </p>
+
+      <button type="submit" class="w-btn">Save to wallet</button>
+    </form>
+  </div>
+
+  <script>
+    // Live-mirror the merchant name and total into the receipt replica as
+    // the customer edits them, so the two stay in sync without a second
+    // round trip -- the replica is otherwise a read-only preview.
+    const merchantInput = document.getElementById('merchantName');
+    const replicaMerchant = document.getElementById('replica-merchant');
+    merchantInput.addEventListener('input', () => {
+      replicaMerchant.textContent = merchantInput.value.trim() || 'Merchant name';
+    });
+
+    const totalInput = document.getElementById('total');
+    const replicaTotal = document.getElementById('replica-total');
+    totalInput.addEventListener('input', () => {
+      const n = parseFloat(totalInput.value);
+      replicaTotal.textContent = '$' + (Number.isNaN(n) ? '0.00' : n.toFixed(2));
+    });
+  </script>
+</body>
+</html>

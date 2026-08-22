@@ -1,0 +1,75 @@
+<!-- views/account-welcome.ejs -->
+<!-- Shown once, right after someone creates a wallet account from a receipt.
+     Confirms the receipt is saved and points at the two things worth doing
+     next. Also the moment we tell them, plainly, that the shop they just
+     bought from introduced them -- see lib/referralAttribution.js. -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>You're all set - ReceipTap</title>
+  <link rel="stylesheet" href="/css/receiptap.css" />
+  <%- include('partials/wallet-dark-theme') %>
+  <style>
+    .welcome { max-width: 480px; margin: 0 auto; padding: 8vh 20px 40px; text-align: center; }
+    .tick {
+      width: 62px; height: 62px; border-radius: 50%; margin: 0 auto 22px;
+      background: var(--w-accent-wash); border: 1px solid rgba(5,107,254,0.35);
+      display: flex; align-items: center; justify-content: center; color: var(--w-accent);
+    }
+    .welcome h1 { font-family: var(--font-display); font-size: 26px; margin: 0 0 10px; }
+    .welcome .lead { font-size: 14.5px; color: var(--w-ink-soft); line-height: 1.6; margin: 0 0 26px; }
+    .next { text-align: left; margin-top: 8px; }
+    .next-row { display: flex; align-items: center; gap: 13px; padding: 15px 16px; border-bottom: 1px solid var(--w-line); text-decoration: none; color: var(--w-ink); }
+    .next-row:last-child { border-bottom: none; }
+    .next-icon { width: 34px; height: 34px; border-radius: 10px; background: var(--w-card-raised); display: flex; align-items: center; justify-content: center; color: var(--w-accent); flex: none; }
+    .next-label { flex: 1; font-size: 14px; font-weight: 600; }
+    .next-sub { font-size: 11.5px; color: var(--w-ink-soft); font-weight: 400; margin-top: 2px; }
+    .next-chev { color: var(--w-ink-soft); flex: none; }
+    .credit { font-size: 12px; color: var(--w-ink-soft); line-height: 1.6; margin-top: 24px; }
+    .credit a { color: var(--w-accent); font-weight: 600; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <div class="welcome">
+    <div class="tick">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+    </div>
+    <h1>You're all set<%= customerName ? ', ' + customerName.split(' ')[0] : '' %></h1>
+    <p class="lead">
+      <% if (merchantName) { %>
+        Your receipt from <strong style="color:var(--w-ink);"><%= merchantName %></strong> is saved to your wallet.
+      <% } else { %>
+        Your receipt is saved to your wallet.
+      <% } %>
+      From now on, every receipt you tap for auto-saves to your ReceipTap wallet, AI-organized by
+      category with possible deductions flagged. No app, no paper.
+    </p>
+
+    <div class="w-card next">
+      <% if (transactionId) { %>
+        <a class="next-row" href="/receipt/<%= transactionId %>">
+          <div class="next-icon"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 2h12v20l-3-2-3 2-3-2-3 2Z"/><path d="M9 8h6M9 12h6"/></svg></div>
+          <div class="next-label">Back to your receipt<div class="next-sub">Print it, save it to Photos, or add a warranty</div></div>
+          <div class="next-chev"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg></div>
+        </a>
+      <% } %>
+      <a class="next-row" href="/account/receipts">
+        <div class="next-icon"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18"/></svg></div>
+        <div class="next-label">Open your ReceipTap wallet<div class="next-sub">Every auto-saved receipt, searchable and categorised</div></div>
+        <div class="next-chev"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg></div>
+      </a>
+      <a class="next-row" href="/account/settings">
+        <div class="next-icon"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.9 1.2V21a2 2 0 1 1-4 0v-.1A1.7 1.7 0 0 0 8 19.4a1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0-1.2-2.9H2a2 2 0 1 1 0-4h.1A1.7 1.7 0 0 0 3.7 8a1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H8a1.7 1.7 0 0 0 1-1.5V2a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 2.9 1.2l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V8a1.7 1.7 0 0 0 1.5 1H22a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg></div>
+        <div class="next-label">Set a password<div class="next-sub">So you can sign in from any device</div></div>
+        <div class="next-chev"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg></div>
+      </a>
+    </div>
+
+    <p class="credit">
+      Run a business yourself? <a href="/partner-program">See what ReceipTap does</a>.
+    </p>
+  </div>
+</body>
+</html>

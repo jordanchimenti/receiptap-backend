@@ -17,14 +17,33 @@ model Merchant {
   id              String    @id @default(cuid())
   businessName    String
   ownerName       String? // the person's own name, e.g. "Welcome back, Jordan" -- distinct from businessName
+  ownerPhone      String? // the person's own phone number, optional -- account/login contact info, not shown on a receipt (that's ReceiptTheme.phone, a separate field)
   profilePhotoUrl String? // the person's own avatar photo, shown top-right in the dashboard rail
   email           String    @unique
   passwordHash    String? // null for accounts created via "Sign in with Google" that never set a password
   googleId        String?   @unique // set if they signed in with Google instead of email/password
+  appleId         String?   @unique // set if they signed in with Apple instead of email/password
+  microsoftId     String?   @unique // set if they signed in with Microsoft instead of email/password
   createdAt       DateTime  @default(now())
   isActive        Boolean   @default(true) // false once a merchant deactivates their own account
   deactivatedAt   DateTime? // when isActive went false -- services/dataRetentionService.js needs this to compute the DEACTIVATED_MERCHANT_PURGE_DAYS window; there is no reactivation flow anywhere in the app, so this is never cleared once set
   dataPurgedAt    DateTime? // set once purgeDeactivatedMerchants() has scrubbed this merchant -- prevents reprocessing an already-purged row on every future run
+
+  // Business Settings ("Business Profile" / "Business Address") -- printed
+  // on every receipt/PDF a customer receives (see views/receipt.ejs's
+  // businessAddressLines and views/receipt-layouts/*.ejs), except industry,
+  // which stays account-only. phone/gstHstNumber live on ReceiptTheme
+  // instead, reused rather than duplicated -- see Business Settings' own
+  // comment in views/business-settings.ejs.
+  businessEmail     String? // public-facing contact email, separate from the login email above
+  website           String?
+  industry          String?
+  addressLine1      String?
+  addressLine2      String? // suite/unit/level, optional
+  addressCity       String?
+  addressRegion     String? // state/province
+  addressPostalCode String?
+  addressCountry    String?
 
   // "Forgot password?" flow -- token is single-use (cleared on success) and
   // expires 1 hour after being issued, whichever comes first.
@@ -180,6 +199,40 @@ model Transaction {
   total         Int // cents
   paymentMethod String?
 
+  // Payment detail, captured only where the POS actually reports it. Every
+  // field is nullable and stays null rather than being inferred: a receipt
+  // showing the wrong card tail or approval code is worse than one showing
+  // neither. Square and Clover supply all of these; Shopify supplies the card
+  // brand/tail on orders that carry payment_details; Lightspeed's X-Series
+  // sale payload returned an empty payments array on a real sale, so nothing
+  // is captured there (see routes/webhooks.js).
+  cardBrand           String? // "Visa", "Mastercard", ...
+  cardLast4           String? // last four digits only -- never a full PAN
+  authCode            String? // issuer approval / authorization code
+  amountTenderedCents Int? // cash handed over
+  changeDueCents      Int? // cash returned
+
+  // SHA-256 of Square's card_details.card.fingerprint, captured at sale time.
+  // The raw fingerprint is never stored -- not here, not in a log.
+  //
+  // Why it lands on the transaction rather than going straight to
+  // ShopperIdentifier: the webhook fires when the card is dipped, and at that
+  // moment there is no shopper and no consent -- both arrive later, when
+  // someone saves the receipt. This column is the only bridge between those
+  // two events, since the raw value is unrecoverable afterwards.
+  //
+  // On its own it identifies nobody: it is payment metadata sitting beside
+  // cardLast4 and authCode, scoped to one receipt, and deleted with it by the
+  // existing retention jobs. It is ONLY ever linked to a person in
+  // ShopperIdentifier, and only on explicit cross-merchant consent.
+  cardFingerprintHash String?
+
+  // True when this receipt landed in a wallet by card recognition rather than
+  // by someone tapping. Provenance, not decoration: a shopper looking at a
+  // receipt they never tapped for deserves to be told why it's there, and a
+  // DSAR needs to distinguish "they handed us this" from "we matched them".
+  autoSavedViaRecognition Boolean @default(false)
+
   // Consumer wallet — set only if a customer explicitly claims this receipt
   customerId String?
   customer   Customer? @relation(fields: [customerId], references: [id])
@@ -239,6 +292,64 @@ model ReceiptTheme {
   // Promotes ReceipTap to other business owners at the top of this
   // merchant's receipts, using their own Partner Program referral link.
   showPartnerProgram Boolean @default(false)
+
+  // --- Header block visibility ---------------------------------------------
+  // What appears at the top of the receipt. The VALUES these show (phone,
+  // address, GST/HST, website, business email) are all edited in Business
+  // Settings -- only whether they print lives here, so there's still exactly
+  // one place to change each fact.
+  showLogo          Boolean @default(true)
+  showBusinessName  Boolean @default(true)
+  showAddress       Boolean @default(true)
+  showTaxNumber     Boolean @default(true)
+  showPhone         Boolean @default(true)
+  showWebsite       Boolean @default(true)
+  showBusinessEmail Boolean @default(true)
+
+  // --- Receipt block visibility (Receipt design > Blocks) -----------------
+  // Every flag here controls something the Transaction model actually
+  // carries -- toggles for data we don't capture (cashier, rounding, card
+  // tail, approval code, tender/change) are deliberately absent rather than
+  // shipped as switches that control nothing.
+  showDateTime      Boolean @default(true)
+  showReceiptNumber Boolean @default(true)
+  showRegister      Boolean @default(false) // Transaction.posDeviceId, when the POS sent one
+
+  showItemQuantity  Boolean @default(true)
+  showItemUnitPrice Boolean @default(true)
+  showItemLineTotal Boolean @default(true)
+  itemLayout        String  @default("compact") // "compact" | "detailed"
+
+  showSubtotal   Boolean @default(true)
+  showDiscounts  Boolean @default(true)
+  showTax        Boolean @default(true)
+  showTotal      Boolean @default(true)
+  totalProminent Boolean @default(true)
+
+  showPaymentMethod Boolean @default(true)
+  showCardTail      Boolean @default(true)
+  showApprovalCode  Boolean @default(false) // useful for disputes, noise for most
+  showTenderChange  Boolean @default(true)
+
+  showBarcode        Boolean @default(false)
+  // "receiptNumber" | "transactionId" | "bestAvailable" | "custom"
+  barcodeValue       String  @default("receiptNumber")
+  barcodeCustomValue String? // only used when barcodeValue is "custom"
+
+  // Merchant-authored promo card -- all free text, so no POS data needed.
+  showPromo        Boolean @default(false)
+  promoTitle       String?
+  promoMessage     String?
+  promoButtonLabel String?
+  promoButtonUrl   String?
+  promoExpiryText  String?
+
+  socialsHeading  String?
+  customLinkLabel String?
+  customLinkUrl   String?
+  offerLine       String?
+
+  footerLegal String? // legal / footer notes under the thank-you message
 
   // Social links shown as clickable icons on receipts -- each is optional,
   // and its icon only renders if a URL is set.
@@ -331,6 +442,9 @@ model Affiliate {
 
   referredMerchants Merchant[]   @relation("ReferredMerchants")
   commissions       Commission[]
+
+  // Shoppers who first met ReceipTap through this affiliate's receipts.
+  referredCustomers Customer[] @relation("CustomerReferrals")
 }
 
 enum AffiliateType {
@@ -374,6 +488,8 @@ model Customer {
   email        String   @unique
   passwordHash String?
   googleId     String?  @unique // set if they signed in with Google instead of email
+  appleId      String?  @unique // set if they signed in with Apple instead of email
+  microsoftId  String?  @unique // set if they signed in with Microsoft instead of email
   name         String?
   createdAt    DateTime @default(now())
 
@@ -382,8 +498,50 @@ model Customer {
   resetToken          String?   @unique
   resetTokenExpiresAt DateTime?
 
-  transactions Transaction[]
-  loyaltyCards LoyaltyCard[]
+  // Referral attribution. Set when a shopper first creates a wallet account
+  // from a merchant's receipt: that merchant introduced them to ReceipTap, so
+  // if this same person later signs their OWN business up they're credited as
+  // the referrer and earn commission on it. First touch wins -- once set, a
+  // later receipt from a different merchant doesn't overwrite it.
+  // Attribution expires REFERRAL_WINDOW_DAYS after the timestamp below
+  // (lib/referralAttribution.js); the row is kept for history either way.
+  referredByAffiliateId String?
+  referredByAffiliate   Affiliate? @relation("CustomerReferrals", fields: [referredByAffiliateId], references: [id])
+  referralAttributedAt  DateTime?
+
+  transactions    Transaction[]
+  loyaltyCards    LoyaltyCard[]
+  scannedReceipts ScannedReceipt[]
+  identifiers     ShopperIdentifier[]
+
+  @@index([referredByAffiliateId])
+}
+
+// A receipt the customer photographed/uploaded themselves, from a store
+// that may not even be a ReceipTap merchant -- distinct from Transaction,
+// which always means a real POS sale at a connected merchant and requires
+// a real Merchant row via its non-nullable merchantId. Money in cents,
+// same convention as Transaction.total.
+model ScannedReceipt {
+  id            String    @id @default(cuid())
+  customerId    String
+  customer      Customer  @relation(fields: [customerId], references: [id])
+  imageUrl      String
+  merchantName  String
+  purchaseDate  DateTime?
+  total         Int
+  aiCategory    String?
+  // Both read off the photo itself by the same AI extraction pass as
+  // merchantName/total/date -- only populated when the receipt actually
+  // prints them (e.g. "Visa •••• 6123", a store's own transaction/receipt
+  // number). Never fabricated: ReceipTap doesn't collect real card data,
+  // this is only ever what's legible on the paper the customer photographed.
+  paymentMethod String?
+  receiptNumber String?
+  lineItems     Json?
+  createdAt     DateTime  @default(now())
+
+  @@index([customerId])
 }
 
 // ---------------------------------------------------------------------------
@@ -431,10 +589,70 @@ model ShopperConsent {
   granted            Boolean
   consentTextVersion String // which exact wording (config/legal.js) was shown at the moment of this decision
 
+  // Cross-merchant recognition is a SEPARATE PURPOSE from receipt delivery,
+  // so under PIPEDA it needs its own consent and cannot ride along on the
+  // transactional one. Kept as its own flag with its own timestamp rather
+  // than another ConsentType value, so the moment it was granted is recorded
+  // independently of when the receipt consent above was captured -- and so
+  // withdrawing one never implies anything about the other.
+  crossMerchantRecognition   Boolean   @default(false)
+  crossMerchantRecognitionAt DateTime?
+
   createdAt DateTime @default(now())
   ipAddress String?
 
   @@index([receiptId])
+}
+
+// A passive identifier that lets ReceipTap recognise a returning shopper
+// WITHOUT them tapping again -- currently only Square's card fingerprint.
+//
+// Three constraints shape this model:
+//   1. Never store the raw value. identifierValueHash is SHA-256 of it; the
+//      original fingerprint never lands in the database, a log, or a backup.
+//   2. Identifiers are PLATFORM-SCOPED. A Square fingerprint and a Clover
+//      token for the same physical card are unrelated values, so
+//      sourcePlatform is part of the unique key and of every lookup. There is
+//      deliberately no cross-platform identity graph here.
+//   3. Only written with explicit cross-merchant recognition consent
+//      (ShopperConsent.crossMerchantRecognition) -- see Stage 2.
+//
+// Platforms that expose no equivalent identifier (Clover, Shopify,
+// Lightspeed, Toast today) simply never get a row, and those shoppers keep
+// tapping every time. That degradation is the intended behaviour, not a gap.
+model ShopperIdentifier {
+  id        String   @id @default(cuid())
+  shopperId String
+  shopper   Customer @relation(fields: [shopperId], references: [id])
+
+  identifierType      IdentifierType
+  identifierValueHash String // SHA-256 hex -- never the raw value
+  sourcePlatform      SourcePlatform
+
+  createdAt DateTime  @default(now())
+  // Soft revocation: a revoked row still proves the identifier was once
+  // linked (needed for a DSAR audit trail) but must never match a lookup.
+  revokedAt DateTime?
+
+  // One row per (kind of identifier, value, platform). The same hash arriving
+  // from two platforms is two distinct identifiers, not a conflict.
+  @@unique([identifierType, identifierValueHash, sourcePlatform])
+  @@index([shopperId])
+}
+
+enum IdentifierType {
+  CARD_FINGERPRINT
+  EMAIL
+  PHONE
+}
+
+enum SourcePlatform {
+  SQUARE
+  CLOVER
+  SHOPIFY
+  LIGHTSPEED
+  TOAST
+  MANUAL
 }
 
 enum ConsentType {

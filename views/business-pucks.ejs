@@ -14,6 +14,26 @@
   <%- include('partials/wallet-dark-theme') %>
   <style>
     .biz-header { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+    /* Moved with the card from views/business-overview.ejs. */
+    .status-panel { padding: 18px; margin-bottom: 16px; }
+    .panel-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+    .panel-head h2 { font-size: 15px; margin: 0; }
+    .panel-total { font-size: 12.5px; font-weight: 600; color: var(--w-ink-soft); }
+    .stackbar { display: flex; height: 8px; border-radius: 999px; overflow: hidden; background: var(--w-card-raised); margin-bottom: 14px; }
+    .legend-row { display: flex; justify-content: space-between; align-items: center; font-size: 13px; margin-bottom: 8px; }
+    .legend-row:last-child { margin-bottom: 0; }
+    .legend-key { display: flex; align-items: center; gap: 8px; color: var(--w-ink-soft); }
+    .sw { width: 8px; height: 8px; border-radius: 50%; }
+    /* receiptap.css also has a `.status-note`, styled for the LIGHT theme --
+       a pale --ok-wash background with dark teal text. It was quietly winning
+       here (the rule below never set a background), which is why this callout
+       rendered as a pale blue box on a dark card. Set explicitly so it belongs
+       to the page it's on. Same collision as .empty-state and .nav. */
+    .status-note {
+      font-size: 12.5px; line-height: 1.5; margin: 14px 0 0; padding: 12px 14px;
+      border-radius: 10px; background: var(--w-card-raised); color: var(--w-ink-soft);
+    }
+    .status-note.warn { background: var(--w-accent-wash); color: var(--w-accent); }
     .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
     .stat-card { padding: 14px 16px; }
     .stat-label { font-size: 11px; color: var(--w-ink-soft); margin-bottom: 4px; }
@@ -58,11 +78,32 @@
       </div>
     </div>
 
-    <div class="stat-grid">
-      <div class="w-card stat-card"><div class="stat-label">Total</div><div class="stat-value"><%= stats.total %></div></div>
-      <div class="w-card stat-card"><div class="stat-label">Linked</div><div class="stat-value"><%= stats.linked %></div></div>
-      <div class="w-card stat-card"><div class="stat-label">Needs linking</div><div class="stat-value"><%= stats.needsLinking %></div></div>
-      <div class="w-card stat-card"><div class="stat-label">Activated in <%= stats.monthLabel %></div><div class="stat-value"><%= stats.activatedThisMonth %></div></div>
+    <%# Moved here from the Dashboard: the breakdown belongs beside the list of
+        devices it describes, where "1 needs linking" is one glance away from
+        which one. The four summary tiles took its place on the Dashboard.
+
+        The status chips below filter this same list, so the counts and the
+        filters now read as one control rather than two. %>
+    <% var pct = function (n) { return stats.total ? (n / stats.total) * 100 : 0; }; %>
+    <div class="w-card panel status-panel">
+      <div class="panel-head"><h2>ReceipTap status</h2><span class="panel-total"><%= stats.total %> total</span></div>
+      <!-- Same brand blue throughout, just varied in shade/opacity so the
+           3 segments stay visually distinguishable. -->
+      <div class="stackbar">
+        <span style="width: <%= pct(stats.linked) %>%; background: var(--w-accent);"></span>
+        <span style="width: <%= pct(stats.pairing) %>%; background: rgba(5,107,254,0.55);"></span>
+        <span style="width: <%= pct(stats.needsLinking) %>%; background: rgba(5,107,254,0.22);"></span>
+      </div>
+      <div class="legend-row"><span class="legend-key"><span class="sw" style="background:var(--w-accent);"></span>Linked to a register</span><span><%= stats.linked %></span></div>
+      <div class="legend-row"><span class="legend-key"><span class="sw" style="background:rgba(5,107,254,0.55);"></span>Pairing right now</span><span><%= stats.pairing %></span></div>
+      <div class="legend-row"><span class="legend-key"><span class="sw" style="background:rgba(5,107,254,0.22);"></span>Needs linking</span><span><%= stats.needsLinking %></span></div>
+      <% if (stats.total === 0) { %>
+        <div class="status-note warn">No ReceipTaps activated yet.</div>
+      <% } else if (stats.needsLinking > 0) { %>
+        <div class="status-note warn"><%= stats.needsLinking %> <%= stats.needsLinking === 1 ? 'ReceipTap needs' : 'ReceipTaps need' %> linking to a register before receipts reach it.</div>
+      <% } else { %>
+        <div class="status-note">Everything is linked. Receipts are routed automatically.</div>
+      <% } %>
     </div>
 
     <form class="w-card search-card" method="GET" action="/account/business/pucks">

@@ -1,0 +1,104 @@
+<!-- views/business-claim.ejs -->
+<!-- Claim a ReceipTap from its activation code alone, with no puck ID.
+     views/claim.ejs is the other way in: you get there by physically tapping
+     an unclaimed puck, which puts the ID in the URL. That works at the
+     counter, but not for a merchant holding a puck they can't tap, or one
+     already mounted where a phone won't reach -- and the Dashboard's setup
+     guide has always promised "or type its activation code". This is that
+     page. -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Claim a ReceipTap - ReceipTap Business</title>
+  <link rel="stylesheet" href="/css/receiptap.css" />
+  <%- include('partials/wallet-dark-theme') %>
+  <style>
+    .claim-card { padding: 22px 20px; }
+    .claim-title { font-size: 19px; font-weight: 700; margin: 0 0 6px; }
+    .claim-sub { font-size: 13.5px; color: var(--w-ink-soft); line-height: 1.55; margin: 0 0 20px; }
+    .code-input {
+      width: 100%; box-sizing: border-box; background: var(--w-card-raised);
+      border: 1px solid var(--w-line); color: var(--w-ink); border-radius: 12px;
+      padding: 16px 12px; font-family: var(--font-mono); font-size: 24px;
+      font-weight: 700; letter-spacing: 8px; text-align: center; text-transform: uppercase;
+    }
+    .code-input:focus { outline: 2px solid var(--w-accent); outline-offset: 1px; border-color: var(--w-accent); }
+    .code-input::placeholder { letter-spacing: 6px; color: var(--w-ink-soft); opacity: 0.45; font-weight: 400; }
+    .claim-hint { font-size: 12.5px; color: var(--w-ink-soft); line-height: 1.55; margin-top: 12px; text-align: center; }
+    .claim-error {
+      background: rgba(220,38,38,0.12); border: 1px solid rgba(220,38,38,0.35); color: #fca5a5;
+      font-size: 13px; line-height: 1.5; border-radius: 10px; padding: 12px 14px; margin-bottom: 16px;
+    }
+    .tap-note {
+      display: flex; gap: 12px; align-items: flex-start; margin-top: 18px;
+      padding-top: 18px; border-top: 1px solid var(--w-line);
+    }
+    .tap-note-icon {
+      width: 34px; height: 34px; border-radius: 10px; flex-shrink: 0;
+      background: var(--w-accent-wash); color: var(--w-accent);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .tap-note-icon svg { width: 17px; height: 17px; }
+    .tap-note-body { font-size: 12.5px; color: var(--w-ink-soft); line-height: 1.55; }
+    .tap-note-body strong { color: var(--w-ink); display: block; font-size: 13px; margin-bottom: 2px; }
+  </style>
+</head>
+<body>
+  <div class="w-shell">
+    <div style="margin-bottom:18px;">
+      <div class="w-eyebrow">ReceipTaps</div>
+      <h1 class="w-title" style="font-size:20px;">Claim a ReceipTap</h1>
+    </div>
+
+    <div class="w-card claim-card">
+      <div class="claim-title">Enter your activation code</div>
+      <p class="claim-sub">
+        It's the 6-character code printed on the insert card that came with your ReceipTap.
+      </p>
+
+      <% if (error) { %>
+        <div class="claim-error"><%= error %></div>
+      <% } %>
+
+      <form method="POST" action="/account/business/claim">
+        <input
+          class="code-input"
+          type="text"
+          name="claimCode"
+          value="<%= submittedCode %>"
+          placeholder="ABC123"
+          required
+          maxlength="6"
+          autocomplete="off"
+          autocapitalize="characters"
+          spellcheck="false"
+          autofocus
+        />
+        <div class="claim-hint">Letters and numbers only — we'll handle the capitals.</div>
+      </form>
+
+      <div class="tap-note">
+        <div class="tap-note-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <path d="M5 8a9 9 0 0 1 0 8"/><path d="M9 6a13 13 0 0 1 0 12"/><path d="M13 4a17 17 0 0 1 0 16"/>
+          </svg>
+        </div>
+        <div class="tap-note-body">
+          <strong>Or just tap it</strong>
+          Hold your phone to the ReceipTap and it opens this step for you, with the puck already identified.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <%# The form lives above, so the sticky bar submits it by id -- same
+      pattern as every other save bar in the business wallet. %>
+  <div class="save-bar">
+    <button type="submit" class="w-btn" onclick="document.querySelector('.claim-card form').requestSubmit();">Claim this ReceipTap</button>
+  </div>
+
+  <%- include('partials/back-affordance', { backFallback: '/account/business/pucks' }) %>
+</body>
+</html>

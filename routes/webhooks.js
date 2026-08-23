@@ -7,9 +7,10 @@ const express = require('express');
 const crypto = require('crypto');
 const router = express.Router();
 const prisma = require('../lib/prisma');
+const { claimAwaitingPuck } = require('../lib/pairPuck');
 const { hashIdentifier } = require('../lib/hashIdentifier');
 const { autoSaveReceiptForKnownShopper } = require('../services/receiptAutoSave');
-const { incrementLoyaltyPunch } = require('./loyalty');
+const { awardLoyaltyStamps } = require('./loyalty');
 const { categorizeInBackground } = require('../services/categorize-receipt');
 
 // The email a POS attached to a sale, if any. Only ever used as a lookup key
@@ -140,7 +141,7 @@ router.post('/webhooks/pos/square', async (req, res) => {
     // fall straight through and behave exactly as before.
     await autoSaveReceiptForKnownShopper(transaction, {
       onLinked: async ({ transaction: txn, shopper }) => {
-        await incrementLoyaltyPunch(txn.merchantId, shopper.id);
+        await awardLoyaltyStamps(txn, shopper.id);
         if (!txn.aiCategorizedAt) {
           categorizeInBackground(txn, merchant.businessName);
         }
@@ -163,6 +164,13 @@ router.post('/webhooks/pos/square', async (req, res) => {
       });
     }
 
+    // Nothing mapped to this register yet -- but a puck may be sitting in
+    // tap-to-pair, waiting for exactly this sale to tell it where it lives.
+    // See lib/pairPuck.js.
+    if (!puck) {
+      puck = await claimAwaitingPuck(prisma, merchant.id, transaction);
+    }
+
     if (puck) {
       await prisma.puck.update({
         where: { id: puck.id },
@@ -172,8 +180,8 @@ router.post('/webhooks/pos/square', async (req, res) => {
         },
       });
     }
-    // If no puck is mapped to this location yet, the transaction is still saved —
-    // it just won't be reachable by tap until the merchant assigns one.
+    // If no puck is mapped to this location and none was waiting to pair, the
+    // transaction is still saved — it just won't be reachable by tap yet.
 
     res.sendStatus(200);
   } catch (err) {
@@ -340,16 +348,19 @@ async function handleCloverOrderEvent(cloverMerchantId, orderId) {
     await autoSaveReceiptForKnownShopper(transaction, {
       posCustomerEmail: posCustomerEmailFrom('clover', order),
       onLinked: async ({ transaction: txn, shopper }) => {
-        await incrementLoyaltyPunch(txn.merchantId, shopper.id);
+        await awardLoyaltyStamps(txn, shopper.id);
         if (!txn.aiCategorizedAt) categorizeInBackground(txn, merchant.businessName);
       },
     });
 
   // A Clover connection is a single location -- no device-level lanes to
   // disambiguate between, unlike Square's multi-register handling.
-  const puck = await prisma.puck.findFirst({
+  let puck = await prisma.puck.findFirst({
     where: { merchantId: merchant.id, posLocationId: cloverMerchantId, posDeviceId: null },
   });
+  // Same tap-to-pair fallback as Square: a puck waiting to learn which
+  // register it sits on is claimed by the first sale no other puck covers.
+  if (!puck) puck = await claimAwaitingPuck(prisma, merchant.id, transaction);
   if (puck) {
     await prisma.puck.update({
       where: { id: puck.id },
@@ -363,12 +374,36 @@ async function handleCloverOrderEvent(cloverMerchantId, orderId) {
 
 // Clover's X-Clover-Auth header carries a value shown in the Developer
 // Dashboard's Webhooks section once configured -- set CLOVER_WEBHOOK_AUTH_TOKEN
-// to that value to enable verification. Left unset, requests aren't rejected
-// (verification is best-effort until that value is confirmed and configured).
+// to that value.
+//
+// This used to accept ANY request when the token was unset, which was
+// tolerable only because no Clover webhook was configured and the URL was
+// therefore unreachable. The moment it is pointed at a public address, an
+// unverified endpoint lets anyone who finds it POST fabricated sales into a
+// merchant's account -- inventing receipts, filling loyalty cards, moving
+// revenue figures. Square and Shopify both verify properly; this was the gap.
+//
+// So it now fails CLOSED in production: no token configured means no Clover
+// webhook is accepted at all, which is the safe direction to be wrong in. In
+// development it still passes through, so the flow stays testable without the
+// real token.
 function verifyCloverAuth(req) {
   const expected = process.env.CLOVER_WEBHOOK_AUTH_TOKEN;
-  if (!expected) return true;
-  return req.headers['x-clover-auth'] === expected;
+  if (!expected) {
+    if (process.env.NODE_ENV === 'production') {
+      console.error(
+        '[webhooks] REFUSED a Clover webhook: CLOVER_WEBHOOK_AUTH_TOKEN is not set. ' +
+        'Set it to the value shown in Clover\'s Developer Dashboard > Webhooks, or ' +
+        'no Clover sale can be accepted.'
+      );
+      return false;
+    }
+    return true;
+  }
+  const received = req.headers['x-clover-auth'];
+  if (typeof received !== 'string' || received.length !== expected.length) return false;
+  // Constant-time, same as every other secret comparison in this project.
+  return crypto.timingSafeEqual(Buffer.from(received), Buffer.from(expected));
 }
 
 // ---------------------------------------------------------------------------
@@ -434,8 +469,14 @@ router.post('/webhooks/pos/lightspeed', async (req, res) => {
         id: saleId,
         merchantId: merchant.id,
         posProvider: 'lightspeed',
-        posLocationId: sale.source?.register_id || sale.source?.outlet_id || domainPrefix,
-        posDeviceId: null,
+        // The retailer goes in the LOCATION field and the register in the
+        // DEVICE field, mirroring Square. These were the other way round: the
+        // register id was written as the location, while the puck lookup below
+        // only ever searched for domainPrefix -- so a register id could never
+        // match anything, and a puck paired against such a sale would store an
+        // id nothing looks for and silently receive no receipts.
+        posLocationId: domainPrefix,
+        posDeviceId: sale.source?.register_id || sale.source?.outlet_id || null,
         orderNumber: sale.invoice_number || sale.receipt_number || null,
         createdAt: sale.date ? new Date(sale.date) : new Date(),
         lineItems,
@@ -458,16 +499,26 @@ router.post('/webhooks/pos/lightspeed', async (req, res) => {
     await autoSaveReceiptForKnownShopper(transaction, {
       posCustomerEmail: posCustomerEmailFrom('lightspeed', sale),
       onLinked: async ({ transaction: txn, shopper }) => {
-        await incrementLoyaltyPunch(txn.merchantId, shopper.id);
+        await awardLoyaltyStamps(txn, shopper.id);
         if (!txn.aiCategorizedAt) categorizeInBackground(txn, merchant.businessName);
       },
     });
 
-    // A Lightspeed (X-Series) connection is a single retailer -- no
-    // device-level lanes to disambiguate between, same as Clover.
-    const puck = await prisma.puck.findFirst({
-      where: { merchantId: merchant.id, posLocationId: domainPrefix, posDeviceId: null },
-    });
+    // Register first, then the retailer as a whole -- same two-step Square
+    // uses. A puck assigned through the older dropdown holds domainPrefix with
+    // no device, so it still matches on the second pass.
+    let puck = null;
+    if (transaction.posDeviceId) {
+      puck = await prisma.puck.findFirst({
+        where: { merchantId: merchant.id, posDeviceId: transaction.posDeviceId },
+      });
+    }
+    if (!puck) {
+      puck = await prisma.puck.findFirst({
+        where: { merchantId: merchant.id, posLocationId: domainPrefix, posDeviceId: null },
+      });
+    }
+    if (!puck) puck = await claimAwaitingPuck(prisma, merchant.id, transaction);
     if (puck) {
       await prisma.puck.update({
         where: { id: puck.id },
@@ -571,14 +622,15 @@ router.post('/webhooks/pos/shopify', async (req, res) => {
     await autoSaveReceiptForKnownShopper(transaction, {
       posCustomerEmail: posCustomerEmailFrom('shopify', order),
       onLinked: async ({ transaction: txn, shopper }) => {
-        await incrementLoyaltyPunch(txn.merchantId, shopper.id);
+        await awardLoyaltyStamps(txn, shopper.id);
         if (!txn.aiCategorizedAt) categorizeInBackground(txn, merchant.businessName);
       },
     });
 
-    const puck = await prisma.puck.findFirst({
+    let puck = await prisma.puck.findFirst({
       where: { merchantId: merchant.id, posLocationId: shopDomain, posDeviceId: null },
     });
+    if (!puck) puck = await claimAwaitingPuck(prisma, merchant.id, transaction);
     if (puck) {
       await prisma.puck.update({
         where: { id: puck.id },

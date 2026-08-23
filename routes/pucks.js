@@ -4,6 +4,7 @@
 const express = require('express');
 const router = express.Router();
 const prisma = require('../lib/prisma');
+const { findPairableSale, bindPuckToSale, isAwaiting } = require('../lib/pairPuck');
 
 // Adjust this to however your app checks auth — placeholder shown here
 function requireAuth(req, res, next) {
@@ -34,6 +35,17 @@ router.get('/r/:puckId', async (req, res) => {
     puck.currentTransactionId &&
     puck.transactionExpiresAt &&
     puck.transactionExpiresAt > new Date();
+
+  // The MERCHANT tapping their own unlinked puck is not a customer looking for
+  // a receipt -- it is someone standing at the till trying to set it up. Send
+  // them to pairing instead of the "no live receipt" page, which is a dead end
+  // for them. A customer tapping the same puck is unaffected: this only fires
+  // when the tapper is signed in as the merchant who owns it.
+  const isOwner = req.session?.merchantId === puck.merchantId;
+  const isLinked = Boolean(puck.posLocationId || puck.posDeviceId);
+  if (puck.status === 'CLAIMED' && !hasLiveTransaction && isOwner && !isLinked) {
+    return res.redirect(`/pair/${puck.id}`);
+  }
 
   if (puck.status === 'CLAIMED' && !hasLiveTransaction) {
     return res.redirect(`/merchant/${puck.merchantId}`);
@@ -116,6 +128,69 @@ router.post('/claim/:puckId', requireAuth, async (req, res) => {
   });
 
   res.json({ success: true, puck: updated });
+});
+
+// ---------------------------------------------------------------------------
+// Tap to pair. Reached by a merchant tapping their own puck before it has been
+// linked to a register -- see lib/pairPuck.js for why this exists at all.
+// ---------------------------------------------------------------------------
+router.get('/pair/:puckId', requireAuth, async (req, res) => {
+  const puck = await prisma.puck.findUnique({ where: { id: req.params.puckId } });
+  if (!puck || puck.merchantId !== req.session.merchantId) {
+    return res.redirect('/account/business/pucks');
+  }
+
+  const sale = await findPairableSale(prisma, req.session.merchantId);
+  res.render('puck-pair', {
+    puck,
+    sale: sale
+      ? {
+          id: sale.id,
+          total: (sale.total / 100).toFixed(2),
+          locationId: sale.posLocationId,
+          deviceId: sale.posDeviceId,
+          when: sale.createdAt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }),
+        }
+      : null,
+    waiting: isAwaiting(puck),
+    alreadyLinked: Boolean(puck.posLocationId || puck.posDeviceId),
+    error: req.query.error || null,
+  });
+});
+
+// Confirming the register the tapped puck belongs to.
+router.post('/pair/:puckId', requireAuth, async (req, res) => {
+  const puck = await prisma.puck.findUnique({ where: { id: req.params.puckId } });
+  if (!puck || puck.merchantId !== req.session.merchantId) {
+    return res.redirect('/account/business/pucks');
+  }
+
+  // "Wait for the next sale" -- the tap-first order. The puck holds a
+  // timestamp and the next uncovered sale claims it (see claimAwaitingPuck).
+  // Changed their mind -- back to being offered the last uncovered sale.
+  if (req.body.mode === 'cancel') {
+    await prisma.puck.update({ where: { id: puck.id }, data: { awaitingSaleAssignment: null } });
+    return res.redirect(`/pair/${puck.id}`);
+  }
+
+  if (req.body.mode === 'wait') {
+    await prisma.puck.update({
+      where: { id: puck.id },
+      data: { awaitingSaleAssignment: new Date() },
+    });
+    return res.redirect(`/pair/${puck.id}`);
+  }
+
+  // Re-read rather than trusting a posted location: the page the merchant is
+  // looking at may be a minute old, and a sale that has since been covered by
+  // another puck must not be pairable any more.
+  const sale = await findPairableSale(prisma, req.session.merchantId);
+  if (!sale) {
+    return res.redirect(`/pair/${puck.id}?error=` + encodeURIComponent('That sale is no longer available to pair — ring another one and tap again.'));
+  }
+
+  await bindPuckToSale(prisma, puck.id, sale);
+  res.redirect('/account/business/pucks?paired=' + encodeURIComponent(puck.id));
 });
 
 module.exports = router;

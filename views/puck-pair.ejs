@@ -1,0 +1,123 @@
+<!-- views/puck-pair.ejs -->
+<!-- Where a merchant lands after tapping their own puck before it's linked to
+     a register. The whole point is that nothing here has to be typed or
+     recognised: the tap said which puck, and the sale says which till. -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pair this ReceipTap - ReceipTap Business</title>
+  <link rel="stylesheet" href="/css/receiptap.css" />
+  <%- include('partials/wallet-dark-theme') %>
+  <style>
+    .pair-card { padding: 24px 20px; text-align: center; }
+    .pair-icon {
+      width: 54px; height: 54px; border-radius: 16px; margin: 0 auto 16px;
+      background: var(--w-accent-wash); color: var(--w-accent);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .pair-icon svg { width: 26px; height: 26px; }
+    .pair-title { font-size: 20px; font-weight: 700; margin-bottom: 6px; }
+    .pair-id { font-family: var(--font-mono); font-size: 13px; color: var(--w-ink-soft); margin-bottom: 18px; }
+    .pair-sale {
+      background: var(--w-card-raised); border: 1px solid var(--w-line); border-radius: 14px;
+      padding: 16px; margin-bottom: 18px; text-align: left;
+    }
+    .pair-sale-eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--w-ink-soft); margin-bottom: 8px; }
+    .pair-sale-amount { font-family: var(--font-mono); font-size: 22px; font-weight: 700; }
+    .pair-sale-where { font-size: 13px; color: var(--w-ink-soft); margin-top: 4px; line-height: 1.5; }
+    .pair-sale-where strong { color: var(--w-ink); }
+    .pair-lede { font-size: 13.5px; color: var(--w-ink-soft); line-height: 1.55; margin-bottom: 18px; }
+    .pair-btn {
+      display: block; width: 100%; box-sizing: border-box; text-align: center; cursor: pointer;
+      background: var(--w-accent); color: #fff; border: none; border-radius: 999px;
+      font-family: inherit; font-size: 15px; font-weight: 700; padding: 15px; text-decoration: none;
+    }
+    .pair-btn.secondary { background: none; border: 1px solid var(--w-line); color: var(--w-ink); margin-top: 10px; }
+    .pair-waiting {
+      display: flex; align-items: center; gap: 10px; justify-content: center;
+      font-size: 13.5px; color: var(--w-accent); margin-bottom: 16px;
+    }
+    .pair-pulse { width: 9px; height: 9px; border-radius: 50%; background: var(--w-accent); animation: pair-pulse 1.6s ease-in-out infinite; }
+    @keyframes pair-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.25; } }
+    @media (prefers-reduced-motion: reduce) { .pair-pulse { animation: none; } }
+    .pair-error {
+      background: rgba(255,69,58,0.12); border: 1px solid rgba(255,69,58,0.35); color: #fca5a5;
+      font-size: 13px; line-height: 1.5; border-radius: 10px; padding: 12px 14px; margin-bottom: 16px; text-align: left;
+    }
+  </style>
+</head>
+<body>
+  <div class="w-shell">
+    <div style="margin-bottom:16px;">
+      <div class="w-eyebrow">ReceipTaps</div>
+      <h1 class="w-title" style="font-size:20px;">Pair to a register</h1>
+    </div>
+
+    <div class="w-card pair-card">
+      <div class="pair-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round">
+          <path d="M5 8a9 9 0 0 1 0 8"/><path d="M9 6a13 13 0 0 1 0 12"/><path d="M13 4a17 17 0 0 1 0 16"/>
+        </svg>
+      </div>
+
+      <% if (alreadyLinked) { %>
+        <div class="pair-title">Already linked</div>
+        <div class="pair-id">ReceipTap <%= puck.id.slice(0, 4).toUpperCase() %></div>
+        <p class="pair-lede">This ReceipTap is already pointed at a register, so receipts reach it. Unassign it from the ReceipTaps page if it has moved to a different till.</p>
+        <a class="pair-btn" href="/account/business/pucks">Back to ReceipTaps</a>
+
+      <% } else { %>
+        <div class="pair-title">Pair this ReceipTap</div>
+        <div class="pair-id">ReceipTap <%= puck.id.slice(0, 4).toUpperCase() %></div>
+
+        <% if (error) { %><div class="pair-error"><%= error %></div><% } %>
+
+        <%# Waiting is checked FIRST. Choosing "not this one" and then being
+            shown that same sale again reads as the button having done nothing
+            -- the merchant already answered this question. %>
+        <% if (waiting) { %>
+          <div class="pair-waiting"><span class="pair-pulse"></span>Waiting for a sale…</div>
+          <p class="pair-lede">Ring any sale on the register this ReceipTap sits on. The moment it comes through, this puck is linked to that till — no need to come back here.</p>
+          <a class="pair-btn secondary" href="/account/business/pucks">Done for now</a>
+          <form method="POST" action="/pair/<%= puck.id %>">
+            <input type="hidden" name="mode" value="cancel" />
+            <button type="submit" class="pair-btn secondary">Stop waiting</button>
+          </form>
+
+        <% } else if (sale) { %>
+          <%# A real sale names the register for us -- no list to pick from,
+              and it works for a lane the POS never exposed. %>
+          <div class="pair-sale">
+            <div class="pair-sale-eyebrow">Last sale with no ReceipTap</div>
+            <div class="pair-sale-amount">$<%= sale.total %></div>
+            <div class="pair-sale-where">
+              at <strong><%= sale.deviceId || sale.locationId %></strong><br />
+              <%= sale.when %>
+            </div>
+          </div>
+          <p class="pair-lede">Is this the register this ReceipTap sits on? Pairing sends its receipts to this puck from now on.</p>
+          <form method="POST" action="/pair/<%= puck.id %>">
+            <button type="submit" class="pair-btn">Pair to this register</button>
+          </form>
+          <form method="POST" action="/pair/<%= puck.id %>">
+            <input type="hidden" name="mode" value="wait" />
+            <button type="submit" class="pair-btn secondary">Not this one — wait for the next sale</button>
+          </form>
+
+        <% } else { %>
+          <p class="pair-lede">Ring any sale on the register this ReceipTap sits on, then tap it again — or start waiting now and the next sale will link it automatically.</p>
+          <form method="POST" action="/pair/<%= puck.id %>">
+            <input type="hidden" name="mode" value="wait" />
+            <button type="submit" class="pair-btn">Wait for the next sale</button>
+          </form>
+          <a class="pair-btn secondary" href="/account/business/pucks">Back to ReceipTaps</a>
+        <% } %>
+      <% } %>
+    </div>
+  </div>
+
+  <%- include('partials/back-affordance', { backFallback: '/account/business/pucks' }) %>
+</body>
+</html>

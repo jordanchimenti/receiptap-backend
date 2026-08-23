@@ -1,3 +1,203 @@
+<!-- PWA install metadata. On iOS, web push only works for a site the
+     customer has added to their Home Screen -- which requires these tags,
+     not just the manifest being reachable. -->
+<link rel="manifest" href="/manifest.webmanifest" />
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+<%# /favicon.ico is served from public/ and browsers fetch it on every page
+    without any markup, so this link is only the sharper version for tabs. %>
+<link rel="icon" type="image/png" sizes="64x64" href="/icons/favicon-64.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<%# "black", not "black-translucent": translucent makes the app draw
+    under the status bar and the home indicator, which is what dragged
+    env(safe-area-inset-*) into the layout. Opaque lets iOS reserve both
+    strips itself, so every page gets the same usable area. %>
+<meta name="apple-mobile-web-app-status-bar-style" content="black" />
+<meta name="apple-mobile-web-app-title" content="ReceipTap" />
+<meta name="theme-color" content="#0A0A0A" />
+<script>
+  // Chrome/Edge fire beforeinstallprompt once, early, and only on pages that
+  // meet the install criteria -- often before any page-specific script has
+  // run. Capture it here (this partial is in the <head> of every wallet and
+  // business page) and stash it, so /account/install can use it whenever the
+  // customer gets there. preventDefault stops Chrome's own mini-infobar so
+  // the install happens on OUR button, not a browser banner.
+  window.__installPrompt = null;
+  window.addEventListener('beforeinstallprompt', function (e) {
+    e.preventDefault();
+    window.__installPrompt = e;
+    window.dispatchEvent(new Event('receiptap:installable'));
+  });
+
+  // Pull down from the top of any wallet page to reload it. The page itself
+  // follows the finger and the ReceipTap mark is revealed in the gap above
+  // it; releasing past the trigger spins the mark and reloads, and the fresh
+  // document paints back at the top. Touch-only and top-only: the handler
+  // bows out the moment the gesture looks like a scroll, a horizontal swipe
+  // or a pinch, so it can never eat a normal drag.
+  (function () {
+    var TRIGGER = 68;    // px of travel before releasing will actually reload
+    var MAX = 104;       // furthest the page will travel, however hard you pull
+    var SLOP = 6;        // ignore the first few px so a tap can't start a pull
+
+    document.addEventListener('DOMContentLoaded', function () {
+      if (document.body.hasAttribute('data-no-pull-refresh')) return;
+
+      var wrap = document.createElement('div');
+      wrap.className = 'ptr';
+      wrap.innerHTML =
+        '<div class="ptr-badge"><span class="ptr-ring"></span>' +
+        '<img src="/images/receiptap-mark.png" alt="" aria-hidden="true" /></div>';
+      document.body.appendChild(wrap);
+      var badge = wrap.querySelector('.ptr-badge');
+      var BADGE = 44, GAP = 8;   // badge size, and the clearance kept above the content
+
+      // Everything in normal flow moves; fixed chrome (the tab bar, any
+      // floating CTA, this indicator) stays where it is. Collected per
+      // gesture rather than once, so a page that adds content later still
+      // shifts as one piece.
+      var moving = [];
+      function collect() {
+        moving = [];
+        for (var i = 0; i < document.body.children.length; i++) {
+          var el = document.body.children[i];
+          if (el === wrap || el.tagName === 'SCRIPT' || el.tagName === 'STYLE') continue;
+          if (getComputedStyle(el).position === 'fixed') continue;
+          moving.push(el);
+        }
+      }
+
+      function shift(px, animate) {
+        for (var i = 0; i < moving.length; i++) {
+          var el = moving[i];
+          el.style.transition = animate ? 'transform 280ms cubic-bezier(.22,1,.36,1)' : 'none';
+          el.style.transform = px ? 'translate3d(0,' + px + 'px,0)' : '';
+          if (!px && !animate) el.style.transition = '';
+        }
+      }
+
+      var startY = 0, startX = 0, tracking = false, pulling = false, travel = 0, busy = false;
+
+      function atTop() {
+        return (window.scrollY || document.documentElement.scrollTop || 0) <= 0;
+      }
+
+      // A modal is its own scroll context; a pull behind one would reload the
+      // page out from under it.
+      function modalOpen() {
+        return !!document.querySelector('[class*="modal"].open, [class*="overlay"].open');
+      }
+
+      function paint(px, progress) {
+        // Pinned just above the page's top edge, so it is never drawn over the
+        // content -- early in the pull it is simply still off-screen and gets
+        // revealed as the gap opens, which is what makes it read as "behind"
+        // the page rather than floating on top of it.
+        badge.style.transform = 'translateY(' + (px - BADGE - GAP) + 'px)';
+        badge.style.opacity = progress;
+        wrap.style.setProperty('--ptr-progress', Math.min(1, progress));
+      }
+
+      function reset() {
+        wrap.classList.add('settling');
+        shift(0, true);
+        paint(0, 0);
+        setTimeout(function () {
+          wrap.classList.remove('settling');
+          shift(0, false);
+        }, 300);
+      }
+
+      document.addEventListener('touchstart', function (e) {
+        if (busy || e.touches.length !== 1 || !atTop() || modalOpen()) { tracking = false; return; }
+        startY = e.touches[0].clientY;
+        startX = e.touches[0].clientX;
+        tracking = true;
+        pulling = false;
+        travel = 0;
+      }, { passive: true });
+
+      document.addEventListener('touchmove', function (e) {
+        if (!tracking || busy) return;
+        if (e.touches.length !== 1) { tracking = false; if (pulling) { pulling = false; reset(); } return; }
+
+        var dy = e.touches[0].clientY - startY;
+        var dx = e.touches[0].clientX - startX;
+
+        // Upward, sideways, or no longer at the top -- it's a scroll, not a pull.
+        if (dy <= SLOP || Math.abs(dx) > Math.abs(dy) || !atTop()) {
+          if (pulling) { pulling = false; reset(); }
+          tracking = false;
+          return;
+        }
+
+        if (!pulling) { pulling = true; collect(); wrap.classList.remove('settling'); }
+
+        // Rubber band: the pull gets heavier the further it goes, so it eases
+        // into MAX instead of stopping dead against it.
+        travel = MAX * (1 - Math.exp(-(dy - SLOP) / MAX));
+        shift(travel, false);
+        paint(travel, Math.min(1, travel / TRIGGER));
+
+        // Only now, once it's certainly a pull, stop the page rubber-banding.
+        if (e.cancelable) e.preventDefault();
+      }, { passive: false });
+
+      function release() {
+        if (!tracking || busy) { tracking = false; return; }
+        tracking = false;
+        if (!pulling) return;
+        pulling = false;
+
+        if (travel < TRIGGER) return reset();
+
+        busy = true;
+        // Settle to a fixed resting gap and hold it while the request runs --
+        // the new document paints at the top, which reads as the snap back.
+        wrap.classList.add('settling');
+        shift(TRIGGER, true);
+        paint(TRIGGER, 1);
+        setTimeout(function () {
+          wrap.classList.remove('settling');
+          wrap.classList.add('refreshing');
+          location.reload();
+        }, 200);
+      }
+
+      document.addEventListener('touchend', release, { passive: true });
+      document.addEventListener('touchcancel', function () {
+        tracking = false;
+        if (pulling) { pulling = false; reset(); }
+      }, { passive: true });
+
+      // Coming back via the bfcache restores the page exactly as it was left,
+      // including a page held down mid-refresh, which would look stuck.
+      window.addEventListener('pageshow', function (e) {
+        if (!e.persisted) return;
+        busy = false;
+        wrap.classList.remove('refreshing', 'settling');
+        collect();
+        shift(0, false);
+        paint(0, 0);
+      });
+    });
+  })();
+
+  // Opened from the home screen? Then it IS installed -- tell the server once
+  // per session so the setup step can be real state rather than a guess.
+  // Wrapped in a try/catch and a sessionStorage guard: this is a nicety, and
+  // must never break a page or hammer the endpoint on every navigation.
+  (function () {
+    try {
+      var standalone = window.matchMedia('(display-mode: standalone)').matches
+        || window.navigator.standalone === true;
+      if (!standalone || sessionStorage.getItem('receiptap-installed-pinged')) return;
+      sessionStorage.setItem('receiptap-installed-pinged', '1');
+      fetch('/account/install/installed', { method: 'POST' }).catch(function () {});
+    } catch (err) {
+      /* private mode, storage disabled -- nothing to do */
+    }
+  })();
+</script>
 <!-- views/partials/wallet-dark-theme.ejs -->
 <!-- Shared dark theme for the customer-facing wallet pages ONLY
      (customer-wallet.ejs, scan-receipt.ejs, scan-receipt-review.ejs) --
@@ -7,6 +207,49 @@
      "warm paper"/"cool workspace" system untouched. ReceipTap's brand
      blue stands in for green throughout. -->
 <style>
+  /* Pull-to-refresh. A standalone PWA has no browser chrome and no native
+     pull-to-refresh, so without this there is no way to reload a page from
+     the home-screen app at all -- you'd have to close and reopen it.
+
+     The PAGE moves with the finger and the badge is revealed in the gap
+     above it, the way iOS does it. Only non-fixed children of <body> are
+     shifted, so the tab bar stays put instead of sliding off the bottom.
+     Opt a page out with data-no-pull-refresh on its <body>. */
+  .ptr {
+    position: fixed; top: 0; left: 0; right: 0; height: 0; z-index: 90;
+    display: flex; justify-content: center; pointer-events: none;
+  }
+  .ptr-badge {
+    position: absolute; top: 0; width: 44px; height: 44px; border-radius: 50%;
+    display: grid; place-items: center; opacity: 0;
+    /* The mark is dark navy, so it needs a light disc behind it to read at
+       all on --w-bg -- the same reason the auth pages wrap it in .logo-chip. */
+    background: #fff; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
+  }
+  .ptr-badge img { width: 27px; height: 27px; display: block; }
+  /* Ring drawn OUTSIDE the disc: a conic sweep with its middle masked out.
+     While dragging it fills in proportion to the pull, so the gesture shows
+     its own progress; on release it becomes a chasing arc and spins. */
+  .ptr-ring {
+    position: absolute; inset: -5px; border-radius: 50%;
+    background: conic-gradient(var(--w-accent) calc(var(--ptr-progress, 0) * 1turn), rgba(255,255,255,0.12) 0);
+    -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
+            mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
+  }
+  .ptr.settling .ptr-badge { transition: transform 260ms cubic-bezier(.22,1,.36,1), opacity 200ms ease; }
+  .ptr.refreshing .ptr-badge { opacity: 1; }
+  .ptr.refreshing .ptr-ring {
+    background: conic-gradient(transparent 0deg, var(--w-accent) 290deg, transparent 300deg);
+    animation: ptr-spin 700ms linear infinite;
+  }
+  .ptr.refreshing .ptr-badge img { animation: ptr-beat 1.1s ease-in-out infinite; }
+  @keyframes ptr-spin { to { transform: rotate(360deg); } }
+  @keyframes ptr-beat { 0%, 100% { transform: scale(1); } 50% { transform: scale(0.88); } }
+  @media (prefers-reduced-motion: reduce) {
+    .ptr.refreshing .ptr-ring { animation-duration: 1.8s; }
+    .ptr.refreshing .ptr-badge img { animation: none; }
+  }
+
   :root {
     --w-bg: #0a0a0a;
     --w-card: #161616;
@@ -19,8 +262,18 @@
     --w-accent-wash: rgba(5, 107, 254, 0.16);
     --w-danger: #ff453a;
   }
+  /* receiptap.css sets `html, body { height: 100% }` for the old desktop
+     shells. In a full-screen iOS app that pins a SHORT page to exactly the
+     viewport height while a long one grows past it -- and iOS then treats the
+     bottom edge differently in the two cases, so the fixed tab bar does not
+     land in the same place on a page that scrolls and one that doesn't.
+     min-height keeps the floor without freezing the height, so every page
+     behaves like the ones that scroll. Scoped to the in-app views only. */
+  html, body { height: auto; min-height: 100%; }
   body { background: var(--w-bg); color: var(--w-ink); font-family: var(--font-body); margin: 0; }
-  .w-shell { max-width: 480px; margin: 0 auto; padding: 20px 16px 96px; }
+  /* Bottom padding clears the fixed tab bar (75px) with room to spare, so the
+     last row never hides behind it. Plain numbers, identical on every page. */
+  .w-shell { max-width: 480px; margin: 0 auto; padding: 20px 16px 104px; }
   .w-eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--w-ink-soft); }
   .w-title { font-family: var(--font-display); font-size: 30px; font-weight: 700; margin: 2px 0 0; }
   .w-card { background: var(--w-card); border: 1px solid var(--w-line); border-radius: 18px; }
@@ -49,15 +302,63 @@
   }
 
   /* Fixed bottom tab bar */
+  /* Fixed padding on purpose, no env(). Asking iOS for the safe-area inset
+     turned out to return DIFFERENT values on a page that scrolls and one that
+     doesn't, so the bar rendered ~80px tall on Alerts and ~32px on Receipts --
+     same CSS, same device, same moment. Without viewport-fit=cover iOS keeps
+     the app above the home indicator by itself, so this padding is simply
+     breathing room on top of that, and it is the same on every page. */
+  /* Sticky save. Keeps the commit button reachable on a long settings form
+     without having to scroll to the bottom to find it. The gradient lets the
+     content fade out underneath rather than ending at a hard edge.
+
+     Only for pages with ONE form and one primary save -- on a page of separate
+     per-section forms a floating bar can't say which one it would submit. */
+  .save-bar {
+    position: sticky; bottom: 0; z-index: 20;
+    padding: 12px 0 max(12px, env(safe-area-inset-bottom));
+    background: linear-gradient(to top, var(--w-bg) 62%, transparent);
+  }
   .w-tabbar {
     position: fixed; left: 0; right: 0; bottom: 0; background: rgba(10,10,10,0.92); backdrop-filter: blur(12px);
-    border-top: 1px solid var(--w-line); display: flex; justify-content: space-around; padding: 10px 0 max(10px, env(safe-area-inset-bottom));
+    border-top: 1px solid var(--w-line); display: flex; justify-content: space-around;
+    padding: 10px 0 22px;
   }
   .w-tab {
     display: flex; flex-direction: column; align-items: center; gap: 3px; text-decoration: none;
     color: var(--w-ink-soft); font-size: 11px; font-weight: 600; background: none; border: none; cursor: pointer;
     font-family: inherit;
   }
+  /* Every tap that navigates costs a server round trip, so without this the
+     app looks frozen between the tap and the new page. These give the press
+     an immediate visual answer -- the work still takes as long, but it stops
+     feeling like nothing happened.
+
+     touch-action: manipulation also drops the ~300ms wait some mobile browsers
+     keep in case a tap turns into a double-tap zoom. */
+  a, button, .w-tab, .menu-row, .setup-row, .receipt-row, label[for] {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+  a:active, button:active, .w-tab:active,
+  .menu-row:active, .setup-row:active, .receipt-row:active {
+    opacity: 0.62;
+    transition: opacity 0.04s ease;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    a:active, button:active, .w-tab:active,
+    .menu-row:active, .setup-row:active, .receipt-row:active { transition: none; }
+  }
+
   .w-tab.active { color: var(--w-accent); }
   .w-tab svg { width: 22px; height: 22px; }
+  /* Unread count on the Alerts tab. The wrapper is what the badge anchors to,
+     so it has to be exactly the size of the icon -- a bare inline span would
+     shrink to the glyph's own metrics and drag the badge off-centre. */
+  .w-tab-icon-wrap { position: relative; display: block; width: 22px; height: 22px; }
+  .w-tab-badge {
+    position: absolute; top: -4px; right: -7px; min-width: 15px; height: 15px; padding: 0 4px;
+    box-sizing: border-box; border-radius: 999px; background: var(--w-danger); color: #fff;
+    font-size: 9.5px; font-weight: 700; line-height: 15px; text-align: center;
+  }
 </style>

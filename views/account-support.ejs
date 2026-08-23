@@ -1,0 +1,90 @@
+<!-- views/account-support.ejs -->
+<!-- Help & support. This exists because the menu row used to be a bare
+     `mailto:` link: in the installed app that hands you to the Mail app with
+     nothing to come back to, and on a phone with no mail account configured it
+     appears to do nothing at all. A real page can always be backed out of, and
+     it still offers the mail app to anyone who wants it. -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Help &amp; Support - ReceipTap</title>
+  <link rel="stylesheet" href="/css/receiptap.css" />
+  <%- include('partials/wallet-dark-theme') %>
+  <style>
+    .biz-header { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+    .support-card { padding: 20px; margin-bottom: 14px; }
+    .support-card h2 { font-size: 15px; margin: 0 0 8px; }
+    .support-card p { font-size: 13.5px; color: var(--w-ink-soft); line-height: 1.6; margin: 0 0 16px; }
+    .email-row {
+      display: flex; align-items: center; gap: 10px; background: var(--w-card-raised);
+      border: 1px solid var(--w-line); border-radius: 12px; padding: 13px 15px; margin-bottom: 12px;
+    }
+    .email-text { flex: 1; min-width: 0; font-size: 14.5px; font-weight: 600; color: var(--w-ink);
+      overflow: hidden; text-overflow: ellipsis; }
+    .copy-btn {
+      flex: none; border: none; cursor: pointer; border-radius: 999px; padding: 8px 14px;
+      background: var(--w-accent-wash); color: var(--w-accent); font-size: 12.5px; font-weight: 700; font-family: inherit;
+    }
+    .mail-btn {
+      display: block; width: 100%; box-sizing: border-box; text-align: center; text-decoration: none;
+      padding: 14px; border-radius: 999px; background: var(--w-accent); color: #fff;
+      font-size: 15px; font-weight: 700;
+    }
+    .support-note { font-size: 12px; color: var(--w-ink-soft); line-height: 1.55; margin-top: 14px; }
+  </style>
+</head>
+<body>
+  <div class="w-shell">
+    <div class="biz-header">
+      <a href="/account/more" class="w-btn-icon" aria-label="Back">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      </a>
+      <div>
+        <div class="w-eyebrow">Your wallet</div>
+        <h1 class="w-title" style="font-size:20px;">Help &amp; support</h1>
+      </div>
+    </div>
+
+    <div class="w-card support-card">
+      <h2>Email us</h2>
+      <p>Tell us what happened and we'll get back to you. If it's about a specific receipt, the shop name and date help us find it.</p>
+
+      <div class="email-row">
+        <div class="email-text" id="support-email"><%= supportEmail %></div>
+        <button type="button" class="copy-btn" id="copy-btn" onclick="copyEmail()">Copy</button>
+      </div>
+
+      <%# Still offered, just no longer the only route. Anyone whose phone has
+          no mail account set up can copy the address instead of tapping a link
+          that silently does nothing. %>
+      <a class="mail-btn" href="mailto:<%= supportEmail %>">Open mail app</a>
+
+      <div class="support-note">Signed in as <%= customerEmail %> — mention this address and we'll find your account faster.</div>
+    </div>
+  </div>
+
+  <%- include('partials/wallet-tab-bar', { activeTab: 'more' }) %>
+
+  <script>
+    async function copyEmail() {
+      var btn = document.getElementById('copy-btn');
+      var email = document.getElementById('support-email').textContent.trim();
+      try {
+        await navigator.clipboard.writeText(email);
+        btn.textContent = 'Copied';
+      } catch (err) {
+        // Clipboard access can be refused; selecting the text lets them copy
+        // it by hand rather than leaving them with a button that did nothing.
+        var range = document.createRange();
+        range.selectNodeContents(document.getElementById('support-email'));
+        window.getSelection().removeAllRanges();
+        window.getSelection().addRange(range);
+        btn.textContent = 'Select & copy';
+      }
+      setTimeout(function () { btn.textContent = 'Copy'; }, 2500);
+    }
+  </script>
+</body>
+</html>

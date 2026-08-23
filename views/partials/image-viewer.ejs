@@ -1,0 +1,106 @@
+<%# views/partials/image-viewer.ejs
+    In-app full-screen viewer for a receipt photo.
+
+    Why this exists: a scanned receipt's image is a raw .jpg, and linking
+    straight to it used to replace the whole app with a bare image. In a
+    standalone PWA there is no address bar, no tab strip and no back button, so
+    there was no way out except force-quitting the app. target="_blank" doesn't
+    help either -- iOS standalone has no tabs to open into.
+
+    Every way out a person might reach for works: the close button, tapping the
+    backdrop, the Escape key, and the phone's own back swipe (it pushes a
+    history entry so the gesture closes the photo instead of leaving the app).
+
+    Usage: include this once per page, then call openImageViewer(url, title). %>
+<style>
+  .img-viewer { display: none; position: fixed; inset: 0; z-index: 1200; background: #000; flex-direction: column; }
+  .img-viewer.open { display: flex; }
+  .img-viewer-bar {
+    display: flex; align-items: center; gap: 12px; background: rgba(0,0,0,0.85);
+    padding: max(12px, env(safe-area-inset-top)) 14px 12px;
+  }
+  .img-viewer-title {
+    flex: 1; min-width: 0; color: #fff; font-size: 15px; font-weight: 700;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .img-viewer-close {
+    width: 38px; height: 38px; flex: none; border-radius: 50%; border: none; cursor: pointer;
+    background: rgba(255,255,255,0.16); color: #fff; display: flex; align-items: center; justify-content: center;
+  }
+  .img-viewer-body {
+    flex: 1; overflow: auto; display: flex; align-items: flex-start; justify-content: center;
+    padding: 12px calc(12px + env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) calc(12px + env(safe-area-inset-left));
+  }
+  .img-viewer-body img { max-width: 100%; height: auto; border-radius: 10px; }
+  .img-viewer-danger {
+    flex: none; border: none; cursor: pointer; border-radius: 999px; padding: 9px 15px;
+    font-size: 13px; font-weight: 700; font-family: inherit;
+    background: rgba(255,69,58,0.16); color: #ff6961;
+  }
+  .img-viewer-danger.confirm { background: #ff453a; color: #fff; }
+</style>
+
+<div class="img-viewer" id="img-viewer" role="dialog" aria-modal="true" aria-label="Receipt photo">
+  <div class="img-viewer-bar">
+    <div class="img-viewer-title" id="img-viewer-title"></div>
+
+    <%# Two taps, never one. Delete arms the confirm; only the second tap
+        submits. A single-tap delete next to a close button is how someone
+        loses a receipt they meant to shut. %>
+    <form method="POST" id="img-viewer-delete-form" style="margin:0; display:none;">
+      <button type="button" class="img-viewer-danger" id="img-viewer-delete" onclick="armDelete()">Delete</button>
+      <button type="submit" class="img-viewer-danger confirm" id="img-viewer-confirm" style="display:none;">Delete for good?</button>
+    </form>
+
+    <button type="button" class="img-viewer-close" onclick="closeImageViewer()" aria-label="Close">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+    </button>
+  </div>
+  <div class="img-viewer-body" onclick="closeImageViewer()">
+    <img id="img-viewer-img" alt="Receipt photo" onclick="event.stopPropagation();" />
+  </div>
+</div>
+
+<script>
+  var imgViewerOpen = false;
+
+  // `deletePath` is optional -- pass it for a receipt the customer owns and
+  // may remove; leave it out and no delete control appears at all.
+  function openImageViewer(url, title, deletePath) {
+    document.getElementById('img-viewer-img').src = url;
+    document.getElementById('img-viewer-title').textContent = title || 'Receipt photo';
+    resetDelete(deletePath);
+    document.getElementById('img-viewer').classList.add('open');
+    document.body.style.overflow = 'hidden';
+    imgViewerOpen = true;
+    history.pushState({ imgViewer: true }, '');
+  }
+
+
+  function resetDelete(deletePath) {
+    var form = document.getElementById('img-viewer-delete-form');
+    form.style.display = deletePath ? 'block' : 'none';
+    if (deletePath) form.setAttribute('action', deletePath);
+    document.getElementById('img-viewer-delete').style.display = '';
+    document.getElementById('img-viewer-confirm').style.display = 'none';
+  }
+
+  function armDelete() {
+    document.getElementById('img-viewer-delete').style.display = 'none';
+    document.getElementById('img-viewer-confirm').style.display = '';
+  }
+
+  function closeImageViewer(fromPopState) {
+    if (!imgViewerOpen) return;
+    document.getElementById('img-viewer').classList.remove('open');
+    document.getElementById('img-viewer-img').src = '';
+    document.body.style.overflow = '';
+    imgViewerOpen = false;
+    // Don't call history.back() when the back gesture is what closed it, or
+    // we'd navigate a second time and drop them out of the page entirely.
+    if (!fromPopState && history.state && history.state.imgViewer) history.back();
+  }
+
+  window.addEventListener('popstate', function () { closeImageViewer(true); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeImageViewer(); });
+</script>

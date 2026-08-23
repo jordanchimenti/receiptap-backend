@@ -1,0 +1,32 @@
+<%
+  /* views/partials/wallet-tab-bar.ejs
+     The customer wallet's bottom bar. Was copy-pasted across three pages,
+     which is exactly how the unread badge would have gone missing from one of
+     them -- it lives here now, and every page passes `activeTab`.
+
+     `unreadCount` is put on res.locals by the wallet middleware in server.js,
+     so no route has to remember to fetch it. */
+  var activeTab = typeof activeTab !== 'undefined' ? activeTab : '';
+  var unread = typeof unreadCount !== 'undefined' ? unreadCount : 0;
+%>
+<div class="w-tabbar">
+  <a class="w-tab <%= activeTab === 'receipts' ? 'active' : '' %>" href="/account/receipts">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 2h12v20l-3-2-3 2-3-2-3 2Z"/><path d="M9 8h6M9 12h6"/></svg>
+    Receipts
+  </a>
+  <a class="w-tab <%= activeTab === 'scan' ? 'active' : '' %>" href="/account/receipts/scan">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 8V6a2 2 0 0 1 2-2h2M4 16v2a2 2 0 0 0 2 2h2M20 8V6a2 2 0 0 0-2-2h-2M20 16v2a2 2 0 0 1-2 2h-2"/><circle cx="12" cy="12" r="3.5"/></svg>
+    Scan
+  </a>
+  <a class="w-tab <%= activeTab === 'notifications' ? 'active' : '' %>" href="/account/notifications">
+    <span class="w-tab-icon-wrap">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+      <% if (unread > 0) { %><span class="w-tab-badge"><%= unread > 9 ? '9+' : unread %></span><% } %>
+    </span>
+    Alerts
+  </a>
+  <a class="w-tab <%= activeTab === 'more' ? 'active' : '' %>" href="/account/more">
+    <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
+    More
+  </a>
+</div>

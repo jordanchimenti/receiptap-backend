@@ -1,0 +1,67 @@
+<%# views/partials/back-affordance.ejs
+    A floating "Back" control for pages that are reachable BOTH from inside the
+    app and from the open web — legal documents, and the receipt page a shopper
+    lands on by tapping a puck.
+
+    Those pages can't simply carry a back button: someone who taps a ReceipTap
+    at a till has nowhere to go back TO, and a stray Back on a bare receipt is
+    confusing. So this renders only when the page was reached from somewhere
+    else on this origin, which is exactly the case where a way back is needed.
+    That matters most in the installed app, where there is no browser chrome,
+    no address bar and no back gesture out of a dead end.
+
+    Optional locals:
+      `backFallback` — where to go when there's no history to pop (defaults to
+                       the wallet).
+      `backLabel`    — button text (defaults to "Back").
+      `backAlways`   — show it even with no same-origin referrer. For a page
+                       opened deliberately in a NEW TAB, where there is no
+                       referrer to detect and no history to pop, but the reader
+                       still needs a way out. A test receipt is exactly that:
+                       the merchant opened it from Receipt design, and without
+                       this the tab is a dead end. %>
+<style>
+  .floating-back {
+    position: fixed; left: max(12px, env(safe-area-inset-left)); top: 12px; z-index: 900;
+    display: none; align-items: center; gap: 7px;
+    padding: 9px 15px 9px 12px; border-radius: 999px; border: none; cursor: pointer;
+    background: rgba(20,20,22,0.88); color: #fff; backdrop-filter: blur(8px);
+    font-family: inherit; font-size: 13.5px; font-weight: 700; text-decoration: none;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.35);
+  }
+  .floating-back.show { display: inline-flex; }
+  @media print { .floating-back { display: none !important; } }
+</style>
+
+<button type="button" class="floating-back" id="floating-back" onclick="floatingBack()">
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M15 18l-6-6 6-6"/></svg>
+  <%= typeof backLabel !== 'undefined' && backLabel ? backLabel : 'Back' %>
+</button>
+
+<script>
+  (function () {
+    var FALLBACK = <%- JSON.stringify(typeof backFallback !== 'undefined' && backFallback ? backFallback : '/account/receipts') %>;
+
+    // Same-origin referrer means they came from within ReceipTap. A puck tap
+    // arrives with no referrer, and so does a search result — neither should
+    // see a Back button that would take them somewhere they've never been.
+    var cameFromApp = false;
+    try {
+      cameFromApp = Boolean(document.referrer) && new URL(document.referrer).origin === window.location.origin;
+    } catch (err) {
+      cameFromApp = false;
+    }
+
+    var ALWAYS = <%- JSON.stringify(typeof backAlways !== 'undefined' && Boolean(backAlways)) %>;
+
+    if (ALWAYS || cameFromApp) document.getElementById('floating-back').classList.add('show');
+
+    window.floatingBack = function () {
+      // Prefer real history so they land exactly where they were. A tab opened
+      // fresh has none (length 1), which is why FALLBACK has to be somewhere
+      // sensible rather than a last resort.
+      if (window.history.length > 1) window.history.back();
+      else window.location.href = FALLBACK;
+    };
+  })();
+</script>

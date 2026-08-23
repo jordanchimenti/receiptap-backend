@@ -68,6 +68,16 @@
     .deactivate-modal-box p { font-size: 13px; color: var(--w-ink-soft); margin: 0 0 16px; line-height: 1.5; }
     .deactivate-confirm-btn { width: 100%; background: var(--w-danger); color: #fff; border: none; border-radius: 999px; padding: 13px; font-size: 14px; font-weight: 700; cursor: pointer; font-family: inherit; margin-bottom: 10px; }
     .deactivate-cancel-btn { width: 100%; background: none; border: none; padding: 10px; font-size: 13px; font-weight: 600; color: var(--w-ink-soft); cursor: pointer; font-family: inherit; }
+    .photo-row { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; }
+    .photo-avatar { width: 56px; height: 56px; border-radius: 50%; object-fit: cover; flex: none; }
+    .photo-avatar-placeholder {
+      width: 56px; height: 56px; border-radius: 50%; flex: none; display: flex; align-items: center;
+      justify-content: center; background: var(--w-accent-wash); color: var(--w-accent);
+      font-family: var(--font-display); font-size: 22px; font-weight: 700; text-transform: uppercase;
+    }
+    .photo-input-wrap { flex: 1; min-width: 0; }
+    .photo-input-wrap input[type="file"] { font-size: 12.5px; color: var(--w-ink-soft); max-width: 100%; }
+    .photo-hint { font-size: 11.5px; color: var(--w-ink-soft); margin-top: 5px; }
   </style>
 </head>
 <body>
@@ -81,31 +91,60 @@
         <h1 class="w-title" style="font-size:20px;">Settings</h1>
       </div>
     </div>
+    <%# One form across all three cards, so the sticky Save at the bottom has
+        a single thing to submit. It also absorbs the merchant-profile fields
+        that used to live on a second Settings page -- both pages wrote
+        Merchant.email, so having two of them was a way to have the same column
+        edited in two places. enctype is multipart for the profile photo. %>
+    <form method="POST" action="/dashboard/settings/account/business-all" enctype="multipart/form-data">
 
     <div class="w-card panel">
       <h2>Business information</h2>
       <% if (businessError) { %><div class="banner error"><%= businessError %></div><% } %>
       <% if (businessSuccess) { %><div class="banner success">Business info updated.</div><% } %>
-      <form method="POST" action="/dashboard/settings/account/business">
-        <input type="hidden" name="redirectTo" value="/account/business/settings" />
+              <input type="hidden" name="redirectTo" value="/account/business/settings" />
         <div class="w-field"><label for="businessName">Business name</label><input type="text" id="businessName" name="businessName" value="<%= merchant.businessName %>" required /></div>
         <div class="w-field"><label for="email">Email</label><input type="email" id="email" name="email" value="<%= merchant.email %>" required /></div>
         <div class="w-field"><label for="businessPhone">Phone (optional)</label><input type="text" id="businessPhone" name="phone" value="<%= receiptTheme ? (receiptTheme.phone || '') : '' %>" placeholder="416-555-1234" /></div>
         <div class="field-hint">Shown on the receipts your customers receive. Leave blank to not show one.</div>
-        <button type="submit" class="w-btn" style="margin-top:4px;">Save</button>
-      </form>
     </div>
 
     <div class="w-card panel">
       <h2>Business profile</h2>
       <% if (businessProfileError) { %><div class="banner error"><%= businessProfileError %></div><% } %>
       <% if (businessProfileSuccess) { %><div class="banner success">Business profile updated.</div><% } %>
-      <form method="POST" action="/dashboard/settings/account/business-profile">
-        <input type="hidden" name="redirectTo" value="/account/business/settings" />
+              
         <p style="font-size:12.5px; color:var(--w-ink-soft); margin:-8px 0 14px; line-height:1.5;">Shown on the receipts your customers receive.</p>
         <div class="w-field"><label for="businessEmail">Business email (optional)</label><input type="email" id="businessEmail" name="businessEmail" value="<%= merchant.businessEmail || '' %>" placeholder="hello@yourbusiness.com" /></div>
         <div class="field-hint">Separate from your login email above.</div>
-        <div class="w-field"><label for="profileGstHst">GST/HST number</label><input type="text" id="profileGstHst" name="gstHstNumber" value="<%= receiptTheme ? (receiptTheme.gstHstNumber || '') : '' %>" placeholder="123456789 RT0001" /></div>
+        <%# Two slots, each with its own label. Canada is the reason: a Quebec
+            merchant is registered for GST/HST *and* QST and has to show both,
+            and BC/Saskatchewan/Manitoba carry a PST number alongside GST. With
+            one field their customers could never claim the provincial half
+            back. US merchants have no equivalent to print and leave both
+            blank. The label is a field rather than hardcoded because "GST/HST"
+            is wrong everywhere except most of Canada. %>
+        <div class="w-field-row" style="display:flex; gap:10px;">
+          <div class="w-field" style="flex:0 0 108px;">
+            <label for="taxNumberLabel">Tax type</label>
+            <input type="text" id="taxNumberLabel" name="taxNumberLabel" value="<%= receiptTheme ? (receiptTheme.taxNumberLabel || '') : '' %>" placeholder="GST/HST" maxlength="20" />
+          </div>
+          <div class="w-field" style="flex:1;">
+            <label for="profileGstHst">Tax registration number</label>
+            <input type="text" id="profileGstHst" name="gstHstNumber" value="<%= receiptTheme ? (receiptTheme.gstHstNumber || '') : '' %>" placeholder="123456789 RT0001" />
+          </div>
+        </div>
+        <div class="w-field-row" style="display:flex; gap:10px;">
+          <div class="w-field" style="flex:0 0 108px;">
+            <label for="taxNumber2Label">Second type</label>
+            <input type="text" id="taxNumber2Label" name="taxNumber2Label" value="<%= receiptTheme ? (receiptTheme.taxNumber2Label || '') : '' %>" placeholder="QST" maxlength="20" />
+          </div>
+          <div class="w-field" style="flex:1;">
+            <label for="taxNumber2">Second registration number</label>
+            <input type="text" id="taxNumber2" name="taxNumber2" value="<%= receiptTheme ? (receiptTheme.taxNumber2 || '') : '' %>" placeholder="Only if you're registered for two" />
+          </div>
+        </div>
+        <div class="hint">Both print on every receipt you issue. If you're registered in Quebec you'll have a QST number as well as GST/HST — your customers need both to claim their tax back.</div>
         <div class="field-hint">Prints on receipts of $100 or more, for customers claiming an input tax credit.</div>
         <div class="w-field">
           <label for="industry">Industry (optional)</label>
@@ -117,16 +156,13 @@
           </select>
         </div>
         <div class="field-hint">For your own records only — not shown on receipts.</div>
-        <button type="submit" class="w-btn" style="margin-top:4px;">Save changes</button>
-      </form>
     </div>
 
     <div class="w-card panel">
       <h2>Business address</h2>
       <p style="font-size:12.5px; color:var(--w-ink-soft); margin:-8px 0 14px; line-height:1.5;">Used on tax invoices and digital receipt PDFs.</p>
       <% if (addressSuccess) { %><div class="banner success">Business address updated.</div><% } %>
-      <form method="POST" action="/dashboard/settings/account/business-address">
-        <input type="hidden" name="redirectTo" value="/account/business/settings" />
+              
         <div class="w-field"><label for="addressLine1">Street address</label><input type="text" id="addressLine1" name="addressLine1" value="<%= merchant.addressLine1 || '' %>" placeholder="123 Main Street" /></div>
         <div class="w-field"><label for="addressLine2">Suite / Level / Unit (optional)</label><input type="text" id="addressLine2" name="addressLine2" value="<%= merchant.addressLine2 || '' %>" placeholder="Suite 4, Level 2" /></div>
         <div class="field-row">
@@ -137,9 +173,27 @@
           <div class="w-field"><label for="addressPostalCode">Postal code</label><input type="text" id="addressPostalCode" name="addressPostalCode" value="<%= merchant.addressPostalCode || '' %>" placeholder="A1A 1A1" /></div>
           <div class="w-field"><label for="addressCountry">Country</label><input type="text" id="addressCountry" name="addressCountry" value="<%= merchant.addressCountry || '' %>" placeholder="Canada" /></div>
         </div>
-        <button type="submit" class="w-btn" style="margin-top:4px;">Save changes</button>
-      </form>
     </div>
+    <div class="w-card panel">
+      <h2>Your profile</h2>
+      <p style="font-size:12.5px; color:var(--w-ink-soft); margin:-8px 0 14px; line-height:1.5;">About you, not the business. Never shown to customers.</p>
+      <div class="photo-row">
+        <% if (merchant.profilePhotoUrl) { %>
+          <img class="photo-avatar" src="<%= merchant.profilePhotoUrl %>" alt="Your photo" />
+        <% } else { %>
+          <div class="photo-avatar-placeholder"><%= (merchant.ownerName || merchant.businessName || '?').charAt(0) %></div>
+        <% } %>
+        <div class="photo-input-wrap">
+          <input type="file" name="profilePhoto" accept="image/png,image/jpeg,image/webp" />
+          <div class="photo-hint">PNG, JPG, or WEBP — up to 2MB.</div>
+        </div>
+      </div>
+      <div class="w-field"><label for="ownerName">Your name</label><input type="text" id="ownerName" name="ownerName" value="<%= merchant.ownerName || '' %>" placeholder="Your first and last name" /></div>
+      <div class="w-field"><label for="ownerPhone">Your phone (optional)</label><input type="text" id="ownerPhone" name="ownerPhone" value="<%= merchant.ownerPhone || '' %>" placeholder="416-555-1234" /></div>
+    </div>
+
+    <div class="save-bar"><button type="submit" class="w-btn">Save changes</button></div>
+    </form>
 
     <div class="w-card panel">
       <h2>Change password</h2>

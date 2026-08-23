@@ -30,10 +30,11 @@
     .w-field { margin-bottom: 14px; }
     .w-field:last-child { margin-bottom: 0; }
     .w-field label { display: block; font-size: 12.5px; font-weight: 600; color: var(--w-ink-soft); margin-bottom: 6px; }
-    .w-field input[type="text"], .w-field input[type="url"], .w-field input[type="number"], .w-field select {
+    .w-field input[type="text"], .w-field input[type="url"], .w-field input[type="number"], .w-field select, .w-field textarea {
       width: 100%; box-sizing: border-box; background: var(--w-card-raised); border: 1px solid var(--w-line);
       color: var(--w-ink); border-radius: 10px; padding: 11px 13px; font-size: 14.5px; font-family: inherit;
     }
+    .w-field textarea { resize: vertical; line-height: 1.45; min-height: 92px; }
     .w-field input[type="color"] { width: 56px; height: 38px; border: 1px solid var(--w-line); border-radius: 8px; padding: 2px; background: var(--w-card-raised); }
     .w-field input[type="file"] { font-size: 13px; color: var(--w-ink-soft); }
     .hint { font-size: 11.5px; color: var(--w-ink-soft); margin-top: 5px; line-height: 1.5; }
@@ -47,6 +48,12 @@
        setting actually persists) a switch. Rows expand in place via
        <details> so there's no JS holding the open/closed state. */
     .blk { border: 1px solid var(--w-line); border-radius: 14px; background: var(--w-card-raised); margin-bottom: 10px; overflow: hidden; }
+    /* The clip above is what keeps the summary's hover inside the rounded
+       corners -- but it also cut off any dropdown that opened past the bottom
+       of the block, so the last option in a select was unreachable. Lifted
+       only while a select inside this block is actually open, so the corners
+       stay clean the rest of the time. */
+    .blk.select-open { overflow: visible; }
     .blk:last-of-type { margin-bottom: 0; }
     .blk[open] { border-color: rgba(5,107,254,0.4); }
     .blk > summary {
@@ -97,6 +104,17 @@
     .cs-opt.selected .cs-check { opacity: 1; }
 
     /* A setting row inside an open block: label left, switch right. */
+    /* Locked rows: the handful of fields a receipt can't legally do without.
+       Shown as rows rather than removed, so a merchant scanning the list can
+       see they ARE printed -- an absent row reads as "not supported". */
+    .opt.locked label { color: var(--w-ink-soft); }
+    .opt-lock {
+      display: inline-flex; align-items: center; gap: 5px; flex: none;
+      font-size: 11px; font-weight: 700; letter-spacing: 0.02em;
+      color: var(--w-ink-soft); background: var(--w-card-raised);
+      border: 1px solid var(--w-line); border-radius: 999px; padding: 5px 10px;
+    }
+    .opt-lock svg { width: 12px; height: 12px; }
     .opt { display: flex; align-items: center; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--w-line); }
     .opt:last-child { border-bottom: none; }
     .opt label { flex: 1; font-size: 13.5px; font-weight: 500; color: var(--w-ink); cursor: pointer; }
@@ -142,15 +160,40 @@
       font-weight: 700; cursor: pointer; font-family: inherit;
     }
 
-    .loyalty-value-row { display: flex; gap: 10px; align-items: center; }
-    .loyalty-value-row select { flex-shrink: 0; width: auto; }
-    .loyalty-value-row input { flex: 1; }
 
-    .save-bar {
-      position: sticky; bottom: 0; padding: 12px 0 max(12px, env(safe-area-inset-bottom));
-      background: linear-gradient(to top, var(--w-bg) 62%, transparent);
+
+    .try-row { display: flex; gap: 10px; margin-bottom: 18px; }
+    .try-row .preview-btn { flex: 1; margin-bottom: 0; }
+    /* .preview-modal-box is white because it frames a paper receipt. This
+       modal is app UI, not a receipt, so it takes the app's own surface --
+       otherwise the title (white ink) lands on a white card and vanishes. */
+    /* Two classes, because .preview-modal-box declares `background: #fff`
+       further down this same stylesheet -- at equal specificity the later rule
+       wins, and the white title landed on a white card. */
+    .preview-modal-box.test-sale-box {
+      text-align: center; max-width: 340px; padding: 24px 22px;
+      background: var(--w-card); border: 1px solid var(--w-line);
     }
-
+    .preview-modal-box.test-sale-box .preview-modal-close { background: var(--w-card-raised); color: var(--w-ink); }
+    .test-sale-title { font-size: 17px; font-weight: 700; color: var(--w-ink); margin-bottom: 6px; }
+    .test-sale-sub { font-size: 12.5px; color: var(--w-ink-soft); line-height: 1.55; margin-bottom: 16px; }
+    /* White plate behind the QR: a dark background makes it unscannable. */
+    .test-sale-qr { width: 220px; height: 220px; background: #fff; border-radius: 12px; padding: 10px; display: block; margin: 0 auto 16px; }
+    .test-sale-open {
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      width: 100%; box-sizing: border-box; padding: 12px; border-radius: 999px;
+      background: var(--w-ink); color: #0a0a0a; text-decoration: none;
+      font-size: 14px; font-weight: 700; margin-bottom: 9px;
+    }
+    .test-sale-open svg { width: 15px; height: 15px; }
+    /* Until the receipt exists there is nothing to open -- shown but inert,
+       rather than appearing then jumping in once the fetch lands. */
+    .test-sale-open.is-waiting { opacity: 0.45; pointer-events: none; }
+    .test-sale-copy {
+      width: 100%; padding: 11px; border-radius: 999px; cursor: pointer; font-family: inherit;
+      background: var(--w-card-raised); border: 1px solid var(--w-line); color: var(--w-ink);
+      font-size: 13.5px; font-weight: 700;
+    }
     .preview-modal-overlay {
       display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 200;
       align-items: center; justify-content: center; padding: 16px;
@@ -183,6 +226,11 @@
     <% if (error) { %><div class="banner error"><%= error %></div><% } %>
 
     <form method="POST" action="/account/business/receipt-design" enctype="multipart/form-data">
+      <%# Says "this request carries the block toggles". Without it the save
+          handler cannot tell an unchecked checkbox from a form that never had
+          the field, and the legacy navy page -- which has none of them --
+          switched every block off on save. See saveReceiptSettings. %>
+      <input type="hidden" name="_blockFlagsSubmitted" value="1" />
       <div class="w-card panel">
         <h2>Receipt layout</h2>
         <div class="layout-picker">
@@ -193,7 +241,13 @@
           <% }); %>
         </div>
         <input type="hidden" name="layoutId" id="layoutId-input" value="<%= theme.layoutId || 'classic' %>" />
-        <button type="button" class="preview-btn" onclick="openPreviewModal();">Preview receipt</button>
+        <div class="try-row">
+          <button type="button" class="preview-btn" onclick="openPreviewModal();">Preview receipt</button>
+          <%# Preview shows it here; a test sale puts it on your phone, which is
+              where customers actually read it. Writes no sale -- see the
+              comment on the endpoint in routes/account-business.js. %>
+          <button type="button" class="preview-btn" onclick="runTestSale();">Run a test sale</button>
+        </div>
       </div>
 
       <div class="w-card panel">
@@ -256,7 +310,7 @@
           </summary>
           <div class="blk-body">
             <div class="opt"><label for="showLogo">Show logo</label><span class="sw"><input type="checkbox" id="showLogo" name="showLogo" <%= theme.showLogo ? 'checked' : '' %> /></span></div>
-            <div class="opt"><label for="showBusinessName">Show business name<div class="opt-note">Your account name, <%= merchant.businessName %></div></label><span class="sw"><input type="checkbox" id="showBusinessName" name="showBusinessName" <%= theme.showBusinessName ? 'checked' : '' %> /></span></div>
+            <div class="opt locked"><label>Show business name<div class="opt-note">Your account name, <%= merchant.businessName %></div></label><span class="opt-lock" title="Always on — a receipt without this can't support your customer's claim"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>Always on</span></div>
             <div class="opt"><label for="showAddress">Show address</label><span class="sw"><input type="checkbox" id="showAddress" name="showAddress" <%= theme.showAddress ? 'checked' : '' %> /></span></div>
             <div class="opt"><label for="showPhone">Show phone</label><span class="sw"><input type="checkbox" id="showPhone" name="showPhone" <%= theme.showPhone ? 'checked' : '' %> /></span></div>
             <div class="opt"><label for="showBusinessEmail">Show business email</label><span class="sw"><input type="checkbox" id="showBusinessEmail" name="showBusinessEmail" <%= theme.showBusinessEmail ? 'checked' : '' %> /></span></div>
@@ -266,7 +320,7 @@
               <input type="url" name="website" id="website" value="<%= merchant.website || '' %>" placeholder="https://yourbusiness.com" />
               <div class="hint">Needs the full https:// address. Leave blank to print no website.</div>
             </div>
-            <div class="opt"><label for="showTaxNumber">Show GST/HST number</label><span class="sw"><input type="checkbox" id="showTaxNumber" name="showTaxNumber" <%= theme.showTaxNumber ? 'checked' : '' %> /></span></div>
+            <div class="opt locked"><label>Show tax number<div class="opt-note">Printed whenever you have one saved</div></label><span class="opt-lock" title="Always on — a receipt without this can't support your customer's claim"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>Always on</span></div>
             <!-- Only the show/hide switches live here. The VALUES are business
                  facts and stay on Business Settings, so each one has exactly one
                  place to be changed -- see the de-duplication pass on this page. -->
@@ -291,7 +345,7 @@
             </div>
           </summary>
           <div class="blk-body">
-            <div class="opt"><label for="showDateTime">Show date &amp; time</label><span class="sw"><input type="checkbox" id="showDateTime" name="showDateTime" <%= theme.showDateTime ? 'checked' : '' %> /></span></div>
+            <div class="opt locked"><label>Show date &amp; time</label><span class="opt-lock" title="Always on — a receipt without this can't support your customer's claim"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>Always on</span></div>
             <div class="opt"><label for="showReceiptNumber">Show receipt number</label><span class="sw"><input type="checkbox" id="showReceiptNumber" name="showReceiptNumber" <%= theme.showReceiptNumber ? 'checked' : '' %> /></span></div>
             <div class="opt"><label for="showRegister">Show register / terminal</label><span class="sw"><input type="checkbox" id="showRegister" name="showRegister" <%= theme.showRegister ? 'checked' : '' %> /></span></div>
             <div class="hint">Register only appears when your POS sends one with the sale.</div>
@@ -335,8 +389,8 @@
           <div class="blk-body">
             <div class="opt"><label for="showSubtotal">Show subtotal</label><span class="sw"><input type="checkbox" id="showSubtotal" name="showSubtotal" <%= theme.showSubtotal ? 'checked' : '' %> /></span></div>
             <div class="opt"><label for="showDiscounts">Show discounts</label><span class="sw"><input type="checkbox" id="showDiscounts" name="showDiscounts" <%= theme.showDiscounts ? 'checked' : '' %> /></span></div>
-            <div class="opt"><label for="showTax">Show tax</label><span class="sw"><input type="checkbox" id="showTax" name="showTax" <%= theme.showTax ? 'checked' : '' %> /></span></div>
-            <div class="opt"><label for="showTotal">Show total</label><span class="sw"><input type="checkbox" id="showTotal" name="showTotal" <%= theme.showTotal ? 'checked' : '' %> /></span></div>
+            <div class="opt locked"><label>Show tax<div class="opt-note">Hidden automatically when no tax was charged</div></label><span class="opt-lock" title="Always on — a receipt without this can't support your customer's claim"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>Always on</span></div>
+            <div class="opt locked"><label>Show total</label><span class="opt-lock" title="Always on — a receipt without this can't support your customer's claim"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>Always on</span></div>
             <div class="opt"><label for="totalProminent">Make total prominent</label><span class="sw"><input type="checkbox" id="totalProminent" name="totalProminent" <%= theme.totalProminent ? 'checked' : '' %> /></span></div>
             <div class="hint">Discounts only appear on sales that actually had one.</div>
           </div>
@@ -478,50 +532,6 @@
           <summary>
             <svg class="blk-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 6l6 6-6 6"/></svg>
             <div class="blk-text">
-              <div class="blk-name">Loyalty punch card</div>
-              <div class="blk-sub">Reward customers after 5 punches, unlocked by your staff code</div>
-            </div>
-            <span class="sw"><input type="checkbox" id="loyaltyEnabled" name="loyaltyEnabled" onclick="event.stopPropagation();" <%= loyalty.enabled ? 'checked' : '' %> /></span>
-          </summary>
-          <div class="blk-body">
-            <div class="w-field">
-              <label>Reward after 5 punches</label>
-              <div class="loyalty-value-row">
-                <select name="loyaltyOfferType" id="loyaltyOfferType" class="themed-select">
-                  <option value="PERCENT" <%= loyalty.offerType === 'PERCENT' ? 'selected' : '' %>>% off</option>
-                  <option value="AMOUNT" <%= loyalty.offerType === 'AMOUNT' ? 'selected' : '' %>>$ off</option>
-                </select>
-                <input type="number" name="loyaltyOfferValue" id="loyaltyOfferValue" min="1" step="<%= loyalty.offerType === 'AMOUNT' ? '0.01' : '1' %>" value="<%= loyalty.offerValue %>" />
-              </div>
-              <div class="hint">Example: "10" with "% off" gives 10% off once a customer collects all 5 punches.</div>
-            </div>
-            <div class="w-field">
-              <label>Redemption code</label>
-              <input type="text" name="loyaltyRedemptionCode" value="<%= loyalty.redemptionCode %>" maxlength="40" placeholder="e.g. REWARD5" />
-              <div class="hint">
-                <strong style="color:var(--w-ink);">Your staff's code for cashing in a full card.</strong>
-                Once a customer collects all 5 punches, their wallet asks for this code before the reward
-                is released — your cashier enters it or reads it out at the counter, and the card resets
-                to zero so they can start collecting again.
-              </div>
-              <div class="hint" style="margin-top:8px;">
-                <strong style="color:var(--w-ink);">Keep it to your team.</strong>
-                It's the only thing stopping a customer redeeming from home without buying anything —
-                so don't print it on receipts or signage. Change it here any time; the new code takes
-                effect immediately and old cards keep their punches.
-              </div>
-              <div class="hint" style="margin-top:8px;">
-                It's yours alone — every business sets its own, and customers never see another
-                merchant's. Capitalisation doesn't matter (<code>REWARD</code> and <code>reward</code>
-                both work), up to 40 characters. Leave it blank to keep your current code.
-              </div>
-            </div>
-          </div>
-        </details>
-        <details class="blk">
-          <summary>
-            <svg class="blk-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 6l6 6-6 6"/></svg>
-            <div class="blk-text">
               <div class="blk-name">Links &amp; socials <span class="blk-tag">Shown when filled in</span></div>
               <div class="blk-sub">Clickable icons on the receipt</div>
             </div>
@@ -549,12 +559,15 @@
             <svg class="blk-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 6l6 6-6 6"/></svg>
             <div class="blk-text">
               <div class="blk-name">Register warranty</div>
-              <div class="blk-sub">"Register Warranty" action on the receipt</div>
+              <div class="blk-sub">Warranty terms and a "Register Warranty" action</div>
             </div>
             <span class="sw"><input type="checkbox" id="showWarranty" name="showWarranty" onclick="event.stopPropagation();" <%= theme.showWarranty ? 'checked' : '' %> /></span>
           </summary>
           <div class="blk-body">
-            <div class="hint" style="margin-top:0;">Useful if you sell products with a warranty period. Off for most businesses.</div>
+            <div class="w-field"><label>Warranty period</label><input type="text" name="warrantyPeriod" value="<%= theme.warrantyPeriod || '' %>" placeholder="1 year from date of purchase" /></div>
+            <div class="w-field"><label>What's covered</label><textarea name="warrantyDetails" rows="4" placeholder="Covers manufacturing defects in materials and workmanship. Does not cover accidental damage, normal wear, or misuse."><%= theme.warrantyDetails || '' %></textarea></div>
+            <div class="w-field"><label>How to make a claim</label><input type="text" name="warrantyContact" value="<%= theme.warrantyContact || '' %>" placeholder="Email warranty@yourbusiness.com with your receipt" /></div>
+            <div class="hint" style="margin-top:0;">Useful if you sell products with a warranty period. Off for most businesses. The receipt itself is the customer's proof of purchase, so anything you write here stays attached to it.</div>
           </div>
         </details>
         <details class="blk">
@@ -577,6 +590,27 @@
     </form>
   </div>
 
+  <div class="preview-modal-overlay" id="test-sale-modal" onclick="if (event.target === this) closeTestSale();">
+    <div class="preview-modal-box test-sale-box">
+      <button type="button" class="preview-modal-close" onclick="closeTestSale();">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
+      </button>
+      <div class="test-sale-title">Scan to see it on your phone</div>
+      <div class="test-sale-sub" id="test-sale-sub">This is your real receipt design, exactly as a customer sees it. No sale is recorded.</div>
+      <img id="test-sale-qr" class="test-sale-qr" alt="" />
+      <%# The QR is for looking at it on a phone, but a merchant sitting at a
+          desktop has no camera pointed at their own screen. A real <a> rather
+          than a scripted window.open, so it can be middle-clicked, long-pressed
+          and copied like any other link. Href is filled in once the test
+          receipt exists. %>
+      <a id="test-sale-open" class="test-sale-open is-waiting" target="_blank" rel="noopener noreferrer" aria-disabled="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14 21 3"/></svg>
+        Open in browser
+      </a>
+      <button type="button" class="test-sale-copy" id="test-sale-copy" onclick="copyTestLink();">Copy link instead</button>
+    </div>
+  </div>
+
   <div class="preview-modal-overlay" id="preview-modal" onclick="if (event.target === this) closePreviewModal();">
     <div class="preview-modal-box">
       <button type="button" class="preview-modal-close" onclick="closePreviewModal();">
@@ -593,15 +627,6 @@
       document.querySelectorAll('.layout-option').forEach(el => el.classList.remove('selected'));
       document.querySelector(`.layout-option[data-layout-id="${id}"]`).classList.add('selected');
     }
-
-    function updateLoyaltyValueConstraints() {
-      const type = document.getElementById('loyaltyOfferType').value;
-      const valueInput = document.getElementById('loyaltyOfferValue');
-      if (type === 'PERCENT') { valueInput.step = '1'; valueInput.max = '100'; }
-      else { valueInput.step = '0.01'; valueInput.removeAttribute('max'); }
-    }
-    document.getElementById('loyaltyOfferType').addEventListener('change', updateLoyaltyValueConstraints);
-    updateLoyaltyValueConstraints();
 
     // The custom-value input is only meaningful for the "Custom value" source.
     function updateBarcodeCustomField() {
@@ -699,12 +724,23 @@
         sync();
         close();
       }
-      function open() { wrap.classList.add('open'); button.setAttribute('aria-expanded', 'true'); }
-      function close() { wrap.classList.remove('open'); button.setAttribute('aria-expanded', 'false'); }
+      // The enclosing <details> block clips its contents; release it while
+      // this menu is open so the options below the fold are reachable.
+      var blk = wrap.closest('.blk');
+      function open() {
+        wrap.classList.add('open');
+        if (blk) blk.classList.add('select-open');
+        button.setAttribute('aria-expanded', 'true');
+      }
+      function close() {
+        wrap.classList.remove('open');
+        if (blk) blk.classList.remove('select-open');
+        button.setAttribute('aria-expanded', 'false');
+      }
 
       button.addEventListener('click', (e) => {
         e.stopPropagation();
-        document.querySelectorAll('.cs.open').forEach((el) => { if (el !== wrap) el.classList.remove('open'); });
+        closeAllSelects(wrap);
         wrap.classList.contains('open') ? close() : open();
       });
       button.addEventListener('keydown', (e) => {
@@ -721,37 +757,49 @@
       select.addEventListener('change', sync);
       sync();
     }
+    // Shared by the button handler and the click-away below, so a select can
+    // never be closed without also un-clipping the block it sits in.
+    function closeAllSelects(except) {
+      document.querySelectorAll('.cs.open').forEach((el) => {
+        if (el === except) return;
+        el.classList.remove('open');
+        var b = el.closest('.blk');
+        if (b) b.classList.remove('select-open');
+      });
+    }
+
     document.querySelectorAll('select.themed-select').forEach(enhanceSelect);
-    document.addEventListener('click', () => {
-      document.querySelectorAll('.cs.open').forEach((el) => el.classList.remove('open'));
-    });
+    document.addEventListener('click', () => closeAllSelects());
 
     // Same query-param contract the real settings page's JS builds --
     // GET /dashboard/settings/receipt/preview/:layoutId (routes/theme-settings.js)
     // is reused unchanged.
     function buildPreviewParams() {
       const val = (name) => document.querySelector(`[name=${name}]`).value;
-      const checked = (id) => document.getElementById(id).checked;
+      // Locked rows have no checkbox at all; anything missing is treated as on
+      // rather than throwing and leaving the preview blank.
+      const checked = (id) => { const el = document.getElementById(id); return el ? el.checked : true; };
       return new URLSearchParams({
         primaryColor: val('primaryColor'), accentColor: val('accentColor'),
         headerText: val('headerText'), footerText: val('footerText'),
         taxLabel: effectiveTaxLabel(), returnPolicy: val('returnPolicy'),
         googleReviewUrl: val('googleReviewUrl'), showGoogleReview: checked('showGoogleReview'),
         showWarranty: checked('showWarranty'), showPartnerProgram: checked('showPartnerProgram'),
+        warrantyPeriod: val('warrantyPeriod'), warrantyDetails: val('warrantyDetails'),
+        warrantyContact: val('warrantyContact'),
         instagramUrl: val('instagramUrl'), facebookUrl: val('facebookUrl'), tiktokUrl: val('tiktokUrl'),
         xUrl: val('xUrl'), youtubeUrl: val('youtubeUrl'), linkedinUrl: val('linkedinUrl'),
-        loyaltyEnabled: checked('loyaltyEnabled'), loyaltyOfferType: val('loyaltyOfferType'),
-        loyaltyOfferValue: val('loyaltyOfferValue'), showWalletSave: checked('showWalletSave'),
-        showLogo: checked('showLogo'), showBusinessName: checked('showBusinessName'),
+        showWalletSave: checked('showWalletSave'),
+        showLogo: checked('showLogo'), showBusinessName: true,
         showAddress: checked('showAddress'), showPhone: checked('showPhone'),
         showBusinessEmail: checked('showBusinessEmail'), showWebsite: checked('showWebsite'),
-        showTaxNumber: checked('showTaxNumber'), website: val('website'),
-        showDateTime: checked('showDateTime'), showReceiptNumber: checked('showReceiptNumber'),
+        showTaxNumber: true, website: val('website'),
+        showDateTime: true, showReceiptNumber: checked('showReceiptNumber'),
         showRegister: checked('showRegister'), showItemQuantity: checked('showItemQuantity'),
         showItemUnitPrice: checked('showItemUnitPrice'), showItemLineTotal: checked('showItemLineTotal'),
         itemLayout: val('itemLayout'), showSubtotal: checked('showSubtotal'),
-        showDiscounts: checked('showDiscounts'), showTax: checked('showTax'),
-        showTotal: checked('showTotal'), totalProminent: checked('totalProminent'),
+        showDiscounts: checked('showDiscounts'), showTax: true,
+        showTotal: true, totalProminent: checked('totalProminent'),
         showPaymentMethod: checked('showPaymentMethod'), showCardTail: checked('showCardTail'),
         showApprovalCode: checked('showApprovalCode'), showTenderChange: checked('showTenderChange'),
         showBarcode: checked('showBarcode'),
@@ -773,6 +821,58 @@
       document.getElementById('preview-modal-title').textContent = layoutId.charAt(0).toUpperCase() + layoutId.slice(1) + ' layout';
       document.getElementById('preview-modal').classList.add('open');
     }
+
+    var testSaleUrl = null;
+
+    async function runTestSale() {
+      var modal = document.getElementById('test-sale-modal');
+      var sub = document.getElementById('test-sale-sub');
+      var qr = document.getElementById('test-sale-qr');
+      qr.removeAttribute('src');
+      var openBtn = document.getElementById('test-sale-open');
+      openBtn.removeAttribute('href');
+      openBtn.setAttribute('aria-disabled', 'true');
+      openBtn.classList.add('is-waiting');
+      sub.textContent = 'Building your test receipt…';
+      modal.classList.add('open');
+
+      try {
+        var res = await fetch('/account/business/receipt-design/test-sale', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          // Uses the layout they're currently looking at, not the saved one.
+          body: JSON.stringify({ layoutId: document.getElementById('layoutId-input').value }),
+        });
+        if (!res.ok) throw new Error('the server declined (' + res.status + ')');
+        var data = await res.json();
+        testSaleUrl = data.receiptUrl;
+        var openBtn = document.getElementById('test-sale-open');
+        openBtn.href = testSaleUrl;
+        openBtn.removeAttribute('aria-disabled');
+        openBtn.classList.remove('is-waiting');
+        if (data.qrDataUrl) qr.src = data.qrDataUrl;
+        sub.textContent = 'This is your real receipt design, exactly as a customer sees it. No sale is recorded.';
+      } catch (err) {
+        sub.textContent = "Couldn't build a test receipt — " + err.message;
+      }
+    }
+
+    function closeTestSale() {
+      document.getElementById('test-sale-modal').classList.remove('open');
+    }
+
+    async function copyTestLink() {
+      if (!testSaleUrl) return;
+      var btn = document.getElementById('test-sale-copy');
+      try {
+        await navigator.clipboard.writeText(testSaleUrl);
+        btn.textContent = 'Copied';
+      } catch (err) {
+        btn.textContent = 'Copy failed — long-press the QR instead';
+      }
+      setTimeout(function () { btn.textContent = 'Copy link instead'; }, 2500);
+    }
+
     function closePreviewModal() {
       document.getElementById('preview-modal').classList.remove('open');
     }

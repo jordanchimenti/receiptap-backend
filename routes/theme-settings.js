@@ -1,7 +1,7 @@
 // routes/theme-settings.js
 // Where a merchant sets everything that drives their receipt's appearance,
 // including the Google review link used by the "Rate us on Google" card,
-// and their loyalty punch-card offer.
+// The stamp card moved to its own page -- see routes/loyalty.js.
 
 const express = require('express');
 const router = express.Router();
@@ -12,12 +12,15 @@ const multer = require('multer');
 const QRCode = require('qrcode');
 const { toSvg: barcodeSvg } = require('../lib/code128');
 const { resolveBarcodeValue, normalizeBarcodeValue } = require('../lib/barcodeValue');
+const { applyComplianceFloor } = require('../lib/receiptComplianceFloor');
+const fileStorage = require('../lib/fileStorage');
 const prisma = require('../lib/prisma');
 const { ensureMerchantAffiliate } = require('./affiliates');
 const { MERCHANT_AFFILIATE_RATE } = require('../services/affiliateRates');
 const { TAX_LABEL_GROUPS, TAX_LABEL_OPTIONS, CUSTOM_TAX_LABEL, isCustomTaxLabel, resolveTaxLabel } = require('../lib/taxLabels');
 const { SHOPPER_CONSENT } = require('../config/legal');
 const { getBaseUrl } = require('../lib/baseUrl');
+const { createTestReceiptToken, verifyTestReceiptToken } = require('../lib/testReceiptToken');
 
 function requireAuth(req, res, next) {
   if (!req.session?.merchantId) return res.redirect('/login');
@@ -41,19 +44,12 @@ function loyaltyForDisplay(loyalty) {
 // works because this app isn't deployed anywhere yet. Most hosting platforms
 // wipe local files on every redeploy, so this needs to move to real object
 // storage (S3 / Supabase Storage) before going to production.
-const LOGO_DIR = path.join(__dirname, '..', 'public', 'uploads', 'logos');
-fs.mkdirSync(LOGO_DIR, { recursive: true });
-
 const ALLOWED_LOGO_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml'];
 
+// In memory, then handed to lib/fileStorage -- a logo written to container
+// disk disappears on the next deploy and every receipt loses its branding.
 const uploadLogo = multer({
-  storage: multer.diskStorage({
-    destination: LOGO_DIR,
-    filename: (req, file, cb) => {
-      const ext = path.extname(file.originalname).toLowerCase();
-      cb(null, `${req.session.merchantId}-${Date.now()}${ext}`);
-    },
-  }),
+  storage: multer.memoryStorage(),
   limits: { fileSize: 2 * 1024 * 1024 }, // 2MB
   fileFilter: (req, file, cb) => {
     if (!ALLOWED_LOGO_TYPES.includes(file.mimetype)) {
@@ -107,11 +103,17 @@ async function computeReceiptSettingsData(merchantId) {
       headerText: '',
       footerText: '',
       gstHstNumber: '',
+      taxNumberLabel: '',
+      taxNumber2: '',
+      taxNumber2Label: '',
       taxLabel: 'Tax',
       returnPolicy: '',
       showGoogleReview: false,
       googleReviewUrl: '',
       showWarranty: false,
+      warrantyPeriod: '',
+      warrantyDetails: '',
+      warrantyContact: '',
       showWalletSave: true,
       showPartnerProgram: false,
       showLogo: true,
@@ -220,12 +222,19 @@ router.post('/dashboard/settings/receipt/test-sale', requireAuth, async (req, re
 // rendered with sample data so they can compare before committing. Reuses the
 // exact same receipt.ejs shell + layout partials real customers see, so the
 // preview can never drift out of sync with the real thing.
-router.get('/dashboard/settings/receipt/preview/:layoutId', requireAuth, async (req, res) => {
+// Reachable two ways: with a merchant session (the in-app preview modal), or
+// with a signed token (a test receipt opened on a phone that isn't logged in).
+// Deliberately the SAME route for both -- a test receipt that rendered through
+// its own code path could drift from the preview, and then from the real thing.
+router.get('/dashboard/settings/receipt/preview/:layoutId', async (req, res) => {
+  const merchantId = req.session?.merchantId || verifyTestReceiptToken(req.query.t);
+  if (!merchantId) return res.redirect('/login');
+
   const [merchant, savedTheme, savedLoyaltyProgram, existingAffiliate] = await Promise.all([
-    prisma.merchant.findUnique({ where: { id: req.session.merchantId } }),
-    prisma.receiptTheme.findUnique({ where: { merchantId: req.session.merchantId } }),
-    prisma.loyaltyProgram.findUnique({ where: { merchantId: req.session.merchantId } }),
-    prisma.affiliate.findUnique({ where: { merchantId: req.session.merchantId } }),
+    prisma.merchant.findUnique({ where: { id: merchantId } }),
+    prisma.receiptTheme.findUnique({ where: { merchantId } }),
+    prisma.loyaltyProgram.findUnique({ where: { merchantId } }),
+    prisma.affiliate.findUnique({ where: { merchantId } }),
   ]);
 
   // Query params reflect the merchant's live, unsaved edits (sent by the
@@ -245,11 +254,17 @@ router.get('/dashboard/settings/receipt/preview/:layoutId', requireAuth, async (
     location: req.query.location || (savedTheme && savedTheme.location) || '',
     phone: req.query.phone || (savedTheme && savedTheme.phone) || '',
     gstHstNumber: req.query.gstHstNumber || (savedTheme && savedTheme.gstHstNumber) || '',
+    taxNumberLabel: req.query.taxNumberLabel || (savedTheme && savedTheme.taxNumberLabel) || '',
+    taxNumber2: req.query.taxNumber2 || (savedTheme && savedTheme.taxNumber2) || '',
+    taxNumber2Label: req.query.taxNumber2Label || (savedTheme && savedTheme.taxNumber2Label) || '',
     taxLabel: req.query.taxLabel || (savedTheme && savedTheme.taxLabel) || 'Tax',
     returnPolicy: req.query.returnPolicy || (savedTheme && savedTheme.returnPolicy) || '',
     googleReviewUrl: req.query.googleReviewUrl || (savedTheme && savedTheme.googleReviewUrl) || '',
     showGoogleReview: bool(req.query.showGoogleReview, Boolean(savedTheme && savedTheme.showGoogleReview)),
     showWarranty: bool(req.query.showWarranty, Boolean(savedTheme && savedTheme.showWarranty)),
+    warrantyPeriod: req.query.warrantyPeriod || (savedTheme && savedTheme.warrantyPeriod) || '',
+    warrantyDetails: req.query.warrantyDetails || (savedTheme && savedTheme.warrantyDetails) || '',
+    warrantyContact: req.query.warrantyContact || (savedTheme && savedTheme.warrantyContact) || '',
     showWalletSave: bool(req.query.showWalletSave, savedTheme ? Boolean(savedTheme.showWalletSave) : true),
     showPartnerProgram: bool(req.query.showPartnerProgram, Boolean(savedTheme && savedTheme.showPartnerProgram)),
     instagramUrl: req.query.instagramUrl || (savedTheme && savedTheme.instagramUrl) || '',
@@ -317,12 +332,19 @@ router.get('/dashboard/settings/receipt/preview/:layoutId', requireAuth, async (
     enabled: bool(req.query.loyaltyEnabled, Boolean(savedLoyaltyProgram && savedLoyaltyProgram.enabled)),
     offerType: previewOfferType,
     offerValue: previewOfferType === 'AMOUNT' ? Math.round(safeRawOfferValue * 100) : Math.min(100, Math.round(safeRawOfferValue)),
+    // What the receipt actually prints now. Neither page sends these as query
+    // params -- they're set on the Loyalty page, not this one -- so the saved
+    // program is the only source, falling back to the schema defaults for a
+    // merchant who hasn't opened that page yet.
+    stampsRequired: (savedLoyaltyProgram && savedLoyaltyProgram.stampsRequired) || 10,
+    rewardLabel: (savedLoyaltyProgram && savedLoyaltyProgram.rewardLabel) || 'Free reward',
   };
-  // A representative "in progress" card so merchants can see the actual punch
-  // visual, not just the empty "Join Now" state -- only shown while enabled,
+  // A representative "in progress" card so merchants can see the actual stamp
+  // visual, not the "save this receipt" prompt a shopper sees before their
+  // first receipt from this merchant is linked -- only shown while enabled,
   // matching exactly how the real receipt page decides whether to render it.
   const previewLoyaltyCard = previewLoyaltyProgram.enabled
-    ? { id: 'preview', punches: 2 }
+    ? { id: 'preview', stamps: Math.min(2, previewLoyaltyProgram.stampsRequired) }
     : null;
 
   // The merchant may not have a referral code yet (only created once they
@@ -344,7 +366,11 @@ router.get('/dashboard/settings/receipt/preview/:layoutId', requireAuth, async (
 
   res.render('receipt', {
     merchant,
-    theme: previewTheme,
+    // The preview must show what will ACTUALLY be issued, floor included --
+    // otherwise a merchant sees the total disappear here, ships it, and the
+    // real receipt (correctly) still prints it. Cents matching the sample
+    // sale below: $15.26 total, $1.76 tax.
+    theme: applyComplianceFloor(previewTheme, { total: 1526, tax: 176 }),
     barcodeValue: previewBarcodeValue,
     barcodeMarkup: previewBarcodeMarkup,
     canRecogniseCard: false, // a preview has no real card behind it
@@ -379,6 +405,10 @@ router.get('/dashboard/settings/receipt/preview/:layoutId', requireAuth, async (
     // but before a logo is uploaded, show a "Custom Logo" placeholder box
     // instead of just leaving that space blank.
     isPreview: true,
+    // Only set when opened through a test-sale link (?t=<token>). The design
+    // page's own iframe preview never passes one, so it keeps the in-frame
+    // behaviour and doesn't grow a floating Back inside the modal.
+    isTestReceipt: Boolean(req.query.t),
   });
 });
 
@@ -390,6 +420,7 @@ async function saveReceiptSettings(merchantId, body, file) {
   const {
     layoutId, primaryColor, accentColor, headerText, footerText, displayName, taxLabel, returnPolicy,
     googleReviewUrl, showGoogleReview, showWarranty, showWalletSave, showPartnerProgram,
+    warrantyPeriod, warrantyDetails, warrantyContact,
     instagramUrl, facebookUrl, tiktokUrl, xUrl, youtubeUrl, linkedinUrl,
     loyaltyEnabled, loyaltyOfferType, loyaltyOfferValue, loyaltyRedemptionCode,
     itemLayout, barcodeValue,
@@ -400,7 +431,21 @@ async function saveReceiptSettings(merchantId, body, file) {
   // Every block toggle on the Receipt design page. Unchecked checkboxes
   // aren't submitted at all, so `=== 'on'` is the whole test -- same
   // convention the older showGoogleReview/showWarranty flags already use.
-  const blockFlags = {
+  //
+  // But "unchecked" and "this form has no such field" arrive identically as an
+  // absent key, and only ONE of the two pages sharing this handler has these
+  // controls. The legacy navy page (/dashboard/settings/receipt) renders just
+  // three toggles, so saving anything there used to read all two dozen as
+  // unchecked and switch the lot off -- silently stripping the business name,
+  // date, tax number, tax and total off every receipt that merchant issued.
+  // A receipt missing those cannot support a customer's input tax credit, so
+  // this was a compliance bug wearing a cosmetic disguise.
+  //
+  // The form that owns these controls now says so with a hidden marker. No
+  // marker means the request never had them to begin with: keep what is
+  // already saved rather than reading silence as "off".
+  const blockFlagsSubmitted = '_blockFlagsSubmitted' in body;
+  const blockFlags = !blockFlagsSubmitted ? null : {
     showLogo: body.showLogo === 'on',
     showBusinessName: body.showBusinessName === 'on',
     showAddress: body.showAddress === 'on',
@@ -474,6 +519,16 @@ async function saveReceiptSettings(merchantId, body, file) {
   const safeLinkedinUrl = sanitizeUrl(linkedinUrl);
 
   const safeLayoutId = ['classic', 'modern', 'minimal'].includes(layoutId) ? layoutId : 'classic';
+
+  // Only the legacy dashboard page (views/theme-settings.ejs) still carries a
+  // loyalty block. The wallet's Receipt design page dropped it when the stamp
+  // card moved to its own page (/account/business/loyalty), so its submissions
+  // arrive with no loyalty fields at all -- and writing the defaults below
+  // would quietly wipe whatever was configured over there. The redemption code
+  // is the marker: it's a text input, so a form that has the block always
+  // sends it, even empty.
+  const bodyHasLoyaltyFields = loyaltyRedemptionCode !== undefined;
+
   const safeOfferType = loyaltyOfferType === 'AMOUNT' ? 'AMOUNT' : 'PERCENT';
   const parsedOfferValue = parseFloat(loyaltyOfferValue);
   const safeOfferValueDisplay = Number.isFinite(parsedOfferValue) && parsedOfferValue > 0 ? parsedOfferValue : 10;
@@ -486,6 +541,22 @@ async function saveReceiptSettings(merchantId, body, file) {
     prisma.merchant.findUnique({ where: { id: merchantId } }),
     prisma.loyaltyProgram.findUnique({ where: { merchantId } }),
   ]);
+
+  // The legacy navy page (/dashboard/settings/receipt) still carries the
+  // showWarranty toggle but has no fields for the terms behind it, so saving
+  // there would blank warranty text the merchant wrote on Receipt design.
+  // Absent key = leave alone; present-but-empty = they really did clear it --
+  // the same contract phone/gstHstNumber use below, for the same reason.
+  //
+  // A <textarea> submits CRLF line breaks per the HTML spec; store plain \n
+  // so what comes back out matches what was typed in, on every platform.
+  const warrantyFields = {
+    warrantyPeriod: keepIfAbsent('warrantyPeriod', existingTheme && existingTheme.warrantyPeriod),
+    warrantyDetails: ('warrantyDetails' in body)
+      ? ((warrantyDetails || '').replace(/\r\n/g, '\n') || null)
+      : ((existingTheme && existingTheme.warrantyDetails) ?? null),
+    warrantyContact: keepIfAbsent('warrantyContact', existingTheme && existingTheme.warrantyContact),
+  };
 
   // An empty submission shouldn't wipe out a working code -- fall back to
   // whatever was already saved, then a sane default for a brand-new program.
@@ -503,17 +574,51 @@ async function saveReceiptSettings(merchantId, body, file) {
   // silently wipe the logo on every save.
   let logoUrl = existingTheme ? existingTheme.logoUrl : null;
   if (file) {
-    logoUrl = `/uploads/logos/${file.filename}`;
+    logoUrl = await fileStorage.put('logos', file, { prefix: merchantId });
   }
 
   // If they've turned the review toggle on, require a real, well-formed URL —
   // this is the link customers will actually be sent to, so it has to work.
   if (showGoogleReview === 'on') {
     if (!googleReviewUrl || !isValidGoogleReviewUrl(googleReviewUrl)) {
+      // Built from computeReceiptSettingsData, NOT hand-listed. The hand-built
+      // version referenced three variables this function never destructures
+      // (location, phone, gstHstNumber), so the moment anyone switched the
+      // Google review block on without a valid link, saving threw
+      // "ReferenceError: location is not defined" instead of showing them the
+      // message -- and it silently omitted the tax-label locals the template
+      // needs, which would have thrown next. Reusing the real data function
+      // means this path can never drift from what the page requires again;
+      // only the merchant's unsaved edits are layered on top.
+      const base = await computeReceiptSettingsData(merchantId);
       return {
-        merchant,
-        theme: { ...existingTheme, layoutId: safeLayoutId, logoUrl, displayName, location, phone, gstHstNumber, taxLabel: safeTaxLabel, returnPolicy, primaryColor, accentColor, headerText, footerText, googleReviewUrl, showGoogleReview: true, showWarranty: showWarranty === 'on', showWalletSave: showWalletSave === 'on', showPartnerProgram: showPartnerProgram === 'on', instagramUrl: safeInstagramUrl, facebookUrl: safeFacebookUrl, tiktokUrl: safeTiktokUrl, xUrl: safeXUrl, youtubeUrl: safeYoutubeUrl, linkedinUrl: safeLinkedinUrl },
-        loyalty: { enabled: loyaltyEnabled === 'on', offerType: safeOfferType, offerValue: safeOfferValueDisplay, redemptionCode: safeRedemptionCode },
+        ...base,
+        theme: {
+          ...base.theme,
+          layoutId: safeLayoutId,
+          logoUrl,
+          displayName,
+          taxLabel: safeTaxLabel,
+          returnPolicy,
+          primaryColor,
+          accentColor,
+          headerText,
+          footerText,
+          googleReviewUrl,
+          showGoogleReview: true,
+          showWarranty: showWarranty === 'on',
+          showWalletSave: showWalletSave === 'on',
+          showPartnerProgram: showPartnerProgram === 'on',
+          instagramUrl: safeInstagramUrl,
+          facebookUrl: safeFacebookUrl,
+          tiktokUrl: safeTiktokUrl,
+          xUrl: safeXUrl,
+          youtubeUrl: safeYoutubeUrl,
+          linkedinUrl: safeLinkedinUrl,
+        },
+        loyalty: bodyHasLoyaltyFields
+          ? { enabled: loyaltyEnabled === 'on', offerType: safeOfferType, offerValue: safeOfferValueDisplay, redemptionCode: safeRedemptionCode }
+          : loyaltyForDisplay(existingLoyaltyProgram),
         merchantAffiliateRate: MERCHANT_AFFILIATE_RATE,
         saved: false,
         error: 'Enter a valid Google review link (should start with https:// and be a Google URL).',
@@ -534,6 +639,11 @@ async function saveReceiptSettings(merchantId, body, file) {
         headerText: headerText || null,
         footerText: footerText || null,
         gstHstNumber: keepIfAbsent('gstHstNumber', existingTheme && existingTheme.gstHstNumber),
+        // Edited in Business Settings, not here -- so Receipt design must
+        // leave them alone rather than read their absence as "cleared".
+        taxNumberLabel: keepIfAbsent('taxNumberLabel', existingTheme && existingTheme.taxNumberLabel),
+        taxNumber2: keepIfAbsent('taxNumber2', existingTheme && existingTheme.taxNumber2),
+        taxNumber2Label: keepIfAbsent('taxNumber2Label', existingTheme && existingTheme.taxNumber2Label),
         taxLabel: safeTaxLabel,
         returnPolicy: returnPolicy || null,
         googleReviewUrl: googleReviewUrl || null,
@@ -542,6 +652,7 @@ async function saveReceiptSettings(merchantId, body, file) {
         showWalletSave: showWalletSave === 'on',
         showPartnerProgram: showPartnerProgram === 'on',
         ...blockFlags,
+        ...warrantyFields,
         instagramUrl: safeInstagramUrl,
         facebookUrl: safeFacebookUrl,
         tiktokUrl: safeTiktokUrl,
@@ -560,6 +671,11 @@ async function saveReceiptSettings(merchantId, body, file) {
         headerText: headerText || null,
         footerText: footerText || null,
         gstHstNumber: keepIfAbsent('gstHstNumber', existingTheme && existingTheme.gstHstNumber),
+        // Edited in Business Settings, not here -- so Receipt design must
+        // leave them alone rather than read their absence as "cleared".
+        taxNumberLabel: keepIfAbsent('taxNumberLabel', existingTheme && existingTheme.taxNumberLabel),
+        taxNumber2: keepIfAbsent('taxNumber2', existingTheme && existingTheme.taxNumber2),
+        taxNumber2Label: keepIfAbsent('taxNumber2Label', existingTheme && existingTheme.taxNumber2Label),
         taxLabel: safeTaxLabel,
         returnPolicy: returnPolicy || null,
         googleReviewUrl: googleReviewUrl || null,
@@ -568,6 +684,7 @@ async function saveReceiptSettings(merchantId, body, file) {
         showWalletSave: showWalletSave === 'on',
         showPartnerProgram: showPartnerProgram === 'on',
         ...blockFlags,
+        ...warrantyFields,
         instagramUrl: safeInstagramUrl,
         facebookUrl: safeFacebookUrl,
         tiktokUrl: safeTiktokUrl,
@@ -576,11 +693,13 @@ async function saveReceiptSettings(merchantId, body, file) {
         linkedinUrl: safeLinkedinUrl,
       },
     }),
-    prisma.loyaltyProgram.upsert({
-      where: { merchantId },
-      update: { enabled: loyaltyEnabled === 'on', offerType: safeOfferType, offerValue: safeOfferValueStored, redemptionCode: safeRedemptionCode },
-      create: { merchantId, enabled: loyaltyEnabled === 'on', offerType: safeOfferType, offerValue: safeOfferValueStored, redemptionCode: safeRedemptionCode },
-    }),
+    bodyHasLoyaltyFields
+      ? prisma.loyaltyProgram.upsert({
+          where: { merchantId },
+          update: { enabled: loyaltyEnabled === 'on', offerType: safeOfferType, offerValue: safeOfferValueStored, redemptionCode: safeRedemptionCode },
+          create: { merchantId, enabled: loyaltyEnabled === 'on', offerType: safeOfferType, offerValue: safeOfferValueStored, redemptionCode: safeRedemptionCode },
+        })
+      : Promise.resolve(),
   ]);
 
   const [theme, loyalty] = await Promise.all([

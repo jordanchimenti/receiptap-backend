@@ -28,6 +28,14 @@
     /* Same treatment the personal More page gives its log-out row. */
     .menu-row.danger .menu-row-icon { background: rgba(255,69,58,0.12); color: var(--w-danger); }
     .menu-row.danger .menu-row-label { color: var(--w-danger); }
+    /* The log-out row is a <button>, and browsers give buttons
+       text-align: center. With the label set to flex: 1 that centred "Log out"
+       inside the space AFTER the icon, so it sat visibly right of centre.
+       Centring the icon and label together as a group is what actually reads
+       as centred -- and this row has no chevron to balance against, unlike
+       every other row here. */
+    .menu-row.danger { justify-content: center; }
+    .menu-row.danger .menu-row-label { flex: none; }
     .menu-row:last-child { border-bottom: none; }
     .menu-row-icon {
       width: 36px; height: 36px; border-radius: 10px; background: var(--w-accent-wash); color: var(--w-accent);
@@ -36,6 +44,18 @@
     .menu-row-icon svg { width: 18px; height: 18px; }
     .menu-row-label { flex: 1; font-size: 14.5px; font-weight: 600; }
     .menu-row-chevron { color: var(--w-ink-soft); }
+    /* The label is the flex child that stretches, so the tag sits with the
+       text rather than drifting over by the chevron. */
+    .menu-row-label { display: flex; align-items: center; gap: 9px; }
+    .row-tag {
+      flex: none; font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+      padding: 3px 8px; border-radius: 999px; background: var(--w-accent-wash); color: var(--w-accent);
+    }
+    /* Only this row carries a description, so the body wrapper is what lets a
+       two-line row sit in a list of one-line ones without the icon drifting. */
+    .menu-row-body { flex: 1; min-width: 0; }
+    .menu-row-body .menu-row-label { flex: none; }
+    .menu-row-sub { font-size: 12px; color: var(--w-ink-soft); margin-top: 3px; line-height: 1.45; }
     .menu-row.locked { opacity: 0.55; }
     .menu-row.locked .menu-row-chevron { color: var(--w-ink-soft); }
 
@@ -145,25 +165,35 @@
       </a>
     </div>
 
-    <!-- Generic account Settings (views/business-account.ejs) -- distinct
-         from Business Settings above: your own name/photo/email/phone and
-         password, never shown to a customer. -->
-    <div class="w-card">
-      <a class="featured-row" href="/account/business/account">
-        <div class="featured-row-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5"/></svg></div>
-        <div class="featured-row-body">
-          <div class="featured-row-title">Settings</div>
-          <div class="featured-row-sub">Your profile, login, and password</div>
-        </div>
-        <div class="featured-row-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg></div>
-      </a>
-    </div>
-
     <div class="section-label">Setup</div>
     <div class="w-card">
+      <%# The FREE tag only shows before a card is on file. Someone who has just
+          switched over from a personal account sees a menu where most rows are
+          locked behind a subscription -- this says plainly that the one thing
+          they'd most want to try first isn't. Once they subscribe the tag has
+          nothing left to tell them, so it goes. %>
       <a class="menu-row" href="/account/business/receipt-design">
         <div class="menu-row-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20h16"/><path d="M6 16 16 6a2.1 2.1 0 0 1 3 3L9 19l-4 1Z"/></svg></div>
-        <div class="menu-row-label">Receipt design</div>
+        <div class="menu-row-body">
+          <div class="menu-row-label">
+            Receipt design
+            <% if (!hasFullAccess) { %><span class="row-tag">Free</span><% } %>
+          </div>
+          <%# Both halves are real on that page now: a live preview, and a
+              Run a test sale button that issues a genuine receipt against a
+              throwaway transaction. (This line used to say preview only,
+              because test receipts lived on the desktop dashboard and were
+              demo-tier -- that stopped being true when the button moved here.) %>
+          <div class="menu-row-sub">Design your receipt and run a test sale.</div>
+        </div>
+        <div class="menu-row-chevron"><%- chevronIcon %></div>
+      </a>
+      <!-- Directly under Receipt design, and not locked for the same reason:
+           setting up a stamp card doesn't require a paid subscription, and
+           nothing stamps until a customer saves a receipt. -->
+      <a class="menu-row" href="/account/business/loyalty">
+        <div class="menu-row-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 12v9H4v-9"/><path d="M2 7h20v5H2z"/><path d="M12 22V7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7Z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7Z"/></svg></div>
+        <div class="menu-row-label">Loyalty</div>
         <div class="menu-row-chevron"><%- chevronIcon %></div>
       </a>
       <!-- Not locked, deliberately -- referring other businesses doesn't

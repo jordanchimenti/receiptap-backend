@@ -109,6 +109,25 @@
       </form>
     </div>
 
+    <%# Stamp card emails. Only the EMAIL is optional -- the Alerts tab always
+        gets the notification, so turning this off quietens their inbox
+        without hiding a reward they've earned. %>
+    <div class="w-card settings-card">
+      <h2>Reward emails</h2>
+      <p class="sub">
+        When a stamp card fills up, we email you which reward is waiting and where.
+        Turn this off and you'll still see it in Alerts — you just won't get the email.
+      </p>
+      <% if (loyaltyEmailsSuccess) { %><div class="success-note">Saved.</div><% } %>
+      <form method="POST" action="/account/settings/reward-emails" style="margin:0;">
+        <div class="pref-row">
+          <label for="loyaltyEmails">Email me when a card is full</label>
+          <span class="sw"><input type="checkbox" id="loyaltyEmails" name="loyaltyEmails" <%= customer.loyaltyEmails ? 'checked' : '' %> /></span>
+        </div>
+        <button type="submit" class="w-btn" style="margin-top:14px;">Save preference</button>
+      </form>
+    </div>
+
     <%# Cross-merchant recognition. Shown only when a link actually exists --
         a shopper who has never consented shouldn't be told about a feature
         that isn't touching them. Never renders the hash itself. %>
@@ -177,11 +196,13 @@
 
     <div class="section-label">Legal</div>
     <div class="w-card">
-      <a class="legal-row" href="/legal/wallet-privacy" target="_blank" rel="noopener">
+      <%# No target="_blank": in the installed app that replaces the whole app
+          rather than opening a tab, and there is no chrome to get back with. %>
+      <a class="legal-row" href="/legal/wallet-privacy">
         Privacy Policy
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17 17 7M8 7h9v9"/></svg>
       </a>
-      <a class="legal-row" href="/legal/wallet-terms" target="_blank" rel="noopener">
+      <a class="legal-row" href="/legal/wallet-terms">
         Terms of Service
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17 17 7M8 7h9v9"/></svg>
       </a>

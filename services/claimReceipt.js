@@ -10,7 +10,7 @@
 // easy to get wrong: refusing an already-claimed receipt, and doing the
 // follow-on work (loyalty punch, categorisation) consistently.
 const prisma = require('../lib/prisma');
-const { incrementLoyaltyPunch } = require('../routes/loyalty');
+const { awardLoyaltyStamps } = require('../routes/loyalty');
 const { categorizeInBackground } = require('./categorize-receipt');
 
 /**
@@ -44,7 +44,7 @@ async function claimReceiptForShopper(transactionId, shopperId) {
   });
   if (result.count === 0) return 'owned-by-other';
 
-  await incrementLoyaltyPunch(transaction.merchantId, shopperId);
+  await awardLoyaltyStamps(transaction, shopperId);
   if (!transaction.aiCategorizedAt) {
     categorizeInBackground(transaction, transaction.merchant.businessName);
   }

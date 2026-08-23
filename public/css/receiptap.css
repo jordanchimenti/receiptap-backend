@@ -260,9 +260,10 @@ input, select, textarea, button { font-family: var(--font-body); }
   padding: 22px 14px 16px; overflow-y: auto;
 }
 .rail-brand { display: flex; align-items: center; padding: 0 8px 22px; }
-/* Logo is a wide horizontal lockup (~5:1) -- height is capped low enough
-   that it fits the fixed --rail-w sidebar without clipping, rather than
-   the old logo's ~2.8:1 ratio which had more headroom at a taller height. */
+/* Logo is a horizontal lockup (~3.8:1 since the 2026 refresh) -- height is
+   capped low enough that it fits the fixed --rail-w sidebar without clipping.
+   The filter flattens the navy/blue artwork to a white silhouette, which is
+   what makes it readable against the navy rail. */
 .rail-brand img { height: 38px; filter: brightness(0) invert(1); }
 .rail-group { font-size: 10.5px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase;
   color: #5D6480; padding: 16px 10px 7px; }

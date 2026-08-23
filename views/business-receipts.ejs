@@ -82,7 +82,7 @@
       <% } else { %>
         <div class="w-card">
           <% customerReceipts.forEach(function(t) { %>
-            <a class="receipt-row" href="/receipt/<%= t.id %>" target="_blank" rel="noopener">
+            <a class="receipt-row" href="/receipt/<%= t.id %>">
               <div>
                 <div class="receipt-date"><%= t.date %></div>
                 <div class="receipt-sub"><%= t.paymentMethod || 'No payment method' %></div>
@@ -108,7 +108,7 @@
       <% } else { %>
         <div class="w-card">
           <% merchantReceipts.forEach(function(t) { %>
-            <a class="receipt-row" href="/receipt/<%= t.id %><%= t.kind === 'own-sale' ? '?copy=merchant' : '' %>" target="_blank" rel="noopener">
+            <a class="receipt-row" href="/receipt/<%= t.id %><%= t.kind === 'own-sale' ? '?copy=merchant' : '' %>">
               <div>
                 <div class="receipt-date"><%= t.date %></div>
                 <div class="receipt-sub"><%= t.kind === 'purchased' ? 'Bought at ' + t.soldByName : (t.paymentMethod || 'No payment method') %></div>

@@ -50,7 +50,7 @@ const CONTRACTS = {
   'lib/taxLabels.js': ['TAX_LABEL_GROUPS', 'TAX_LABEL_OPTIONS', 'resolveTaxLabel', 'isCustomTaxLabel'],
   'lib/referralAttribution.js': ['resolveReferrer', 'attributeCustomerToMerchant', 'readReferralCookie'],
   'lib/safeRedirect.js': ['safeNextPath'],
-  'routes/loyalty.js': ['incrementLoyaltyPunch'],
+  'routes/loyalty.js': ['awardLoyaltyStamps'],
   'routes/affiliates.js': ['ensureMerchantAffiliate', 'getCurrentAffiliate', 'buildAffiliateView'],
   'routes/theme-settings.js': ['computeReceiptSettingsData', 'saveReceiptSettings', 'handleLogoUpload'],
 };

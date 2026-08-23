@@ -9,7 +9,7 @@ const express = require('express');
 const router = express.Router();
 const { OAuth2Client } = require('google-auth-library');
 const { categorizeInBackground } = require('../services/categorize-receipt');
-const { incrementLoyaltyPunch } = require('./loyalty');
+const { awardLoyaltyStamps } = require('./loyalty');
 const { recordShopperConsent } = require('../services/shopperConsentService');
 const { deleteShopperByEmail } = require('../services/dataRetentionService');
 const prisma = require('../lib/prisma');
@@ -123,7 +123,7 @@ router.post('/receipt/:transactionId/capture-email', async (req, res) => {
     where: { id: transaction.id },
     data: { customerId: customer.id },
   });
-  await incrementLoyaltyPunch(transaction.merchantId, customer.id);
+  await awardLoyaltyStamps(transaction, customer.id);
   await recordShopperConsent({ receiptId: transaction.id, merchantId: transaction.merchantId, email, marketingGranted: marketingOptIn, crossMerchantGranted: crossMerchantOptIn }, req);
 
   // Kick off AI categorization — doesn't block this response
@@ -183,7 +183,7 @@ router.post('/receipt/:transactionId/capture-email-google', async (req, res) => 
     where: { id: transaction.id },
     data: { customerId: customer.id },
   });
-  await incrementLoyaltyPunch(transaction.merchantId, customer.id);
+  await awardLoyaltyStamps(transaction, customer.id);
   await recordShopperConsent({ receiptId: transaction.id, merchantId: transaction.merchantId, email, marketingGranted: marketingOptIn, crossMerchantGranted: crossMerchantOptIn }, req);
 
   if (!transaction.aiCategorizedAt) {

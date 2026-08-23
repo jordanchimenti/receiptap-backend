@@ -122,6 +122,13 @@
          which already fails safe to an empty array on any Stripe error. -->
     <% var hasSubscriptionInFlight = paymentMethods.length > 0; %>
 
+    <%# Landed here from a locked section (requireFullBusinessAccess in
+        routes/account-business.js). Say which one and why, rather than
+        leaving them to work out why the link they clicked went somewhere
+        else entirely. %>
+    <% if (lockedSection) { %>
+      <div class="banner warn"><strong><%= lockedSection %></strong> needs a payment method on file. Add one below to unlock it.</div>
+    <% } %>
     <% if (error) { %><div class="banner error"><%= error %></div><% } %>
     <% if (pmSuccess) { %><div class="banner success">Payment method updated.</div><% } %>
     <% if (justStarted) { %><div class="banner success">You're all set — your trial has started.</div><% } %>

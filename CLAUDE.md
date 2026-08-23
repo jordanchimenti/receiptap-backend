@@ -26,7 +26,7 @@ Solo founder, first-time coder. Explain in plain language, one step at a time.
 - `middleware/` — subscriptionGate, requireAdmin, ownerFlag, legalReacceptance
 - `services/` — categorize-receipt, generate-receipt-pdf, stripeService,
   legalAcceptanceService, shopperConsentService, dataRetentionService,
-  emailSuppressionService
+  emailSuppressionService, notificationService, pushService
 - `config/legal.js` — single source of truth for legal-document and
   consent-string versions. See Conventions.
 - `config/retention.js` — single source of truth for every data-retention
@@ -119,6 +119,27 @@ Solo founder, first-time coder. Explain in plain language, one step at a time.
   shopper consent (a plain transactional notice + a separate,
   unchecked-by-default marketing opt-in) writing `ShopperConsent` rows,
   logging declines the same way as grants
+- Loyalty stamp cards: merchants configure them at
+  `/account/business/loyalty` (earn rule, stamps needed, free-text reward,
+  head-start bonus, card design). There is **no signup** — a customer with a
+  ReceipTap account is enrolled by the first receipt they link from that
+  merchant (`awardLoyaltyStamps` in `routes/loyalty.js`). When a card fills,
+  they get an in-app alert (Alerts tab, `Notification` table), an email, and
+  a web push if they've enabled it.
+- Web push (VAPID) for the customer wallet: `public/sw.js`,
+  `public/manifest.webmanifest`, `services/pushService.js`. Verified as far as
+  FCM locally (encryption, delivery attempt, dead-subscription pruning) but
+  **never delivered to a real device** — that needs a deployed HTTPS origin,
+  and on iOS the customer must add ReceipTap to their Home Screen first.
+- "Add to home screen" (`/account/install`), linked as a step from BOTH setup
+  checklists. One page for shoppers and merchants. Chrome/Edge get a real
+  one-tap install via `beforeinstallprompt` (captured in
+  `views/partials/wallet-dark-theme.ejs`, since it fires before page scripts).
+  **iOS Safari has no install API at all** — Apple only allows Share → Add to
+  Home Screen by hand, so that platform gets written steps, not a button. The
+  step is marked done by observing `display-mode: standalone` on a later page
+  load, which stamps `Customer.homeScreenAddedAt` / `Merchant.homeScreenAddedAt`
+  — real observed state, consistent with every other checklist step.
 - Data retention infrastructure: `config/retention.js` defines every window;
   `services/dataRetentionService.js` purges expired receipts and idle
   shopper accounts, purges deactivated merchants past their grace period
@@ -153,8 +174,9 @@ Solo founder, first-time coder. Explain in plain language, one step at a time.
   "online" or "offline". Any device-status UI must be about setup state
   (linked / pairing / needs linking), never connectivity.
 - **Deletion FK order.** `ShopperConsent.receiptId -> Transaction`,
-  `LoyaltyCard.customerId -> Customer`, and `ScannedReceipt.customerId ->
-  Customer` are all `ON DELETE RESTRICT` —
+  `LoyaltyCard.customerId -> Customer`, `ScannedReceipt.customerId ->
+  Customer`, `Notification.customerId -> Customer`, and
+  `PushSubscription.customerId -> Customer` are all `ON DELETE RESTRICT` —
   delete the child rows before the parent or Postgres rejects it.
   `LegalAcceptance.merchantId`, `ReceiptTheme.merchantId`,
   `LoyaltyProgram.merchantId`, and `Commission.merchantId` are ALSO
@@ -171,6 +193,11 @@ Solo founder, first-time coder. Explain in plain language, one step at a time.
 - The eight older dashboard pages still have prototype styling inside the new
   rail: receipts-hub, analytics, repeat-customers, customer-emails,
   merchant-receipts, pos-setup, theme-settings, merchant-expenses.
+- **Transactional email can only reach one address.** `RESEND_API_KEY` is
+  set but `RESEND_FROM_EMAIL` is empty, so everything sends from the
+  `onboarding@resend.dev` sandbox sender, which Resend will only deliver to
+  jordanchimenti98@gmail.com (403 for anyone else). Verify a domain at
+  resend.com/domains and set `RESEND_FROM_EMAIL` before launch.
 - Not deployed yet — in version control and pushed to GitHub
   (jordanchimenti/receiptap-backend) now, just not hosted anywhere real yet.
 - `/legal/terms`, `/legal/privacy`, and `/legal/dpa` (for merchants), plus
@@ -200,9 +227,10 @@ Solo founder, first-time coder. Explain in plain language, one step at a time.
   no shared lock between them.
 - **No unsubscribe mechanism exists yet.** `EmailSuppression` rows are only
   ever written today when a merchant deletes a shopper via the dashboard.
-  There's no marketing-email sender in this app either (Resend is only ever
-  used for password resets) — the "shopper unsubscribes" trigger has
-  nothing to hook into until one of those gets built.
+  There's still no marketing-email sender in this app — Resend now sends
+  password resets, email verification, and the "your stamp card is full"
+  alert, all transactional. The "shopper unsubscribes" trigger has nothing to
+  hook into until a marketing sender gets built.
 - **`deleteShopperEverywhere()` has no UI.** It's built and tested
   (`services/dataRetentionService.js`) but nothing calls it —
   `/dashboard/customer-emails` only wires up the merchant-scoped

@@ -7,49 +7,7 @@
   <title>Log In - ReceipTap</title>
   <link rel="stylesheet" href="/css/receiptap.css" />
   <%- include('partials/wallet-dark-theme') %>
-  <style>
-    .auth-shell { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
-    .auth-card { width: 100%; max-width: 380px; background: var(--w-card); border: 1px solid var(--w-line); border-radius: 20px; padding: 36px 30px; text-align: center; }
-    .auth-title { font-family: var(--font-display); font-size: 24px; font-weight: 700; margin: 4px 0 6px; }
-    .auth-sub { font-size: 13.5px; color: var(--w-ink-soft); margin: 0 0 24px; }
-    .auth-field { text-align: left; margin-bottom: 16px; }
-    .auth-field-row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
-    .auth-field label { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--w-ink-soft); }
-    .auth-field a { font-size: 12.5px; font-weight: 600; color: var(--w-accent); text-decoration: none; }
-    .auth-input-wrap { position: relative; }
-    .auth-field input {
-      width: 100%; box-sizing: border-box; background: var(--w-card-raised); border: 1px solid var(--w-line);
-      color: var(--w-ink); border-radius: 12px; padding: 13px 16px; font-size: 15px; font-family: inherit;
-    }
-    .auth-field input:focus { outline: 2px solid var(--w-accent); outline-offset: 1px; border-color: var(--w-accent); }
-    .pw-toggle {
-      position: absolute; right: 4px; top: 50%; transform: translateY(-50%); background: none; border: none;
-      color: var(--w-ink-soft); cursor: pointer; padding: 8px; display: flex;
-    }
-    .auth-pill-btn {
-      display: block; width: 100%; box-sizing: border-box; background: var(--w-accent); color: #fff; border: none;
-      border-radius: 999px; padding: 14px 20px; font-size: 15px; font-weight: 700; cursor: pointer; font-family: inherit;
-      margin-bottom: 22px;
-    }
-    .auth-pill-btn:hover { background: var(--w-accent-deep); }
-    .auth-divider { display: flex; align-items: center; gap: 10px; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--w-ink-soft); margin-bottom: 16px; }
-    .auth-divider span.line { flex: 1; height: 1px; background: var(--w-line); }
-    .auth-oauth-btn {
-      display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; box-sizing: border-box;
-      padding: 12px 16px; border-radius: 999px; font-size: 14.5px; font-weight: 600; text-decoration: none;
-      border: 1px solid var(--w-line); margin-bottom: 10px; cursor: pointer; font-family: inherit;
-    }
-    .auth-oauth-btn.google { background: var(--w-card-raised); color: var(--w-ink); }
-    .auth-oauth-btn.apple { background: #000; color: #fff; border-color: #000; }
-    .auth-oauth-btn.microsoft { background: var(--w-card-raised); color: var(--w-ink); }
-    #google-signin-btn { display: flex; justify-content: center; margin-bottom: 10px; }
-    /* The logo's "Receip" wordmark is dark navy, meant for a light
-       background -- rather than recolor the actual brand asset, give it a
-       small paper-toned chip to sit on so it stays legible here, same
-       brand-paper accent already used on the scan page's tips card. */
-    .logo-chip { display: inline-block; background: var(--paper); border-radius: 12px; padding: 10px 18px; margin-bottom: 22px; }
-    .logo-chip img { display: block; height: 32px; }
-  </style>
+  <%- include('partials/auth-card-styles') %>
 </head>
 <body>
   <div class="auth-shell">

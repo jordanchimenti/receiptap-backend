@@ -169,6 +169,18 @@
       display: inline-block; margin-top: 10px; background: var(--accent); color: #fff;
       font-size: 13.5px; font-weight: 700; padding: 9px 18px; border-radius: 8px; text-decoration: none;
     }
+    .warranty-card {
+      background: #fff; border: 1px solid #e5e5e5; border-radius: 12px;
+      padding: 16px; margin-top: 10px;
+    }
+    .warranty-card .warranty-title {
+      font-size: 13px; font-weight: 700; color: #111; text-transform: uppercase;
+      letter-spacing: 0.04em; margin-bottom: 8px;
+    }
+    .warranty-card .warranty-row { font-size: 13px; color: #555; line-height: 1.55; margin-bottom: 6px; }
+    .warranty-card .warranty-row:last-child { margin-bottom: 0; }
+    .warranty-card .warranty-label { font-weight: 600; color: #333; }
+    .warranty-card .warranty-details { white-space: pre-wrap; }
     .scan-card { background: #fff; border-radius: 12px; padding: 16px; text-align: center; margin-top: 10px; }
     .barcode-wrap { max-width: 260px; margin: 0 auto 8px; }
     .barcode-wrap svg { display: block; width: 100%; height: auto; }
@@ -269,28 +281,29 @@
       </a>
     <% } %>
     <% if (!isMerchantCopy && typeof loyaltyProgram !== 'undefined' && loyaltyProgram && loyaltyProgram.enabled) { %>
-      <% var loyaltyOfferText = loyaltyProgram.offerType === 'PERCENT' ? (loyaltyProgram.offerValue + '% off') : ('$' + (loyaltyProgram.offerValue / 100).toFixed(2) + ' off'); %>
+      <% var loyaltyOfferText = loyaltyProgram.rewardLabel; %>
+      <% var stampsRequired = loyaltyProgram.stampsRequired; %>
       <div class="loyalty-card" id="loyalty-card" <% if (loyaltyCard) { %>data-card-id="<%= loyaltyCard.id %>"<% } %>>
         <% if (!loyaltyCard) { %>
-          <div class="loyalty-title">🎁 Join our Loyalty Program</div>
-          <div class="loyalty-sub">Collect 5 punches and get <%= loyaltyOfferText %> your next order!</div>
-          <button type="button" class="action-button" style="background:var(--accent); border:none; cursor:pointer;" onclick="handleSaveClick('loyalty-join')">Join Now</button>
+          <div class="loyalty-title">🎁 Loyalty Rewards</div>
+          <div class="loyalty-sub">Save this receipt to your ReceipTap wallet and you'll collect stamps automatically — <%= stampsRequired %> stamps gets you <%= loyaltyOfferText %>.</div>
+          <button type="button" class="action-button" style="background:var(--accent); border:none; cursor:pointer;" onclick="handleSaveClick('loyalty-save')">Save this receipt</button>
         <% } else { %>
           <div class="loyalty-title">🎁 Loyalty Rewards</div>
           <div class="punch-row">
-            <% for (var p = 1; p <= 5; p++) { %>
-              <div class="punch-hole <%= p <= loyaltyCard.punches ? 'filled' : '' %>"><%= p <= loyaltyCard.punches ? '✓' : '' %></div>
+            <% for (var p = 1; p <= stampsRequired; p++) { %>
+              <div class="punch-hole <%= p <= loyaltyCard.stamps ? 'filled' : '' %>"><%= p <= loyaltyCard.stamps ? '✓' : '' %></div>
             <% } %>
           </div>
           <div class="loyalty-sub">
-            <% if (loyaltyCard.punches >= 5) { %>
+            <% if (loyaltyCard.stamps >= stampsRequired) { %>
               Card full — redeem for <%= loyaltyOfferText %>!
             <% } else { %>
-              <% var punchesLeft = 5 - loyaltyCard.punches; %>
-              You're <%= punchesLeft %> punch<%= punchesLeft === 1 ? '' : 'es' %> away from claiming <%= loyaltyOfferText %>!
+              <% var stampsLeft = stampsRequired - loyaltyCard.stamps; %>
+              You're <%= stampsLeft %> stamp<%= stampsLeft === 1 ? '' : 's' %> away from claiming <%= loyaltyOfferText %>!
             <% } %>
           </div>
-          <% if (loyaltyCard.punches >= 5) { %>
+          <% if (loyaltyCard.stamps >= stampsRequired) { %>
             <button type="button" class="action-button" style="background:var(--accent); border:none; cursor:pointer;" onclick="openLoyaltyModal()">Redeem Reward</button>
           <% } %>
         <% } %>
@@ -339,7 +352,24 @@
     <% if (!isMerchantCopy && theme.offerLine) { %>
       <div class="offer-line"><%= theme.offerLine %></div>
     <% } %>
+    <%# The terms print on the receipt itself, not just behind the button --
+        the receipt is what the customer still has months later when
+        something breaks, and it's their proof of purchase either way. %>
     <% if (!isMerchantCopy && theme.showWarranty) { %>
+      <% if (theme.warrantyPeriod || theme.warrantyDetails || theme.warrantyContact) { %>
+        <div class="warranty-card">
+          <div class="warranty-title">Warranty</div>
+          <% if (theme.warrantyPeriod) { %>
+            <div class="warranty-row"><span class="warranty-label">Covered for:</span> <%= theme.warrantyPeriod %></div>
+          <% } %>
+          <% if (theme.warrantyDetails) { %>
+            <div class="warranty-row warranty-details"><%= theme.warrantyDetails %></div>
+          <% } %>
+          <% if (theme.warrantyContact) { %>
+            <div class="warranty-row"><span class="warranty-label">To make a claim:</span> <%= theme.warrantyContact %></div>
+          <% } %>
+        </div>
+      <% } %>
       <a class="action-button" style="background:#555;" href="/receipt/<%= transaction.id %>/warranty">Register Warranty</a>
     <% } %>
     <% if (theme.footerText) { %>
@@ -388,8 +418,8 @@
     </div>
   </div>
 
-  <!-- Loyalty redemption modal: pops up automatically once a card hits 5/5 -->
-  <% if (!isMerchantCopy && loyaltyCard && loyaltyCard.punches >= 5) { %>
+  <!-- Loyalty redemption modal: pops up automatically once a card fills -->
+  <% if (!isMerchantCopy && loyaltyProgram && loyaltyCard && loyaltyCard.stamps >= loyaltyProgram.stampsRequired) { %>
     <div class="modal-overlay" id="loyalty-modal">
       <div class="modal-box">
         <div class="modal-title">🎉 Your card is full!</div>
@@ -461,15 +491,11 @@
         setTimeout(() => window.print(), 200);
       } else if (action === 'photo') {
         saveToPhotos();
-      } else if (action === 'loyalty-join') {
-        joinLoyalty();
+      } else if (action === 'loyalty-save') {
+        // Saving linked the receipt to their account, which is what starts or
+        // stamps the card -- re-render so they see it.
+        location.reload();
       }
-    }
-
-    // --- Loyalty punch card -----------------------------------------------
-    async function joinLoyalty() {
-      const res = await fetch(`/receipt/${TRANSACTION_ID}/loyalty/join`, { method: 'POST' });
-      if (res.ok) location.reload(); // server re-renders the punch card at 1/5
     }
 
     // --- Loyalty redemption modal -------------------------------------------
@@ -640,6 +666,20 @@
         }
       });
     </script>
+  <% } %>
+  <%# A test receipt is opened in a NEW TAB from Receipt design, so there is no
+      referrer to detect and no history to pop -- without forcing it on, the tab
+      is a dead end, which is worse in the installed app where there is no
+      browser chrome to escape with. Everyone else keeps the referrer-gated
+      behaviour: a shopper who taps a puck has nowhere to go "back" to. %>
+  <% if (typeof isTestReceipt !== 'undefined' && isTestReceipt) { %>
+    <%- include('partials/back-affordance', {
+          backFallback: '/account/business/receipt-design',
+          backLabel: 'Receipt design',
+          backAlways: true,
+        }) %>
+  <% } else { %>
+    <%- include('partials/back-affordance', { backFallback: '/account/receipts' }) %>
   <% } %>
 </body>
 </html>

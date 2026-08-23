@@ -35,12 +35,22 @@
     body { background: var(--ms-bg); color: var(--ms-ink); font-family: var(--font-body); margin: 0; height: auto; min-height: 100%; }
 
     .nav {
-      display: flex; align-items: center; justify-content: space-between; padding: 18px 6vw;
+      /* flex-direction and flex are set explicitly because receiptap.css also
+         has a `.nav` -- the old dashboard SIDEBAR, which is `column` and
+         `flex: 1`. That was silently winning here, stacking this top bar
+         vertically on every screen size. Same class name, different component. */
+      display: flex; flex-direction: row; flex: none; gap: 12px;
+      align-items: center; justify-content: space-between; padding: 18px 6vw;
       position: sticky; top: 0; z-index: 50; background: rgba(10,10,10,0.86); backdrop-filter: blur(10px);
       border-bottom: 1px solid var(--ms-line);
     }
     /* The logo's "Receip" wordmark is dark navy, meant for a light background
        -- same paper-toned chip used on the auth pages so it stays legible. */
+    .nav-back {
+      width: 36px; height: 36px; flex: none; border-radius: 50%; border: 1px solid var(--ms-line);
+      background: var(--ms-card-raised); color: var(--ms-ink); cursor: pointer;
+      display: flex; align-items: center; justify-content: center; margin-right: 10px; font-family: inherit;
+    }
     .logo-chip { display: inline-block; background: var(--paper); border-radius: 10px; padding: 7px 12px; }
     .logo-chip img { display: block; height: 24px; }
     .nav-links { display: flex; align-items: center; gap: 18px; }
@@ -82,6 +92,10 @@
        line up down the page as the magnitudes grow. */
     .maths { padding-top: 64px; padding-bottom: 64px; max-width: 720px; }
     .maths-scroll { overflow-x: auto; }
+    /* 420px is wider than a phone, so this table always overflowed its
+       scroller and the "Per year" column -- the most persuasive number on the
+       page -- sat off-screen. The min-width only exists to keep the columns
+       from crushing on desktop; below it, the layout tightens instead. */
     .maths-table { width: 100%; min-width: 420px; border-collapse: collapse; }
     .maths-table th {
       text-align: right; font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
@@ -100,6 +114,34 @@
     /* Currency code rides along in the header so the numbers below can stay
        clean symbols without "$" being ambiguous between USD/CAD/AUD. */
     .m-cur { color: var(--ms-accent); letter-spacing: 0.06em; }
+    @media (max-width: 560px) {
+      .maths-table { min-width: 0; }
+      /* The column header already says "Merchants referred" -- repeating
+         "subscribed" on every row is what pushed the table over the edge. */
+      .m-count span { display: none; }
+      .m-count { font-size: 14px; }
+      .maths-table th { font-size: 9.5px; letter-spacing: 0.04em; }
+      .m-period, .m-year { font-size: 14px; padding-left: 10px; }
+      .maths-table td { padding: 14px 0; }
+    }
+    /* A persistent call to action for a long scrolling page. Pill-shaped
+       rather than a true circle: the ask is a sentence, and a circle big
+       enough to hold it would cover half the screen. Hidden until they've
+       scrolled past the hero button, and hidden again at the footer button --
+       two live CTAs on screen at once just compete with each other. */
+    .sticky-cta {
+      position: fixed; left: 50%; transform: translate(-50%, 120%);
+      bottom: max(18px, env(safe-area-inset-bottom)); z-index: 800;
+      display: flex; align-items: center; gap: 10px;
+      max-width: min(92vw, 420px); box-sizing: border-box;
+      padding: 15px 26px; border-radius: 999px; text-decoration: none;
+      background: var(--ms-accent); color: #fff; font-size: 15px; font-weight: 700;
+      box-shadow: 0 10px 30px rgba(5,107,254,0.45);
+      transition: transform 0.28s cubic-bezier(0.2, 0.8, 0.3, 1);
+    }
+    .sticky-cta.show { transform: translate(-50%, 0); }
+    .sticky-cta svg { flex: none; }
+    @media (prefers-reduced-motion: reduce) { .sticky-cta { transition: none; } }
     .maths-fine { font-size: 12.5px; color: var(--ms-ink-soft); line-height: 1.6; margin: 22px 0 0; }
 
     .section { padding: 72px 6vw; max-width: 960px; margin: 0 auto; }
@@ -174,6 +216,15 @@
 <body>
 
   <nav class="nav">
+    <%# A signed-in merchant reaches this page from the setup checklist inside
+        the app. Running from the home screen there is no browser chrome and no
+        back button, so the only way out was tapping the logo -- which nobody
+        reads as "back". Same dead end the scanned-receipt viewer had. %>
+    <% if (showBack) { %>
+      <button type="button" class="nav-back" onclick="goBack()" aria-label="Back">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+    <% } %>
     <a href="<%= isMerchant ? dashboardPath : '/' %>" class="logo-chip"><img src="/images/receiptap-logo.png" alt="ReceipTap" /></a>
     <div class="nav-links">
       <% if (isMerchant) { %>
@@ -346,5 +397,73 @@
     </span>
   </footer>
 
+  <script>
+    // Prefer real back, so they land exactly where they were -- the setup
+    // checklist, not a different page that merely happens to be nearby.
+    // dashboardPath is the fallback for a fresh tab with no history, and it is
+    // allowlist-validated server-side (lib/affiliateReturnPath.js), never
+    // whatever was in the querystring.
+    function goBack() {
+      if (window.history.length > 1 && document.referrer && new URL(document.referrer).origin === location.origin) {
+        window.history.back();
+      } else {
+        window.location.href = <%- JSON.stringify(backPath) %>;
+      }
+    }
+  </script>
+  <a class="sticky-cta" id="sticky-cta" href="<%= isMerchant ? dashboardPath : '/affiliate/signup' %>">
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 1v22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+    Claim your <%= rate %>% passive income
+  </a>
+
+  <script>
+    (function () {
+      var cta = document.getElementById('sticky-cta');
+      var hero = document.querySelector('.cta-main');   // the page's own first CTA
+      var footer = document.querySelector('footer');    // and its last
+
+      // IntersectionObserver rather than a scroll handler: it fires on the
+      // observer's own schedule instead of every scroll frame, it reports the
+      // starting state without needing the page to move first, and it doesn't
+      // depend on scroll events being delivered at all.
+      var heroVisible = true;
+      var footerVisible = false;
+
+      function apply() {
+        // Show once the page's own CTA has scrolled away, and stand down again
+        // at the footer -- two live calls to action on screen at once just
+        // compete with each other.
+        cta.classList.toggle('show', !heroVisible && !footerVisible);
+      }
+
+      // Measure directly rather than trusting either mechanism on its own.
+      function onScreen(el) {
+        if (!el) return false;
+        var r = el.getBoundingClientRect();
+        return r.bottom > 0 && r.top < window.innerHeight;
+      }
+
+      function recheck() {
+        heroVisible = onScreen(hero);
+        footerVisible = onScreen(footer);
+        apply();
+      }
+
+      // Belt and braces. An observer is the efficient path, but a plain scroll
+      // listener costs almost nothing here and covers any browser where the
+      // observer doesn't deliver -- a call to action that never appears is a
+      // silent failure nobody would report.
+      if ('IntersectionObserver' in window && hero) {
+        var io = new IntersectionObserver(recheck, { threshold: 0 });
+        io.observe(hero);
+        if (footer) io.observe(footer);
+      }
+      window.addEventListener('scroll', recheck, { passive: true });
+      window.addEventListener('resize', recheck);
+
+      // And settle the starting state without waiting for anything to happen.
+      recheck();
+    })();
+  </script>
 </body>
 </html>

@@ -86,7 +86,10 @@
     .empty-sub { font-size: 13.5px; color: var(--w-ink-soft); line-height: 1.5; max-width: 300px; margin: 0 auto 22px; }
 
     .fab {
-      position: fixed; right: 20px; bottom: 88px; width: 52px; height: 52px; border-radius: 50%;
+      /* Clears the tab bar, which is now taller by the home-indicator inset. */
+      /* Sits just above the 75px tab bar. */
+      position: fixed; right: 20px; bottom: 95px;
+      width: 52px; height: 52px; border-radius: 50%;
       background: var(--w-accent); color: #fff; display: flex; align-items: center; justify-content: center;
       text-decoration: none; box-shadow: 0 6px 20px rgba(5,107,254,0.4); font-size: 24px; font-weight: 300;
     }
@@ -110,6 +113,48 @@
     .setup-row-sub { font-size: 12px; color: var(--w-ink-soft); margin-top: 2px; line-height: 1.4; }
     .setup-row-chevron { color: var(--w-ink-soft); flex-shrink: 0; margin-top: 3px; }
     .badge-auto { background: rgba(5,107,254,0.14); color: var(--w-accent); }
+    /* --- Account menu (the "J" circle) --- */
+    .acct-wrap { position: relative; }
+    .acct-menu {
+      display: none; position: absolute; right: 0; top: calc(100% + 8px); z-index: 90;
+      width: 254px; background: var(--w-card); border: 1px solid var(--w-line); border-radius: 14px;
+      box-shadow: 0 14px 40px rgba(0,0,0,0.55); overflow: hidden; text-align: left;
+    }
+    .acct-menu.open { display: block; }
+    /* Catches taps anywhere else so the menu closes, without needing a
+       document-wide click handler that fights the button's own onclick. */
+    .acct-backdrop { display: none; position: fixed; inset: 0; z-index: 80; }
+    .acct-backdrop.open { display: block; }
+    .acct-email {
+      padding: 12px 14px; font-size: 12px; color: var(--w-ink-soft);
+      border-bottom: 1px solid var(--w-line); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .acct-toggle { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--w-line); }
+    .acct-toggle-text { flex: 1; min-width: 0; }
+    .acct-toggle-title { font-size: 13.5px; font-weight: 700; color: var(--w-ink); }
+    .acct-toggle-sub { font-size: 11.5px; color: var(--w-ink-soft); margin-top: 2px; line-height: 1.4; }
+    .acct-item {
+      display: flex; align-items: center; gap: 10px; width: 100%; box-sizing: border-box;
+      padding: 12px 14px; font-size: 13.5px; font-weight: 600; color: var(--w-ink);
+      text-decoration: none; background: none; border: none; cursor: pointer; font-family: inherit;
+      border-bottom: 1px solid var(--w-line);
+    }
+    .acct-item:last-child { border-bottom: none; }
+    .acct-item svg { color: var(--w-ink-soft); flex: none; }
+    .acct-item.danger { color: var(--w-danger); }
+    .acct-item.danger svg { color: var(--w-danger); }
+    .sw { position: relative; flex: none; width: 40px; height: 24px; }
+    .sw input {
+      appearance: none; -webkit-appearance: none; margin: 0; cursor: pointer;
+      width: 40px; height: 24px; border-radius: 999px; background: #3a3a3a; border: none; transition: background 0.18s ease;
+    }
+    .sw input:checked { background: var(--w-accent); }
+    .sw input:disabled { opacity: 0.45; cursor: default; }
+    .sw input::after {
+      content: ''; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%;
+      background: #fff; transition: transform 0.18s ease;
+    }
+    .sw input:checked::after { transform: translateX(16px); }
   </style>
 </head>
 <body>
@@ -119,9 +164,45 @@
         <div class="w-eyebrow">ReceipTap</div>
         <h1 class="w-title">Receipts</h1>
       </div>
-      <a class="w-btn-icon" href="/account/settings" aria-label="Profile settings" style="text-transform:uppercase;">
-        <%= (customerEmail || '?').charAt(0) %>
-      </a>
+      <%# Was a plain link to Settings. It's a menu now, because turning phone
+          notifications back OFF had nowhere to live -- every surface could
+          switch them on and none could switch them off. %>
+      <div class="acct-wrap">
+        <button type="button" class="w-btn-icon" id="acct-btn" onclick="toggleAccountMenu()"
+                aria-haspopup="true" aria-expanded="false" aria-label="Account menu"
+                style="text-transform:uppercase; cursor:pointer;">
+          <%= (customerEmail || '?').charAt(0) %>
+        </button>
+
+        <div class="acct-menu" id="acct-menu" role="menu">
+          <div class="acct-email"><%= customerEmail %></div>
+
+          <div class="acct-toggle" id="push-row">
+            <div class="acct-toggle-text">
+              <div class="acct-toggle-title">Phone notifications</div>
+              <div class="acct-toggle-sub" id="push-sub">Alerts on this device</div>
+            </div>
+            <span class="sw"><input type="checkbox" id="push-switch" onchange="onPushToggle(this)" /></span>
+          </div>
+
+          <a class="acct-item" href="/account/notifications" role="menuitem">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+            Alerts
+          </a>
+          <a class="acct-item" href="/account/settings" role="menuitem">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>
+            Settings
+          </a>
+
+          <form method="POST" action="/account/logout" style="margin:0;">
+            <button type="submit" class="acct-item danger" role="menuitem">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>
+              Log out
+            </button>
+          </form>
+        </div>
+      </div>
+      <div class="acct-backdrop" id="acct-backdrop" onclick="closeAccountMenu()"></div>
     </div>
 
     <div class="w-card setup-card">
@@ -147,27 +228,31 @@
         </div>
         <div class="setup-row-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg></div>
       </a>
-      <a class="setup-row <%= setup.receiptSaved ? 'done' : '' %>" href="/account/receipts">
-        <% if (setup.receiptSaved) { %><div class="setup-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div><% } else { %><div class="setup-check"></div><% } %>
+      <%# One step, not two: tapping a ReceipTap and scanning a paper receipt
+          are different routes to the same milestone -- a receipt in the wallet.
+          Links at the scan page when it's still to do, since that screen offers
+          both the camera and a file upload. %>
+      <a class="setup-row <%= setup.firstReceipt ? 'done' : '' %>" href="<%= setup.firstReceipt ? '/account/receipts' : '/account/receipts/scan' %>">
+        <% if (setup.firstReceipt) { %><div class="setup-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div><% } else { %><div class="setup-check"></div><% } %>
         <div class="setup-row-body">
-          <div class="setup-row-title">Save your first receipt</div>
-          <div class="setup-row-sub"><%= setup.receiptSaved ? "Tapped receipts land here automatically." : "Tap a ReceipTap at checkout and it saves itself." %></div>
+          <div class="setup-row-title">Scan, save or upload your first receipt</div>
+          <div class="setup-row-sub"><%= setup.firstReceipt ? "Your receipts are all in one place." : "Tap a ReceipTap at checkout, or snap a paper receipt yourself." %></div>
         </div>
         <div class="setup-row-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg></div>
       </a>
-      <a class="setup-row <%= setup.receiptScanned ? 'done' : '' %>" href="/account/receipts/scan">
-        <% if (setup.receiptScanned) { %><div class="setup-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div><% } else { %><div class="setup-check"></div><% } %>
+      <a class="setup-row <%= setup.homeScreenAdded ? 'done' : '' %>" href="/account/install">
+        <% if (setup.homeScreenAdded) { %><div class="setup-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div><% } else { %><div class="setup-check"></div><% } %>
         <div class="setup-row-body">
-          <div class="setup-row-title">Scan a paper receipt</div>
-          <div class="setup-row-sub"><%= setup.receiptScanned ? "Paper receipts are in your wallet too." : "Snap an old paper receipt to keep it with the rest." %></div>
+          <div class="setup-row-title">Add ReceipTap to your home screen</div>
+          <div class="setup-row-sub"><%= setup.homeScreenAdded ? "One tap to your receipts, and alerts on your phone." : "Open it like an app, and get alerts on your phone." %></div>
         </div>
         <div class="setup-row-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg></div>
       </a>
-      <a class="setup-row <%= setup.loyaltyJoined ? 'done' : '' %>" href="/account/loyalty">
-        <% if (setup.loyaltyJoined) { %><div class="setup-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div><% } else { %><div class="setup-check"></div><% } %>
+      <a class="setup-row <%= setup.partnerProgram ? 'done' : '' %>" href="/partner-program">
+        <% if (setup.partnerProgram) { %><div class="setup-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div><% } else { %><div class="setup-check"></div><% } %>
         <div class="setup-row-body">
-          <div class="setup-row-title">Join a loyalty program</div>
-          <div class="setup-row-sub"><%= setup.loyaltyJoined ? "Collecting punches toward a reward." : "Collect punches at shops you already visit." %></div>
+          <div class="setup-row-title">Join our Partner Program</div>
+          <div class="setup-row-sub"><%= setup.partnerProgram ? "You're a ReceipTap partner — earn " + affiliateRate + "% for as long as they stay." : "Earn " + affiliateRate + "% recurring commission on every business you refer. Free to join." %></div>
         </div>
         <div class="setup-row-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg></div>
       </a>
@@ -258,7 +343,14 @@
           <div class="day-heading"><%= r.date.toUpperCase() %></div>
           <div class="w-card" style="margin-bottom: 14px;">
         <% } %>
-            <a class="receipt-row" href="<%= r.link %>" <%= r.kind === 'scanned' ? 'target="_blank" rel="noopener"' : '' %>>
+            <%# A scanned receipt used to open its raw .jpg -- first by navigating
+                to it, which trapped anyone running the app from their home
+                screen, then in an in-app image viewer. Both showed the picture
+                and nothing else, while the subtotal, tax number and payment
+                method read off that picture sat unused in the database. It now
+                opens the same kind of page a tapped receipt does, with the
+                photo on it as the supporting evidence. %>
+            <a class="receipt-row" href="<%= r.kind === 'scanned' ? '/account/receipts/scanned/' + r.id : r.link %>">
               <div>
                 <div class="merchant-name"><%= r.merchantName %></div>
                 <div class="receipt-date"><%= r.date %></div>
@@ -284,19 +376,71 @@
 
   <a href="/account/receipts/scan" class="fab" aria-label="Scan a receipt">+</a>
 
-  <div class="w-tabbar">
-    <a class="w-tab active" href="/account/receipts">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 2h12v20l-3-2-3 2-3-2-3 2Z"/><path d="M9 8h6M9 12h6"/></svg>
-      Receipts
-    </a>
-    <a class="w-tab" href="/account/receipts/scan">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 8V6a2 2 0 0 1 2-2h2M4 16v2a2 2 0 0 0 2 2h2M20 8V6a2 2 0 0 0-2-2h-2M20 16v2a2 2 0 0 1-2 2h-2"/><circle cx="12" cy="12" r="3.5"/></svg>
-      Scan
-    </a>
-    <a class="w-tab" href="/account/more">
-      <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
-      More
-    </a>
-  </div>
+  <%- include('partials/wallet-tab-bar', { activeTab: 'receipts' }) %>
+  <%- include('partials/image-viewer') %>
+  <%- include('partials/push-controls') %>
+  <script>
+    var acctMenu = document.getElementById('acct-menu');
+    var acctBackdrop = document.getElementById('acct-backdrop');
+    var acctBtn = document.getElementById('acct-btn');
+    var pushSwitch = document.getElementById('push-switch');
+    var pushSub = document.getElementById('push-sub');
+
+    function toggleAccountMenu() {
+      acctMenu.classList.contains('open') ? closeAccountMenu() : openAccountMenu();
+    }
+    function openAccountMenu() {
+      acctMenu.classList.add('open');
+      acctBackdrop.classList.add('open');
+      acctBtn.setAttribute('aria-expanded', 'true');
+      refreshPushSwitch();
+    }
+    function closeAccountMenu() {
+      acctMenu.classList.remove('open');
+      acctBackdrop.classList.remove('open');
+      acctBtn.setAttribute('aria-expanded', 'false');
+    }
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeAccountMenu(); });
+
+    // Read the real state every time the menu opens rather than trusting a
+    // value rendered at page load -- they may have turned notifications off in
+    // Safari's own settings since, and a switch that lies is worse than none.
+    async function refreshPushSwitch() {
+      if (!ReceipTapPush.configured || !ReceipTapPush.supported) {
+        pushSwitch.disabled = true;
+        pushSub.textContent = "This browser can't show notifications.";
+        return;
+      }
+      if (ReceipTapPush.permission() === 'denied') {
+        pushSwitch.disabled = true;
+        pushSwitch.checked = false;
+        pushSub.textContent = 'Blocked in your browser settings.';
+        return;
+      }
+      pushSwitch.disabled = false;
+      var on = await ReceipTapPush.isOn();
+      pushSwitch.checked = on;
+      pushSub.textContent = on ? 'On for this device' : 'Off — turn on to get alerts here';
+    }
+
+    async function onPushToggle(input) {
+      input.disabled = true;
+      pushSub.textContent = input.checked ? 'Turning on…' : 'Turning off…';
+      try {
+        var result = input.checked ? await ReceipTapPush.enable() : await ReceipTapPush.disable();
+        if (!result.ok) {
+          input.checked = false;
+          pushSub.textContent = result.reason;
+          input.disabled = ReceipTapPush.permission() === 'denied';
+          return;
+        }
+      } catch (err) {
+        input.checked = !input.checked;
+        pushSub.textContent = "That didn't work — " + err.message;
+      }
+      input.disabled = false;
+      await refreshPushSwitch();
+    }
+  </script>
 </body>
 </html>

@@ -93,7 +93,8 @@
             <ul>
               <li>Remove them as the named customer on <%= lookupResult.details.Transaction_unlinked %> receipt<%= lookupResult.details.Transaction_unlinked === 1 ? '' : 's' %></li>
               <li>Delete <%= lookupResult.details.ShopperConsent %> consent record<%= lookupResult.details.ShopperConsent === 1 ? '' : 's' %></li>
-              <% if (lookupResult.details.LoyaltyCard > 0) { %><li>Delete their loyalty punch card</li><% } %>
+              <% if (lookupResult.details.LoyaltyCard > 0) { %><li>Delete their stamp card</li><% } %>
+              <% if (lookupResult.details.Notification > 0) { %><li>Delete <%= lookupResult.details.Notification %> alert<%= lookupResult.details.Notification === 1 ? '' : 's' %> we sent them about your rewards</li><% } %>
             </ul>
             <form method="POST" action="/account/business/emails/delete" class="delete-confirm-form" data-confirm-email="<%= lookupEmail %>">
               <input type="hidden" name="email" value="<%= lookupEmail %>" />

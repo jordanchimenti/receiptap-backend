@@ -304,10 +304,19 @@ function buildEarningsProjection(price, rate) {
 // other redirect, and validated by the same allowlist rather than trusted.
 router.get('/partner-program', async (req, res) => {
   const price = await getSubscriptionPrice();
+  const isMerchant = Boolean(req.session?.merchantId);
+  const isCustomer = Boolean(req.session?.customerId);
+
   res.render('partner-program', {
     rate: REGULAR_AFFILIATE_RATE,
-    isMerchant: Boolean(req.session?.merchantId),
+    isMerchant,
     dashboardPath: affiliateReturnPath(req.query.from),
+    // Shoppers reach this page from the setup checklist in their wallet, and
+    // running from the home screen they have no browser back button -- without
+    // a way back this page is a dead end for them exactly as it was for
+    // merchants. Their return path is the wallet, not a merchant surface.
+    showBack: isMerchant || isCustomer,
+    backPath: isMerchant ? affiliateReturnPath(req.query.from) : '/account/receipts',
     earnings: buildEarningsProjection(price, REGULAR_AFFILIATE_RATE),
   });
 });
@@ -414,6 +423,19 @@ router.get('/affiliate/dashboard', requireAffiliateAuth, async (req, res) => {
 
 // `redirectTo` only matters for a MERCHANT-type affiliate -- a regular
 // affiliate has exactly one dashboard, so there's nowhere else to return to.
+// Where to send someone who has to sign in before we can finish. The two
+// affiliate types authenticate in completely different places -- a MERCHANT
+// partner signs in with their business account, a REGULAR partner has a
+// standalone partner account -- so a single `/login` fallback sent half of
+// them to a page their password doesn't work on.
+//
+// `returnTo` is carried through so they resume where they were interrupted
+// instead of landing on a dashboard and having to find their way back.
+function loginPathFor(type, returnTo) {
+  const base = type === 'MERCHANT' ? '/login' : '/affiliate/login';
+  return returnTo ? `${base}?redirect=${encodeURIComponent(returnTo)}` : base;
+}
+
 function dashboardPathFor(affiliate, redirectTo) {
   return affiliate.type === 'MERCHANT' ? affiliateReturnPath(redirectTo) : '/affiliate/dashboard';
 }
@@ -480,7 +502,9 @@ router.post('/affiliate/referral-code', async (req, res) => {
 
 router.get('/affiliate/connect-stripe/start', async (req, res) => {
   const affiliate = await getCurrentAffiliate(req);
-  if (!affiliate) return res.redirect('/login');
+  // No session at all: a merchant session is the only one that could have
+  // reached this link, so the business login is the right guess here.
+  if (!affiliate) return res.redirect(loginPathFor('MERCHANT', req.originalUrl));
 
   // Validated once here rather than trusted as-is on the way back out --
   // these become Stripe-hosted URLs we don't control the query string of
@@ -497,10 +521,16 @@ router.get('/affiliate/connect-stripe/start', async (req, res) => {
     }
 
     const baseUrl = getBaseUrl(req);
+    // The affiliate's TYPE rides along to Stripe and back. It's only ever used
+    // to choose which login screen to show if the session didn't survive the
+    // round trip -- it identifies nobody and grants nothing, and it's checked
+    // against the two known values on the way back rather than trusted.
+    const as = affiliate.type === 'MERCHANT' ? 'MERCHANT' : 'REGULAR';
+    const query = `next=${encodeURIComponent(next)}&as=${as}`;
     const url = await createAffiliateOnboardingLink(
       accountId,
-      `${baseUrl}/affiliate/connect-stripe/start?next=${encodeURIComponent(next)}`, // Stripe sends them back here if the link expires mid-flow
-      `${baseUrl}/affiliate/connect-stripe/return?next=${encodeURIComponent(next)}`
+      `${baseUrl}/affiliate/connect-stripe/start?${query}`, // Stripe sends them back here if the link expires mid-flow
+      `${baseUrl}/affiliate/connect-stripe/return?${query}`
     );
     res.redirect(url);
   } catch (err) {
@@ -511,7 +541,18 @@ router.get('/affiliate/connect-stripe/start', async (req, res) => {
 
 router.get('/affiliate/connect-stripe/return', async (req, res) => {
   const affiliate = await getCurrentAffiliate(req);
-  if (!affiliate || !affiliate.stripeConnectAccountId) return res.redirect('/login');
+
+  // Coming back from a Stripe-hosted page, the session sometimes isn't there
+  // -- a different browser finished the flow, or the cookie didn't survive the
+  // round trip. Send them to the login their account actually uses, and bring
+  // them straight back here afterwards so the Connect status still gets
+  // confirmed rather than silently skipped.
+  if (!affiliate || !affiliate.stripeConnectAccountId) {
+    const as = req.query.as === 'MERCHANT' ? 'MERCHANT' : 'REGULAR';
+    const next = affiliateReturnPath(req.query.next);
+    const resume = `/affiliate/connect-stripe/return?next=${encodeURIComponent(next)}&as=${as}`;
+    return res.redirect(loginPathFor(as, resume));
+  }
 
   try {
     const status = await getAffiliateConnectStatus(affiliate.stripeConnectAccountId);

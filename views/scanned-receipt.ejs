@@ -1,0 +1,149 @@
+<!-- views/scanned-receipt.ejs -->
+<!-- The digital version of a scanned paper receipt. Everything the extraction
+     pass read off the photo was being stored and then never shown: the wallet
+     row had merchant, date, category and total, and the only way to see a
+     subtotal or a tax number was to squint at the picture. For a receipt kept
+     to support a tax claim that is the wrong way round -- the figures are the
+     point, and the photo is the evidence behind them. -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title><%= receipt.merchantName %> - ReceipTap</title>
+  <link rel="stylesheet" href="/css/receiptap.css" />
+  <%- include('partials/wallet-dark-theme') %>
+  <style>
+    .r-head { text-align: center; padding: 22px 20px 18px; }
+    .r-merchant { font-size: 20px; font-weight: 700; }
+    .r-address { font-size: 12.5px; color: var(--w-ink-soft); margin-top: 4px; line-height: 1.5; }
+    .r-total { font-family: var(--font-mono); font-size: 34px; font-weight: 700; margin-top: 14px; }
+    .r-when { font-size: 12.5px; color: var(--w-ink-soft); margin-top: 4px; }
+    .r-badges { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; margin-top: 12px; }
+    .r-badge { font-size: 10.5px; font-weight: 700; padding: 4px 10px; border-radius: 999px; background: var(--w-card-raised); color: var(--w-ink-soft); }
+    .r-badge.cat { background: var(--w-accent-wash); color: var(--w-accent); }
+
+    .r-sec { padding: 16px 18px; }
+    .r-sec + .r-sec { border-top: 1px solid var(--w-line); }
+    .r-sec-title { font-size: 11px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--w-ink-soft); margin-bottom: 12px; }
+    .r-row { display: flex; justify-content: space-between; gap: 14px; font-size: 13.5px; padding: 5px 0; }
+    .r-row .k { color: var(--w-ink-soft); flex-shrink: 0; }
+    .r-row .v { text-align: right; word-break: break-word; font-variant-numeric: tabular-nums; }
+    .r-row.grand { font-weight: 700; font-size: 15px; border-top: 1px solid var(--w-line); margin-top: 8px; padding-top: 10px; }
+    .r-item { display: flex; justify-content: space-between; gap: 14px; font-size: 13.5px; padding: 6px 0; }
+    .r-item .n { color: var(--w-ink); }
+    .r-item .a { font-family: var(--font-mono); color: var(--w-ink-soft); flex-shrink: 0; }
+
+    .r-note { font-size: 13px; line-height: 1.55; color: var(--w-ink); }
+    .r-missing { font-size: 12.5px; color: var(--w-ink-soft); line-height: 1.55; }
+    .r-photo { display: block; width: 100%; border-radius: 12px; }
+    .r-danger {
+      display: block; width: 100%; text-align: center; background: none; cursor: pointer;
+      border: 1px solid rgba(255,69,58,0.35); color: var(--w-danger);
+      font-size: 14px; font-weight: 600; padding: 13px; border-radius: 12px;
+      font-family: inherit; margin-top: 16px;
+    }
+  </style>
+</head>
+<body>
+  <div class="w-shell">
+    <div style="margin-bottom:16px;">
+      <div class="w-eyebrow">Receipt</div>
+      <h1 class="w-title" style="font-size:20px;">Scanned</h1>
+    </div>
+
+    <div class="w-card">
+      <div class="r-head">
+        <div class="r-merchant"><%= receipt.merchantName %></div>
+        <% if (receipt.merchantAddress) { %><div class="r-address"><%= receipt.merchantAddress %></div><% } %>
+        <div class="r-total">$<%= money(receipt.total) %><% if (receipt.currency) { %> <span style="font-size:15px; color:var(--w-ink-soft);"><%= receipt.currency %></span><% } %></div>
+        <div class="r-when"><%= whenLabel %></div>
+        <div class="r-badges">
+          <% if (receipt.aiCategory) { %><span class="r-badge cat"><%= receipt.aiCategory %></span><% } %>
+          <span class="r-badge">Scanned</span>
+        </div>
+      </div>
+
+      <% if (items.length) { %>
+        <div class="r-sec">
+          <div class="r-sec-title">Items</div>
+          <% items.forEach(function (it) { %>
+            <div class="r-item">
+              <span class="n"><%= it.description %></span>
+              <span class="a"><%= typeof it.amount === 'number' ? '$' + it.amount.toFixed(2) : '' %></span>
+            </div>
+          <% }); %>
+        </div>
+      <% } %>
+
+      <div class="r-sec">
+        <div class="r-sec-title">Totals</div>
+        <% if (receipt.subtotal !== null) { %><div class="r-row"><span class="k">Subtotal</span><span class="v">$<%= money(receipt.subtotal) %></span></div><% } %>
+        <% if (receipt.tax !== null) { %><div class="r-row"><span class="k">Tax</span><span class="v">$<%= money(receipt.tax) %></span></div><% } %>
+        <% if (receipt.tip !== null) { %><div class="r-row"><span class="k">Tip</span><span class="v">$<%= money(receipt.tip) %></span></div><% } %>
+        <div class="r-row grand"><span class="k">Total</span><span class="v">$<%= money(receipt.total) %></span></div>
+      </div>
+
+      <%# The block that decides whether this receipt can actually back a
+          claim. Grouped together rather than scattered so it reads as one
+          answer to one question. %>
+      <div class="r-sec">
+        <div class="r-sec-title">For your records</div>
+        <% if (receipt.taxNumber) { %><div class="r-row"><span class="k">Tax number</span><span class="v"><%= receipt.taxNumber %></span></div><% } %>
+        <% if (receipt.taxNumber2) { %><div class="r-row"><span class="k">Second tax no.</span><span class="v"><%= receipt.taxNumber2 %></span></div><% } %>
+        <% if (receipt.buyerName) { %><div class="r-row"><span class="k">Billed to</span><span class="v"><%= receipt.buyerName %></span></div><% } %>
+        <% if (receipt.receiptNumber) { %><div class="r-row"><span class="k">Receipt no.</span><span class="v"><%= receipt.receiptNumber %></span></div><% } %>
+        <% if (receipt.paymentMethod) { %><div class="r-row"><span class="k">Paid with</span><span class="v"><%= receipt.paymentMethod %></span></div><% } %>
+        <% if (receipt.purchaseTimeText) { %><div class="r-row"><span class="k">Time</span><span class="v"><%= receipt.purchaseTimeText %></span></div><% } %>
+
+        <% if (missing.length) { %>
+          <%# Named, not hidden. Someone relying on this receipt at tax time
+              should find out now that a field is absent, not during an audit. %>
+          <div class="r-missing" style="margin-top:12px;">
+            Not printed on this receipt: <%= missing.join(', ') %>.
+          </div>
+        <% } %>
+      </div>
+
+      <div class="r-sec">
+        <div class="r-sec-title">What it was for</div>
+        <% if (receipt.businessPurpose) { %>
+          <div class="r-note"><%= receipt.businessPurpose %></div>
+        <% } else { %>
+          <div class="r-missing">
+            No note yet. If you might claim this, a line saying why you bought it
+            is worth adding — the receipt can prove what you spent, but never what
+            it was for, and that reason is exactly what a deduction turns on.
+          </div>
+        <% } %>
+        <form method="POST" action="/account/receipts/scanned/<%= receipt.id %>/purpose" style="margin-top:12px;">
+          <div class="w-field" style="margin-bottom:10px;">
+            <input type="text" name="businessPurpose" value="<%= receipt.businessPurpose || '' %>"
+                   placeholder="e.g. Client lunch — Acme contract review" maxlength="300" />
+          </div>
+          <button type="submit" class="w-btn" style="width:100%;">Save note</button>
+        </form>
+      </div>
+
+      <div class="r-sec">
+        <div class="r-sec-title">Original photo</div>
+        <a href="javascript:void 0" onclick="openImageViewer('<%= receipt.imageUrl %>', '<%= receipt.merchantName.replace(/'/g, "\\'") %>'); return false;">
+          <img class="r-photo" src="<%= receipt.imageUrl %>" alt="Photo of the receipt from <%= receipt.merchantName %>" />
+        </a>
+        <div class="r-missing" style="margin-top:10px;">
+          This photo is the record that actually supports a claim — the figures above
+          are read from it. Tax authorities accept a legible image; keep it.
+        </div>
+      </div>
+    </div>
+
+    <form method="POST" action="/account/receipts/scanned/<%= receipt.id %>/delete"
+          onsubmit="return confirm('Delete this receipt and its photo? This cannot be undone.');">
+      <button type="submit" class="r-danger">Delete this receipt</button>
+    </form>
+  </div>
+
+  <%- include('partials/back-affordance', { backFallback: '/account/receipts' }) %>
+  <%- include('partials/image-viewer') %>
+</body>
+</html>

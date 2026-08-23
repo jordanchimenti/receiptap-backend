@@ -119,8 +119,15 @@
         <div class="meta">Change $<%= (transaction.changeDueCents / 100).toFixed(2) %></div>
   <% } %>
 
+  <%# Both registration numbers, each with its own label. A Quebec merchant
+      carries GST/HST and QST; printing only one leaves their customer unable
+      to claim the other back. "GST/HST" is the fallback label, not a fact --
+      a US or UK merchant sets their own. %>
   <% if (theme.showTaxNumber !== false && theme.gstHstNumber) { %>
-    <div class="meta">GST/HST #<%= theme.gstHstNumber %></div>
+    <div class="meta"><%= theme.taxNumberLabel || 'GST/HST' %> #<%= theme.gstHstNumber %></div>
+  <% } %>
+  <% if (theme.showTaxNumber !== false && theme.taxNumber2) { %>
+    <div class="meta"><%= theme.taxNumber2Label || 'Tax' %> #<%= theme.taxNumber2 %></div>
   <% } %>
   <% if (theme.showAddress !== false && businessAddressLines.length > 0) { %>
     <div class="meta"><% businessAddressLines.forEach(function(line, i) { %><%= line %><% if (i < businessAddressLines.length - 1) { %><br /><% } %><% }); %></div>

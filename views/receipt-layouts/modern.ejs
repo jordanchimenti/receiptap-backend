@@ -139,7 +139,10 @@
     <% } %>
 
     <% if (theme.showTaxNumber !== false && theme.gstHstNumber) { %>
-      <div style="font-size:12px; color:#888; margin-top:8px;">GST/HST #<%= theme.gstHstNumber %></div>
+      <div style="font-size:12px; color:#888; margin-top:8px;"><%= theme.taxNumberLabel || 'GST/HST' %> #<%= theme.gstHstNumber %></div>
+    <% } %>
+    <% if (theme.showTaxNumber !== false && theme.taxNumber2) { %>
+      <div style="font-size:12px; color:#888; margin-top:2px;"><%= theme.taxNumber2Label || 'Tax' %> #<%= theme.taxNumber2 %></div>
     <% } %>
     <% if (theme.showAddress !== false && businessAddressLines.length > 0) { %>
       <div style="font-size:12px; color:#888; margin-top:6px;"><% businessAddressLines.forEach(function(line, i) { %><%= line %><% if (i < businessAddressLines.length - 1) { %><br /><% } %><% }); %></div>

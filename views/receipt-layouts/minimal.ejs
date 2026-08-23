@@ -116,7 +116,10 @@
   <% } %>
 
   <% if (theme.showTaxNumber !== false && theme.gstHstNumber) { %>
-    <div class="meta-center">GST/HST #<%= theme.gstHstNumber %></div>
+    <div class="meta-center"><%= theme.taxNumberLabel || 'GST/HST' %> #<%= theme.gstHstNumber %></div>
+  <% } %>
+  <% if (theme.showTaxNumber !== false && theme.taxNumber2) { %>
+    <div class="meta-center"><%= theme.taxNumber2Label || 'Tax' %> #<%= theme.taxNumber2 %></div>
   <% } %>
   <% if (theme.showAddress !== false && businessAddressLines.length > 0) { %>
     <div class="meta-center"><% businessAddressLines.forEach(function(line, i) { %><%= line %><% if (i < businessAddressLines.length - 1) { %><br /><% } %><% }); %></div>

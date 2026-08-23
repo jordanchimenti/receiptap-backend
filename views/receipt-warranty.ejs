@@ -1,0 +1,126 @@
+<!-- views/receipt-warranty.ejs -->
+<!-- Where the receipt's "Register Warranty" button lands. The button shipped
+     long before this page did and 404'd the whole time; the merchant's terms
+     (Receipt design > Register warranty) are what it was always meant to show,
+     alongside the purchase record that proves when the cover started. -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title><%= theme.displayName || merchant.businessName %> - Warranty</title>
+  <style>
+    :root { --primary: <%= theme.primaryColor %>; --accent: <%= theme.accentColor %>; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f4f4f5; margin: 0; padding: 24px 16px; color: var(--primary);
+    }
+    .sheet { max-width: 420px; margin: 0 auto; }
+    .card { background: #fff; border-radius: 12px; padding: 20px; margin-bottom: 10px; }
+    .biz { text-align: center; margin-bottom: 18px; }
+    .biz img { max-height: 48px; max-width: 160px; object-fit: contain; }
+    .biz-name { font-size: 16px; font-weight: 700; margin-top: 8px; }
+    h1 { font-size: 20px; font-weight: 700; margin: 0 0 4px; text-align: center; }
+    .lede { font-size: 13px; color: #666; line-height: 1.55; text-align: center; margin: 0 0 4px; }
+    .sec-title {
+      font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
+      color: #888; margin-bottom: 10px;
+    }
+    .row { display: flex; justify-content: space-between; gap: 12px; font-size: 13.5px; padding: 5px 0; }
+    .row .k { color: #777; flex-shrink: 0; }
+    .row .v { font-weight: 600; text-align: right; word-break: break-word; }
+    .terms { font-size: 13.5px; line-height: 1.6; color: #444; }
+    .terms .block { margin-bottom: 12px; }
+    .terms .block:last-child { margin-bottom: 0; }
+    .terms .label { font-weight: 700; color: #222; display: block; margin-bottom: 2px; }
+    .terms .body { white-space: pre-wrap; }
+    .note {
+      background: #f0f7ff; border: 1px solid #d6e6fb; border-radius: 10px;
+      padding: 13px 15px; font-size: 12.5px; line-height: 1.55; color: #33506e;
+    }
+    .action-button {
+      display: block; width: 100%; box-sizing: border-box; text-align: center;
+      background: var(--accent); color: #fff; text-decoration: none; padding: 12px;
+      border-radius: 8px; font-weight: 600; margin-top: 10px;
+    }
+    .action-button.secondary { background: #fff; color: var(--primary); border: 1px solid #ddd; }
+    @media print { .action-button { display: none; } }
+  </style>
+</head>
+<body>
+  <div class="sheet">
+    <div class="biz">
+      <% if (theme.logoUrl) { %><img src="<%= theme.logoUrl %>" alt="<%= theme.displayName || merchant.businessName %>" /><% } %>
+      <div class="biz-name"><%= theme.displayName || merchant.businessName %></div>
+    </div>
+
+    <div class="card">
+      <h1>Warranty</h1>
+      <p class="lede">Keep this receipt — it's your proof of purchase.</p>
+    </div>
+
+    <% if (theme.warrantyPeriod || theme.warrantyDetails || theme.warrantyContact) { %>
+      <div class="card">
+        <div class="sec-title">Your cover</div>
+        <div class="terms">
+          <% if (theme.warrantyPeriod) { %>
+            <div class="block"><span class="label">Covered for</span><span class="body"><%= theme.warrantyPeriod %></span></div>
+          <% } %>
+          <% if (theme.warrantyDetails) { %>
+            <div class="block"><span class="label">What's covered</span><span class="body"><%= theme.warrantyDetails %></span></div>
+          <% } %>
+          <% if (theme.warrantyContact) { %>
+            <div class="block"><span class="label">To make a claim</span><span class="body"><%= theme.warrantyContact %></span></div>
+          <% } %>
+        </div>
+      </div>
+    <% } else { %>
+      <%# The merchant turned the block on but hasn't written any terms yet.
+          Say so plainly rather than showing an empty card -- the purchase
+          record below is still worth having. %>
+      <div class="card">
+        <div class="sec-title">Your cover</div>
+        <p class="lede" style="text-align:left; margin:0;">
+          <%= theme.displayName || merchant.businessName %> hasn't published warranty terms yet.
+          Contact them with the purchase details below to ask about cover.
+        </p>
+      </div>
+    <% } %>
+
+    <div class="card">
+      <div class="sec-title">Proof of purchase</div>
+      <div class="row"><span class="k">Purchased</span><span class="v"><%= transaction.date %></span></div>
+      <% if (transaction.orderNumber) { %>
+        <div class="row"><span class="k">Receipt no.</span><span class="v"><%= transaction.orderNumber %></span></div>
+      <% } %>
+      <div class="row"><span class="k">Total paid</span><span class="v">$<%= transaction.total %></span></div>
+      <% if (items.length) { %>
+        <div class="sec-title" style="margin-top:16px;">Items</div>
+        <% items.forEach(function (item) { %>
+          <div class="row">
+            <span class="k"><%= item.name %><%= item.quantity > 1 ? ' × ' + item.quantity : '' %></span>
+            <span class="v">$<%= (item.total / 100).toFixed(2) %></span>
+          </div>
+        <% }) %>
+      <% } %>
+    </div>
+
+    <div class="card">
+      <div class="note">
+        <% if (isSaved) { %>
+          This purchase is saved to your ReceipTap wallet, so this record stays
+          with you — nothing to register, and nothing to lose.
+        <% } else { %>
+          Save this receipt to your ReceipTap wallet and this record stays with
+          you for the life of the warranty, even if the paper copy is long gone.
+        <% } %>
+      </div>
+    </div>
+
+    <a class="action-button" href="/receipt/<%= transaction.id %>">Back to receipt</a>
+    <% if (!isSaved) { %>
+      <a class="action-button secondary" href="/account/signup">Save it to my wallet</a>
+    <% } %>
+  </div>
+</body>
+</html>

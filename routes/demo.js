@@ -7,6 +7,7 @@
 // through the partner banner, the receipt, the save buttons, the Google
 // review card, the loyalty punch card, and the social links in one pass.
 const express = require('express');
+const { applyComplianceFloor } = require('../lib/receiptComplianceFloor');
 const router = express.Router();
 const prisma = require('../lib/prisma');
 const { SHOPPER_CONSENT } = require('../config/legal');
@@ -49,13 +50,17 @@ router.get('/demo/receipt', async (req, res) => {
 
   res.render('receipt', {
     merchant,
-    theme,
+    // Same floor the real thing gets, so the demo can't advertise a receipt
+    // shape that would never be issued.
+    theme: applyComplianceFloor(theme, { total: 1526, tax: 176 }),
     isPreview: true, // shows the "Your custom logo" placeholder box instead of a real image
     logoPlaceholderText: 'Your custom logo',
     googleClientId: process.env.GOOGLE_CLIENT_ID || '',
     alreadySignedUp: false,
-    loyaltyProgram: loyaltyProgram || { enabled: true, offerType: 'PERCENT', offerValue: 10 },
-    loyaltyCard: { id: 'demo', punches: 3 }, // mid-progress, not full -- a full card auto-opens a redemption modal, which would hijack the scroll tour
+    loyaltyProgram: loyaltyProgram || { enabled: true, stampsRequired: 10, rewardLabel: 'Free reward' },
+    // Mid-progress, not full -- a full card auto-opens a redemption modal,
+    // which would hijack the scroll tour.
+    loyaltyCard: { id: 'demo', stamps: 3 },
     partnerReferralUrl,
     isMerchantCopy: false,
     shopperConsentText: SHOPPER_CONSENT,

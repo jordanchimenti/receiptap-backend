@@ -9,6 +9,24 @@ const prisma = require('../lib/prisma');
 const { SHOPPER_CONSENT } = require('../config/legal');
 const { getBaseUrl } = require('../lib/baseUrl');
 const { claimReceiptForShopper } = require('../services/claimReceipt');
+const { applyComplianceFloor } = require('../lib/receiptComplianceFloor');
+
+// A merchant's own test receipt, opened from a QR on their phone. Declared
+// BEFORE /receipt/:transactionId or Express would read "test" as a
+// transaction id and 404.
+//
+// It renders through the existing preview route rather than duplicating the
+// receipt-building logic -- one rendering path means a test receipt can't
+// drift away from what a customer actually sees. Nothing is written to the
+// database; see lib/testReceiptToken.js for why that matters.
+router.get('/receipt/test/:token', (req, res) => {
+  const { verifyTestReceiptToken } = require('../lib/testReceiptToken');
+  if (!verifyTestReceiptToken(req.params.token)) {
+    return res.status(404).send('This test receipt link has expired. Open Receipt design and run a new test sale.');
+  }
+  const layout = /^[a-z]+$/.test(req.query.layout || '') ? req.query.layout : 'classic';
+  res.redirect(`/dashboard/settings/receipt/preview/${layout}?t=${encodeURIComponent(req.params.token)}`);
+});
 
 router.get('/receipt/:transactionId', async (req, res) => {
   const transaction = await prisma.transaction.findUnique({
@@ -108,7 +126,11 @@ router.get('/receipt/:transactionId', async (req, res) => {
 
   res.render('receipt', {
     merchant,
-    theme: safeTheme,
+    // Forced on regardless of what the merchant switched off: a receipt
+    // missing the seller, date, tax or total can't support the customer's
+    // claim, and design preferences don't outrank that. See
+    // lib/receiptComplianceFloor.js.
+    theme: applyComplianceFloor(safeTheme, transaction),
     barcodeValue,
     barcodeMarkup,
     // Only Square exposes a card fingerprint, and only card sales carry one.
@@ -132,6 +154,47 @@ router.get('/receipt/:transactionId', async (req, res) => {
         dateStyle: 'medium',
         timeStyle: 'short',
       }),
+    },
+  });
+});
+
+// The "Register Warranty" button on the receipt has pointed here since the
+// showWarranty toggle shipped, but the route never existed -- every customer
+// who pressed it got a 404. What it owes them is the merchant's terms
+// (Receipt design > Register warranty) plus the purchase record that dates
+// the cover. There is no separate registration step to complete: the receipt
+// is already the record, which is the whole point of a digital receipt.
+router.get('/receipt/:transactionId/warranty', async (req, res) => {
+  const transaction = await prisma.transaction.findUnique({
+    where: { id: req.params.transactionId },
+  });
+
+  if (!transaction) {
+    return res.status(404).send('Receipt not found');
+  }
+
+  const [theme, merchant] = await Promise.all([
+    prisma.receiptTheme.findUnique({ where: { merchantId: transaction.merchantId } }),
+    prisma.merchant.findUnique({ where: { id: transaction.merchantId } }),
+  ]);
+
+  // A merchant who has the block switched off isn't offering a warranty, so
+  // there is nothing here to show even if someone kept the link.
+  if (!theme || !theme.showWarranty) {
+    return res.redirect(`/receipt/${transaction.id}`);
+  }
+
+  const items = Array.isArray(transaction.lineItems) ? transaction.lineItems : [];
+
+  res.render('receipt-warranty', {
+    merchant,
+    theme,
+    items,
+    isSaved: Boolean(transaction.customerId),
+    transaction: {
+      ...transaction,
+      total: (transaction.total / 100).toFixed(2),
+      date: transaction.createdAt.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }),
     },
   });
 });

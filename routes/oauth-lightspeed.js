@@ -7,6 +7,7 @@
 // location" step, just assign a puck straight to it.
 
 const express = require('express');
+const { getBaseUrl } = require('../lib/baseUrl');
 const router = express.Router();
 const prisma = require('../lib/prisma');
 const { LIGHTSPEED_AUTH_BASE_URL, LIGHTSPEED_SCOPES, exchangeCodeForToken, createWebhookSubscription } = require('../services/lightspeedService');
@@ -19,7 +20,17 @@ function requireAuth(req, res, next) {
 
 // Step 1: send the merchant to Lightspeed's own login/authorization page
 router.get('/oauth/lightspeed/connect', requireAuth, (req, res) => {
-  const redirectUri = `${req.protocol}://${req.get('host')}/oauth/lightspeed/callback`;
+  // OAuth redirect URIs must EXACTLY match a value registered with the provider,
+  // so there has to be exactly one of them. This used to be built from
+  // req.get('host'), which made it different on localhost, on a tunnel and in
+  // production -- three URIs to register, one of which (http://localhost) a
+  // production Square app rejects outright with
+  // "Invalid value for parameter `redirect_uri`".
+  //
+  // getBaseUrl pins it to APP_BASE_URL when that is set, so there is a single
+  // URI per provider to register. It still falls back to the request host when
+  // APP_BASE_URL is unset, which keeps a bare local checkout working.
+  const redirectUri = `${getBaseUrl(req)}/oauth/lightspeed/callback`;
   const params = new URLSearchParams({
     response_type: 'code',
     client_id: process.env.LIGHTSPEED_CLIENT_ID,
@@ -41,7 +52,7 @@ router.get('/oauth/lightspeed/callback', requireAuth, async (req, res) => {
   const { code, domain_prefix: domainPrefix, state } = req.query;
   if (!code || !domainPrefix) return res.status(400).send('Missing authorization code from Lightspeed');
 
-  const redirectUri = `${req.protocol}://${req.get('host')}/oauth/lightspeed/callback`;
+  const redirectUri = `${getBaseUrl(req)}/oauth/lightspeed/callback`;
 
   let tokens;
   try {

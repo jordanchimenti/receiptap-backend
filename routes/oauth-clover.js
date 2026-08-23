@@ -7,6 +7,7 @@
 // step the way multi-location Square merchants have.
 
 const express = require('express');
+const { getBaseUrl } = require('../lib/baseUrl');
 const router = express.Router();
 const prisma = require('../lib/prisma');
 const { CLOVER_AUTH_BASE_URL, exchangeCodeForToken } = require('../services/cloverService');
@@ -19,7 +20,17 @@ function requireAuth(req, res, next) {
 
 // Step 1: send the merchant to Clover's own login/authorization page
 router.get('/oauth/clover/connect', requireAuth, (req, res) => {
-  const redirectUri = `${req.protocol}://${req.get('host')}/oauth/clover/callback`;
+  // OAuth redirect URIs must EXACTLY match a value registered with the provider,
+  // so there has to be exactly one of them. This used to be built from
+  // req.get('host'), which made it different on localhost, on a tunnel and in
+  // production -- three URIs to register, one of which (http://localhost) a
+  // production Square app rejects outright with
+  // "Invalid value for parameter `redirect_uri`".
+  //
+  // getBaseUrl pins it to APP_BASE_URL when that is set, so there is a single
+  // URI per provider to register. It still falls back to the request host when
+  // APP_BASE_URL is unset, which keeps a bare local checkout working.
+  const redirectUri = `${getBaseUrl(req)}/oauth/clover/callback`;
   const params = new URLSearchParams({
     client_id: process.env.CLOVER_APP_ID,
     redirect_uri: redirectUri,

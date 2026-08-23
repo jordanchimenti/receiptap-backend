@@ -21,16 +21,20 @@ const router = express.Router();
 const prisma = require('../lib/prisma');
 const { deleteShopperByEmail } = require('../services/dataRetentionService');
 const { DEACTIVATED_MERCHANT_PURGE_DAYS } = require('../config/retention');
+const claimLimit = require('../lib/claimAttemptLimit');
 
 const { computeOverviewData, computeReceiptsHubData, computePucksData } = require('./merchant-dashboard');
 const { computeAnalyticsData } = require('./analytics');
 const { computeRepeatCustomersData } = require('./repeat-customers');
 const { computeCustomerEmailsData } = require('./email-capture');
 const { computeReceiptSettingsData, saveReceiptSettings, handleLogoUpload } = require('./theme-settings');
+const { computeLoyaltyPageData, saveLoyaltyProgram, redeemForCustomer } = require('./loyalty');
 const { computeBillingData, syncSubscriptionFromStripe } = require('./billing');
 const { computePosSetupData, getGuideProviders, computeGuideData } = require('./oauth-square');
 const { getCurrentAffiliate, buildAffiliateView } = require('./affiliates');
-const { getBaseUrl } = require('../lib/baseUrl');
+const { getBaseUrl, getSelfUrl } = require('../lib/baseUrl');
+const QRCode = require('qrcode');
+const { createTestReceiptToken } = require('../lib/testReceiptToken');
 const {
   createCheckoutSession,
   createPortalSession,
@@ -64,12 +68,35 @@ function requireAuth(req, res, next) {
 // for everyone else too. listPaymentMethods() (services/stripeService.js)
 // already fails safe to an empty list on any Stripe error, so a merchant
 // with dead/placeholder IDs correctly reads as "no card" here.
+// Which section someone was trying to open, so the billing page can say so by
+// name. Longest paths first -- /pos/guides has to match before /pos.
+const LOCKED_SECTION_NAMES = [
+  ['/account/business/receipts', 'Receipts'],
+  ['/account/business/analytics', 'Analytics'],
+  ['/account/business/customers', 'Customers'],
+  ['/account/business/emails', 'Customer emails'],
+  ['/account/business/pos', 'POS connection'],
+];
+
+function lockedSectionFor(url) {
+  const path = (url || '').split('?')[0];
+  const hit = LOCKED_SECTION_NAMES.find(([prefix]) => path.startsWith(prefix));
+  return hit ? hit[1] : null;
+}
+
 async function requireFullBusinessAccess(req, res, next) {
   try {
     const merchant = await prisma.merchant.findUnique({ where: { id: req.session.merchantId } });
     const { paymentMethods } = await listPaymentMethods(merchant);
     if (paymentMethods.length > 0) return next();
-    return res.redirect('/account/business/receipt-design');
+
+    // Used to redirect to Receipt design, which was a dead end: someone who
+    // clicked "View all" under Recent receipts landed on an unrelated editor
+    // with no explanation and reasonably concluded the link was broken.
+    // Billing is where the thing they're missing actually gets fixed, and
+    // ?locked= lets that page name the section they were reaching for.
+    const section = lockedSectionFor(req.originalUrl);
+    return res.redirect('/account/business/billing' + (section ? '?locked=' + encodeURIComponent(section) : ''));
   } catch (err) {
     // Fail-open, same posture as demoAccountGate/subscriptionGate/legalReacceptance.
     console.error('requireFullBusinessAccess check failed:', err);
@@ -100,6 +127,67 @@ router.get('/account/business/receipts', requireAuth, requireFullBusinessAccess,
     pageSize: 5,
   });
   res.render('business-receipts', data);
+});
+
+// ---------------------------------------------------------------------------
+// Claim a ReceipTap from its activation code alone.
+//
+// GET/POST /claim/:puckId (routes/pucks.js) is the other way in, and it only
+// works if you physically tapped the puck -- that's where the ID in the URL
+// comes from. This path takes the 6-character code on its own, which is what
+// the Dashboard's setup guide has always told merchants they could do, and
+// what the Get started card's "Already have a code?" link needs.
+//
+// Not behind requireFullBusinessAccess: claiming hardware is part of getting
+// started, so a merchant still on trial has to be able to do it.
+// ---------------------------------------------------------------------------
+router.get('/account/business/claim', requireAuth, (req, res) => {
+  res.render('business-claim', { error: req.query.error || null, submittedCode: '' });
+});
+
+router.post('/account/business/claim', requireAuth, async (req, res) => {
+  const raw = typeof req.body.claimCode === 'string' ? req.body.claimCode.trim().toUpperCase() : '';
+  const fail = (error, keepCode) =>
+    res.status(400).render('business-claim', { error, submittedCode: keepCode ? raw : '' });
+
+  // Keyed on the merchant, not the IP: the session is already required to
+  // reach this route at all, so this is the account doing the guessing.
+  const limitKey = req.session.merchantId;
+  if (claimLimit.isLockedOut(limitKey)) {
+    return fail('Too many incorrect codes. Wait 15 minutes and try again.', false);
+  }
+
+  if (!/^[A-Z0-9]{6}$/.test(raw)) {
+    return fail('An activation code is 6 letters and numbers. Check the insert card that came with your ReceipTap.', true);
+  }
+
+  const puck = await prisma.puck.findUnique({ where: { claimCode: raw } });
+
+  // A wrong code and an already-claimed one are both failures worth counting,
+  // but they get different wording -- "someone already claimed this" is a real
+  // situation a merchant needs to act on, not a typo to retry.
+  if (!puck) {
+    claimLimit.recordFailure(limitKey);
+    return fail("We don't recognise that code. Check the insert card and try again.", true);
+  }
+
+  if (puck.status !== 'UNCLAIMED') {
+    claimLimit.recordFailure(limitKey);
+    if (puck.merchantId === req.session.merchantId) {
+      return fail('That ReceipTap is already on your account.', false);
+    }
+    return fail('That ReceipTap has already been claimed by another account. Contact support@receiptap.com if you believe that is a mistake.', false);
+  }
+
+  await prisma.puck.update({
+    where: { id: puck.id },
+    data: { status: 'CLAIMED', merchantId: req.session.merchantId, claimedAt: new Date() },
+  });
+  claimLimit.clear(limitKey);
+
+  // Straight to the POS page: a claimed ReceipTap still routes nothing until
+  // it's linked to a register, so this is the next thing that has to happen.
+  res.redirect('/account/business/pos?claimed=' + encodeURIComponent(puck.id));
 });
 
 router.get('/account/business/pucks', requireAuth, async (req, res) => {
@@ -155,6 +243,59 @@ router.post('/account/business/receipt-design', requireAuth, handleLogoUpload, a
   }
   const result = await saveReceiptSettings(req.session.merchantId, req.body, req.file);
   res.render('business-receipt-design', result);
+});
+
+// The stamp card, sitting directly under Receipt design in the More menu.
+// Same no-requireFullBusinessAccess treatment as Receipt design: configuring
+// a loyalty program isn't one of the gated business tools, and the program
+// can't stamp anything until a customer saves a receipt anyway.
+// Run a test sale: hands back a link + QR to a receipt rendered exactly as a
+// customer would see it, using this merchant's saved design.
+//
+// No Transaction is created. The old demo-only test sale wrote a real row,
+// which is precisely why it was restricted -- one test sale in a live
+// merchant's data would show up in their revenue, receipt counts, analytics
+// and exports. This is signed and read-only instead, so it's safe for any
+// merchant, subscribed or not.
+router.post('/account/business/receipt-design/test-sale', requireAuth, async (req, res) => {
+  const layout = /^[a-z]+$/.test(req.body.layoutId || '') ? req.body.layoutId : 'classic';
+  const token = createTestReceiptToken(req.session.merchantId);
+  // getSelfUrl, not getBaseUrl: this link has to open from wherever the
+  // dashboard is actually running. See lib/baseUrl.js.
+  const receiptUrl = `${getSelfUrl(req)}/receipt/test/${token}?layout=${layout}`;
+
+  try {
+    const qrDataUrl = await QRCode.toDataURL(receiptUrl, { width: 480, margin: 1 });
+    res.json({ receiptUrl, qrDataUrl });
+  } catch (err) {
+    // The link alone is still useful -- don't fail the whole thing over a QR.
+    console.error('[test-sale] QR generation failed:', err.message);
+    res.json({ receiptUrl, qrDataUrl: null });
+  }
+});
+
+router.get('/account/business/loyalty', requireAuth, async (req, res) => {
+  res.render('business-loyalty', await computeLoyaltyPageData(req.session.merchantId));
+});
+
+// Reuses theme-settings' multer handler -- the card logo is the same kind of
+// upload as the receipt logo, into the same directory, under the same 2MB and
+// image-type limits. Same error path too: multer stashes onto req rather than
+// rendering, so this route renders its own template.
+router.post('/account/business/loyalty', requireAuth, handleLogoUpload, async (req, res) => {
+  if (req.logoUploadError) {
+    const data = await computeLoyaltyPageData(req.session.merchantId);
+    return res.status(400).render('business-loyalty', { ...data, error: req.logoUploadError });
+  }
+  res.render('business-loyalty', await saveLoyaltyProgram(req.session.merchantId, req.body, req.file));
+});
+
+// Staff redeeming a full card at the counter. Renders rather than redirects so
+// the result lands beside the box it was typed into.
+router.post('/account/business/loyalty/redeem', requireAuth, async (req, res) => {
+  const result = await redeemForCustomer(req.session.merchantId, req.body.email, req.body.code);
+  const data = await computeLoyaltyPageData(req.session.merchantId);
+  res.render('business-loyalty', { ...data, redeemMessage: result.message || null, redeemError: result.error || null });
 });
 
 // The Partner Program card reached from the More tab. Same buildAffiliateView()
@@ -229,20 +370,14 @@ router.get('/account/business/settings', requireAuth, async (req, res) => {
   });
 });
 
-// The generic Settings card reached from the More tab -- distinct from
-// Business Settings above, which is the customer-facing/compliance stuff
-// (profile shown on receipts, mailing address). This is the merchant's own
-// account: photo, name, login email, phone, and password -- nothing here
-// is ever shown to a customer.
-router.get('/account/business/account', requireAuth, async (req, res) => {
-  const merchant = await prisma.merchant.findUnique({ where: { id: req.session.merchantId } });
-  res.render('business-account', {
-    merchant,
-    profileError: req.query.profileError || null,
-    profileSuccess: req.query.profileSuccess === '1',
-    passwordError: req.query.passwordError || null,
-    passwordSuccess: req.query.passwordSuccess === '1',
-  });
+// This page's contents were folded into Business Settings -- it was a second
+// place to edit Merchant.email and the merchant's own profile, which meant two
+// pages writing the same columns. Kept as a redirect rather than deleted: the
+// path is bookmarkable, and several POST handlers still send `redirectTo` here
+// after saving.
+router.get('/account/business/account', requireAuth, (req, res) => {
+  const qs = req.originalUrl.includes('?') ? '?' + req.originalUrl.split('?')[1] : '';
+  res.redirect('/account/business/settings' + qs);
 });
 
 // Danger Zone's "Disconnect all tiles" -- fully releases every ReceipTap
@@ -293,6 +428,7 @@ router.get('/account/business/billing', requireAuth, async (req, res) => {
     ...data,
     error: req.query.error || null,
     pmSuccess: req.query.pmSuccess === '1',
+    lockedSection: typeof req.query.locked === 'string' ? req.query.locked.slice(0, 40) : null,
     justResumed: req.query.resumed === '1',
     justStarted: req.query.success === '1',
     stripePublishableKey: process.env.STRIPE_PUBLISHABLE_KEY || '',

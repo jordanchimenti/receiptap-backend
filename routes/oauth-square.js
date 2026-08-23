@@ -4,6 +4,7 @@
 // which is the ONGOING shared endpoint that receives sale events afterward.
 
 const express = require('express');
+const { getBaseUrl } = require('../lib/baseUrl');
 const router = express.Router();
 const prisma = require('../lib/prisma');
 const { posReturnPath } = require('../lib/posReturnPath');
@@ -23,7 +24,17 @@ const SQUARE_BASE_URL = process.env.SQUARE_APP_ID?.startsWith('sandbox-')
 
 // Step 1: send the merchant to Square's own login/authorization page
 router.get('/oauth/square/connect', requireAuth, (req, res) => {
-  const redirectUri = `${req.protocol}://${req.get('host')}/oauth/square/callback`;
+  // OAuth redirect URIs must EXACTLY match a value registered with the provider,
+  // so there has to be exactly one of them. This used to be built from
+  // req.get('host'), which made it different on localhost, on a tunnel and in
+  // production -- three URIs to register, one of which (http://localhost) a
+  // production Square app rejects outright with
+  // "Invalid value for parameter `redirect_uri`".
+  //
+  // getBaseUrl pins it to APP_BASE_URL when that is set, so there is a single
+  // URI per provider to register. It still falls back to the request host when
+  // APP_BASE_URL is unset, which keeps a bare local checkout working.
+  const redirectUri = `${getBaseUrl(req)}/oauth/square/callback`;
   const params = new URLSearchParams({
     client_id: process.env.SQUARE_APP_ID,
     scope: 'MERCHANT_PROFILE_READ PAYMENTS_READ ORDERS_READ',
@@ -45,7 +56,7 @@ router.get('/oauth/square/callback', requireAuth, async (req, res) => {
   if (!code) return res.status(400).send('Missing authorization code from Square');
 
   // Must exactly match the redirect_uri used in the authorize request above.
-  const redirectUri = `${req.protocol}://${req.get('host')}/oauth/square/callback`;
+  const redirectUri = `${getBaseUrl(req)}/oauth/square/callback`;
 
   const tokenResponse = await fetch(`${SQUARE_BASE_URL}/oauth2/token`, {
     method: 'POST',

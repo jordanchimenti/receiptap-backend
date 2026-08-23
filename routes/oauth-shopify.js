@@ -8,6 +8,7 @@
 // offline and never expires -- no refresh logic needed here.
 
 const express = require('express');
+const { getBaseUrl } = require('../lib/baseUrl');
 const router = express.Router();
 const prisma = require('../lib/prisma');
 const {
@@ -32,7 +33,17 @@ router.get('/oauth/shopify/connect', requireAuth, (req, res) => {
     return res.status(400).send('Enter your shop domain as yourstorename.myshopify.com');
   }
 
-  const redirectUri = `${req.protocol}://${req.get('host')}/oauth/shopify/callback`;
+  // OAuth redirect URIs must EXACTLY match a value registered with the provider,
+  // so there has to be exactly one of them. This used to be built from
+  // req.get('host'), which made it different on localhost, on a tunnel and in
+  // production -- three URIs to register, one of which (http://localhost) a
+  // production Square app rejects outright with
+  // "Invalid value for parameter `redirect_uri`".
+  //
+  // getBaseUrl pins it to APP_BASE_URL when that is set, so there is a single
+  // URI per provider to register. It still falls back to the request host when
+  // APP_BASE_URL is unset, which keeps a bare local checkout working.
+  const redirectUri = `${getBaseUrl(req)}/oauth/shopify/callback`;
   // Round-tripped back on the callback below to know where to send the
   // merchant afterward -- see the identical comment in oauth-square.js.
   // Shopify's own HMAC signature (verifyOAuthCallback below) covers this

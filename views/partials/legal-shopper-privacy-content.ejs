@@ -133,8 +133,12 @@
     <h2>How long we keep your data</h2>
     <p>
       Our policy is to keep your saved tap receipts, and your account
-      itself, for <strong><%= retention.SHOPPER_RECEIPT_MONTHS %> months</strong>,
-      and then delete them.
+      itself, for <strong><%= Math.round(retention.SHOPPER_RECEIPT_MONTHS / 12) %> years</strong>,
+      and then delete them. We keep them that long on purpose: the Canada
+      Revenue Agency expects business records to be kept for six years after
+      the end of the tax year they belong to, and US limitation periods can
+      run to seven. Deleting sooner would take your receipts away while you
+      might still need them.
       <span class="review">[[REVIEW: automatic deletion on this schedule is built into our systems but has not been switched on in production as of the date above -- confirm live status before publishing this page, or adjust this paragraph to describe how deletion requests are being handled manually in the meantime.]]</span>
     </p>
     <p>

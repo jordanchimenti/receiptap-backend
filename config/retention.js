@@ -13,7 +13,23 @@
 // Shopper-side receipts: the Transaction row, its lineItems, and everything
 // that cascades from it (ShopperConsent rows tied to that receiptId) age out
 // this many months after Transaction.createdAt.
-const SHOPPER_RECEIPT_MONTHS = 24;
+//
+// SEVEN YEARS, not the two this used to be. The old window quietly destroyed
+// the very thing the product exists to keep: CRA requires business records be
+// kept SIX YEARS from the end of the last tax year they relate to, so a
+// receipt dated early in a year must survive nearly seven from its own date.
+// The US limitation periods sit inside that -- three years normally, six where
+// more than 25% of income was omitted, seven for bad-debt claims.
+//
+// This is deliberately the longest of those, because a shorter window is
+// unrecoverable: a purged receipt cannot be un-purged when someone is audited.
+// It is a real privacy cost (PIPEDA and GDPR both say do not keep personal
+// data longer than the purpose needs), and the purpose that justifies it is
+// tax substantiation -- which is exactly what this product promises.
+//
+// [[REVIEW: confirm with counsel before publishing. The number drives the
+// retention paragraph in BOTH privacy policies automatically.]]
+const SHOPPER_RECEIPT_MONTHS = 84;
 
 // A shopper's account-level data (Customer.email, name, login) follows a
 // separate clock from any single receipt: once EVERY receipt tied to them
@@ -22,7 +38,7 @@ const SHOPPER_RECEIPT_MONTHS = 24;
 // Kept as its own named constant rather than reusing SHOPPER_RECEIPT_MONTHS
 // -- these are conceptually different things that currently happen to share
 // a number, and a future privacy policy could reasonably set them apart.
-const SHOPPER_ACCOUNT_MONTHS = 24;
+const SHOPPER_ACCOUNT_MONTHS = 84;
 
 // A merchant who deactivates (Merchant.isActive = false) gets this many
 // days of grace before their data is actually purged -- long enough to

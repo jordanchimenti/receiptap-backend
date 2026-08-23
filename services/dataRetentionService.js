@@ -17,6 +17,7 @@
 // LegalAcceptance.
 const prisma = require('../lib/prisma');
 const fs = require('fs');
+const fileStorage = require('../lib/fileStorage');
 const path = require('path');
 const {
   SHOPPER_RECEIPT_MONTHS,
@@ -49,11 +50,10 @@ function sumDetails(details) {
 // purge over, so this only ever logs and moves on.
 function deleteUploadedFile(webPath) {
   if (!webPath) return;
-  try {
-    fs.unlinkSync(path.join(PUBLIC_DIR, webPath));
-  } catch (err) {
-    if (err.code !== 'ENOENT') console.error('[dataRetentionService] failed to remove uploaded file:', webPath, err.message);
-  }
+  // Delegates so a purge reaches remote objects too, not just local files.
+  // Fire-and-forget on purpose: a storage hiccup must not fail a purge, and
+  // fileStorage.remove already logs its own failures.
+  fileStorage.remove(webPath).catch(() => {});
 }
 
 async function writePurgeLog({ jobName, dryRun, details, error, initiatedByMerchantId, startedAt }) {
@@ -95,11 +95,68 @@ async function deleteInBatches(findBatchIds, deleteByIds) {
  * keeping the account "active" (LoyaltyCard rows first, same RESTRICT
  * reasoning). Logs one PurgeLog row for the whole run.
  */
+// ---------------------------------------------------------------------------
+// Abandoned scan uploads.
+//
+// A photo is written to disk the moment it is uploaded, BEFORE the customer
+// confirms it on the review screen (see POST /account/receipts/scan). Back out
+// of that screen -- or lose the request, as a server restart mid-scan will do
+// -- and the JPG stays forever with no ScannedReceipt row pointing at it. It
+// is invisible in the app, so the customer cannot delete it, and every
+// deletion path we have works from the row, so none of them ever will either.
+//
+// These are photographs of receipts: card tails, addresses, what someone
+// bought. This sweeps any that no row references and that are old enough to
+// be certain nobody is still mid-review.
+const ABANDONED_SCAN_GRACE_HOURS = 24;
+
+async function purgeAbandonedScanUploads({ dryRun = true } = {}) {
+  const startedAt = new Date();
+  const details = { AbandonedScanFiles: 0 };
+  let error = null;
+
+  try {
+    const dir = path.join(PUBLIC_DIR, 'uploads', 'receipt-scans');
+    if (!fs.existsSync(dir)) {
+      await writePurgeLog({ jobName: 'purgeAbandonedScanUploads', dryRun, details, error, startedAt });
+      return { details, error };
+    }
+
+    const rows = await prisma.scannedReceipt.findMany({ select: { imageUrl: true } });
+    const referenced = new Set(rows.map((r) => path.basename(r.imageUrl || '')).filter(Boolean));
+    const cutoff = Date.now() - ABANDONED_SCAN_GRACE_HOURS * 60 * 60 * 1000;
+
+    for (const name of fs.readdirSync(dir)) {
+      if (name.startsWith('.')) continue;
+      if (referenced.has(name)) continue;
+      const full = path.join(dir, name);
+      let stat;
+      try {
+        stat = fs.statSync(full);
+      } catch (err) {
+        continue;
+      }
+      // Still inside the grace window -- someone may be looking at the review
+      // screen right now, and their photo has to survive until they save it.
+      if (stat.mtimeMs > cutoff) continue;
+
+      details.AbandonedScanFiles += 1;
+      if (!dryRun) deleteUploadedFile('/uploads/receipt-scans/' + name);
+    }
+  } catch (err) {
+    error = err.message;
+    console.error('[dataRetentionService] purgeAbandonedScanUploads failed:', err);
+  }
+
+  await writePurgeLog({ jobName: 'purgeAbandonedScanUploads', dryRun, details, error, startedAt });
+  return { details, error };
+}
+
 async function purgeExpiredReceipts({ dryRun = true } = {}) {
   const startedAt = new Date();
   const receiptCutoff = monthsAgo(SHOPPER_RECEIPT_MONTHS);
   const accountCutoff = monthsAgo(SHOPPER_ACCOUNT_MONTHS);
-  const details = { Transaction: 0, ShopperConsent: 0, Customer: 0, LoyaltyCard: 0, ShopperIdentifier: 0 };
+  const details = { Transaction: 0, ShopperConsent: 0, Customer: 0, LoyaltyCard: 0, ShopperIdentifier: 0, Notification: 0, PushSubscription: 0 };
   let error = null;
 
   try {
@@ -147,18 +204,27 @@ async function purgeExpiredReceipts({ dryRun = true } = {}) {
       if (dryRun) {
         details.LoyaltyCard += await prisma.loyaltyCard.count({ where: { customerId: { in: batch } } });
         details.ShopperIdentifier += await prisma.shopperIdentifier.count({ where: { shopperId: { in: batch } } });
+        details.Notification += await prisma.notification.count({ where: { customerId: { in: batch } } });
+        details.PushSubscription += await prisma.pushSubscription.count({ where: { customerId: { in: batch } } });
         details.Customer += batch.length;
       } else {
-        // ShopperIdentifier.shopperId is ON DELETE RESTRICT, so it has to be
-        // cleared before the Customer rows -- without this, this scheduled job
-        // starts throwing the first time an idle shopper has a card link.
-        const [loyaltyResult, identifierResult, customerResult] = await prisma.$transaction([
-          prisma.loyaltyCard.deleteMany({ where: { customerId: { in: batch } } }),
-          prisma.shopperIdentifier.deleteMany({ where: { shopperId: { in: batch } } }),
-          prisma.customer.deleteMany({ where: { id: { in: batch } } }),
-        ]);
+        // ShopperIdentifier.shopperId, Notification.customerId and
+        // PushSubscription.customerId are all ON DELETE RESTRICT, so they have
+        // to be cleared before the Customer rows -- without this, this
+        // scheduled job starts throwing the first time an idle shopper has a
+        // card link, a stamp-card alert, or a phone signed up for push.
+        const [loyaltyResult, identifierResult, notificationResult, pushResult, customerResult] =
+          await prisma.$transaction([
+            prisma.loyaltyCard.deleteMany({ where: { customerId: { in: batch } } }),
+            prisma.shopperIdentifier.deleteMany({ where: { shopperId: { in: batch } } }),
+            prisma.notification.deleteMany({ where: { customerId: { in: batch } } }),
+            prisma.pushSubscription.deleteMany({ where: { customerId: { in: batch } } }),
+            prisma.customer.deleteMany({ where: { id: { in: batch } } }),
+          ]);
         details.LoyaltyCard += loyaltyResult.count;
         details.ShopperIdentifier += identifierResult.count;
+        details.Notification += notificationResult.count;
+        details.PushSubscription += pushResult.count;
         details.Customer += customerResult.count;
       }
     }
@@ -192,7 +258,7 @@ async function purgeExpiredReceipts({ dryRun = true } = {}) {
 async function purgeDeactivatedMerchants({ dryRun = true } = {}) {
   const startedAt = new Date();
   const cutoff = daysAgo(DEACTIVATED_MERCHANT_PURGE_DAYS);
-  const details = { Merchant: 0, Transaction: 0, ShopperConsent: 0, LoyaltyCard: 0, LoyaltyProgram: 0, ReceiptTheme: 0 };
+  const details = { Merchant: 0, Transaction: 0, ShopperConsent: 0, LoyaltyCard: 0, LoyaltyProgram: 0, ReceiptTheme: 0, Notification: 0 };
   let error = null;
 
   try {
@@ -230,6 +296,10 @@ async function purgeDeactivatedMerchants({ dryRun = true } = {}) {
           prisma.shopperConsent.deleteMany({ where: { receiptId: { in: txnIds } } }),
           prisma.transaction.deleteMany({ where: { merchantId: merchant.id } }),
           prisma.loyaltyCard.deleteMany({ where: { merchantId: merchant.id } }),
+          // Their stamp cards are going, so the "your card is full" alerts
+          // naming this shop have to go too -- otherwise a customer is left
+          // with a reward to claim at a business that no longer exists.
+          prisma.notification.deleteMany({ where: { merchantId: merchant.id } }),
           prisma.loyaltyProgram.deleteMany({ where: { merchantId: merchant.id } }),
           prisma.receiptTheme.deleteMany({ where: { merchantId: merchant.id } }),
           prisma.merchant.update({
@@ -302,7 +372,7 @@ async function purgeDeactivatedMerchants({ dryRun = true } = {}) {
  */
 async function deleteShopperByEmail(email, merchantId, { dryRun = true } = {}) {
   const startedAt = new Date();
-  const details = { Transaction_unlinked: 0, ShopperConsent: 0, LoyaltyCard: 0 };
+  const details = { Transaction_unlinked: 0, ShopperConsent: 0, LoyaltyCard: 0, Notification: 0 };
   let error = null;
   let found = false;
 
@@ -321,20 +391,28 @@ async function deleteShopperByEmail(email, merchantId, { dryRun = true } = {}) {
       const loyaltyCard = await prisma.loyaltyCard.findUnique({
         where: { merchantId_customerId: { merchantId, customerId: customer.id } },
       });
+      // Scoped to this merchant, like everything else here -- their cards at
+      // other shops, and the alerts about them, are none of this merchant's
+      // business.
+      const notificationWhere = { customerId: customer.id, merchantId };
+      const notificationCount = await prisma.notification.count({ where: notificationWhere });
 
       if (dryRun) {
         details.Transaction_unlinked = txnIds.length;
         details.ShopperConsent = consentCount;
         details.LoyaltyCard = loyaltyCard ? 1 : 0;
+        details.Notification = notificationCount;
       } else {
         const ops = [
           prisma.shopperConsent.deleteMany({ where: { receiptId: { in: txnIds } } }),
           prisma.transaction.updateMany({ where: { id: { in: txnIds } }, data: { customerId: null } }),
+          prisma.notification.deleteMany({ where: notificationWhere }),
         ];
         if (loyaltyCard) ops.push(prisma.loyaltyCard.delete({ where: { id: loyaltyCard.id } }));
         const results = await prisma.$transaction(ops);
         details.ShopperConsent = results[0].count;
         details.Transaction_unlinked = results[1].count;
+        details.Notification = results[2].count;
         details.LoyaltyCard = loyaltyCard ? 1 : 0;
 
         // Survives on purpose -- see EmailSuppression's doc comment in the
@@ -372,7 +450,7 @@ async function deleteShopperByEmail(email, merchantId, { dryRun = true } = {}) {
  */
 async function deleteShopperEverywhere(email, { dryRun = true, initiatedByMerchantId = null } = {}) {
   const startedAt = new Date();
-  const details = { Transaction_unlinked: 0, ShopperConsent: 0, LoyaltyCard: 0, ScannedReceipt: 0, ShopperIdentifier: 0, Customer: 0 };
+  const details = { Transaction_unlinked: 0, ShopperConsent: 0, LoyaltyCard: 0, ScannedReceipt: 0, ShopperIdentifier: 0, Notification: 0, PushSubscription: 0, Customer: 0 };
   let error = null;
   let found = false;
 
@@ -391,7 +469,16 @@ async function deleteShopperEverywhere(email, { dryRun = true, initiatedByMercha
       const merchantIds = [...new Set(txns.map((t) => t.merchantId))];
       const consentCount = await prisma.shopperConsent.count({ where: { receiptId: { in: txnIds } } });
       const loyaltyCardCount = await prisma.loyaltyCard.count({ where: { customerId: customer.id } });
-      const scannedReceiptCount = await prisma.scannedReceipt.count({ where: { customerId: customer.id } });
+      // Read the image paths BEFORE the rows go: once ScannedReceipt is
+      // deleted there is nothing left pointing at the JPGs on disk, and they
+      // would sit in public/uploads/receipt-scans forever. A photo of
+      // someone's receipt surviving their own erasure request is exactly the
+      // thing a right-to-erasure request is asking us not to do.
+      const scannedReceipts = await prisma.scannedReceipt.findMany({
+        where: { customerId: customer.id },
+        select: { imageUrl: true },
+      });
+      const scannedReceiptCount = scannedReceipts.length;
       // Every passive identifier that could still recognise this person --
       // revoked ones included. A revoked row is kept for audit while the
       // shopper exists, but a full erasure means nothing about them survives,
@@ -406,23 +493,33 @@ async function deleteShopperEverywhere(email, { dryRun = true, initiatedByMercha
         details.ShopperIdentifier = identifierCount;
         details.Customer = 1;
       } else {
-        // ScannedReceipt.customerId and ShopperIdentifier.shopperId are both
-        // ON DELETE RESTRICT (see prisma/schema.prisma) -- those rows have to
-        // go before the Customer delete below or Postgres rejects the whole
-        // transaction. Order matters here, not just membership.
+        // ScannedReceipt.customerId, ShopperIdentifier.shopperId,
+        // Notification.customerId and PushSubscription.customerId are all ON
+        // DELETE RESTRICT (see
+        // prisma/schema.prisma) -- those rows have to go before the Customer
+        // delete below or Postgres rejects the whole transaction. Order matters
+        // here, not just membership.
         const results = await prisma.$transaction([
           prisma.shopperConsent.deleteMany({ where: { receiptId: { in: txnIds } } }),
           prisma.transaction.updateMany({ where: { id: { in: txnIds } }, data: { customerId: null } }),
           prisma.loyaltyCard.deleteMany({ where: { customerId: customer.id } }),
           prisma.scannedReceipt.deleteMany({ where: { customerId: customer.id } }),
           prisma.shopperIdentifier.deleteMany({ where: { shopperId: customer.id } }),
+          prisma.notification.deleteMany({ where: { customerId: customer.id } }),
+          prisma.pushSubscription.deleteMany({ where: { customerId: customer.id } }),
           prisma.customer.delete({ where: { id: customer.id } }),
         ]);
+        // Only once the rows are certainly gone -- deleting files first would
+        // leave receipts pointing at nothing if the transaction rolled back.
+        scannedReceipts.forEach((r) => deleteUploadedFile(r.imageUrl));
+
         details.ShopperConsent = results[0].count;
         details.Transaction_unlinked = results[1].count;
         details.LoyaltyCard = results[2].count;
         details.ScannedReceipt = results[3].count;
         details.ShopperIdentifier = results[4].count;
+        details.Notification = results[5].count;
+        details.PushSubscription = results[6].count;
         details.Customer = 1;
 
         for (const mId of merchantIds) {
@@ -521,6 +618,7 @@ async function purgeShopifyShopData(shopDomain, { dryRun = true } = {}) {
 module.exports = {
   purgeExpiredReceipts,
   purgeDeactivatedMerchants,
+  purgeAbandonedScanUploads,
   deleteShopperByEmail,
   deleteShopperEverywhere,
   purgeShopifyShopData,

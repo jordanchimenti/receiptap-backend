@@ -43,7 +43,24 @@ app.use('/webhooks/pos/shopify', express.raw({ type: 'application/json' }));
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(express.static(path.join(__dirname, 'public')));
+// Static assets were going out with `max-age=0`, which meant the browser
+// re-validated the stylesheet and the logo on EVERY page navigation. On a
+// desktop that's invisible; on a phone it's two extra network round trips
+// before anything renders, and it was a large part of why the home-screen app
+// felt sluggish.
+//
+// An hour is deliberately modest rather than the usual year: these files have
+// no content hash in their names, so a long cache would leave someone looking
+// at an old logo with no way to force a refresh. The service worker
+// (public/sw.js) caches them properly on top of this.
+app.use(express.static(path.join(__dirname, 'public'), {
+  maxAge: '1h',
+  setHeaders(res, filePath) {
+    // The icons are referenced by the manifest and installed once; the HTML
+    // itself must never be cached, or a deploy wouldn't reach anyone.
+    if (filePath.endsWith('.html')) res.setHeader('Cache-Control', 'no-cache');
+  },
+}));
 
 // Sessions live in Postgres, through the app's own Prisma connection
 // (lib/prismaSessionStore.js). With the default MemoryStore every restart --
@@ -82,6 +99,9 @@ app.use(
   })
 );// --- Route modules built across this project -------------------------------
 const { ownerFlag } = require('./middleware/ownerFlag');
+const { countUnread: countUnreadNotifications } = require('./services/notificationService');
+const pushService = require('./services/pushService');
+
 app.use(ownerFlag);
 app.use(require('./routes/auth'));           // signup / login / logout
 app.use(require('./routes/legal'));          // /legal/terms, /legal/privacy, /legal/dpa -- stub pages linked from signup
@@ -164,6 +184,42 @@ app.use(require('./routes/pdf-export'));              // /dashboard/receipts/pdf
 app.use(require('./routes/theme-settings'));       // /dashboard/settings/receipt (Google review link, branding)
 app.use(require('./routes/account-settings'));    // /dashboard/settings/account (business info, password, POS disconnect, deactivate)
 app.use(require('./routes/email-capture'));         // email/Google capture gate before receipt save, merchant email list
+// The wallet's bottom bar shows an unread count on the Alerts tab, and that
+// bar is on every wallet page -- so resolve it once here rather than making
+// each route remember to fetch it. Signed-out requests and non-wallet paths
+// skip the query entirely.
+app.use('/account', async (req, res, next) => {
+  res.locals.unreadCount = 0;
+  // Every wallet page can offer the notification switch, so the keys go on
+  // locals here rather than being threaded through each route individually.
+  res.locals.pushConfigured = pushService.isPushConfigured();
+  res.locals.pushPublicKey = pushService.publicKey();
+  if (!req.session?.customerId) return next();
+
+  // Started here but NOT awaited. Awaiting would put a full database round
+  // trip (~26ms) in front of every wallet page before the route had even begun
+  // its own queries. Kicking it off now and collecting it at render time lets
+  // it run alongside them instead, so the badge costs nothing it doesn't have
+  // to.
+  const pending = countUnreadNotifications(req.session.customerId).catch((err) => {
+    // A badge is not worth failing a page load over.
+    console.error('[wallet] unread notification count failed:', err.message);
+    return 0;
+  });
+
+  const render = res.render.bind(res);
+  res.render = function (view, options, callback) {
+    pending.then((count) => {
+      // A route that already set this (the Alerts tab clears its own badge)
+      // wins -- it knows something this query can't.
+      if (res.locals.unreadCount === 0) res.locals.unreadCount = count;
+      render(view, options, callback);
+    });
+  };
+
+  next();
+});
+
 app.use(require('./routes/customer-account'));    // consumer wallet: /account/*
 app.use(require('./routes/account-business'));    // wallet's dark reskin of the merchant dashboard: /account/business/*
 app.use(require('./routes/loyalty'));               // punch cards: join/earn/self-serve redeem, /account/loyalty
@@ -201,7 +257,7 @@ setInterval(() => {
 // than the literal string "true") keeps every run in dry-run mode
 // regardless of dataRetentionService's own default -- there is no way to
 // go live except by explicitly setting this in the environment.
-const { purgeExpiredReceipts, purgeDeactivatedMerchants } = require('./services/dataRetentionService');
+const { purgeExpiredReceipts, purgeDeactivatedMerchants, purgeAbandonedScanUploads } = require('./services/dataRetentionService');
 const RETENTION_PURGE_ENABLED = process.env.RETENTION_PURGE_ENABLED === 'true';
 const RETENTION_PURGE_INTERVAL_MS = 24 * 60 * 60 * 1000; // daily
 const RETENTION_PURGE_BOOT_DELAY_MS = 60 * 1000; // let the app finish starting up first
@@ -225,6 +281,8 @@ async function runRetentionPurge() {
     const merchants = await purgeDeactivatedMerchants({ dryRun });
     console.log('[retention] purgeExpiredReceipts:', JSON.stringify(receipts.details), receipts.error || '');
     console.log('[retention] purgeDeactivatedMerchants:', JSON.stringify(merchants.details), merchants.error || '');
+    const scans = await purgeAbandonedScanUploads({ dryRun });
+    console.log('[retention] purgeAbandonedScanUploads:', JSON.stringify(scans.details), scans.error || '');
   } catch (err) {
     console.error('[retention] daily purge run failed:', err);
   } finally {
@@ -241,6 +299,7 @@ setTimeout(() => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
+  require('./lib/fileStorage').assertProductionStorage();
   console.log(`ReceipTap backend running on http://localhost:${PORT}`);
 });
 

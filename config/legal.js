@@ -21,8 +21,8 @@ const LEGAL_DOCUMENTS = {
     label: 'Terms of Service',
   },
   PRIVACY: {
-    version: '2026-08-18.1',
-    lastUpdated: '2026-08-18',
+    version: '2026-08-22.1',
+    lastUpdated: '2026-08-22',
     label: 'Privacy Policy',
   },
   DPA: {
@@ -45,8 +45,8 @@ const LEGAL_DOCUMENTS = {
     label: 'Wallet Terms of Service',
   },
   SHOPPER_PRIVACY: {
-    version: '2026-08-19.1',
-    lastUpdated: '2026-08-19',
+    version: '2026-08-22.1',
+    lastUpdated: '2026-08-22',
     label: 'Wallet Privacy Policy',
   },
 };

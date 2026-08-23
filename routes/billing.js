@@ -21,7 +21,6 @@ const {
   mapStripeStatus,
   syncPuckReturnWindows,
   TRIAL_DAYS,
-  SHIPPING_FEE_CENTS,
   applyRetentionDiscount,
   cancelSubscriptionAtPeriodEnd,
   resumeSubscription,
@@ -149,11 +148,6 @@ async function computeBillingData(merchantId) {
     price,
     trialDays: TRIAL_DAYS,
     trialFirstChargeDate,
-    shippingFee: (SHIPPING_FEE_CENTS / 100).toFixed(2),
-    // Restarting after a cancellation doesn't charge shipping again — see
-    // the isFirstTimeSubscriber comment on createCheckoutSession() in
-    // services/stripeService.js for why that's deliberate, not an oversight.
-    chargesShipping: merchant.subscriptionStatus !== 'CANCELED',
     subscription,
     paymentMethod,
     paymentMethods: paymentMethods.map((pm) => ({

@@ -8,12 +8,13 @@ const stripe = process.env.STRIPE_SECRET_KEY
 
 const TRIAL_DAYS = 30;
 
-// The Hardware section of the Terms of Service (TERMS.version 2026-08-06.2)
-// discloses this as a flat one-time charge to actually receive the included
-// puck. Charged as a one-time Checkout line item alongside the recurring
-// subscription price -- Stripe invoices and collects a one-time item
-// immediately at checkout even when the recurring item has a trial, so this
-// lands today, not deferred to when the trial ends.
+// Puck shipping. This is NOT part of subscription checkout any more: billing
+// them together meant a "30-day free trial -- pay nothing" headline that
+// charged $25 the same day, so the billing copy had to walk itself back in
+// the very next sentence. Shipping is collected by its own one-time purchase
+// instead, which keeps the trial genuinely free. The standalone purchase flow
+// is not built yet, so nothing currently charges this -- it stays here as the
+// single definition of the amount the Terms disclose.
 const SHIPPING_FEE_CENTS = 2500; // $25.00 USD
 
 /**
@@ -71,19 +72,8 @@ async function createCheckoutSession(merchant, successUrl, cancelUrl) {
     });
   }
 
-  const isFirstTimeSubscriber = merchant.subscriptionStatus !== 'CANCELED';
-
+  // Subscription only -- no shipping line item. See SHIPPING_FEE_CENTS above.
   const lineItems = [{ price: process.env.STRIPE_PRICE_ID, quantity: 1 }];
-  if (isFirstTimeSubscriber) {
-    lineItems.push({
-      price_data: {
-        currency: 'usd',
-        product_data: { name: 'ReceipTap puck — shipping (one-time)' },
-        unit_amount: SHIPPING_FEE_CENTS,
-      },
-      quantity: 1,
-    });
-  }
 
   const session = await stripe.checkout.sessions.create({
     customer: customerId,

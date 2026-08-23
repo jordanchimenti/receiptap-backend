@@ -1,7 +1,8 @@
 <!-- views/account-loyalty.ejs -->
-<!-- Every loyalty punch card this customer has, across every merchant they've
-     joined a program with -- lets them finish a redemption here even if
-     they're not looking at the original receipt anymore. -->
+<!-- Every stamp card this customer has, across every merchant they've saved a
+     receipt from -- lets them finish a redemption here even if they're not
+     looking at the original receipt anymore. Each card is drawn in the
+     merchant's own Card design (see resolveCardDesign, routes/loyalty.js). -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -13,27 +14,61 @@
   <style>
     .biz-header { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
 
-    .loyalty-card { padding: 20px 18px; margin-bottom: 12px; text-align: center; }
-    .loyalty-merchant { font-weight: 700; font-size: 15.5px; color: var(--w-ink); }
-    .loyalty-sub { font-size: 12.5px; color: var(--w-ink-soft); margin-top: 8px; line-height: 1.45; }
-    .loyalty-sub strong { color: var(--w-accent); }
-    .punch-row { display: flex; justify-content: center; gap: 9px; margin-top: 14px; }
+    /* The card wears the merchant's own design (background/accent/logo, resolved
+       by resolveCardDesign in routes/loyalty.js), so everything inside it is
+       drawn in currentColor rather than the wallet's own ink tokens. */
+    .loyalty-card { border-radius: 18px; padding: 16px; margin-bottom: 12px; }
+    .stamp-head { display: flex; align-items: center; gap: 11px; margin-bottom: 14px; }
+    .stamp-logo {
+      width: 40px; height: 40px; border-radius: 10px; flex: none; display: flex;
+      align-items: center; justify-content: center; background: rgba(255,255,255,0.18); overflow: hidden;
+    }
+    .stamp-logo img { width: 100%; height: 100%; object-fit: contain; }
+    .stamp-monogram { font-family: var(--font-display); font-size: 18px; font-weight: 700; line-height: 1; }
+    .stamp-head-text { min-width: 0; }
+    .loyalty-merchant { font-weight: 700; font-size: 15px; line-height: 1.2; }
+    .loyalty-sub { font-size: 12px; opacity: 0.85; margin-top: 2px; line-height: 1.45; }
+    .punch-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
     .punch-hole {
-      width: 36px; height: 36px; border-radius: 50%; border: 2px dashed var(--w-line);
-      display: flex; align-items: center; justify-content: center; font-size: 15px;
-      color: var(--w-ink-soft); box-sizing: border-box;
+      width: 34px; height: 34px; border-radius: 50%; border: 1.5px solid currentColor;
+      display: flex; align-items: center; justify-content: center; font-size: 12.5px;
+      font-weight: 700; box-sizing: border-box; opacity: 0.55;
     }
-    .punch-hole.filled { border-style: solid; border-color: var(--w-accent); background: var(--w-accent); color: #fff; }
+    .punch-hole.filled { opacity: 1; }
+    .stamp-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 13.5px; font-weight: 600; }
+    .stamp-foot-reward { display: flex; align-items: center; gap: 7px; min-width: 0; }
+    .stamp-foot-reward span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .loyalty-btn {
-      display: inline-block; margin-top: 14px; padding: 11px 22px; border-radius: 999px;
-      border: none; background: var(--w-accent); color: #fff; font-weight: 700; font-size: 13.5px;
-      cursor: pointer; font-family: inherit;
+      display: block; width: 100%; margin-top: 14px; padding: 11px 22px; border-radius: 999px;
+      border: 1.5px solid currentColor; background: transparent; color: inherit; font-weight: 700;
+      font-size: 13.5px; cursor: pointer; font-family: inherit;
     }
-    .loyalty-btn:hover { background: var(--w-accent-deep); }
     .loyalty-error { color: var(--w-danger); font-size: 12px; margin-top: 6px; min-height: 14px; }
 
     /* Empty state, in the same dashed-card language the light page used. */
+    /* receiptap.css's .empty-state is the light theme's -- it sets
+       background: var(--paper-raised), which renders white on these dark
+       pages. Override it explicitly rather than inheriting it. */
+    .rewards-search { padding: 12px 14px; margin-bottom: 14px; }
+    .rewards-search-row { display: flex; align-items: center; gap: 10px; }
+    .rewards-search-icon { width: 17px; height: 17px; color: var(--w-ink-soft); flex: none; }
+    .rewards-search input {
+      flex: 1; min-width: 0; background: none; border: none; outline: none;
+      color: var(--w-ink); font-family: inherit; font-size: 15px; padding: 4px 0;
+    }
+    .rewards-search input::placeholder { color: var(--w-ink-soft); }
+    /* Safari draws its own clear button on type=search and it doesn't match. */
+    .rewards-search input::-webkit-search-decoration,
+    .rewards-search input::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }
+    .rewards-search-clear {
+      display: none; background: none; border: none; padding: 4px; cursor: pointer;
+      color: var(--w-ink-soft); flex: none; line-height: 0;
+    }
+    .rewards-search-clear svg { width: 15px; height: 15px; }
+    .rewards-search.searching .rewards-search-clear { display: block; }
+
     .empty-state {
+      background: var(--w-card);
       border: 1px dashed var(--w-line); border-radius: 18px; padding: 40px 24px; margin-top: 8px;
       text-align: center; color: var(--w-ink-soft); font-size: 13.5px; line-height: 1.6;
     }
@@ -89,28 +124,66 @@
         <div class="empty-icon">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 12v9H4v-9"/><path d="M2 7h20v5H2z"/><path d="M12 22V7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7Z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7Z"/></svg>
         </div>
-        No loyalty cards yet — join one from a receipt at a participating business.
+        No stamp cards yet — save a receipt from a shop that runs one and your card starts itself.
       </div>
     <% } else { %>
+      <%# Filters the cards already on the page rather than reloading. The
+          whole list is rendered in one go (loyalty cards aren't paginated),
+          so there is nothing for a server round-trip to fetch, and matching
+          in place means the list narrows as you type. %>
+      <div class="w-card rewards-search">
+        <div class="rewards-search-row">
+          <svg class="rewards-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <input type="search" id="rewards-search" placeholder="Search by business" autocomplete="off"
+                 aria-label="Search your loyalty cards by business" oninput="filterRewards()" />
+          <button type="button" class="rewards-search-clear" id="rewards-clear" onclick="clearRewardsSearch()" aria-label="Clear search">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <div id="rewards-none" class="empty-state" style="display:none;">
+        No cards match that business.
+      </div>
+
       <% cards.forEach(function(card) { %>
-        <% var offerText = card.offerType === 'PERCENT' ? (card.offerValue + '% off') : ('$' + (card.offerValue / 100).toFixed(2) + ' off'); %>
-        <div class="w-card loyalty-card" data-card-id="<%= card.id %>">
-          <div class="loyalty-merchant"><%= card.merchantName %></div>
+        <% var isFull = card.stamps >= card.stampsRequired; %>
+        <div class="loyalty-card" data-card-id="<%= card.id %>" data-merchant="<%= card.merchantName.toLowerCase() %>"
+             style="background: <%= card.design.background %>; color: <%= card.design.accent %>;">
+          <div class="stamp-head">
+            <div class="stamp-logo">
+              <% if (card.design.logoUrl) { %><img src="<%= card.design.logoUrl %>" alt="" /><% } else { %>
+                <span class="stamp-monogram"><%= card.design.monogram %></span>
+              <% } %>
+            </div>
+            <div class="stamp-head-text">
+              <div class="loyalty-merchant"><%= card.merchantName %></div>
+              <div class="loyalty-sub">
+                <% if (isFull) { %>
+                  Card full — redeem for <%= card.rewardLabel %>
+                <% } else { %>
+                  <% var stampsLeft = card.stampsRequired - card.stamps; %>
+                  <%= stampsLeft %> stamp<%= stampsLeft === 1 ? '' : 's' %> from <%= card.rewardLabel %>
+                <% } %>
+              </div>
+            </div>
+          </div>
 
           <div class="punch-row">
-            <% for (var p = 1; p <= 5; p++) { %>
-              <div class="punch-hole <%= p <= card.punches ? 'filled' : '' %>"><%= p <= card.punches ? '✓' : '' %></div>
+            <% for (var p = 1; p <= card.stampsRequired; p++) { %>
+              <div class="punch-hole <%= p <= card.stamps ? 'filled' : '' %>"><%= p <= card.stamps ? '✓' : p %></div>
             <% } %>
           </div>
-          <div class="loyalty-sub">
-            <% if (card.punches >= 5) { %>
-              Card full — redeem for <%= offerText %>!
-            <% } else { %>
-              <% var punchesLeft = 5 - card.punches; %>
-              You're <%= punchesLeft %> punch<%= punchesLeft === 1 ? '' : 'es' %> away from claiming <%= offerText %>!
-            <% } %>
+
+          <div class="stamp-foot">
+            <div class="stamp-foot-reward">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 12v9H4v-9"/><path d="M2 7h20v5H2z"/><path d="M12 22V7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7Z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7Z"/></svg>
+              <span><%= card.rewardLabel %></span>
+            </div>
+            <div><%= card.stamps %> / <%= card.stampsRequired %></div>
           </div>
-          <% if (card.punches >= 5) { %>
+
+          <% if (isFull) { %>
             <button type="button" class="loyalty-btn" onclick="openLoyaltyModal('<%= card.id %>')">Redeem Reward</button>
           <% } %>
         </div>
@@ -141,6 +214,33 @@
   </div>
 
   <script>
+    // Card filtering. Matches anywhere in the business name, not just the
+    // start, because people search for the word they remember ("coffee")
+    // rather than what the shop is filed under ("The Coffee House").
+    function filterRewards() {
+      var box = document.getElementById('rewards-search');
+      if (!box) return;
+      var q = box.value.trim().toLowerCase();
+      var wrap = box.closest('.rewards-search');
+      wrap.classList.toggle('searching', q.length > 0);
+
+      var shown = 0;
+      document.querySelectorAll('.loyalty-card').forEach(function (el) {
+        var hit = !q || (el.dataset.merchant || '').indexOf(q) !== -1;
+        el.style.display = hit ? '' : 'none';
+        if (hit) shown++;
+      });
+      // Only speak up once they've actually typed -- an empty box that
+      // matches nothing means they have no cards, which the page already says.
+      document.getElementById('rewards-none').style.display = (q && shown === 0) ? '' : 'none';
+    }
+
+    function clearRewardsSearch() {
+      var box = document.getElementById('rewards-search');
+      box.value = '';
+      filterRewards();
+      box.focus();
+    }
     let activeLoyaltyCardId = null;
 
     function openLoyaltyModal(cardId) {

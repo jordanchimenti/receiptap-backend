@@ -107,6 +107,10 @@ model Merchant {
   // rather than blocking on the permanently-INCOMPLETE subscriptionStatus.
   isDemoAccount Boolean @default(false)
 
+  // Same as Customer.homeScreenAddedAt -- first time this merchant opened the
+  // business dashboard from their home screen.
+  homeScreenAddedAt DateTime?
+
   pucks              Puck[]
   issuedReceipts     Transaction[]      @relation("IssuedReceipts")
   collectedExpenses  Transaction[]      @relation("CollectedExpenses")
@@ -116,6 +120,7 @@ model Merchant {
   legalAcceptances   LegalAcceptance[]
   purgeLogsInitiated PurgeLog[]
   emailSuppressions  EmailSuppression[]
+  notifications      Notification[]
 
   // Affiliate program -- set if this merchant signed up via someone's
   // referral link. A merchant can ALSO be an affiliate themselves (their own
@@ -151,6 +156,14 @@ model Puck {
 
   currentTransactionId String?
   transactionExpiresAt DateTime?
+
+  // Set when a merchant taps their own puck to pair it and there is no recent
+  // unassigned sale to bind it to yet -- it waits, and the next sale that
+  // arrives from a register no puck covers claims it. The ReceipTaps page has
+  // shown a "Pairing right now" state and filter for this all along; the
+  // column was simply never added, so it always read false (there is a note
+  // to that effect in computePucksData).
+  awaitingSaleAssignment DateTime?
 
   createdAt DateTime  @default(now())
   claimedAt DateTime?
@@ -280,13 +293,36 @@ model ReceiptTheme {
   // an input tax credit (CRA requires it on receipts for purchases $30+).
   // taxLabel is customizable since "Tax" isn't always accurate: a merchant
   // might charge GST/HST alone, or GST/HST + a provincial tax like PST/QST.
-  gstHstNumber String?
+  // The merchant's tax registration number, and what to call it. The label
+  // used to be hardcoded as "GST/HST" in all three layouts, which is right in
+  // most of Canada, wrong in the US, and wrong again anywhere that says VAT.
+  gstHstNumber   String?
+  taxNumberLabel String? // "GST/HST", "VAT", "ABN"... defaults to GST/HST when unset
+
+  // A SECOND registration number, because one slot isn't enough in Canada: a
+  // Quebec merchant is registered for GST/HST *and* QST and must show both,
+  // and BC/Saskatchewan/Manitoba merchants carry a PST number alongside GST.
+  // With one field they could only ever print half of what their customers
+  // need, so those customers could not recover the provincial tax.
+  // Unused by US merchants, who have no equivalent registration to print.
+  taxNumber2      String?
+  taxNumber2Label String?
+
   taxLabel     String  @default("Tax")
   returnPolicy String?
 
   showGoogleReview Boolean @default(false)
   googleReviewUrl  String?
   showWarranty     Boolean @default(false)
+
+  // Warranty terms the merchant writes once, carried by every receipt.
+  // Before these existed the block was a bare toggle: it printed a "Register
+  // Warranty" button with no terms behind it, pointing at a route that was
+  // never built. The terms are what the customer actually needs months later.
+  warrantyPeriod   String? // "1 year from purchase", "90 days"
+  warrantyDetails  String? // what's covered, and what isn't
+  warrantyContact  String? // how to start a claim -- email, phone, or a link
+
   showWalletSave   Boolean @default(true)
 
   // Promotes ReceipTap to other business owners at the top of this
@@ -372,22 +408,51 @@ model LoyaltyProgram {
 
   enabled Boolean @default(false)
 
+  // What earns a stamp. One of:
+  //   ORDER  -- one stamp per receipt, whatever they bought
+  //   VISIT  -- one stamp per calendar day, so a second coffee at 4pm doesn't
+  //             fill the card twice (earnItemName/earnAmountCents unused)
+  //   ITEM   -- one stamp per matching line item, matched on earnItemName
+  //   AMOUNT -- one stamp per earnAmountCents of receipt total
+  earnRule        String  @default("ORDER")
+  earnItemName    String? // ITEM only -- case-insensitive substring of the line item name
+  earnAmountCents Int     @default(1000) // AMOUNT only
+
+  // How many stamps fill a card, and what the customer gets when it does.
+  // rewardLabel is free text printed as-is on receipts and wallet cards
+  // ("Free coffee", "10% off") -- it replaced the old offerType/offerValue
+  // picker, which stays below only so existing rows keep their history.
+  stampsRequired Int    @default(10)
+  rewardLabel    String @default("Free reward")
+
+  // Stamps a brand-new card arrives with. A card already underway gets
+  // finished far more often than one starting at zero.
+  headStartStamps Int @default(0)
+
+  // Card design -- how the stamp card looks in the customer's wallet.
+  cardLogoUrl    String?
+  cardBackground String  @default("#0A84FF")
+  cardAccent     String  @default("#FFFFFF")
+
+  // Static, merchant-editable code. The customer types it on their own phone
+  // to redeem a full card, or staff enters it on the Loyalty page to redeem
+  // on a customer's behalf. Shared by every redemption until it's changed.
+  redemptionCode String @default("REWARD")
+
+  // Legacy percent/amount offer. No longer drives any UI -- rewardLabel does.
+  // Kept so existing programs don't lose what they had configured.
   offerType  String @default("PERCENT") // "PERCENT" | "AMOUNT"
   offerValue Int    @default(10) // percent (1-100) if PERCENT, cents if AMOUNT
-
-  // Static, merchant-editable code customers type into their own phone to
-  // redeem a full punch card themselves -- no merchant dashboard step.
-  // Shared by every redemption until the merchant changes it.
-  redemptionCode String @default("REWARD")
 
   updatedAt DateTime @updatedAt
 }
 
 // ---------------------------------------------------------------------------
-// LoyaltyCard — one customer's punch card at one merchant. Punches accrue as
-// they link more receipts to their account; once full, the customer redeems
-// it themselves by entering the merchant's redemption code -- at which point
-// the card resets for the next cycle.
+// LoyaltyCard — one customer's stamp card at one merchant. There is no signup:
+// the card is created by the first receipt they link from that merchant, and
+// stamps accrue as they link more. Once full it's redeemed with the merchant's
+// redemption code -- by the customer on their own phone, or by staff on the
+// merchant's Loyalty page -- at which point the card resets for the next cycle.
 // ---------------------------------------------------------------------------
 model LoyaltyCard {
   id         String   @id @default(cuid())
@@ -396,7 +461,13 @@ model LoyaltyCard {
   customerId String
   customer   Customer @relation(fields: [customerId], references: [id])
 
-  punches Int @default(1) // 0-5
+  // Column is still named "punches" in Postgres -- the product calls them
+  // stamps now, and renaming the column would move data for no gain.
+  stamps Int @default(1) @map("punches") // 0..LoyaltyProgram.stampsRequired
+
+  // Last time a stamp landed. Only the VISIT rule reads it, to hold a
+  // customer to one stamp a day however many receipts they save.
+  lastStampedAt DateTime?
 
   lastRedeemedAt DateTime?
 
@@ -404,6 +475,68 @@ model LoyaltyCard {
   updatedAt DateTime @updatedAt
 
   @@unique([merchantId, customerId])
+}
+
+// ---------------------------------------------------------------------------
+// Notification — something that happened to a customer, waiting in their
+// wallet. Deliberately general (type + title + body + link) rather than a
+// loyalty-only table: the first one is "your stamp card is full", but the
+// Notifications tab is the place everything else will land too.
+//
+// Written whether or not any email or push went out, and independently of
+// whether either succeeded -- this is the record of record, and the other
+// channels are best-effort copies of it.
+// ---------------------------------------------------------------------------
+model Notification {
+  id         String   @id @default(cuid())
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id])
+
+  type  String // "LOYALTY_REWARD_READY"
+  title String
+  body  String
+
+  // Where tapping it goes, and which merchant it's about (so a card that gets
+  // redeemed or a program that gets deleted can clear its notifications).
+  linkUrl    String?
+  merchantId String?
+  merchant   Merchant? @relation(fields: [merchantId], references: [id])
+
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([customerId, createdAt])
+  @@index([customerId, readAt])
+}
+
+// ---------------------------------------------------------------------------
+// PushSubscription — one browser that agreed to receive push notifications.
+// A customer can have several (phone, laptop, a second browser), so pushes fan
+// out to every row.
+//
+// The endpoint is the push service's own URL for that browser and is unique
+// on its own -- re-subscribing the same browser updates the row rather than
+// adding a duplicate. p256dh and auth are the browser-generated keys the
+// payload is encrypted with; they're useless to anyone else and are what makes
+// the push service unable to read the message it's delivering.
+//
+// Rows are deleted, not kept, when a push service answers 404/410: that is the
+// browser telling us the subscription is dead (uninstalled, permission
+// revoked, storage cleared).
+// ---------------------------------------------------------------------------
+model PushSubscription {
+  id         String   @id @default(cuid())
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id])
+
+  endpoint String @unique
+  p256dh   String
+  auth     String
+
+  createdAt  DateTime  @default(now())
+  lastUsedAt DateTime?
+
+  @@index([customerId])
 }
 
 // ---------------------------------------------------------------------------
@@ -520,10 +653,23 @@ model Customer {
   referredByAffiliate   Affiliate? @relation("CustomerReferrals", fields: [referredByAffiliateId], references: [id])
   referralAttributedAt  DateTime?
 
-  transactions    Transaction[]
-  loyaltyCards    LoyaltyCard[]
-  scannedReceipts ScannedReceipt[]
-  identifiers     ShopperIdentifier[]
+  // Whether we email them when a stamp card fills. The in-app notification
+  // is always created either way -- this only governs the email, so turning
+  // it off quietens their inbox without hiding anything from them.
+  loyaltyEmails Boolean @default(true)
+
+  // First time we saw this account open ReceipTap from the home screen
+  // (display-mode: standalone). Not a "have they seen the tip" flag -- the
+  // browser genuinely tells us this, so the setup step stays real account
+  // state like every other one.
+  homeScreenAddedAt DateTime?
+
+  transactions      Transaction[]
+  loyaltyCards      LoyaltyCard[]
+  scannedReceipts   ScannedReceipt[]
+  notifications     Notification[]
+  pushSubscriptions PushSubscription[]
+  identifiers       ShopperIdentifier[]
 
   @@index([referredByAffiliateId])
 }
@@ -549,8 +695,62 @@ model ScannedReceipt {
   // this is only ever what's legible on the paper the customer photographed.
   paymentMethod String?
   receiptNumber String?
-  lineItems     Json?
-  createdAt     DateTime  @default(now())
+
+  // The rest of what a paper receipt actually prints, read off the photo by
+  // the same extraction pass. A tapped receipt gets all of this from the POS;
+  // a scanned one had only a grand total, which made the two kinds of receipt
+  // look very different in a wallet that's meant to hold both.
+  //
+  // Money in cents, like everywhere else in this project. All nullable: a
+  // receipt that doesn't print a subtotal (or a photo where it isn't legible)
+  // stores null rather than a guess.
+  subtotal Int?
+  tax      Int?
+  tip      Int?
+
+  // The merchant's tax registration number. Worth capturing specifically:
+  // claiming an input tax credit in Canada requires the supplier's GST/HST
+  // number on the receipt for purchases over $30, so a wallet that drops it
+  // makes those receipts useless for exactly the person most likely to keep
+  // them.
+  taxNumber String?
+
+  // A second registration number, where the receipt prints one. Canadian
+  // receipts routinely carry two -- federal GST/HST plus a provincial QST or
+  // PST number -- and a single slot silently threw the second away, which is
+  // the one a Quebec filer needs. Stored exactly as printed, label and all
+  // ("QST 1016551356 TQ 0001"), because which tax it belongs to is part of
+  // the record.
+  taxNumber2 String?
+
+  // The buyer's name, when the receipt prints one. Required by CRA for an
+  // input tax credit once a purchase reaches $150 -- below that the supplier
+  // details are enough, above it the recipient has to be named on the
+  // document itself. Most retail receipts don't print it; invoices do.
+  buyerName String?
+
+  // Time of day exactly as printed ("18:42:29"), kept as text rather than
+  // folded into purchaseDate on purpose: the paper says nothing about which
+  // timezone it means, and inventing one would turn a fact into a guess.
+  // IRS section 274(d) substantiation for travel and meals asks for the time.
+  purchaseTimeText String?
+
+  // Why this was bought. NOT extracted -- it isn't on the paper. It's the
+  // taxpayer's own note, and for US travel, meals, gifts and listed property
+  // it is a hard requirement under section 274(d): a receipt proves what was
+  // spent, never what it was for. Nothing else in the wallet captures it.
+  businessPurpose String?
+
+  // ISO code as printed ("CAD", "USD"). Null when the receipt doesn't say --
+  // better blank than showing a US total with a Canadian symbol.
+  currency String?
+
+  // The address line(s) printed on the receipt, useful for telling two
+  // branches of the same chain apart.
+  merchantAddress String?
+
+  lineItems Json?
+  createdAt DateTime @default(now())
 
   @@index([customerId])
 }
@@ -700,7 +900,7 @@ enum ConsentType {
 // session was never saved.
 model Session {
   sid       String   @id
-  data      String   // the serialised session, as express-session hands it over
+  data      String // the serialised session, as express-session hands it over
   expiresAt DateTime
 
   @@index([expiresAt])

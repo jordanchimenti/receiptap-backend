@@ -1,0 +1,108 @@
+<%# views/partials/push-controls.ejs
+    The mechanics of turning phone notifications on and off, in one place.
+
+    This lives here because four separate surfaces need it -- the Alerts tab,
+    the add-to-home-screen page, the wallet's account menu, and whatever comes
+    next -- and four hand-rolled copies of a permission-and-subscribe dance is
+    how three of them quietly stop matching the fourth.
+
+    Pages own their own UI; this owns the browser and server plumbing.
+    Needs res.locals.pushConfigured / pushPublicKey (set in server.js). %>
+<script>
+  window.ReceipTapPush = (function () {
+    var CONFIGURED = <%= pushConfigured ? 'true' : 'false' %>;
+    var PUBLIC_KEY = '<%= pushPublicKey %>';
+
+    var supported = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+
+    // The VAPID key travels as base64url; PushManager wants raw bytes.
+    function keyBytes(base64String) {
+      var padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+      var base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+      var raw = window.atob(base64);
+      var out = new Uint8Array(raw.length);
+      for (var i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+      return out;
+    }
+
+    async function currentSubscription() {
+      if (!supported) return null;
+      var reg = await navigator.serviceWorker.getRegistration();
+      if (!reg) return null;
+      return reg.pushManager.getSubscription();
+    }
+
+    return {
+      configured: CONFIGURED,
+      supported: supported,
+
+      permission: function () {
+        return supported ? Notification.permission : 'unsupported';
+      },
+
+      // Is THIS browser subscribed? Asked of the browser, not the server: the
+      // account may well have another phone signed up, and that says nothing
+      // about whether this one will buzz.
+      isOn: async function () {
+        return Boolean(await currentSubscription());
+      },
+
+      enable: async function () {
+        if (!CONFIGURED) return { ok: false, reason: 'Notifications are not switched on for this server yet.' };
+        if (!supported) return { ok: false, reason: "This browser doesn't support notifications." };
+
+        var permission = await Notification.requestPermission();
+        if (permission !== 'granted') {
+          return {
+            ok: false,
+            reason: permission === 'denied'
+              ? 'Notifications are blocked for this site in your browser settings.'
+              : 'No problem — you can turn these on any time.',
+          };
+        }
+
+        var reg = await navigator.serviceWorker.register('/sw.js');
+        await navigator.serviceWorker.ready;
+
+        // Reuse an existing subscription rather than replacing it: calling
+        // subscribe() again with a different key throws.
+        var sub = await reg.pushManager.getSubscription();
+        if (!sub) {
+          sub = await reg.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: keyBytes(PUBLIC_KEY),
+          });
+        }
+
+        var res = await fetch('/account/push/subscribe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ subscription: sub.toJSON() }),
+        });
+        if (!res.ok) return { ok: false, reason: 'the server rejected it' };
+        return { ok: true };
+      },
+
+      disable: async function () {
+        var sub = await currentSubscription();
+        if (!sub) return { ok: true }; // already off
+
+        // Tell the server BEFORE unsubscribing: once the browser drops the
+        // subscription we no longer have the endpoint to identify the row, and
+        // it would sit in the database forever being pushed to.
+        try {
+          await fetch('/account/push/unsubscribe', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ endpoint: sub.endpoint }),
+          });
+        } catch (err) {
+          /* the browser-side unsubscribe below still matters most */
+        }
+
+        await sub.unsubscribe();
+        return { ok: true };
+      },
+    };
+  })();
+</script>

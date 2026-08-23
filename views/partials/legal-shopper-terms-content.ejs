@@ -320,7 +320,11 @@
     <h2>Contact us</h2>
     <div class="contact-box">
       <%= entity.legalName %><br />
-      <%= entity.registeredAddress || '[[REVIEW: address pending]]' %><br />
+      <%# No registered address configured yet. Print nothing rather than a
+          placeholder: a contact block reading "[[REVIEW: address pending]]" was
+          being shown to every customer who opened this page. The wrapped
+          markers elsewhere still surface it during review. %>
+      <% if (entity.registeredAddress) { %><%= entity.registeredAddress %><br /><% } %>
       <a href="mailto:<%= entity.contactEmail %>"><%= entity.contactEmail %></a>
     </div>
   </section>

@@ -15,16 +15,32 @@
   <link rel="stylesheet" href="/css/receiptap.css" />
 </head>
 <body>
+  <%
+    // The content partials carry [[REVIEW: ...]] notes in <span class="review">
+    // -- working notes about unfinished decisions, written for the founder and
+    // whoever reviews these documents. The class had no styling, so all 42 of
+    // them rendered as plain body text on the published pages: a customer
+    // reading the privacy policy saw "[[REVIEW: address pending]]" and internal
+    // reasoning about gaps we haven't closed.
+    //
+    // Stripped from the OUTPUT rather than hidden with CSS, so they aren't
+    // sitting in the page source either. They still render locally, where they
+    // are the whole point.
+    const showReviewNotes = process.env.NODE_ENV !== 'production';
+    const strip = (html) => showReviewNotes
+      ? html
+      : html.replace(/<span class="review">[\s\S]*?<\/span>/g, '');
+  %>
   <% if (documentType === 'PRIVACY') { %>
-    <%- include('partials/legal-privacy-content', { doc, entity, retention }) %>
+    <%- strip(include('partials/legal-privacy-content', { doc, entity, retention })) %>
   <% } else if (documentType === 'TERMS') { %>
-    <%- include('partials/legal-terms-content', { doc, entity, retention }) %>
+    <%- strip(include('partials/legal-terms-content', { doc, entity, retention })) %>
   <% } else if (documentType === 'DPA') { %>
-    <%- include('partials/legal-dpa-content', { doc, entity, retention }) %>
+    <%- strip(include('partials/legal-dpa-content', { doc, entity, retention })) %>
   <% } else if (documentType === 'SHOPPER_TERMS') { %>
-    <%- include('partials/legal-shopper-terms-content', { doc, entity, retention }) %>
+    <%- strip(include('partials/legal-shopper-terms-content', { doc, entity, retention })) %>
   <% } else if (documentType === 'SHOPPER_PRIVACY') { %>
-    <%- include('partials/legal-shopper-privacy-content', { doc, entity, retention }) %>
+    <%- strip(include('partials/legal-shopper-privacy-content', { doc, entity, retention })) %>
   <% } else { %>
     <div class="centered-shell">
       <div class="auth-card">

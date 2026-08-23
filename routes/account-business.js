@@ -429,6 +429,10 @@ router.get('/account/business/billing', requireAuth, async (req, res) => {
     error: req.query.error || null,
     pmSuccess: req.query.pmSuccess === '1',
     lockedSection: typeof req.query.locked === 'string' ? req.query.locked.slice(0, 40) : null,
+    // Set by middleware/subscriptionGate.js when it redirects a merchant with
+    // no live subscription here. Without it the bounce is silent: they tap
+    // Receipts, land on Billing, and nothing says why.
+    blocked: req.query.blocked === '1',
     justResumed: req.query.resumed === '1',
     justStarted: req.query.success === '1',
     stripePublishableKey: process.env.STRIPE_PUBLISHABLE_KEY || '',

@@ -47,9 +47,23 @@ async function refreshStatusFromStripe(merchant) {
   return merchant;
 }
 
+// Which billing page to send a blocked merchant to. Mounted via
+// app.use('/account/business', ...) and app.use('/dashboard', ...), so
+// originalUrl is the reliable signal for which surface the request came in
+// through -- req.path is already stripped of the mount prefix.
+function billingBasePath(req) {
+  return req.originalUrl.startsWith('/account/business')
+    ? '/account/business/billing'
+    : '/dashboard/billing';
+}
+
 /**
  * Use on merchant dashboard routes AFTER requireAuth. Redirects blocked
- * merchants to /dashboard/billing (which stays accessible so they can fix it).
+ * merchants to the billing page (which stays accessible so they can fix it)
+ * on whichever surface they're already using -- the wallet's dark Business
+ * section keeps them in the wallet, the navy sidebar dashboard keeps them
+ * there. Sending everyone to /dashboard/billing threw wallet merchants out
+ * to the old dashboard on the very first page load after login.
  */
 async function requireActiveSubscription(req, res, next) {
   try {
@@ -69,7 +83,7 @@ async function requireActiveSubscription(req, res, next) {
     }
 
     if (['INCOMPLETE', 'CANCELED'].includes(merchant.subscriptionStatus)) {
-      return res.redirect('/dashboard/billing?blocked=1');
+      return res.redirect(`${billingBasePath(req)}?blocked=1`);
     }
 
     // PAST_DUE: allow through; billing page shows the warning
@@ -80,4 +94,4 @@ async function requireActiveSubscription(req, res, next) {
   }
 }
 
-module.exports = { requireActiveSubscription };
+module.exports = { requireActiveSubscription, billingBasePath };

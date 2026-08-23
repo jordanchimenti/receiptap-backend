@@ -126,6 +126,9 @@
         routes/account-business.js). Say which one and why, rather than
         leaving them to work out why the link they clicked went somewhere
         else entirely. %>
+    <% if (typeof blocked !== 'undefined' && blocked) { %>
+      <div class="banner warn">Your ReceipTap service is paused — start your subscription below to get back into your dashboard.</div>
+    <% } %>
     <% if (lockedSection) { %>
       <div class="banner warn"><strong><%= lockedSection %></strong> needs a payment method on file. Add one below to unlock it.</div>
     <% } %>
@@ -183,10 +186,6 @@
             <strong>$<%= price.amount %> <%= price.currency %> / <%= price.interval %></strong>
             starting <strong><%= trialFirstChargeDate %></strong> — cancel anytime before
             then and pay nothing.
-            <% if (chargesShipping) { %>
-              A one-time <strong>$<%= shippingFee %> USD shipping fee</strong> for your
-              ReceipTap puck is charged today, separately from the trial.
-            <% } %>
             A card is required to start the trial.
           </div>
         <% } %>

@@ -231,7 +231,7 @@
           </div>
         <% }); %>
       <% } else { %>
-        <div class="empty">No POS connected. Connect one from the <a href="/dashboard/pos-setup">POS connection</a> page.</div>
+        <div class="empty">No POS connected. Connect one from the <a href="/account/business/pos">POS connection</a> page.</div>
       <% } %>
     </div>
 
@@ -240,7 +240,7 @@
       <% if (disconnectAllSuccess) { %><div class="banner success">All ReceipTaps have been released from your account.</div><% } %>
       <p>Releasing every ReceipTap stops them from issuing receipts immediately, and each one needs its claim code entered again before it can be used.</p>
       <button type="button" class="deactivate-btn" id="open-disconnect-all-modal" style="margin-bottom:14px;">Disconnect all ReceipTaps</button>
-      <p>Deactivating immediately ends your access and can't be undone by you — if you just want to stop paying but keep using ReceipTap until your current period ends, <a href="/dashboard/billing">cancel your subscription</a> from Billing instead.</p>
+      <p>Deactivating immediately ends your access and can't be undone by you — if you just want to stop paying but keep using ReceipTap until your current period ends, <a href="/account/business/billing">cancel your subscription</a> from Billing instead.</p>
       <button type="button" class="deactivate-btn" id="open-deactivate-modal">Deactivate account</button>
     </div>
   </div>

@@ -153,13 +153,17 @@ app.use('/dashboard', (req, res, next) => {
 // (the wallet's dark reskin of the dashboard, routes/account-business.js)
 // so this second entry point into merchant data can't show a demo or
 // canceled-subscription merchant anything the real dashboard wouldn't.
-// No /billing exception here -- Phase 1 has no billing page in the wallet
-// yet, so a blocked merchant lands on the real /dashboard/billing instead.
+// The wallet now has its own billing page (GET /account/business/billing),
+// so it gets the same /billing exception /dashboard has -- without it the
+// subscription gate bounced a blocked merchant to billing on a page that
+// was itself gated, dumping them out of the wallet and onto the navy
+// dashboard on the first load after login.
 app.use('/account/business', (req, res, next) => {
   if (!req.session?.merchantId) return next();
   return requireDemoAccess(req, res, next);
 });
 app.use('/account/business', (req, res, next) => {
+  if (req.path.startsWith('/billing')) return next(); // billing page always reachable
   // Partner Program exception, matching /dashboard/referrals above: it's free
   // to join and free to earn from, so a lapsed merchant still reaches their
   // referral link and commission history here instead of being sent to billing.
@@ -168,6 +172,7 @@ app.use('/account/business', (req, res, next) => {
   return requireActiveSubscription(req, res, next);
 });
 app.use('/account/business', (req, res, next) => {
+  if (req.path.startsWith('/billing')) return next(); // same reason as /dashboard's legal gate
   if (!req.session?.merchantId) return next();
   return requireCurrentLegalAcceptance(req, res, next);
 });

@@ -136,7 +136,7 @@ const GETTING_STARTED_STEPS = [
     image: '/images/pos-guides/getting-started/01-create-account.png',
   },
   {
-    text: "If this is a brand-new account, you'll be asked to start your 30-day free trial before you can reach anything else — a card is required, but you won't be charged until the trial ends. Go to <a href=\"/dashboard/billing\">Billing</a> to start it.",
+    text: "If this is a brand-new account, you'll be asked to start your 30-day free trial before you can reach anything else — a card is required, but you won't be charged until the trial ends. Go to <a href=\"{{billingPath}}\">Billing</a> to start it.",
     image: '/images/pos-guides/getting-started/02-start-trial.png',
   },
   {
@@ -213,10 +213,19 @@ function getGuideProviders() {
 // Shared by GET /dashboard/pos-setup/guide/:provider and
 // GET /account/business/pos/guide/:provider. Returns null for an unknown
 // provider key so each thin route can 404 itself.
-function computeGuideData(provider) {
+// billingPath: the guide is served on both surfaces, so the "go start your
+// trial" link has to resolve to the Billing page of whichever dashboard the
+// merchant is reading it on -- a wallet reader sent to /dashboard/billing
+// lands on the navy dashboard and is stuck there. Defaults to the wallet,
+// which is the surface merchants land on after login.
+function computeGuideData(provider, { billingPath = '/account/business/billing' } = {}) {
   const guide = POS_SETUP_GUIDES[provider];
   if (!guide) return null;
-  return { note: null, ...guide, steps: [...GETTING_STARTED_STEPS, ...guide.steps] };
+  const steps = [...GETTING_STARTED_STEPS, ...guide.steps].map((step) => ({
+    ...step,
+    text: step.text.replace(/\{\{billingPath\}\}/g, billingPath),
+  }));
+  return { note: null, ...guide, steps };
 }
 
 router.get('/dashboard/pos-setup/guides', requireAuth, (req, res) => {
@@ -224,7 +233,7 @@ router.get('/dashboard/pos-setup/guides', requireAuth, (req, res) => {
 });
 
 router.get('/dashboard/pos-setup/guide/:provider', requireAuth, (req, res) => {
-  const data = computeGuideData(req.params.provider);
+  const data = computeGuideData(req.params.provider, { billingPath: '/dashboard/billing' });
   if (!data) return res.status(404).send('No setup guide for that POS provider.');
   res.render('pos-setup-guide', data);
 });

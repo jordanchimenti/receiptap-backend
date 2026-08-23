@@ -249,6 +249,10 @@ async function computeOverviewData(merchantId) {
     puckSetUp: pucks.length > 0,
     receiptCustomized: Boolean(receiptTheme),
     partnerProgramOn: Boolean(receiptTheme && receiptTheme.showPartnerProgram),
+    // Set the first time this merchant opens the dashboard from their home
+    // screen (the browser reports display-mode: standalone) -- observed state,
+    // not a "did they visit the page" flag.
+    homeScreenAdded: Boolean(merchant.homeScreenAddedAt),
   };
   const setupDoneCount = Object.values(setupSteps).filter(Boolean).length;
   // Divide by the actual step count so adding a step can't leave the
@@ -277,9 +281,35 @@ async function computeOverviewData(merchantId) {
   const pairingCount = puckRows.filter((p) => !p.linked && p.pairing).length;
   const setupCount = puckRows.length - linkedCount - pairingCount;
 
+  // The "Get started" card under Today's total. Three real states, in the
+  // order a merchant actually has to do them -- and every one is read from
+  // account state, never a visited-the-page flag:
+  //   claim a ReceipTap -> connect a POS -> link the ReceipTap to a register.
+  // The third step is the one that's easy to miss: a claimed puck attached to
+  // a connected POS still issues nothing until it's pointed at a register.
+  // The whole card disappears once all three are done.
+  const posConnected = Boolean(
+    merchant.squareAccessToken ||
+    merchant.cloverAccessToken ||
+    merchant.lightspeedAccessToken ||
+    merchant.shopifyAccessToken
+  );
+  const getStarted = {
+    claimed: pucks.length > 0,
+    posConnected,
+    linked: linkedCount > 0,
+  };
+  getStarted.complete = getStarted.claimed && getStarted.posConnected && getStarted.linked;
+  // Which step the primary button should drop them into -- the first one
+  // that isn't done yet.
+  getStarted.nextHref = !getStarted.claimed
+    ? '/account/business/claim'
+    : '/account/business/pos';
+
   return {
     merchant,
     merchantAffiliateRate: MERCHANT_AFFILIATE_RATE,
+    getStarted,
     stats: {
       receipts: allTx.length,
       receiptsDelta,
@@ -292,7 +322,18 @@ async function computeOverviewData(merchantId) {
       todayReceipts: todayTx.length,
     },
     setup,
-    puckStatus: { linked: linkedCount, pairing: pairingCount, setup: setupCount, total: puckRows.length },
+    // Carries both shapes: the Dashboard shows the four summary tiles, and the
+    // ReceipTaps page shows the linked/pairing/needs-linking breakdown. Same
+    // counts either way -- they're derived here once rather than each page
+    // doing its own arithmetic and drifting.
+    puckStatus: {
+      linked: linkedCount,
+      pairing: pairingCount,
+      setup: setupCount,
+      total: puckRows.length,
+      activatedThisMonth: puckRows.filter((p) => p.claimedAt && p.claimedAt >= monthStart).length,
+      monthLabel: now.toLocaleDateString('en-US', { month: 'long' }),
+    },
     pucks: puckRows.slice(0, 6),
     recent: recent.map((t) => ({
       id: t.id,
@@ -362,6 +403,9 @@ async function computePucksData(merchantId, query = {}) {
   const stats = {
     total: pucks.length,
     linked: linkedCount,
+    // Already counted above for needsLinking; now surfaced too, because this
+    // page shows the three-way status breakdown.
+    pairing: pairingCount,
     needsLinking: needsLinkingCount,
     activatedThisMonth,
     monthLabel: now.toLocaleDateString('en-US', { month: 'long' }),

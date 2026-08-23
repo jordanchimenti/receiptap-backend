@@ -1,6 +1,6 @@
 <!-- views/business-overview.ejs -->
 <!-- Dark reskin of views/dashboard-overview.ejs's content, single-column
-     for mobile. Same locals (merchant, stats, puckStatus, pucks, recent) --
+     for mobile. Same locals (merchant, stats, pucks, recent) --
      see computeOverviewData() in routes/merchant-dashboard.js. -->
 <!DOCTYPE html>
 <html lang="en">
@@ -32,6 +32,77 @@
     .setup-row-sub { font-size: 12px; color: var(--w-ink-soft); margin-top: 2px; line-height: 1.4; }
     .setup-row-chevron { color: var(--w-ink-soft); flex-shrink: 0; margin-top: 3px; }
     a.setup-row { text-decoration: none; }
+
+    /* Get started card -- the pre-launch companion to Setup progress above.
+       Setup progress tracks the whole account; this one is only about getting
+       hardware issuing receipts, and it goes away for good once it is. */
+    .gs-card { padding: 22px 20px; margin-bottom: 18px; }
+    .gs-eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--w-accent); }
+    .gs-title { font-size: 20px; font-weight: 700; margin: 8px 0 6px; }
+    .gs-lede { font-size: 13.5px; color: var(--w-ink-soft); line-height: 1.55; margin: 0 0 18px; }
+    a.gs-step { display: flex; gap: 13px; align-items: flex-start; padding: 10px 0; text-decoration: none; color: inherit; }
+    /* Tinted tiles, not neutral ones. A step still to do is the thing being
+       asked for, so it carries the brand colour; a grey tile read as disabled,
+       which is the opposite of the intent. */
+    .gs-step-icon {
+      width: 40px; height: 40px; border-radius: 12px; flex-shrink: 0;
+      background: var(--w-accent-wash); color: var(--w-accent);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .gs-step-icon svg { width: 19px; height: 19px; }
+    /* Green for done, matching the reward alerts -- blue-on-blue for both
+       states would have made "done" and "to do" look identical. */
+    .gs-step.done .gs-step-icon { background: rgba(48,209,88,0.16); color: #30d158; }
+    .gs-step-body { flex: 1; min-width: 0; padding-top: 2px; }
+    .gs-step-title { font-size: 14px; font-weight: 700; color: var(--w-ink); }
+    .gs-step.done .gs-step-title { color: var(--w-ink-soft); }
+    .gs-step-sub { font-size: 12.5px; color: var(--w-ink-soft); line-height: 1.45; margin-top: 2px; }
+    .gs-cta {
+      display: flex; align-items: center; justify-content: center; gap: 9px;
+      background: var(--w-ink); color: #0a0a0a; text-decoration: none;
+      font-size: 15px; font-weight: 700; padding: 15px; border-radius: 999px; margin-top: 18px;
+    }
+    .gs-cta svg { width: 17px; height: 17px; }
+    /* Collapsed confirmation, shown in place of the card once all three steps
+       are done -- one line by default, opens to the same destinations. */
+    .gs-done { padding: 0; margin-bottom: 18px; }
+    .gs-done-head { display: flex; align-items: center; gap: 12px; padding: 15px 18px; }
+    .gs-done-tick {
+      width: 26px; height: 26px; border-radius: 50%; flex: none; display: flex; align-items: center; justify-content: center;
+      background: var(--w-accent-wash); color: var(--w-accent);
+    }
+    .gs-done-tick svg { width: 13px; height: 13px; }
+    .gs-done-text { flex: 1; min-width: 0; }
+    .gs-done-title { display: block; font-size: 14px; font-weight: 700; color: var(--w-ink); }
+    .gs-done-sub { display: block; font-size: 12px; color: var(--w-ink-soft); margin-top: 2px; }
+    .gs-done-body { padding: 0 18px 16px; border-top: 1px solid var(--w-line); }
+    a.gs-done-row {
+      display: flex; align-items: flex-start; gap: 10px; padding: 11px 0; text-decoration: none;
+      border-bottom: 1px solid var(--w-line);
+    }
+    a.gs-done-row:last-of-type { border-bottom: none; }
+    .gs-done-row-text { flex: 1; min-width: 0; }
+    .gs-done-row-title { display: block; font-size: 13.5px; font-weight: 600; color: var(--w-ink); }
+    .gs-done-row-sub { display: block; font-size: 12px; color: var(--w-ink-soft); line-height: 1.45; margin-top: 2px; }
+    /* Live, not decorative: a slow pulse reads as "this is on and working",
+       which is the whole point of the row. */
+    .gs-done-dot {
+      width: 7px; height: 7px; border-radius: 50%; background: #30d158; flex: none; margin-top: 5px;
+      animation: gs-pulse 2s ease-in-out infinite;
+    }
+    @keyframes gs-pulse {
+      0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(48,209,88,0.55); }
+      50%      { opacity: 0.6; box-shadow: 0 0 0 5px rgba(48,209,88,0); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .gs-done-dot { animation: none; }
+    }
+    .gs-done-note { font-size: 12px; color: var(--w-ink-soft); line-height: 1.5; margin-top: 12px; }
+
+    .gs-secondary {
+      display: block; text-align: center; font-size: 13px; color: var(--w-ink-soft);
+      text-decoration: none; margin-top: 14px;
+    }
 
     .hero-card {
       padding: 20px 22px; margin-bottom: 18px;
@@ -65,13 +136,6 @@
     .recent-total { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 13.5px; font-weight: 700; text-align: right; }
     .recent-when { font-size: 11px; color: var(--w-ink-soft); text-align: right; }
 
-    .stackbar { display: flex; height: 8px; border-radius: 999px; overflow: hidden; background: var(--w-card-raised); margin-bottom: 14px; }
-    .legend-row { display: flex; justify-content: space-between; align-items: center; font-size: 13px; margin-bottom: 8px; }
-    .legend-row:last-child { margin-bottom: 0; }
-    .legend-key { display: flex; align-items: center; gap: 8px; color: var(--w-ink-soft); }
-    .sw { width: 8px; height: 8px; border-radius: 50%; }
-    .status-note { font-size: 12.5px; color: var(--w-ink-soft); line-height: 1.5; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--w-line); }
-    .status-note.warn { color: var(--w-accent); }
 
     .puck-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     .puck-card { background: var(--w-card-raised); border: 1px solid var(--w-line); border-radius: 12px; padding: 12px; text-decoration: none; color: var(--w-ink); }
@@ -91,8 +155,6 @@
 <body>
   <%
     var name = (merchant.ownerName || merchant.businessName || 'there').split(' ')[0];
-    var st = puckStatus;
-    var pct = function (n) { return st.total ? (n / st.total) * 100 : 0; };
   %>
   <div class="w-shell">
     <div class="biz-header">
@@ -178,6 +240,28 @@
         </a>
       <% } %>
 
+      <%# Same /account/install page the shopper wallet links to -- it's one
+          app, and the install steps don't differ by account type. %>
+      <% if (setup.homeScreenAdded) { %>
+        <a class="setup-row done" href="/account/install">
+          <div class="setup-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div>
+          <div class="setup-row-body">
+            <div class="setup-row-title">Add ReceipTap to your home screen</div>
+            <div class="setup-row-sub">One tap to your dashboard.</div>
+          </div>
+          <div class="setup-row-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg></div>
+        </a>
+      <% } else { %>
+        <a class="setup-row" href="/account/install">
+          <div class="setup-check"></div>
+          <div class="setup-row-body">
+            <div class="setup-row-title">Add ReceipTap to your home screen</div>
+            <div class="setup-row-sub">Open your dashboard like an app, straight from your phone.</div>
+          </div>
+          <div class="setup-row-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg></div>
+        </a>
+      <% } %>
+
       <%# Done once the receipt banner is actually switched on (that's what
           starts earning, not merely visiting a page). Either way this row goes
           to the Partner Program: the landing page while they're deciding, and
@@ -222,6 +306,107 @@
       </div>
     </div>
 
+    <%# Get started: claim a ReceipTap, connect a POS, link the ReceipTap to a
+        register. That third step is the one merchants miss -- claimed hardware
+        on a connected POS still issues nothing until it's pointed at a till.
+        (See getStarted in computeOverviewData.)
+
+        Once all three are done it collapses to a single line rather than
+        vanishing: a card that disappears leaves no way to check what was set
+        up, or to reach the pages behind it, and someone who adds a second
+        ReceipTap later needs the same three steps again. Still openable. %>
+    <% if (getStarted.complete) { %>
+      <%# Always open, not a <details>. There are only three short lines behind
+          it -- hiding them saves almost no height and costs a tap, and a
+          chevron implies there is more to find than there is. %>
+      <div class="w-card gs-done">
+        <div class="gs-done-head">
+          <span class="gs-done-tick">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+          </span>
+          <span class="gs-done-text">
+            <span class="gs-done-title">Getting started</span>
+            <span class="gs-done-sub">Claimed, connected, and linked to a register</span>
+          </span>
+        </div>
+        <div class="gs-done-body">
+          <a class="gs-done-row" href="/account/business/pucks">
+            <span class="gs-done-dot"></span>
+            <span class="gs-done-row-text">
+              <span class="gs-done-row-title">Claim your ReceipTap</span>
+              <span class="gs-done-row-sub">Tap &amp; hold your phone, then enter the claim code.</span>
+            </span>
+          </a>
+          <a class="gs-done-row" href="/account/business/pos">
+            <span class="gs-done-dot"></span>
+            <span class="gs-done-row-text">
+              <span class="gs-done-row-title">Connect your POS</span>
+              <span class="gs-done-row-sub">Enter your POS login on POS connection.</span>
+            </span>
+          </a>
+          <a class="gs-done-row" href="/account/business/pos">
+            <span class="gs-done-dot"></span>
+            <span class="gs-done-row-text">
+              <span class="gs-done-row-title">Link it to a register</span>
+              <span class="gs-done-row-sub">Select your ReceipTap ID in the dropdown menu.</span>
+            </span>
+          </a>
+          <div class="gs-done-note">Adding another ReceipTap? Claim it, then link it to the register it sits on.</div>
+        </div>
+      </div>
+    <% } else { %>
+      <div class="w-card gs-card">
+        <div class="gs-eyebrow">Get started</div>
+        <h2 class="gs-title">Set up your ReceipTap</h2>
+        <p class="gs-lede">Claim your ReceipTap, connect your POS, then link it to a register to start issuing digital receipts.</p>
+
+        <% var gsSteps = [
+             { done: getStarted.claimed,
+               title: 'Claim your ReceipTap',
+               sub: 'Tap & hold your phone, then enter the claim code.',
+               href: '/account/business/claim',
+               icon: '<path d="M5 8a9 9 0 0 1 0 8"/><path d="M9 6a13 13 0 0 1 0 12"/><path d="M13 4a17 17 0 0 1 0 16"/>' },
+             { done: getStarted.posConnected,
+               title: 'Connect your POS',
+               sub: 'Enter your POS login on POS connection.',
+               href: '/account/business/pos',
+               icon: '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M7 20h10"/><path d="M12 16v4"/>' },
+             { done: getStarted.linked,
+               title: 'Link it to a register',
+               sub: 'Select your ReceipTap ID in the dropdown menu.',
+               href: '/account/business/pos',
+               icon: '<path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/>' }
+           ]; %>
+
+        <% gsSteps.forEach(function (step) { %>
+          <a class="gs-step <%= step.done ? 'done' : '' %>" href="<%= step.href %>">
+            <div class="gs-step-icon">
+              <% if (step.done) { %>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+              <% } else { %>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><%- step.icon %></svg>
+              <% } %>
+            </div>
+            <div class="gs-step-body">
+              <div class="gs-step-title"><%= step.title %></div>
+              <div class="gs-step-sub"><%= step.sub %></div>
+            </div>
+          </a>
+        <% }); %>
+
+        <a class="gs-cta" href="<%= getStarted.nextHref %>">
+          <%= !getStarted.claimed ? 'Set up ReceipTap'
+              : !getStarted.posConnected ? 'Connect your POS'
+              : 'Link it to a register' %>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>
+        </a>
+
+        <% if (!getStarted.claimed) { %>
+          <a class="gs-secondary" href="/account/business/claim">Already have a code? Claim a ReceipTap</a>
+        <% } %>
+      </div>
+    <% } %>
+
     <div class="w-card panel">
       <div class="panel-head"><h2>Recent receipts</h2><a href="/account/business/receipts">View all</a></div>
       <% if (recent.length === 0) { %>
@@ -242,28 +427,6 @@
             </div>
           </div>
         <% }); %>
-      <% } %>
-    </div>
-
-    <div class="w-card panel">
-      <div class="panel-head"><h2>ReceipTap status</h2><a href="/account/business/pucks">Manage</a></div>
-      <!-- Same brand blue throughout, just varied in shade/opacity so the
-           3 segments stay visually distinguishable -- see the note on
-           POS_COLORS in routes/analytics.js for the same pattern. -->
-      <div class="stackbar">
-        <span style="width: <%= pct(st.linked) %>%; background: var(--w-accent);"></span>
-        <span style="width: <%= pct(st.pairing) %>%; background: rgba(5,107,254,0.55);"></span>
-        <span style="width: <%= pct(st.setup) %>%; background: rgba(5,107,254,0.22);"></span>
-      </div>
-      <div class="legend-row"><span class="legend-key"><span class="sw" style="background:var(--w-accent);"></span>Linked to a register</span><span><%= st.linked %></span></div>
-      <div class="legend-row"><span class="legend-key"><span class="sw" style="background:rgba(5,107,254,0.55);"></span>Pairing right now</span><span><%= st.pairing %></span></div>
-      <div class="legend-row"><span class="legend-key"><span class="sw" style="background:rgba(5,107,254,0.22);"></span>Needs linking</span><span><%= st.setup %></span></div>
-      <% if (st.total === 0) { %>
-        <div class="status-note warn">No ReceipTaps activated yet.</div>
-      <% } else if (st.setup > 0) { %>
-        <div class="status-note warn"><%= st.setup %> <%= st.setup === 1 ? 'ReceipTap needs' : 'ReceipTaps need' %> linking to a register before receipts reach it.</div>
-      <% } else { %>
-        <div class="status-note">Everything is linked. Receipts are routed automatically.</div>
       <% } %>
     </div>
 

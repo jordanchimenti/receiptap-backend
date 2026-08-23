@@ -6,6 +6,62 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Overview - ReceipTap</title>
   <link rel="stylesheet" href="/css/receiptap.css" />
+  <style>
+    /* Get started. Light-theme twin of the card on the mobile Dashboard --
+       same three steps, same data, this one built from receiptap.css's
+       paper/ink tokens rather than the wallet's dark ones. */
+    .gs { padding: 22px 24px; }
+    .gs-eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--teal); }
+    .gs-title { font-size: 19px; font-weight: 700; margin: 7px 0 5px; letter-spacing: -0.01em; }
+    .gs-lede { font-size: 13.5px; color: var(--ink-soft); line-height: 1.55; margin: 0 0 16px; }
+    .gs-steps { display: flex; flex-direction: column; gap: 2px; }
+    a.gs-step { display: flex; gap: 12px; align-items: flex-start; padding: 10px 0; text-decoration: none; color: inherit; }
+    .gs-num {
+      width: 34px; height: 34px; border-radius: 11px; flex: none; display: flex; align-items: center; justify-content: center;
+      background: var(--teal-wash); color: var(--teal);
+      font-size: 13.5px; font-weight: 700;
+    }
+    .gs-num svg { width: 14px; height: 14px; }
+    .gs-step.done .gs-num { background: rgba(48,209,88,0.16); color: #1f9d4d; }
+    .gs-step-text { flex: 1; min-width: 0; padding-top: 2px; }
+    .gs-step-title { display: block; font-size: 14px; font-weight: 700; color: var(--ink); }
+    .gs-step.done .gs-step-title { color: var(--ink-soft); }
+    .gs-step-sub { display: block; font-size: 12.5px; color: var(--ink-soft); line-height: 1.45; margin-top: 2px; }
+    .gs-cta { display: inline-block; margin-top: 16px; }
+
+    /* Collapsed confirmation once all three are done. */
+    .gs-done { padding: 0; }
+    .gs-done-head { display: flex; align-items: center; gap: 12px; padding: 16px 20px; }
+    .gs-done-tick {
+      width: 26px; height: 26px; border-radius: 50%; flex: none; display: flex; align-items: center; justify-content: center;
+      background: var(--teal-wash); color: var(--teal);
+    }
+    .gs-done-tick svg { width: 13px; height: 13px; }
+    .gs-done-text { flex: 1; min-width: 0; }
+    .gs-done-title { display: block; font-size: 14px; font-weight: 700; color: var(--ink); }
+    .gs-done-sub { display: block; font-size: 12.5px; color: var(--ink-soft); margin-top: 2px; }
+    .gs-done-body { padding: 0 20px 16px; border-top: 1px solid var(--line); }
+    a.gs-done-row {
+      display: flex; align-items: flex-start; gap: 10px; padding: 11px 0; text-decoration: none;
+      border-bottom: 1px solid var(--line);
+    }
+    a.gs-done-row:last-of-type { border-bottom: none; }
+    .gs-done-row-text { flex: 1; min-width: 0; }
+    .gs-done-row-title { display: block; font-size: 13.5px; font-weight: 600; color: var(--ink); }
+    .gs-done-row-sub { display: block; font-size: 12.5px; color: var(--ink-soft); line-height: 1.45; margin-top: 2px; }
+    .gs-done-dot {
+      width: 7px; height: 7px; border-radius: 50%; background: #1f9d4d; flex: none; margin-top: 5px;
+      animation: gs-pulse 2s ease-in-out infinite;
+    }
+    @keyframes gs-pulse {
+      0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(31,157,77,0.5); }
+      50%      { opacity: 0.6; box-shadow: 0 0 0 5px rgba(31,157,77,0); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .gs-done-dot { animation: none; }
+    }
+    .gs-done-note { font-size: 12.5px; color: var(--ink-soft); line-height: 1.5; margin-top: 12px; }
+  </style>
 </head>
 <body>
   <%- include('partials/dashboard-header', { activeNav: 'overview' }) %>
@@ -88,6 +144,85 @@
         <div class="foot">Saved a receipt to their wallet</div>
       </div>
     </div>
+
+    <!-- Get started ------------------------------------------------------- -->
+    <%# Same three steps and the same getStarted data the mobile Dashboard uses
+        (computeOverviewData) -- a merchant working on desktop was the only one
+        who never saw them. Collapses to a single confirmation line once all
+        three are done rather than disappearing, so the steps stay reachable
+        when a second ReceipTap is added later. %>
+    <% if (!getStarted.complete) { %>
+      <div class="card gs">
+        <div class="gs-eyebrow">Get started</div>
+        <h2 class="gs-title">Set up your ReceipTap</h2>
+        <p class="gs-lede">Claim your ReceipTap, connect your POS, then link it to a register to start issuing digital receipts.</p>
+
+        <% var gsSteps = [
+             { done: getStarted.claimed,      title: 'Claim your ReceipTap', sub: 'Tap & hold your phone, then enter the claim code.', href: '/dashboard/pucks' },
+             { done: getStarted.posConnected, title: 'Connect your POS',     sub: 'Enter your POS login on POS connection.',  href: '/dashboard/pos-setup' },
+             { done: getStarted.linked,       title: 'Link it to a register', sub: 'Select your ReceipTap ID in the dropdown menu.',      href: '/dashboard/pos-setup' },
+           ]; %>
+        <div class="gs-steps">
+          <% gsSteps.forEach(function (step, i) { %>
+            <a class="gs-step <%= step.done ? 'done' : '' %>" href="<%= step.href %>">
+              <span class="gs-num">
+                <% if (step.done) { %>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+                <% } else { %><%= i + 1 %><% } %>
+              </span>
+              <span class="gs-step-text">
+                <span class="gs-step-title"><%= step.title %></span>
+                <span class="gs-step-sub"><%= step.sub %></span>
+              </span>
+            </a>
+          <% }); %>
+        </div>
+
+        <a class="btn btn-primary gs-cta" href="<%= !getStarted.claimed ? '/dashboard/pucks' : '/dashboard/pos-setup' %>">
+          <%= !getStarted.claimed ? 'Set up ReceipTap'
+              : !getStarted.posConnected ? 'Connect your POS'
+              : 'Link it to a register' %>
+        </a>
+      </div>
+    <% } else { %>
+      <%# Always open, same as the mobile card -- three short lines aren't worth
+          hiding behind a tap. %>
+      <div class="card gs-done">
+        <div class="gs-done-head">
+          <span class="gs-done-tick">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+          </span>
+          <span class="gs-done-text">
+            <span class="gs-done-title">Getting started</span>
+            <span class="gs-done-sub">Claimed, connected, and linked to a register</span>
+          </span>
+        </div>
+        <div class="gs-done-body">
+          <a class="gs-done-row" href="/dashboard/pucks">
+            <span class="gs-done-dot"></span>
+            <span class="gs-done-row-text">
+              <span class="gs-done-row-title">Claim your ReceipTap</span>
+              <span class="gs-done-row-sub">Tap &amp; hold your phone, then enter the claim code.</span>
+            </span>
+          </a>
+          <a class="gs-done-row" href="/dashboard/pos-setup">
+            <span class="gs-done-dot"></span>
+            <span class="gs-done-row-text">
+              <span class="gs-done-row-title">Connect your POS</span>
+              <span class="gs-done-row-sub">Enter your POS login on POS connection.</span>
+            </span>
+          </a>
+          <a class="gs-done-row" href="/dashboard/pos-setup">
+            <span class="gs-done-dot"></span>
+            <span class="gs-done-row-text">
+              <span class="gs-done-row-title">Link it to a register</span>
+              <span class="gs-done-row-sub">Select your ReceipTap ID in the dropdown menu.</span>
+            </span>
+          </a>
+          <div class="gs-done-note">Adding another ReceipTap? Claim it, then link it to the register it sits on.</div>
+        </div>
+      </div>
+    <% } %>
 
     <!-- Recent receipts + ReceipTap status -------------------------------- -->
     <div class="col-2">

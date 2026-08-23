@@ -64,6 +64,17 @@
     .replica-line span:last-child { color: var(--w-ink); flex-shrink: 0; }
     .replica-empty { text-align: center; font-size: 12px; color: var(--w-ink-soft); padding: 4px 0; }
     .replica-total-row { display: flex; justify-content: space-between; font-size: 14px; font-weight: 700; color: var(--w-ink); margin-top: 4px; }
+    .replica-more { margin-top: 18px; border-top: 1px dashed var(--w-line); padding-top: 12px; }
+    .replica-more summary {
+      cursor: pointer; font-size: 11px; font-weight: 700; letter-spacing: 0.06em;
+      text-transform: uppercase; color: var(--w-ink-soft); list-style: none;
+    }
+    .replica-more summary::-webkit-details-marker { display: none; }
+    .replica-more summary::before { content: '▸ '; }
+    .replica-more[open] summary::before { content: '▾ '; }
+    .replica-field-row { display: flex; gap: 10px; }
+    .replica-field-row .replica-field { flex: 1; min-width: 0; }
+    .replica-hint { font-size: 11px; color: var(--w-ink-soft); line-height: 1.5; margin-top: 12px; }
     .replica-field { margin-top: 16px; }
     .replica-field label { display: block; font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--w-ink-soft); margin-bottom: 5px; }
     .replica-field input {
@@ -77,9 +88,20 @@
       margin-bottom: 22px; padding: 0 2px;
     }
     .original-note a { color: var(--w-accent); font-weight: 600; text-decoration: none; }
+    .total-hint { font-size: 12px; color: var(--w-danger); margin-top: 10px; line-height: 1.45; }
+    .dupe-warning {
+      background: rgba(255,159,10,0.10); border: 1px solid rgba(255,159,10,0.42);
+      border-radius: 14px; padding: 14px 16px; margin-bottom: 16px;
+    }
+    .dupe-title { font-size: 14px; font-weight: 700; color: #ffb340; margin-bottom: 5px; }
+    .dupe-body { font-size: 13px; color: var(--w-ink-soft); line-height: 1.55; }
+    .dupe-body strong { color: var(--w-ink); }
+    .dupe-actions { margin-top: 10px; }
+    .dupe-link { font-size: 12.5px; font-weight: 700; color: var(--w-accent); text-decoration: none; }
   </style>
 </head>
-<body>
+<!-- Holds corrections the customer has typed but not saved; a reload would bin them. -->
+<body data-no-pull-refresh>
   <div class="w-shell">
     <div class="scan-header">
       <a href="/account/receipts/scan" class="w-btn-icon" aria-label="Back">
@@ -88,10 +110,30 @@
       <h1 class="w-title" style="font-size:20px;">Confirm details</h1>
     </div>
 
-    <img class="preview-thumb" src="<%= imageUrl %>" alt="Uploaded receipt" />
+    <img class="preview-thumb" src="<%= imageUrl %>" alt="Uploaded receipt"
+         style="cursor: zoom-in;" onclick="openImageViewer('<%= imageUrl %>', 'Your photo')" />
 
     <% if (typeof error !== 'undefined' && error) { %>
       <div class="w-error"><%= error %></div>
+    <% } else if (typeof duplicate !== 'undefined' && duplicate) { %>
+      <%# A warning, never a block. Two identical coffees on the same day are a
+          real thing, and only the customer knows which case this is. %>
+      <div class="dupe-warning">
+        <div class="dupe-title">You may already have this receipt</div>
+        <div class="dupe-body">
+          There's already a <%= duplicate.kind === 'tapped' ? 'tapped' : 'scanned' %> receipt for
+          <strong>$<%= total %></strong> at <strong><%= duplicate.merchantName %></strong>
+          <%# In UTC, deliberately. purchaseDate is a pure calendar date stored
+              as UTC midnight, so formatting it in a negative-offset local zone
+              rolls it back a day -- this warning said "Aug 21" about an Aug 22
+              receipt before the timeZone was pinned. Same reasoning as the
+              wallet list in routes/customer-account.js. %>
+          on <%= duplicate.date.toLocaleDateString('en-US', { dateStyle: 'medium', timeZone: 'UTC' }) %>.
+        </div>
+        <div class="dupe-actions">
+          <a class="dupe-link" href="/account/receipts">See what's in my wallet</a>
+        </div>
+      </div>
     <% } else if (couldNotRead) { %>
       <div class="notice">Couldn't read that automatically — fill in the details below.</div>
     <% } %>
@@ -125,13 +167,21 @@
         <div class="total-label">Total</div>
         <div class="total-input-row">
           <span class="total-currency">$</span>
+          <%# `required` is kept -- a receipt without a total is not worth
+              saving -- but the AI leaves this blank whenever it can't read the
+              amount, and a bare browser tooltip on a field the customer never
+              filled in reads as "the app is broken". The hint below says so. %>
           <input class="total-input" id="total" type="number" step="0.01" min="0" name="total" value="<%= total %>" placeholder="0.00" required />
         </div>
         <input class="total-date-input" type="date" name="date" value="<%= date %>" />
+        <% if (!total) { %>
+          <div class="total-hint">We couldn't read the total — type it in to save this receipt.</div>
+        <% } %>
       </div>
 
       <div class="receipt-replica">
         <div class="replica-merchant" id="replica-merchant"><%= merchantName || 'Merchant name' %></div>
+        <% if (merchantAddress) { %><div class="replica-sub"><%= merchantAddress %></div><% } %>
         <% if (receiptNumber) { %><div class="replica-sub">RECEIPT #<%= receiptNumber %></div><% } %>
 
         <hr class="replica-dash" />
@@ -149,7 +199,21 @@
 
         <hr class="replica-dash" />
 
-        <div class="replica-total-row"><span>TOTAL</span><span id="replica-total">$<%= totalDisplay %></span></div>
+        <%# Only the lines the receipt actually printed. A blank subtotal means
+            the paper didn't show one, and inventing it by subtracting tax
+            would be making up a number the customer can't check. %>
+        <% if (subtotal) { %><div class="replica-line"><span>Subtotal</span><span>$<%= subtotal %></span></div><% } %>
+        <% if (tax) { %><div class="replica-line"><span>Tax</span><span>$<%= tax %></span></div><% } %>
+        <% if (tip) { %><div class="replica-line"><span>Tip</span><span>$<%= tip %></span></div><% } %>
+
+        <div class="replica-total-row">
+          <span>TOTAL</span>
+          <span id="replica-total">$<%= totalDisplay %><% if (currency) { %> <small style="font-weight:600; opacity:.7;"><%= currency %></small><% } %></span>
+        </div>
+
+        <% if (taxNumber) { %>
+          <div class="replica-sub" style="margin-top:10px;">GST/HST <%= taxNumber %></div>
+        <% } %>
 
         <div class="replica-field">
           <label for="paymentMethod">Payment method (if shown on receipt)</label>
@@ -159,14 +223,95 @@
           <label for="receiptNumber">Receipt # (if shown on receipt)</label>
           <input type="text" id="receiptNumberInput" name="receiptNumber" value="<%= receiptNumber %>" placeholder="Optional" maxlength="60" />
         </div>
+
+        <%# The rest of what was read off the paper. Editable for the same
+            reason the total is: the customer is looking at the photo, so
+            they're the one who can tell a misread tax line from a real one. %>
+        <details class="replica-more"<%= (subtotal || tax || tip || taxNumber || merchantAddress) ? ' open' : '' %>>
+          <summary>More details from this receipt</summary>
+
+          <div class="replica-field-row">
+            <div class="replica-field">
+              <label for="subtotal">Subtotal</label>
+              <input type="number" step="0.01" min="0" id="subtotal" name="subtotal" value="<%= subtotal %>" placeholder="Optional" />
+            </div>
+            <div class="replica-field">
+              <label for="tax">Tax</label>
+              <input type="number" step="0.01" min="0" id="tax" name="tax" value="<%= tax %>" placeholder="Optional" />
+            </div>
+            <div class="replica-field">
+              <label for="tip">Tip</label>
+              <input type="number" step="0.01" min="0" id="tip" name="tip" value="<%= tip %>" placeholder="Optional" />
+            </div>
+          </div>
+
+          <div class="replica-field">
+            <label for="merchantAddress">Address</label>
+            <input type="text" id="merchantAddress" name="merchantAddress" value="<%= merchantAddress %>" placeholder="Optional" maxlength="200" />
+          </div>
+
+          <div class="replica-field-row">
+            <div class="replica-field">
+              <label for="taxNumber">Tax number</label>
+              <input type="text" id="taxNumber" name="taxNumber" value="<%= taxNumber %>" placeholder="GST/HST …" maxlength="40" />
+            </div>
+            <div class="replica-field" style="flex: 0 0 90px;">
+              <label for="currency">Currency</label>
+              <input type="text" id="currency" name="currency" value="<%= currency %>" placeholder="CAD" maxlength="3" style="text-transform:uppercase;" />
+            </div>
+          </div>
+
+          <%# Two of these, because Canadian receipts routinely print two --
+              federal GST/HST alongside a provincial QST or PST. One field
+              silently kept whichever the reader saw first and dropped the
+              other, which is the one a Quebec filer needs. %>
+          <div class="replica-field">
+            <label for="taxNumber2">Second tax number</label>
+            <input type="text" id="taxNumber2" name="taxNumber2" value="<%= taxNumber2 %>" placeholder="QST / PST, if the receipt shows one" maxlength="40" />
+          </div>
+
+          <div class="replica-field-row">
+            <div class="replica-field">
+              <label for="purchaseTimeText">Time</label>
+              <input type="text" id="purchaseTimeText" name="purchaseTimeText" value="<%= purchaseTimeText %>" placeholder="Optional" maxlength="20" />
+            </div>
+            <div class="replica-field">
+              <label for="buyerName">Billed to</label>
+              <input type="text" id="buyerName" name="buyerName" value="<%= buyerName %>" placeholder="Your name, if printed" maxlength="200" />
+            </div>
+          </div>
+
+          <div class="replica-hint">Keeping the tax number matters if you ever claim this back — a receipt without it can't support an input tax credit. Over $150, CRA also wants the buyer named on the receipt itself.</div>
+
+          <%# Not on the paper and never extracted: it's the taxpayer's own
+              note. For US travel, meals, gifts and listed property, section
+              274(d) makes it mandatory -- a receipt proves what was spent,
+              never what it was for. %>
+          <div class="replica-field" style="margin-top:14px;">
+            <label for="businessPurpose">What was this for? <span style="font-weight:400; opacity:.65;">(optional)</span></label>
+            <input type="text" id="businessPurpose" name="businessPurpose" value="<%= businessPurpose %>" placeholder="e.g. Client lunch — Acme contract review" maxlength="300" />
+          </div>
+          <div class="replica-hint">If you might deduct this, write down why now. Tax rules ask for the business reason, and the receipt itself can't tell anyone that.</div>
+        </details>
       </div>
 
       <p class="original-note">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>
-        Original photo attached — <a href="<%= imageUrl %>" target="_blank" rel="noopener">view original</a>
+        <%# Was a plain link to the .jpg, which stranded anyone running the
+            app from their home screen -- see partials/image-viewer.ejs. %>
+        Original photo attached — <a href="javascript:void 0" onclick="openImageViewer('<%= imageUrl %>', 'Your photo'); return false;">view full size</a>
       </p>
 
-      <button type="submit" class="w-btn">Save to wallet</button>
+      <%# Carried on the form so the next submit is the customer's answer to the
+          warning, not a second warning. %>
+      <div class="save-bar">
+        <% if (typeof duplicate !== 'undefined' && duplicate) { %>
+          <input type="hidden" name="confirmDuplicate" value="1" />
+          <button type="submit" class="w-btn">Save it anyway</button>
+        <% } else { %>
+          <button type="submit" class="w-btn">Save to wallet</button>
+        <% } %>
+      </div>
     </form>
   </div>
 
@@ -187,5 +332,6 @@
       replicaTotal.textContent = '$' + (Number.isNaN(n) ? '0.00' : n.toFixed(2));
     });
   </script>
+  <%- include('partials/image-viewer') %>
 </body>
 </html>

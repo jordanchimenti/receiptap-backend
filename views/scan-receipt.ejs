@@ -69,18 +69,33 @@
     }
     .camera-overlay.open { display: flex; }
     .camera-video { flex: 1; width: 100%; object-fit: cover; background: #000; }
+    /* The close and flash buttons sat 18px from the top, which on a phone puts
+       them under the clock and battery -- visible but awkward to hit, and on a
+       notched iPhone partly behind the status bar. 52px clears it, and the
+       buttons themselves are 44px, Apple's minimum comfortable touch target. */
     .camera-topbar {
       position: absolute; top: 0; left: 0; right: 0; display: flex; justify-content: space-between;
-      padding: 18px; z-index: 2;
+      padding: 52px 18px 18px; z-index: 4;
     }
     .camera-icon-btn {
-      width: 40px; height: 40px; border-radius: 50%; background: rgba(0,0,0,0.4);
+      width: 44px; height: 44px; border-radius: 50%; background: rgba(0,0,0,0.55);
       border: none; color: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer;
+      backdrop-filter: blur(6px);
     }
+    /* Taller and narrower than before, closer to the shape of an actual
+       receipt, so what's inside the guide is what the camera should be
+       reading. */
     .camera-frame {
-      position: absolute; top: 18%; left: 6%; right: 6%; bottom: 24%;
-      border: 2px dashed rgba(255,255,255,0.65); border-radius: 12px; pointer-events: none; overflow: hidden;
+      position: absolute; top: 13%; left: 9%; right: 9%; bottom: 21%;
+      border: 2px dashed rgba(255,255,255,0.75); border-radius: 14px; pointer-events: none;
+      /* Darkens everything OUTSIDE the frame in one go: an enormous spread on
+         a shadow with no blur fills the rest of the screen, so the cut-out is
+         exactly the frame with no second element to keep aligned. */
+      box-shadow: 0 0 0 9999px rgba(0,0,0,0.55);
+      z-index: 3;
     }
+    /* The sweep has to sit inside the frame's cut-out, above the dimming. */
+    .camera-frame-inner { position: absolute; inset: 0; overflow: hidden; border-radius: 12px; }
     .scan-line {
       position: absolute; left: 4%; right: 4%; height: 2px;
       background: linear-gradient(90deg, transparent, var(--w-accent), transparent);
@@ -92,13 +107,26 @@
       50% { top: 94%; }
       100% { top: 4%; }
     }
+    /* Bigger and in the brand blue -- this line is the whole coaching loop
+       ("Hold still", "Got it!") and at 13.5px grey it was easy to miss. */
+    /* Sits a fixed distance above the controls (24 + 68 shutter + 34 = 126px),
+       not at a percentage of the screen -- as a percentage it landed on top of
+       the shutter button on shorter screens. */
+    .auto-readout {
+      display: none; position: fixed; left: 10px; bottom: 10px; z-index: 60;
+      font-family: ui-monospace, Menlo, monospace; font-size: 11px; line-height: 1.5;
+      color: #7CFFB2; background: rgba(0,0,0,0.72); padding: 8px 10px; border-radius: 8px;
+      white-space: pre; pointer-events: none;
+    }
+    .auto-readout.on { display: block; }
     .camera-caption {
-      position: absolute; left: 0; right: 0; bottom: 15%; text-align: center;
-      color: rgba(255,255,255,0.85); font-size: 13.5px; z-index: 2;
+      position: absolute; left: 0; right: 0; bottom: 142px; text-align: center;
+      color: var(--w-accent); font-size: 17px; font-weight: 700; z-index: 4;
+      padding: 0 24px; text-shadow: 0 1px 6px rgba(0,0,0,0.7);
     }
     .camera-controls {
       position: absolute; left: 0; right: 0; bottom: 0; display: flex; align-items: center;
-      justify-content: space-between; padding: 24px 32px max(24px, env(safe-area-inset-bottom)); z-index: 2;
+      justify-content: space-between; padding: 24px 32px 34px; z-index: 4;
     }
     .camera-shutter {
       width: 68px; height: 68px; border-radius: 50%; background: #fff; border: 4px solid rgba(255,255,255,0.4);
@@ -110,7 +138,8 @@
     }
   </style>
 </head>
-<body>
+<!-- A reload would tear down the camera stream mid-scan, so no pull-to-refresh here. -->
+<body data-no-pull-refresh>
   <div class="w-shell">
     <div class="scan-header">
       <a href="/account/receipts" class="w-btn-icon" aria-label="Back">
@@ -154,7 +183,14 @@
       </label>
       <input type="file" id="fileInput" accept="image/png,image/jpeg,image/webp" />
 
-      <input type="file" id="receiptPhoto" name="receiptPhoto" style="display:none;" required />
+      <%# Deliberately NOT `required`. The photo is attached from JavaScript,
+          and attaching a File to a file input needs the DataTransfer
+          constructor -- where that fails (Safari has been unreliable about
+          it), the input stays empty, the browser's own validation blocks the
+          form BEFORE any of our code runs, and the submit handler that would
+          have uploaded the photo directly never gets a chance. The handler
+          checks for a photo itself. %>
+      <input type="file" id="receiptPhoto" name="receiptPhoto" style="display:none;" />
       <div class="file-name" id="file-name" style="padding: 0 12px;"></div>
       <button type="submit" class="w-btn" id="submit-btn" style="margin:14px 12px 8px; width:calc(100% - 24px); display:none;">Continue</button>
     </form>
@@ -183,9 +219,14 @@
       </button>
     </div>
     <div class="camera-frame">
-      <div class="scan-line"></div>
+      <div class="camera-frame-inner"><div class="scan-line"></div></div>
     </div>
     <div class="camera-caption">Centre the receipt inside the frame</div>
+    <%# Add ?debug=1 to the scanner URL to see what auto-capture is actually
+        measuring. Thresholds here can only be tuned against real numbers from
+        a real phone in a real room -- guessing them is what left the sharpness
+        bar at more than triple what any receipt scored. %>
+    <div class="auto-readout" id="auto-readout"></div>
     <div class="camera-controls">
       <label class="camera-side-btn" for="cameraFallbackInput" aria-label="Choose from library" title="Choose from library">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
@@ -211,13 +252,67 @@
     // (live camera capture, native camera fallback, or file picker) it
     // gets copied in here via DataTransfer, since a plain form can't
     // submit from several different sources at once.
+    // The photo waiting to be uploaded. Held here as well as on the input,
+    // because putting a File onto an <input type="file"> requires the
+    // DataTransfer constructor, and that is exactly the sort of thing Safari
+    // has historically not supported -- if it fails, the file silently never
+    // attaches and the upload fails with nothing to explain it.
+    let pendingFile = null;
+
     function useFile(file) {
-      const dt = new DataTransfer();
-      dt.items.add(file);
-      hiddenInput.files = dt.files;
+      pendingFile = file;
+      try {
+        const dt = new DataTransfer();
+        dt.items.add(file);
+        hiddenInput.files = dt.files;
+      } catch (err) {
+        // Fine -- the submit handler below sends pendingFile directly.
+        console.warn('Could not attach the file to the form input:', err.message);
+      }
       fileName.textContent = file.name;
       submitBtn.style.display = 'inline-flex';
     }
+
+    // Only steps in when the file did NOT attach to the form input.
+    //
+    // The normal browser form submit was working, and replacing it wholesale
+    // was the wrong instinct: the fetch path has to swap the returned page in
+    // with document.write, which is fragile on Safari in particular. So the
+    // native submit stays the default and this is purely a rescue for the case
+    // that actually breaks -- DataTransfer being unavailable, leaving the
+    // input empty and the photo otherwise unsendable.
+    document.getElementById('scan-form').addEventListener('submit', async (e) => {
+      if (!pendingFile) {
+        e.preventDefault();
+        fileName.textContent = 'Take or choose a photo first.';
+        return;
+      }
+
+      // The file is on the input -- let the browser do what it has always done.
+      if (hiddenInput.files && hiddenInput.files.length > 0) return;
+
+      e.preventDefault();
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Reading your receipt…';
+
+      try {
+        const body = new FormData();
+        body.append('receiptPhoto', pendingFile);
+        const res = await fetch('/account/receipts/scan', { method: 'POST', body, credentials: 'same-origin' });
+        if (!res.ok) throw new Error('the server rejected the photo (' + res.status + ')');
+
+        const html = await res.text();
+        history.replaceState({}, '', res.url);
+        document.open();
+        document.write(html);
+        document.close();
+      } catch (err) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Continue';
+        fileName.textContent = "Couldn't upload that photo — " + err.message;
+      }
+    });
+
     cameraFallbackInput.addEventListener('change', () => { if (cameraFallbackInput.files[0]) useFile(cameraFallbackInput.files[0]); });
     fileInput.addEventListener('change', () => { if (fileInput.files[0]) useFile(fileInput.files[0]); });
 
@@ -229,6 +324,22 @@
     let facingMode = 'environment';
     let torchOn = false;
 
+    // The blur was here: `{ video: { facingMode } }` lets the browser pick,
+    // and browsers pick 640x480. Receipt print at 640x480 is mush -- the AI
+    // reader never had a chance. Ask for the highest sensible resolution and
+    // for continuous autofocus; `ideal` (not `exact`) so a device that can't
+    // manage it still returns a stream instead of throwing.
+    function cameraConstraints() {
+      return {
+        facingMode,
+        width: { ideal: 2560 },
+        height: { ideal: 1440 },
+        // Non-standard but widely honoured, and ignored where it isn't.
+        focusMode: 'continuous',
+        advanced: [{ focusMode: 'continuous' }],
+      };
+    }
+
     async function openCamera() {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         // No live-camera support at all (old browser, insecure context) --
@@ -237,9 +348,11 @@
         return;
       }
       try {
-        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode }, audio: false });
+        stream = await navigator.mediaDevices.getUserMedia({ video: cameraConstraints(), audio: false });
         video.srcObject = stream;
         overlay.classList.add('open');
+        primeAudio();
+        startAutoCapture();
       } catch (err) {
         // Permission denied, no camera, etc. -- same fallback.
         console.warn('Live camera unavailable, falling back to native capture:', err.message);
@@ -248,6 +361,7 @@
     }
 
     function closeCamera() {
+      stopAutoCapture();
       if (stream) stream.getTracks().forEach((t) => t.stop());
       stream = null;
       overlay.classList.remove('open');
@@ -257,8 +371,9 @@
       facingMode = facingMode === 'environment' ? 'user' : 'environment';
       if (stream) stream.getTracks().forEach((t) => t.stop());
       try {
-        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode }, audio: false });
+        stream = await navigator.mediaDevices.getUserMedia({ video: cameraConstraints(), audio: false });
         video.srcObject = stream;
+        startAutoCapture();
       } catch (err) {
         console.warn('Could not switch camera:', err.message);
       }
@@ -280,15 +395,288 @@
       }
     }
 
-    function capturePhoto() {
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    // --- Auto-capture ------------------------------------------------------
+    // Watches the live frame and fires the shutter itself once the receipt is
+    // both SHARP and STILL. Two separate measurements, because either alone
+    // lies: a steady shot of a blurry receipt is still unreadable, and a crisp
+    // frame caught mid-swing is motion-blurred by the time it's encoded.
+    //
+    // Sharpness is the mean squared Laplacian of a downscaled grayscale crop --
+    // an in-focus receipt has hard black-on-white edges everywhere, so its
+    // second derivative is large; a blurred one is smooth and scores near zero.
+    // It's divided by mean brightness so a bright room doesn't read as "sharp".
+    //
+    // Only the framed area is measured, not the whole picture, or the counter
+    // around the receipt would drag the score around.
+    const analysisCanvas = document.createElement('canvas');
+    const analysisCtx = analysisCanvas.getContext('2d', { willReadFrequently: true });
+    const ANALYSIS_W = 240;
+
+    // Calibrated against real receipts shot on this phone, not guessed. Seven
+    // saved scans measured 0.95 / 1.53 / 1.53 / 1.53 / 1.53 / 2.65 / 4.59 on
+    // the score below -- so the old 5.5 bar (floor 3.0) was unreachable, and
+    // auto-capture could never fire no matter how steady or sharp the shot.
+    // The 0.95 outlier was a blown-out frame (brightness 254), which is
+    // exactly what the floor should still reject.
+    const SHARP_ENOUGH = 2.2;      // a clean, well-lit receipt clears this
+    const SHARP_FLOOR = 1.15;      // below this it's blurred or blown out, never capture
+    const ADAPT_AFTER_MS = 2500;   // when the absolute bar proves too high for this phone/room
+    const BEST_DECAY = 0.96;       // per tick, so one lucky frame can't poison the bar
+    const STILL_ENOUGH = 6.0;      // mean per-pixel change between frames
+    const GOOD_FRAMES_NEEDED = 3;  // ~0.6s of holding it right, so it can't fire on a lucky frame
+    const ARMING_DELAY_MS = 1200;  // don't grab the frame from the instant the camera opens
+    const GIVE_UP_MS = 14000;      // stop promising and let them use the button
+
+    let autoTimer = null;
+    let goodFrames = 0;
+    let previousGray = null;
+    let armedAt = 0;
+    let bestSharpness = 0;
+    let autoCaptureEnabled = true;
+    let capturing = false;
+    const readoutEl = new URLSearchParams(location.search).has('debug')
+      ? Object.assign(document.getElementById('auto-readout'), { className: 'auto-readout on' })
+      : null;
+
+    function grayscaleSample() {
+      if (!video.videoWidth) return null;
+      // Must match .camera-frame exactly -- 9% inset each side, 13% top,
+       // 21% bottom. If these drift apart, auto-capture judges sharpness on a
+       // different part of the picture than the one the guide is showing.
+      const sx = video.videoWidth * 0.09;
+      const sy = video.videoHeight * 0.13;
+      const sw = video.videoWidth * 0.82;
+      const sh = video.videoHeight * 0.66;
+
+      const h = Math.round(ANALYSIS_W * (sh / sw));
+      analysisCanvas.width = ANALYSIS_W;
+      analysisCanvas.height = h;
+      analysisCtx.drawImage(video, sx, sy, sw, sh, 0, 0, ANALYSIS_W, h);
+
+      const { data } = analysisCtx.getImageData(0, 0, ANALYSIS_W, h);
+      const gray = new Float32Array(ANALYSIS_W * h);
+      let brightness = 0;
+      for (let i = 0, p = 0; i < data.length; i += 4, p++) {
+        // Rec. 601 luma -- cheaper than converting properly and plenty here.
+        gray[p] = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+        brightness += gray[p];
+      }
+      return { gray, width: ANALYSIS_W, height: h, brightness: brightness / gray.length };
+    }
+
+    function sharpnessOf(sample) {
+      const { gray, width, height, brightness } = sample;
+      if (brightness < 12) return 0; // too dark to judge; treat as not ready
+      let total = 0;
+      let count = 0;
+      for (let y = 1; y < height - 1; y++) {
+        for (let x = 1; x < width - 1; x++) {
+          const i = y * width + x;
+          const lap = 4 * gray[i] - gray[i - 1] - gray[i + 1] - gray[i - width] - gray[i + width];
+          total += lap * lap;
+          count++;
+        }
+      }
+      return Math.sqrt(total / count) / Math.max(brightness, 1) * 10;
+    }
+
+    function movementSince(sample) {
+      if (!previousGray || previousGray.length !== sample.gray.length) return Infinity;
+      let diff = 0;
+      for (let i = 0; i < sample.gray.length; i += 3) diff += Math.abs(sample.gray[i] - previousGray[i]);
+      return diff / (sample.gray.length / 3);
+    }
+
+    function setCaption(text) {
+      document.querySelector('.camera-caption').textContent = text;
+    }
+
+    function startAutoCapture() {
+      stopAutoCapture();
+      goodFrames = 0;
+      previousGray = null;
+      capturing = false;
+      armedAt = Date.now();
+      bestSharpness = 0;
+      setCaption('Centre the receipt inside the frame');
+
+      autoTimer = setInterval(() => {
+        if (!autoCaptureEnabled || capturing || !stream) return;
+        const sample = grayscaleSample();
+        if (!sample) return;
+
+        const elapsed = Date.now() - armedAt;
+        const sharpness = sharpnessOf(sample);
+        const movement = movementSince(sample);
+        previousGray = sample.gray;
+
+        // Decays toward the present rather than holding an all-time maximum.
+        // Without this, one momentarily crisp frame raises the adaptive bar
+        // above everything the camera can manage afterwards, and auto-capture
+        // silently stops working for the rest of the session.
+        bestSharpness = Math.max(sharpness, bestSharpness * BEST_DECAY);
+
+        if (readoutEl) {
+          readoutEl.textContent =
+            'sharp   ' + sharpness.toFixed(2) + '  (need ' + SHARP_ENOUGH + ', floor ' + SHARP_FLOOR + ')\n' +
+            'best    ' + bestSharpness.toFixed(2) + '\n' +
+            'move    ' + (movement === Infinity ? 'n/a' : movement.toFixed(2)) + '  (need < ' + STILL_ENOUGH + ')\n' +
+            'bright  ' + sample.brightness.toFixed(0) + '\n' +
+            'frames  ' + goodFrames + '/' + GOOD_FRAMES_NEEDED + '   t=' + (elapsed / 1000).toFixed(1) + 's';
+        }
+
+        if (elapsed < ARMING_DELAY_MS) return;
+
+        // Phones and rooms vary far more than a fixed number can allow for: a
+        // dim kitchen and an older sensor can put a perfectly readable receipt
+        // below the absolute bar, and it would simply never fire. So after a
+        // few seconds of trying, judge against the best this camera has managed
+        // in this session instead -- but never below SHARP_FLOOR, or a
+        // consistently blurry scene would eventually qualify against itself.
+        const bar = elapsed > ADAPT_AFTER_MS
+          ? Math.max(SHARP_FLOOR, Math.min(SHARP_ENOUGH, bestSharpness * 0.9))
+          : SHARP_ENOUGH;
+
+        // Stop PROMISING after a while, but keep watching. This used to
+        // `return` here, which meant that once the timer elapsed with no good
+        // frame, goodFrames could never increment again -- auto-capture shut
+        // itself off permanently, even if the very next frame was perfect.
+        const givingUp = elapsed > GIVE_UP_MS && goodFrames === 0;
+
+        if (sharpness < bar) {
+          goodFrames = 0;
+          setCaption(givingUp
+            ? 'Tap the button when you are ready'
+            : movement > STILL_ENOUGH ? 'Hold still…' : 'Move a little closer');
+          return;
+        }
+        if (movement > STILL_ENOUGH) {
+          goodFrames = 0;
+          setCaption(givingUp ? 'Tap the button when you are ready' : 'Hold still…');
+          return;
+        }
+
+        goodFrames++;
+        setCaption(goodFrames >= GOOD_FRAMES_NEEDED ? 'Got it!' : 'Looking good — hold it there');
+        if (goodFrames >= GOOD_FRAMES_NEEDED) capturePhoto({ automatic: true });
+      }, 200);
+    }
+
+    function stopAutoCapture() {
+      if (autoTimer) clearInterval(autoTimer);
+      autoTimer = null;
+      previousGray = null;
+    }
+
+    // --- Success feedback --------------------------------------------------
+    // A short two-note chime, synthesised rather than shipped as an audio file
+    // so there's nothing to download and nothing to cache. The AudioContext is
+    // created when the camera opens (a real user gesture), because browsers
+    // refuse to start audio any other way.
+    let audioCtx = null;
+
+    function primeAudio() {
+      try {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+      } catch (err) {
+        audioCtx = null; // no audio on this device -- not worth failing the scan over
+      }
+    }
+
+    function successFeedback() {
+      try {
+        if (audioCtx) {
+          [[880, 0], [1320, 0.09]].forEach(([freq, delay]) => {
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = 'sine';
+            osc.frequency.value = freq;
+            const start = audioCtx.currentTime + delay;
+            gain.gain.setValueAtTime(0.0001, start);
+            gain.gain.exponentialRampToValueAtTime(0.25, start + 0.012);
+            gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.16);
+            osc.connect(gain).connect(audioCtx.destination);
+            osc.start(start);
+            osc.stop(start + 0.18);
+          });
+        }
+      } catch (err) {
+        /* chime is a nicety */
+      }
+
+      // Android buzzes. iOS has no Vibration API at all -- Apple has never
+      // shipped one to Safari -- so iPhones get the chime only.
+      if (navigator.vibrate) {
+        try { navigator.vibrate([35, 45, 35]); } catch (err) { /* ignore */ }
+      }
+    }
+
+    // Capture at whatever the camera gives, but never ENCODE the full frame.
+    //
+    // Two reasons. The server rejects anything over 5MB, and a detailed photo
+    // from a modern phone camera can pass that easily -- which fails at the
+    // upload with nothing useful to say. And encoding a 12-megapixel canvas is
+    // slow enough to lock the page up; it froze a desktop browser outright
+    // while I was testing, so on a phone it is worse.
+    //
+    // 1800px on the long edge is not a compromise: the AI that reads these
+    // downsamples anything larger than ~1568px anyway, so every pixel past
+    // that is upload time and battery spent to send data that gets thrown
+    // away. What matters for legibility is that the CAMERA captured at high
+    // resolution and focus -- which it now does.
+    const MAX_EDGE = 1800;
+    const MAX_UPLOAD_BYTES = 4 * 1024 * 1024; // one under the server's 5MB
+
+    function capturePhoto(options) {
+      // Guards against the auto-capture and a manual tap both firing, which
+      // would upload the same receipt twice.
+      if (capturing) return;
+      capturing = true;
+      stopAutoCapture();
+
+      try {
+        const vw = video.videoWidth;
+        const vh = video.videoHeight;
+        if (!vw || !vh) throw new Error('the camera has not started yet');
+
+        const scale = Math.min(1, MAX_EDGE / Math.max(vw, vh));
+        canvas.width = Math.round(vw * scale);
+        canvas.height = Math.round(vh * scale);
+        canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+
+        encodeWithinLimit(0.9);
+      } catch (err) {
+        captureFailed(err.message);
+      }
+    }
+
+    // Step the quality down until it fits rather than discovering the limit at
+    // the upload, where the only feedback is a rejected request.
+    function encodeWithinLimit(quality) {
       canvas.toBlob((blob) => {
-        if (!blob) return;
+        if (!blob) return captureFailed('this device could not save the photo');
+
+        if (blob.size > MAX_UPLOAD_BYTES && quality > 0.55) {
+          return encodeWithinLimit(quality - 0.15);
+        }
+        if (blob.size > MAX_UPLOAD_BYTES) {
+          return captureFailed('the photo is too large to upload — try again in better light');
+        }
+
+        successFeedback();
         useFile(new File([blob], `receipt-${Date.now()}.jpg`, { type: 'image/jpeg' }));
         closeCamera();
-      }, 'image/jpeg', 0.92);
+      }, 'image/jpeg', quality);
+    }
+
+    // Say what went wrong and hand the camera back, rather than leaving a dead
+    // shutter and no explanation.
+    function captureFailed(reason) {
+      capturing = false;
+      setCaption("Couldn't take that photo — " + reason);
+      startAutoCapture();
     }
   </script>
 </body>

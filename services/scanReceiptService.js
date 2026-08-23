@@ -1,11 +1,21 @@
 // services/scanReceiptService.js
-// Reads a photographed/uploaded receipt image and extracts merchant name,
-// date, total, and line items via Claude's vision support. Unlike
-// categorize-receipt.js's fire-and-forget best-effort categorization, this
-// is called synchronously and its result is shown to the customer for
-// review/correction before anything is saved -- so a failure here doesn't
-// get silently dropped the same way; the caller falls back to a blank
-// review form instead.
+// Reads a photographed/uploaded receipt image and extracts everything the
+// paper actually prints, via Claude's vision support. Unlike
+// categorize-receipt.js's fire-and-forget best-effort categorization, this is
+// called synchronously and its result is shown to the customer for
+// review/correction before anything is saved -- so a failure here doesn't get
+// silently dropped the same way; the caller falls back to a blank review form.
+//
+// The field list deliberately mirrors what a POS-issued receipt carries
+// (subtotal, tax, tip, tax number, currency, address), so a scanned receipt
+// and a tapped one look like the same kind of object in the wallet instead of
+// the scanned one being a bare total.
+//
+// NOT extracted, on purpose: card brand and card number digits as separate
+// fields. `paymentMethod` already captures what the receipt shows ("Visa ••••
+// 6123") as one opaque string, and ReceipTap does not collect real card data
+// anywhere else -- breaking that out into its own column would be a step
+// backwards for no gain.
 
 const fs = require('fs');
 const Anthropic = require('@anthropic-ai/sdk');
@@ -13,61 +23,153 @@ const { CATEGORIES } = require('./categorize-receipt');
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
+// Strict tool use rather than "reply with only JSON": the response is
+// guaranteed to match this schema, which removes the previous failure mode of
+// parsing fenced text with a regex and throwing on anything unexpected.
+const RECEIPT_SCHEMA = {
+  type: 'object',
+  properties: {
+    merchantName: { type: ['string', 'null'], description: 'The store or business name as printed.' },
+    merchantAddress: { type: ['string', 'null'], description: 'Street address printed on the receipt, one line. Null if not shown.' },
+    date: { type: ['string', 'null'], description: 'Purchase date as YYYY-MM-DD. Null if not legible.' },
+    subtotal: { type: ['number', 'null'], description: 'Total before tax, plain number. Null if the receipt does not print one.' },
+    tax: { type: ['number', 'null'], description: 'Total tax charged, plain number. Null if not printed.' },
+    tip: { type: ['number', 'null'], description: 'Tip or gratuity, plain number. Null if not printed.' },
+    total: { type: ['number', 'null'], description: 'The final amount paid, plain number. Null if not legible.' },
+    currency: { type: ['string', 'null'], description: 'Three-letter code if the receipt makes it clear (CAD, USD). Null if it does not.' },
+    taxNumber: { type: ['string', 'null'], description: "The merchant's PRIMARY tax registration number exactly as printed, including its label (e.g. 'GST/HST 137466199 RT 0001'). Null if absent." },
+    taxNumber2: { type: ['string', 'null'], description: "A SECOND tax registration number, if the receipt prints one, exactly as printed with its label (e.g. 'QST 1016551356 TQ 0001'). Canadian receipts often show GST/HST and QST or PST together. Null if there is only one." },
+    buyerName: { type: ['string', 'null'], description: "The customer's or purchaser's name, if the receipt prints one (common on invoices, rare on retail till receipts). Not the merchant's name. Null if absent." },
+    time: { type: ['string', 'null'], description: "Time of day exactly as printed, e.g. '18:42:29' or '6:42 PM'. Null if not shown." },
+    paymentMethod: { type: ['string', 'null'], description: 'Exactly what the receipt prints for how it was paid, e.g. "Visa •••• 6123" or "Cash". Null if not shown.' },
+    receiptNumber: { type: ['string', 'null'], description: "The store's own receipt/transaction/reference number as printed. Null if absent." },
+    // The allowed values live in the description, not an `enum`: a strict
+    // schema rejects an enum of strings on a ['string','null'] field. Anything
+    // off-list is turned into null when the result is validated below.
+    category: {
+      type: ['string', 'null'],
+      description: `Best-fitting spending category. Must be exactly one of: ${CATEGORIES.join(', ')}. Null if none fit.`,
+    },
+    lineItems: {
+      type: 'array',
+      description: 'Individual purchased items as printed. Empty array if not legible.',
+      items: {
+        type: 'object',
+        properties: {
+          description: { type: 'string' },
+          amount: { type: 'number' },
+        },
+        required: ['description', 'amount'],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ['merchantName', 'merchantAddress', 'date', 'time', 'subtotal', 'tax', 'tip', 'total',
+             'currency', 'taxNumber', 'taxNumber2', 'buyerName', 'paymentMethod', 'receiptNumber',
+             'category', 'lineItems'],
+  additionalProperties: false,
+};
+
+const INSTRUCTIONS = `This is a photo of a purchase receipt. Read it for a personal expense wallet and record every field the receipt actually prints.
+
+Rules that matter more than completeness:
+- Never guess. If a field is not printed, or is not legible in this photo, use null. A null is useful; a wrong number is not.
+- Amounts are plain numbers with no currency symbol (42.17, not "$42.17").
+- subtotal, tax and tip are only what the receipt itself shows as separate lines. Do not calculate them from the total.
+- taxNumber is the merchant's registration number (GST/HST, VAT, ABN, QST, PST). It is not the receipt or transaction number. Keep the label with the number, so it is clear which tax it is.
+- If the receipt prints TWO registration numbers, put the federal/primary one in taxNumber and the provincial/second one in taxNumber2. Do not merge them into one field.
+- buyerName is the person or company who BOUGHT, never the store. Most till receipts do not print one; leave it null rather than repeating the merchant.
+- time is copied as printed. Do not convert it, and do not infer a timezone.
+- If this is not a receipt at all, set merchantName to null.`;
+
+// Money on receipts is decimal; everything in this project is stored in cents.
+function toCents(value) {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0
+    ? Math.round(value * 100)
+    : null;
+}
+
+function cleanString(value, max) {
+  return typeof value === 'string' && value.trim() ? value.trim().slice(0, max) : null;
+}
+
 /**
  * Extracts receipt data from an uploaded image file.
- * Returns { merchantName, date, totalCents, lineItems, category,
- * paymentMethod, receiptNumber } or null on any failure (missing API key,
- * unreadable image, malformed response) — callers should treat null as
- * "let the customer fill this in by hand." paymentMethod/receiptNumber are
- * only ever what's actually printed on the receipt (e.g. "Visa •••• 6123",
- * a store's own transaction number) — never fabricated, null if the photo
- * doesn't show one.
+ * Returns the field set above (money in cents) or null on any failure —
+ * missing API key, unreadable image, a photo that isn't a receipt — and
+ * callers should treat null as "let the customer fill this in by hand."
  */
-async function extractReceiptData(filePath, mimetype) {
+/**
+ * @param source  a Buffer (uploads are held in memory now, see
+ *                lib/fileStorage.js) or a path, for any caller that still has
+ *                one on disk.
+ */
+async function extractReceiptData(source, mimetype) {
   if (!process.env.ANTHROPIC_API_KEY) {
     console.warn('[scan-receipt] ANTHROPIC_API_KEY not set, skipping extraction');
     return null;
   }
 
   try {
-    const base64 = fs.readFileSync(filePath).toString('base64');
+    const base64 = Buffer.isBuffer(source)
+      ? source.toString('base64')
+      : fs.readFileSync(source).toString('base64');
 
     const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 500,
+      model: 'claude-opus-5',
+      max_tokens: 2000, // room for line items; the old 500 truncated longer receipts
+      // Reading printed fields off a photo is a perception task, not a
+      // reasoning one -- at the default effort this took 26 seconds, which is
+      // a long time to hold someone on a spinner right after they take a
+      // photo. Low effort answers in a fraction of that with no loss on a task
+      // where the answer is either legible or it isn't.
+      output_config: { effort: 'low' },
+      tools: [
+        {
+          name: 'record_receipt',
+          description: 'Record every field printed on the photographed receipt.',
+          strict: true,
+          input_schema: RECEIPT_SCHEMA,
+        },
+      ],
+      tool_choice: { type: 'tool', name: 'record_receipt' },
       messages: [
         {
           role: 'user',
           content: [
             { type: 'image', source: { type: 'base64', media_type: mimetype, data: base64 } },
-            {
-              type: 'text',
-              text: `This is a photo of a purchase receipt. Extract its details for a personal expense wallet.
-
-Respond with ONLY a JSON object, no other text, in this exact shape:
-{"merchantName": "the store or business name", "date": "YYYY-MM-DD or null if not legible", "total": the final total paid as a plain number (e.g. 42.17, no currency symbol) or null if not legible, "lineItems": [{"description": "...", "amount": 0.00}], "category": one of [${CATEGORIES.map((c) => `"${c}"`).join(', ')}], "paymentMethod": "exactly what the receipt itself prints for how it was paid, e.g. \\"Visa •••• 6123\\" or \\"Cash\\" or \\"Debit\\" -- or null if the receipt doesn't show one, never guessed", "receiptNumber": "the store's own printed receipt/transaction/reference number, exactly as shown, or null if there isn't one"}
-
-If this doesn't look like a receipt at all, or a field genuinely isn't legible, use null for that field rather than guessing. Only fill in paymentMethod or receiptNumber if the receipt actually prints them -- do not infer or make one up.`,
-            },
+            { type: 'text', text: INSTRUCTIONS },
           ],
         },
       ],
     });
 
-    const text = response.content.find((block) => block.type === 'text')?.text || '';
-    const cleaned = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
-    const parsed = JSON.parse(cleaned);
+    const call = response.content.find((block) => block.type === 'tool_use');
+    if (!call) return null;
+    const parsed = call.input;
 
-    if (!parsed.merchantName) return null; // nothing usable came back
+    if (!parsed.merchantName) return null; // not a receipt, or nothing usable
 
     return {
-      merchantName: String(parsed.merchantName).slice(0, 200),
+      merchantName: cleanString(parsed.merchantName, 200),
+      merchantAddress: cleanString(parsed.merchantAddress, 200),
       date: parsed.date && !Number.isNaN(Date.parse(parsed.date)) ? parsed.date : null,
-      totalCents: typeof parsed.total === 'number' ? Math.round(parsed.total * 100) : null,
-      lineItems: Array.isArray(parsed.lineItems) ? parsed.lineItems.slice(0, 50) : [],
+      subtotalCents: toCents(parsed.subtotal),
+      taxCents: toCents(parsed.tax),
+      tipCents: toCents(parsed.tip),
+      totalCents: toCents(parsed.total),
+      // Three letters, uppercased -- anything else is a misread.
+      currency: /^[A-Za-z]{3}$/.test(parsed.currency || '') ? parsed.currency.toUpperCase() : null,
+      taxNumber: cleanString(parsed.taxNumber, 40),
+      taxNumber2: cleanString(parsed.taxNumber2, 40),
+      buyerName: cleanString(parsed.buyerName, 200),
+      // Kept as the text the receipt printed, not parsed into a Date: the
+      // paper never says which timezone it means.
+      timeText: cleanString(parsed.time, 20),
+      paymentMethod: cleanString(parsed.paymentMethod, 60),
+      receiptNumber: cleanString(parsed.receiptNumber, 60),
       category: CATEGORIES.includes(parsed.category) ? parsed.category : null,
-      paymentMethod: typeof parsed.paymentMethod === 'string' && parsed.paymentMethod.trim() ? parsed.paymentMethod.trim().slice(0, 60) : null,
-      receiptNumber: typeof parsed.receiptNumber === 'string' && parsed.receiptNumber.trim() ? parsed.receiptNumber.trim().slice(0, 60) : null,
+      lineItems: Array.isArray(parsed.lineItems) ? parsed.lineItems.slice(0, 50) : [],
     };
   } catch (err) {
     console.error('[scan-receipt] extraction failed:', err.message);

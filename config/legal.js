@@ -40,13 +40,13 @@ const LEGAL_DOCUMENTS = {
   // controller/processor relationship, and an individual wallet holder
   // isn't a data controller the way a merchant is.
   SHOPPER_TERMS: {
-    version: '2026-08-19.1',
-    lastUpdated: '2026-08-19',
+    version: '2026-08-23.1',
+    lastUpdated: '2026-08-23',
     label: 'Wallet Terms of Service',
   },
   SHOPPER_PRIVACY: {
-    version: '2026-08-22.1',
-    lastUpdated: '2026-08-22',
+    version: '2026-08-23.1',
+    lastUpdated: '2026-08-23',
     label: 'Wallet Privacy Policy',
   },
 };

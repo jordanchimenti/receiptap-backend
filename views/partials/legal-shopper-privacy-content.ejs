@@ -100,7 +100,19 @@
       the details you confirmed.
     </p>
     <p>
-      <span class="review">[[REVIEW: scanned receipt photos are currently stored on the application server's own local disk (not a dedicated object-storage service), the same interim approach used elsewhere in this app for uploaded images -- this needs to move to real object storage with proper access controls before this feature is relied on at any real scale, and this paragraph should be revisited once it does, since where and how securely a photo is stored is a real disclosure, not a technicality.]]</span>
+      Receipt photos are held in object storage (Supabase Storage, on
+      infrastructure in the United States) rather than on the server that
+      runs the app, so a photo survives the app being updated or restarted.
+      Each is stored under a long random filename, and deleting a receipt
+      deletes its photo as well.
+    </p>
+    <p>
+      One limit worth being straight about: a photo is served from a public
+      web address, so anyone who has that exact address can open it. The
+      address is unguessable, and it is never shown to anyone but you — but
+      it is not password-protected, and for a short period after you delete
+      a receipt a cached copy may still be reachable at it.
+      <span class="review">[[REVIEW: accurate as built -- a public bucket with unguessable keys and a five-minute CDN cache. If receipts are ever served through signed, expiring URLs instead, this paragraph should be revisited, since it would then be a stronger guarantee than the one described here.]]</span>
     </p>
     <p class="back-top"><a href="#scanning">↑ Back to top</a></p>
   </section>

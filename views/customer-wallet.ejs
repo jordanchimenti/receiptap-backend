@@ -357,7 +357,12 @@
                 <% if (r.aiCategory || r.kind === 'scanned') { %>
                   <div class="badges">
                     <% if (r.aiCategory) { %><span class="badge badge-category"><%= r.aiCategory %></span><% } %>
-                    <% if (r.aiTaxDeductible) { %><span class="badge badge-tax" title="<%= r.aiReasoning %>">Possibly deductible</span><% } %>
+                    <%# "Worth checking", not "Possibly deductible". The old wording read as a
+                        determination the app is in no position to make -- whether something can
+                        actually be claimed turns on what it was bought for and the rules where
+                        the person files, neither of which is on the receipt. The tooltip carries
+                        the AI's reasoning and says plainly that it isn't advice. %>
+                    <% if (r.aiTaxDeductible) { %><span class="badge badge-tax" title="<%= r.aiReasoning ? r.aiReasoning + ' — ' : '' %>This is an AI suggestion, not tax advice. Check with a tax professional.">Worth checking at tax time</span><% } %>
                     <%# Told, not hidden: this receipt is here because their card
                         was recognised, not because they tapped. %>
                     <% if (r.autoSaved) { %><span class="badge badge-auto" title="Saved automatically — your card was recognised at this business. You can turn this off in Settings.">Saved automatically</span><% } %>

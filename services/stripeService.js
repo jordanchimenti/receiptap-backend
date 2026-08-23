@@ -35,6 +35,27 @@ async function createCheckoutSession(merchant, successUrl, cancelUrl) {
   if (!stripe) throw new Error('Stripe is not configured yet (missing STRIPE_SECRET_KEY).');
   let customerId = merchant.stripeCustomerId;
 
+  // A stored id is not proof the customer still exists. An account created
+  // while this app used TEST keys keeps a test-mode customer id that live
+  // Stripe has never heard of, and passing it through fails the whole
+  // checkout with "No such customer: cus_..." -- which reads to the merchant
+  // as "I cannot start a trial", with nothing they can do about it. The same
+  // happens if a customer is deleted in the Stripe dashboard.
+  //
+  // So verify before trusting it, and fall through to creating a fresh one.
+  if (customerId) {
+    try {
+      const existing = await stripe.customers.retrieve(customerId);
+      if (existing.deleted) customerId = null;
+    } catch (err) {
+      console.warn(
+        `[stripe] merchant ${merchant.id} had customer ${customerId}, which this ` +
+        `Stripe account does not recognise (${err.message}). Creating a new one.`
+      );
+      customerId = null;
+    }
+  }
+
   if (!customerId) {
     const customer = await stripe.customers.create({
       email: merchant.email,
@@ -44,7 +65,9 @@ async function createCheckoutSession(merchant, successUrl, cancelUrl) {
     customerId = customer.id;
     await prisma.merchant.update({
       where: { id: merchant.id },
-      data: { stripeCustomerId: customerId },
+      // The old subscription id, if any, belonged to the customer that no
+      // longer exists -- clearing it together keeps the two from disagreeing.
+      data: { stripeCustomerId: customerId, stripeSubscriptionId: null },
     });
   }
 

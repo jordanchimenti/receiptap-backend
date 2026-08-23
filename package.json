@@ -13,6 +13,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.112.3",
     "@prisma/client": "^5.20.0",
+    "@supabase/supabase-js": "^2.112.3",
     "archiver": "^6.0.2",
     "bcrypt": "^5.1.1",
     "chart.js": "^4.5.1",
@@ -27,7 +28,8 @@
     "playwright": "^1.56.0",
     "qrcode": "^1.5.4",
     "resend": "^6.18.1",
-    "stripe": "^22.3.2"
+    "stripe": "^22.3.2",
+    "web-push": "^3.6.7"
   },
   "devDependencies": {
     "prisma": "^5.20.0"

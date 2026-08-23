@@ -10,6 +10,7 @@ const prisma = require('../lib/prisma');
 const { stripe } = require('../services/stripeService');
 const { uploadProfilePhoto } = require('./billing');
 const { DEACTIVATED_MERCHANT_PURGE_DAYS } = require('../config/retention');
+const fileStorage = require('../lib/fileStorage');
 
 function requireAuth(req, res, next) {
   if (!req.session?.merchantId) return res.redirect('/login');
@@ -88,7 +89,7 @@ router.post('/dashboard/settings/account/profile', requireAuth, handleProfilePho
 
   const data = { ownerName: ownerName || null, email: normalizedEmail, ownerPhone: ownerPhone || null };
   if (req.file) {
-    data.profilePhotoUrl = `/uploads/profile-photos/${req.file.filename}`;
+    data.profilePhotoUrl = await fileStorage.put('profile-photos', req.file, { prefix: req.session.merchantId });
   }
   await prisma.merchant.update({ where: { id: req.session.merchantId }, data });
   res.redirect(`${destination}?profileSuccess=1`);
@@ -128,6 +129,83 @@ router.post('/dashboard/settings/account/business', requireAuth, async (req, res
       create: { merchantId: req.session.merchantId, ...phoneWrite },
     }),
   ]);
+  res.redirect(`${destination}?businessSuccess=1`);
+});
+
+// POST /dashboard/settings/account/business-all — the wallet's Business
+// Settings page, saved in one go.
+//
+// That page used to be four separate forms with four Save buttons, posting to
+// four routes. One sticky Save can only submit one form, so they're merged
+// here. The older routes are left in place because the navy dashboard's own
+// settings page still posts to them -- this is an additional entry point, not
+// a replacement, and the field-ownership rules below are copied from them
+// deliberately rather than reinvented:
+//
+//   Merchant      businessName, email, ownerName, ownerPhone, profilePhotoUrl,
+//                 businessEmail, industry, address*
+//   ReceiptTheme  phone, gstHstNumber      (both print on a receipt)
+//
+// `'field' in req.body` rather than a truthiness check throughout: an absent
+// key means "this form didn't render that input, leave it alone", while
+// present-but-empty is a real clear. Getting that backwards would let this
+// page silently wipe a value another page owns.
+router.post('/dashboard/settings/account/business-all', requireAuth, handleProfilePhotoUpload, async (req, res) => {
+  const b = req.body;
+  const destination = settingsRedirectTarget(b.redirectTo);
+  const merchantId = req.session.merchantId;
+  const fail = (msg) => res.redirect(`${destination}?businessError=` + encodeURIComponent(msg));
+
+  if (!b.businessName || !b.email) {
+    return fail('Business name and email are both required.');
+  }
+
+  const normalizedEmail = b.email.trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+    return fail('Enter a valid email address.');
+  }
+  const clash = await prisma.merchant.findFirst({
+    where: { email: normalizedEmail, NOT: { id: merchantId } },
+  });
+  if (clash) return fail('That email is already in use by another account.');
+
+  if (b.businessEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(b.businessEmail)) {
+    return fail('Enter a valid business email.');
+  }
+
+  const merchantData = { businessName: b.businessName, email: normalizedEmail };
+  const only = (key, value) => { if (key in b) merchantData[key] = value; };
+  only('ownerName', b.ownerName || null);
+  only('ownerPhone', b.ownerPhone || null);
+  only('businessEmail', b.businessEmail || null);
+  only('industry', b.industry || null);
+  only('addressLine1', b.addressLine1 || null);
+  only('addressLine2', b.addressLine2 || null);
+  only('addressCity', b.addressCity || null);
+  only('addressRegion', b.addressRegion || null);
+  only('addressPostalCode', b.addressPostalCode || null);
+  only('addressCountry', b.addressCountry || null);
+  if (req.file) merchantData.profilePhotoUrl = await fileStorage.put('profile-photos', req.file, { prefix: merchantId });
+
+  // Both live on ReceiptTheme because both print on a receipt.
+  const themeData = {};
+  if ('phone' in b) themeData.phone = b.phone || null;
+  if ('gstHstNumber' in b) themeData.gstHstNumber = b.gstHstNumber || null;
+  // Label and second registration number travel with it -- see the comment on
+  // ReceiptTheme.taxNumber2 for why one slot wasn't enough.
+  if ('taxNumberLabel' in b) themeData.taxNumberLabel = (b.taxNumberLabel || '').trim().slice(0, 20) || null;
+  if ('taxNumber2' in b) themeData.taxNumber2 = (b.taxNumber2 || '').trim() || null;
+  if ('taxNumber2Label' in b) themeData.taxNumber2Label = (b.taxNumber2Label || '').trim().slice(0, 20) || null;
+
+  await Promise.all([
+    prisma.merchant.update({ where: { id: merchantId }, data: merchantData }),
+    prisma.receiptTheme.upsert({
+      where: { merchantId },
+      update: themeData,
+      create: { merchantId, ...themeData },
+    }),
+  ]);
+
   res.redirect(`${destination}?businessSuccess=1`);
 });
 

@@ -8,6 +8,7 @@ const router = express.Router();
 const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
+const fileStorage = require('../lib/fileStorage');
 const prisma = require('../lib/prisma');
 const {
   stripe,
@@ -39,14 +40,10 @@ fs.mkdirSync(PHOTO_DIR, { recursive: true });
 
 const ALLOWED_PHOTO_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
 
+// In memory, then stored through lib/fileStorage -- see there for why local
+// disk isn't durable once this is deployed.
 const uploadProfilePhoto = multer({
-  storage: multer.diskStorage({
-    destination: PHOTO_DIR,
-    filename: (req, file, cb) => {
-      const ext = path.extname(file.originalname).toLowerCase();
-      cb(null, `${req.session.merchantId}-${Date.now()}${ext}`);
-    },
-  }),
+  storage: multer.memoryStorage(),
   limits: { fileSize: 2 * 1024 * 1024 }, // 2MB
   fileFilter: (req, file, cb) => {
     if (!ALLOWED_PHOTO_TYPES.includes(file.mimetype)) {
@@ -230,7 +227,7 @@ router.post('/dashboard/billing/account', requireAuth, handlePhotoUpload, async 
   const { ownerName } = req.body;
   const data = { ownerName: ownerName || null };
   if (req.file) {
-    data.profilePhotoUrl = `/uploads/profile-photos/${req.file.filename}`;
+    data.profilePhotoUrl = await fileStorage.put('profile-photos', req.file, { prefix: req.session.merchantId });
   }
   await prisma.merchant.update({
     where: { id: req.session.merchantId },

@@ -1,0 +1,74 @@
+<%# The day-grouped receipt list, shared by the wallet home
+    (views/customer-wallet.ejs, most recent few) and the full wallet
+    (views/account-wallet.ejs, everything, filtered).
+
+    Expects `receipts`. Each row already carries its own formatted `date` and
+    its resolved deductible state from the route -- see the merge step in
+    routes/customer-account.js -- so nothing here re-derives either. Kept in
+    one file because the two pages render an identical row, and a row that
+    drifts between them is a receipt that looks like two different receipts. %>
+    <%
+      // Group consecutive receipts by day so each date only prints one
+      // heading -- r.date is already formatted per-item with the right
+      // UTC/local basis for its kind (see the merge step in the route),
+      // so grouping just has to compare that same string, not re-derive it.
+      let lastDayLabel = null;
+    %>
+    <% receipts.forEach(function(r, i) { %>
+      <% if (r.date !== lastDayLabel) { lastDayLabel = r.date; %>
+        <div class="day-heading"><%= r.date.toUpperCase() %></div>
+        <div class="w-card" style="margin-bottom: 14px;">
+      <% } %>
+          <%# A scanned receipt used to open its raw .jpg -- first by navigating
+              to it, which trapped anyone running the app from their home
+              screen, then in an in-app image viewer. Both showed the picture
+              and nothing else, while the subtotal, tax number and payment
+              method read off that picture sat unused in the database. It now
+              opens the same kind of page a tapped receipt does, with the
+              photo on it as the supporting evidence. %>
+          <div class="receipt-line">
+          <a class="receipt-row" href="<%= r.kind === 'scanned' ? '/account/receipts/scanned/' + r.id : r.link %>">
+            <div>
+              <div class="merchant-name"><%= r.merchantName %></div>
+              <div class="receipt-date"><%= r.date %></div>
+              <% if (r.aiCategory || r.kind === 'scanned') { %>
+                <div class="badges">
+                  <% if (r.aiCategory) { %><span class="badge badge-category"><%= r.aiCategory %></span><% } %>
+                  <%# "Worth checking", not "Possibly deductible". The old wording read as a
+                      determination the app is in no position to make -- whether something can
+                      actually be claimed turns on what it was bought for and the rules where
+                      the person files, neither of which is on the receipt. The tooltip carries
+                      the AI's reasoning and says plainly that it isn't advice. %>
+                  <% if (r.aiTaxDeductible) { %><span class="badge badge-tax" title="<%= r.aiReasoning ? r.aiReasoning + ' — ' : '' %>This is an AI suggestion, not tax advice. Check with a tax professional.">Worth checking at tax time</span><% } %>
+                  <%# Told, not hidden: this receipt is here because their card
+                      was recognised, not because they tapped. %>
+                  <% if (r.autoSaved) { %><span class="badge badge-auto" title="Saved automatically — your card was recognised at this business. You can turn this off in Settings.">Saved automatically</span><% } %>
+                  <% if (r.kind === 'scanned') { %><span class="badge badge-scanned">Scanned</span><% } %>
+                </div>
+              <% } %>
+            </div>
+            <div class="receipt-total">$<%= r.total %></div>
+          </a>
+          <%# Outside the <a>, not inside it: a button nested in a link is
+              invalid, and every tap on it would navigate to the receipt
+              instead of toggling. aria-pressed carries the state for anyone
+              not seeing the colour. %>
+          <div class="ded-strip">
+            <button type="button"
+                    class="ded-toggle <%= r.deductible ? 'on' : '' %>"
+                    aria-pressed="<%= r.deductible ? 'true' : 'false' %>"
+                    data-kind="<%= r.kind === 'scanned' ? 'scanned' : 'transaction' %>"
+                    data-id="<%= r.id %>"
+                    onclick="toggleDeductible(this)">
+              <span class="ded-dot" aria-hidden="true"></span>Tax deductible
+            </button>
+            <span class="ded-note"
+                  title="<%= r.aiReasoning ? r.aiReasoning + ' — ' : '' %>An AI suggestion, not tax advice. Whether you can actually claim it depends on what it was for and the rules where you file.">
+              <% if (r.deductibleSource === 'customer') { %>you marked this<% } else if (r.deductibleSource === 'ai') { %>AI suggestion<% } %>
+            </span>
+          </div>
+          </div>
+      <% if (i === receipts.length - 1 || receipts[i + 1].date !== r.date) { %>
+        </div>
+      <% } %>
+    <% }); %>

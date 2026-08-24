@@ -98,4 +98,42 @@ function categorizeInBackground(transaction, merchantName) {
     .catch((err) => console.error('[categorize] background categorization failed:', err.message));
 }
 
-module.exports = { categorizeTransaction, categorizeInBackground, CATEGORIES };
+/**
+ * The same fire-and-forget pass for a receipt the customer photographed.
+ *
+ * Scanned receipts were categorised at extraction time but never assessed for
+ * deductibility -- ScannedReceipt simply had no column for it -- so half a
+ * customer's wallet could never appear in a tax export. Same contract as
+ * categorizeInBackground: best-effort, never blocks or fails the save.
+ *
+ * Writes aiCategory only when the extraction pass didn't already produce one:
+ * that read the actual photo, so it saw more than a merchant name and a list
+ * of items and shouldn't be second-guessed here.
+ */
+function categorizeScannedInBackground(scannedReceipt) {
+  categorizeTransaction({
+    merchantName: scannedReceipt.merchantName,
+    lineItems: Array.isArray(scannedReceipt.lineItems) ? scannedReceipt.lineItems : [],
+  })
+    .then((result) => {
+      if (!result) return;
+      return prisma.scannedReceipt.update({
+        where: { id: scannedReceipt.id },
+        data: {
+          ...(scannedReceipt.aiCategory ? {} : { aiCategory: result.category }),
+          aiTaxDeductible: result.taxDeductible,
+          aiReasoning: result.reasoning,
+        },
+      });
+    })
+    .catch((err) =>
+      console.error('[categorize] background scanned categorization failed:', err.message)
+    );
+}
+
+module.exports = {
+  categorizeTransaction,
+  categorizeInBackground,
+  categorizeScannedInBackground,
+  CATEGORIES,
+};

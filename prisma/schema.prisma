@@ -257,6 +257,14 @@ model Transaction {
   aiReasoning     String? // short human-readable explanation, shown as a tooltip
   aiCategorizedAt DateTime?
 
+  // The customer's own call on deductibility, which OVERRIDES aiTaxDeductible.
+  // Deliberately a separate column rather than overwriting the AI's answer:
+  // null means "nobody has disagreed", so the suggestion still shows and a
+  // later re-categorisation is free to change it, while an explicit true/false
+  // is a decision the AI must never quietly undo. It's the customer's tax
+  // return -- see lib/receiptDeductible.js for how the two combine.
+  taxDeductible Boolean?
+
   // Merchant expense tracking — set only if a DIFFERENT merchant claims this
   // as a purchase they made (buying from another ReceipTap merchant)
   collectedByMerchantId String?
@@ -319,11 +327,11 @@ model ReceiptTheme {
   // Before these existed the block was a bare toggle: it printed a "Register
   // Warranty" button with no terms behind it, pointing at a route that was
   // never built. The terms are what the customer actually needs months later.
-  warrantyPeriod   String? // "1 year from purchase", "90 days"
-  warrantyDetails  String? // what's covered, and what isn't
-  warrantyContact  String? // how to start a claim -- email, phone, or a link
+  warrantyPeriod  String? // "1 year from purchase", "90 days"
+  warrantyDetails String? // what's covered, and what isn't
+  warrantyContact String? // how to start a claim -- email, phone, or a link
 
-  showWalletSave   Boolean @default(true)
+  showWalletSave Boolean @default(true)
 
   // Promotes ReceipTap to other business owners at the top of this
   // merchant's receipts, using their own Partner Program referral link.
@@ -680,21 +688,27 @@ model Customer {
 // a real Merchant row via its non-nullable merchantId. Money in cents,
 // same convention as Transaction.total.
 model ScannedReceipt {
-  id            String    @id @default(cuid())
-  customerId    String
-  customer      Customer  @relation(fields: [customerId], references: [id])
-  imageUrl      String
-  merchantName  String
-  purchaseDate  DateTime?
-  total         Int
-  aiCategory    String?
+  id              String    @id @default(cuid())
+  customerId      String
+  customer        Customer  @relation(fields: [customerId], references: [id])
+  imageUrl        String
+  merchantName    String
+  purchaseDate    DateTime?
+  total           Int
+  aiCategory      String?
+  // Same three the tapped receipts have carried all along. A photographed
+  // receipt was categorised but never assessed for deductibility, so half a
+  // customer's wallet could never appear in a tax export.
+  aiTaxDeductible Boolean?
+  aiReasoning     String?
+  taxDeductible   Boolean?
   // Both read off the photo itself by the same AI extraction pass as
   // merchantName/total/date -- only populated when the receipt actually
   // prints them (e.g. "Visa •••• 6123", a store's own transaction/receipt
   // number). Never fabricated: ReceipTap doesn't collect real card data,
   // this is only ever what's legible on the paper the customer photographed.
-  paymentMethod String?
-  receiptNumber String?
+  paymentMethod   String?
+  receiptNumber   String?
 
   // The rest of what a paper receipt actually prints, read off the photo by
   // the same extraction pass. A tapped receipt gets all of this from the POS;

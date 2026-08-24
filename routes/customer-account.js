@@ -12,7 +12,7 @@ const multer = require('multer');
 const bcrypt = require('bcrypt');
 const crypto = require('crypto');
 const { OAuth2Client } = require('google-auth-library');
-const { categorizeInBackground, CATEGORIES } = require('../services/categorize-receipt');
+const { categorizeInBackground, categorizeScannedInBackground, CATEGORIES } = require('../services/categorize-receipt');
 const { extractReceiptData } = require('../services/scanReceiptService');
 const { sendPasswordResetEmail } = require('../services/emailService');
 const fileStorage = require('../lib/fileStorage');
@@ -21,6 +21,8 @@ const fileStorage = require('../lib/fileStorage');
 const { REGULAR_AFFILIATE_RATE } = require('../services/affiliateRates');
 const { deleteShopperEverywhere } = require('../services/dataRetentionService');
 const prisma = require('../lib/prisma');
+const { isDeductible, deductibleSource, contradictsAi, deductibleWhereClause } = require('../lib/receiptDeductible');
+const { csvCell } = require('../lib/csvCell');
 const { parseMoneyToCents, parseDateOrNull } = require('../lib/parseReceiptFields');
 const { findDuplicateReceipt } = require('../lib/findDuplicateReceipt');
 const { listNotifications, markAllRead, notifyReceiptSaved, notifyReceiptDeleted } = require('../services/notificationService');
@@ -512,11 +514,12 @@ router.post('/receipt/:transactionId/save', requireCustomerAuth, async (req, res
 
 // Shared by the wallet page and its CSV export, so the two can never drift
 // out of sync on what "the current filters" actually match.
-function buildWalletWhere(customerId, { search, from, to, category }) {
+function buildWalletWhere(customerId, { search, from, to, category, deductible }) {
   return {
     customerId,
     ...(search ? { merchant: { businessName: { contains: search, mode: 'insensitive' } } } : {}),
     ...(category ? { aiCategory: category } : {}),
+    ...(deductible ? deductibleWhereClause(true) : {}),
     ...(from || to
       ? {
           createdAt: {
@@ -535,11 +538,12 @@ function buildWalletWhere(customerId, { search, from, to, category }) {
 // happened) is what a date-range search should mean, not createdAt (when
 // the customer got around to uploading it, which could be much later for
 // an old paper receipt).
-function buildScannedReceiptWhere(customerId, { search, from, to, category }) {
+function buildScannedReceiptWhere(customerId, { search, from, to, category, deductible }) {
   return {
     customerId,
     ...(search ? { merchantName: { contains: search, mode: 'insensitive' } } : {}),
     ...(category ? { aiCategory: category } : {}),
+    ...(deductible ? deductibleWhereClause(true) : {}),
     ...(from || to
       ? {
           purchaseDate: {
@@ -555,10 +559,24 @@ function buildScannedReceiptWhere(customerId, { search, from, to, category }) {
 // merchants AND every receipt they've scanned/uploaded themselves, merged
 // into one date-sorted list.
 // Supports ?search=<business name>, ?from=&to=<date range>, and ?category=<ai category>
-router.get('/account/receipts', requireCustomerAuth, async (req, res) => {
+// The wallet HOME (/account/receipts) and the full wallet (/account/wallet)
+// are the same handler: identical data, two presentations. The home is a
+// summary -- setup checklist, month total, the RECENT_RECEIPT_LIMIT most
+// recent receipts and a way through to everything. The wallet is the whole
+// history with the search, filters and export.
+//
+// One handler rather than two because every number on both pages comes from
+// the same six queries; splitting them would mean two routes computing the
+// same month summary and drifting on it.
+const RECENT_RECEIPT_LIMIT = 5;
+
+async function renderWallet(req, res, { isFullWallet }) {
   const { search, from, to, category } = req.query;
-  const where = buildWalletWhere(req.session.customerId, { search, from, to, category });
-  const scanWhere = buildScannedReceiptWhere(req.session.customerId, { search, from, to, category });
+  // Only '1' turns it on -- an absent or malformed value must mean "no filter",
+  // not "show me nothing".
+  const deductible = req.query.deductible === '1';
+  const where = buildWalletWhere(req.session.customerId, { search, from, to, category, deductible });
+  const scanWhere = buildScannedReceiptWhere(req.session.customerId, { search, from, to, category, deductible });
   const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
 
   // "Today"/"This week" quick-filter chips -- real date-range links using
@@ -584,7 +602,7 @@ router.get('/account/receipts', requireCustomerAuth, async (req, res) => {
   // connections in total, and this route alone was firing eleven queries at
   // once (the merchant `include` costs an extra one). They queued against each
   // other, and on a phone over a slow link the wait was plainly visible.
-  const isFiltered = Boolean(search || from || to || category);
+  const isFiltered = Boolean(search || from || to || category || deductible);
 
   const [customer, transactions, scannedReceipts, partnerAccount] = await Promise.all([
     prisma.customer.findUnique({ where: { id: req.session.customerId } }),
@@ -655,6 +673,11 @@ router.get('/account/receipts', requireCustomerAuth, async (req, res) => {
       aiCategory: t.aiCategory,
       aiTaxDeductible: t.aiTaxDeductible,
       aiReasoning: t.aiReasoning,
+      // The effective answer and who gave it -- computed once here so the row,
+      // the toggle and the export can't each decide it differently.
+      deductible: isDeductible(t),
+      deductibleSource: deductibleSource(t),
+      deductibleContradictsAi: contradictsAi(t),
       autoSaved: t.autoSavedViaRecognition,
       link: `/receipt/${t.id}`,
     })),
@@ -672,8 +695,14 @@ router.get('/account/receipts', requireCustomerAuth, async (req, res) => {
         : r.createdAt.toLocaleDateString('en-US', { dateStyle: 'medium' }),
       merchantName: r.merchantName,
       aiCategory: r.aiCategory,
-      aiTaxDeductible: null,
-      aiReasoning: null,
+      // These were hardcoded null because ScannedReceipt had no such columns.
+      // It does now, so a photographed receipt carries the same answer a
+      // tapped one does instead of being silently undeductible.
+      aiTaxDeductible: r.aiTaxDeductible,
+      aiReasoning: r.aiReasoning,
+      deductible: isDeductible(r),
+      deductibleSource: deductibleSource(r),
+      deductibleContradictsAi: contradictsAi(r),
       autoSaved: false, // a scanned receipt was uploaded by hand, never matched
       link: r.imageUrl,
     })),
@@ -708,6 +737,12 @@ router.get('/account/receipts', requireCustomerAuth, async (req, res) => {
   };
 
   res.render('customer-wallet', {
+    isFullWallet,
+    // The home shows a handful; the wallet shows everything. Sliced here, not
+    // in the query, because the month summary and category chips are built
+    // from the same rows and must still count them all.
+    receiptsShown: isFullWallet ? merged.length : Math.min(RECENT_RECEIPT_LIMIT, merged.length),
+    totalReceiptCount: merged.length,
     customerEmail: customer?.email || '',
     customerName: customer?.name || null,
     setup,
@@ -721,31 +756,124 @@ router.get('/account/receipts', requireCustomerAuth, async (req, res) => {
       receiptCount: merged.length,
     },
     categories,
-    receipts: merged,
-    filters: { search: search || '', from: from || '', to: to || '', category: category || '' },
+    receipts: isFullWallet ? merged : merged.slice(0, RECENT_RECEIPT_LIMIT),
+    filters: { search: search || '', from: from || '', to: to || '', category: category || '', deductible },
     quickFilters,
+  });
+}
+
+router.get('/account/receipts', requireCustomerAuth, (req, res) =>
+  renderWallet(req, res, { isFullWallet: false })
+);
+
+// The full history, with everything the home page deliberately leaves out.
+router.get('/account/wallet', requireCustomerAuth, (req, res) =>
+  renderWallet(req, res, { isFullWallet: true })
+);
+
+// POST /account/receipts/:kind/:id/deductible — the customer overriding the
+// AI on one receipt. Answers JSON so the wallet list can flip a switch in
+// place: this is a page you work down marking things before a tax export, and
+// a full reload per receipt would make that miserable.
+//
+// Writes taxDeductible, never aiTaxDeductible: the AI's opinion is kept as it
+// was so the two can be compared, and so a later re-categorisation can't
+// quietly overwrite a decision the customer made. See lib/receiptDeductible.js.
+router.post('/account/receipts/:kind/:id/deductible', requireCustomerAuth, async (req, res) => {
+  const { kind, id } = req.params;
+  if (kind !== 'transaction' && kind !== 'scanned') {
+    return res.status(404).json({ error: 'Unknown receipt type' });
+  }
+
+  // Tri-state on purpose: 'clear' hands the receipt back to the AI's
+  // suggestion rather than freezing today's answer as a customer decision.
+  const raw = req.body?.deductible;
+  const value = raw === 'clear' || raw === null ? null : raw === true || raw === 'true';
+
+  const model = kind === 'transaction' ? prisma.transaction : prisma.scannedReceipt;
+
+  // Ownership is checked by filtering on customerId rather than by reading the
+  // row and comparing: a receipt id is a cuid, guessable enough that "update
+  // where id" alone would let one customer relabel another's receipt.
+  const { count } = await model.updateMany({
+    where: { id, customerId: req.session.customerId },
+    data: { taxDeductible: value },
+  });
+  if (count === 0) return res.status(404).json({ error: 'Not found' });
+
+  const updated = await model.findUnique({
+    where: { id },
+    select: { taxDeductible: true, aiTaxDeductible: true, aiReasoning: true },
+  });
+
+  res.json({
+    deductible: isDeductible(updated),
+    source: deductibleSource(updated),
+    contradictsAi: contradictsAi(updated),
+    aiReasoning: updated.aiReasoning || null,
   });
 });
 
 // GET /account/receipts/export — CSV of whatever the wallet's current filters match
+//
+// Includes SCANNED receipts as well as tapped ones. It used to export only
+// transactions, so a customer who photographed their paper receipts got a tax
+// export missing exactly the receipts they'd gone to the trouble of capturing.
 router.get('/account/receipts/export', requireCustomerAuth, async (req, res) => {
   const { search, from, to, category } = req.query;
-  const where = buildWalletWhere(req.session.customerId, { search, from, to, category });
+  const deductible = req.query.deductible === '1';
+  const where = buildWalletWhere(req.session.customerId, { search, from, to, category, deductible });
+  const scanWhere = buildScannedReceiptWhere(req.session.customerId, { search, from, to, category, deductible });
 
-  const transactions = await prisma.transaction.findMany({
-    where,
-    include: { merchant: true },
-    orderBy: { createdAt: 'desc' },
-  });
+  const [transactions, scanned] = await Promise.all([
+    prisma.transaction.findMany({ where, include: { merchant: true }, orderBy: { createdAt: 'desc' } }),
+    prisma.scannedReceipt.findMany({ where: scanWhere, orderBy: { createdAt: 'desc' } }),
+  ]);
 
-  const rows = transactions.map(
-    (t) =>
-      `${t.id},${t.createdAt.toISOString()},${t.merchant.businessName},${(t.total / 100).toFixed(2)},${t.aiCategory || ''}`
-  );
-  const csv = 'transaction_id,date,business,total,category\n' + rows.join('\n');
+  const rows = [
+    ...transactions.map((t) => ({
+      id: t.id,
+      kind: 'tapped',
+      date: t.createdAt,
+      business: t.merchant.businessName,
+      total: t.total,
+      category: t.aiCategory,
+      row: t,
+    })),
+    ...scanned.map((r) => ({
+      id: r.id,
+      kind: 'scanned',
+      date: r.purchaseDate || r.createdAt,
+      business: r.merchantName,
+      total: r.total,
+      category: r.aiCategory,
+      row: r,
+    })),
+  ].sort((a, b) => b.date - a.date);
+
+  const header = 'receipt_id,type,date,business,total,category,tax_deductible,decided_by';
+  const csv = [header]
+    .concat(
+      rows.map((r) =>
+        [
+          r.id,
+          r.kind,
+          r.date.toISOString(),
+          csvCell(r.business),
+          (r.total / 100).toFixed(2),
+          csvCell(r.category || ''),
+          isDeductible(r.row) ? 'yes' : 'no',
+          deductibleSource(r.row), // customer | ai | none -- an accountant can see which rows were reviewed
+        ].join(',')
+      )
+    )
+    .join('\n');
 
   res.setHeader('Content-Type', 'text/csv');
-  res.setHeader('Content-Disposition', 'attachment; filename="receiptap-my-receipts.csv"');
+  res.setHeader(
+    'Content-Disposition',
+    `attachment; filename="receiptap-${deductible ? 'tax-deductible' : 'my'}-receipts.csv"`
+  );
   res.send(csv);
 });
 
@@ -905,6 +1033,11 @@ router.post('/account/receipts/scan/confirm', requireCustomerAuth, async (req, r
     console.error('[scan] saving a scanned receipt failed:', err.message);
     return backToReview("We couldn't save that receipt just now — please try again.");
   }
+
+  // Deductibility, in the background. The extraction pass reads the photo for
+  // a category; this asks the separate question a tax export depends on, and
+  // like every other categorisation it must never block or fail the save.
+  categorizeScannedInBackground(saved);
 
   // The Alerts tab is the wallet's record of what happened to it. Failing to
   // write the note must never undo a receipt that saved fine.

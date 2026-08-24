@@ -8,7 +8,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>My Receipts - ReceipTap</title>
+  <title><%= isFullWallet ? 'My Wallet' : 'Receipts' %> - ReceipTap</title>
   <link rel="stylesheet" href="/css/receiptap.css" />
   <%- include('partials/wallet-dark-theme') %>
   <style>
@@ -24,6 +24,14 @@
     .summary-num.accent { color: var(--w-accent); }
     .summary-stat:last-child { text-align: right; }
 
+    .wallet-cta {
+      display: flex; align-items: center; justify-content: center; gap: 9px;
+      margin-top: 4px; padding: 14px; border-radius: 12px;
+      background: var(--w-card); border: 1px solid var(--w-line);
+      color: var(--w-ink); font-size: 14px; font-weight: 700; text-decoration: none;
+    }
+    .wallet-cta:hover { background: var(--w-card-raised); }
+    .wallet-cta-count { font-size: 12px; font-weight: 600; color: var(--w-ink-soft); }
     .section-row { display: flex; align-items: center; justify-content: space-between; margin: 4px 0 12px; }
     .section-label { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--w-ink-soft); }
     .export-pill {
@@ -47,12 +55,30 @@
     }
     .day-heading:first-child { padding-top: 0; }
 
+    /* The divider moved to .receipt-line, which now wraps the link AND the
+       deductible strip -- left on .receipt-row it drew a line between a
+       receipt and its own toggle. */
+    .receipt-line { border-bottom: 1px solid var(--w-line); }
+    .receipt-line:last-child { border-bottom: none; }
     .receipt-row {
       display: flex; justify-content: space-between; align-items: flex-start;
-      padding: 16px 18px; text-decoration: none; color: var(--w-ink);
-      border-bottom: 1px solid var(--w-line);
+      padding: 16px 18px 10px; text-decoration: none; color: var(--w-ink);
     }
-    .receipt-row:last-child { border-bottom: none; }
+    .ded-strip { display: flex; align-items: center; gap: 10px; padding: 0 18px 14px; }
+    .ded-toggle {
+      display: inline-flex; align-items: center; gap: 7px;
+      font-size: 11.5px; font-weight: 700; font-family: inherit; cursor: pointer;
+      padding: 5px 11px; border-radius: 999px;
+      border: 1px solid var(--w-line); background: var(--w-card-raised); color: var(--w-ink-soft);
+    }
+    .ded-toggle .ded-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--w-line); border: 1px solid var(--w-line);
+    }
+    .ded-toggle.on { border-color: var(--w-accent); color: var(--w-accent); background: var(--w-accent-wash); }
+    .ded-toggle.on .ded-dot { background: var(--w-accent); border-color: var(--w-accent); }
+    .ded-toggle[disabled] { opacity: 0.5; cursor: default; }
+    .ded-note { font-size: 11px; color: var(--w-ink-soft); }
     .receipt-row:hover { background: var(--w-card-raised); }
     .merchant-name { font-weight: 600; font-size: 15px; }
     .receipt-date { font-size: 12.5px; color: var(--w-ink-soft); margin-top: 2px; }
@@ -162,7 +188,7 @@
     <div class="wallet-header">
       <div>
         <div class="w-eyebrow">ReceipTap</div>
-        <h1 class="w-title">Receipts</h1>
+        <h1 class="w-title"><%= isFullWallet ? 'My Wallet' : 'Receipts' %></h1>
       </div>
       <%# Was a plain link to Settings. It's a menu now, because turning phone
           notifications back OFF had nowhere to live -- every surface could
@@ -189,6 +215,15 @@
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
             Alerts
           </a>
+          <%# Under Alerts, as the menu reads top to bottom: the two places a
+              customer goes to look at something, before the two that change
+              things (Settings, Log out). The wallet is where this menu lives
+              today, so from here it's a link to the current page -- it earns
+              its keep the moment this menu appears on Alerts or Settings too. %>
+          <a class="acct-item" href="/account/wallet" role="menuitem">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 7a2 2 0 0 1 2-2h13a1 1 0 0 1 1 1v2"/><path d="M3 7v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-3"/><path d="M21 11h-5a2 2 0 0 0 0 4h5v-4Z"/></svg>
+            My Wallet
+          </a>
           <a class="acct-item" href="/account/settings" role="menuitem">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>
             Settings
@@ -205,59 +240,7 @@
       <div class="acct-backdrop" id="acct-backdrop" onclick="closeAccountMenu()"></div>
     </div>
 
-    <div class="w-card setup-card">
-      <div class="setup-head">
-        <div class="setup-eyebrow">Setup progress</div>
-        <div class="setup-pct"><%= setup.percent %>%</div>
-      </div>
-      <div class="setup-bar"><div class="setup-bar-fill" style="width: <%= setup.percent %>%;"></div></div>
-
-      <a class="setup-row <%= setup.walletCreated ? 'done' : '' %>" href="/account/settings">
-        <% if (setup.walletCreated) { %><div class="setup-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div><% } else { %><div class="setup-check"></div><% } %>
-        <div class="setup-row-body">
-          <div class="setup-row-title">Create your wallet</div>
-          <div class="setup-row-sub"><%= setup.walletCreated ? "View your account details." : "View your account details." %></div>
-        </div>
-        <div class="setup-row-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg></div>
-      </a>
-      <a class="setup-row <%= setup.canSignInAnywhere ? 'done' : '' %>" href="/account/settings">
-        <% if (setup.canSignInAnywhere) { %><div class="setup-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div><% } else { %><div class="setup-check"></div><% } %>
-        <div class="setup-row-body">
-          <div class="setup-row-title">Set a password</div>
-          <div class="setup-row-sub"><%= setup.canSignInAnywhere ? "You can sign in from any device." : "So you can sign in on any device, not just this one." %></div>
-        </div>
-        <div class="setup-row-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg></div>
-      </a>
-      <%# One step, not two: tapping a ReceipTap and scanning a paper receipt
-          are different routes to the same milestone -- a receipt in the wallet.
-          Links at the scan page when it's still to do, since that screen offers
-          both the camera and a file upload. %>
-      <a class="setup-row <%= setup.firstReceipt ? 'done' : '' %>" href="<%= setup.firstReceipt ? '/account/receipts' : '/account/receipts/scan' %>">
-        <% if (setup.firstReceipt) { %><div class="setup-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div><% } else { %><div class="setup-check"></div><% } %>
-        <div class="setup-row-body">
-          <div class="setup-row-title">Scan, save or upload your first receipt</div>
-          <div class="setup-row-sub"><%= setup.firstReceipt ? "Your receipts are all in one place." : "Tap a ReceipTap at checkout, or snap a paper receipt yourself." %></div>
-        </div>
-        <div class="setup-row-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg></div>
-      </a>
-      <a class="setup-row <%= setup.homeScreenAdded ? 'done' : '' %>" href="/account/install">
-        <% if (setup.homeScreenAdded) { %><div class="setup-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div><% } else { %><div class="setup-check"></div><% } %>
-        <div class="setup-row-body">
-          <div class="setup-row-title">Add ReceipTap to your home screen</div>
-          <div class="setup-row-sub"><%= setup.homeScreenAdded ? "One tap to your receipts, and alerts on your phone." : "Open it like an app, and get alerts on your phone." %></div>
-        </div>
-        <div class="setup-row-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg></div>
-      </a>
-      <a class="setup-row <%= setup.partnerProgram ? 'done' : '' %>" href="/partner-program">
-        <% if (setup.partnerProgram) { %><div class="setup-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div><% } else { %><div class="setup-check"></div><% } %>
-        <div class="setup-row-body">
-          <div class="setup-row-title">Join our Partner Program</div>
-          <div class="setup-row-sub"><%= setup.partnerProgram ? "You're a ReceipTap partner — earn " + affiliateRate + "% for as long as they stay." : "Earn " + affiliateRate + "% recurring commission on every business you refer. Free to join." %></div>
-        </div>
-        <div class="setup-row-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg></div>
-      </a>
-    </div>
-
+    <% if (!isFullWallet) { %>
     <div class="w-card summary-card">
       <div class="summary-stat">
         <div class="summary-eyebrow">This month</div>
@@ -269,22 +252,35 @@
       </div>
     </div>
 
+    <% } %>
+
+    <%# Search, category chips and the tax filter belong to the full wallet.
+        The home page is a summary -- a search box over five rows is noise, and
+        the wallet page is one tap away. %>
+    <% if (isFullWallet) { %>
     <% if (categories.length > 0) { %>
       <div class="chips">
-        <a class="chip <%= !filters.category ? 'active' : '' %>" href="/account/receipts">All</a>
+        <a class="chip <%= !filters.category ? 'active' : '' %>" href="/account/wallet">All</a>
         <% categories.forEach(function(cat) { %>
           <a class="chip <%= filters.category === cat ? 'active' : '' %>"
-             href="/account/receipts?category=<%= encodeURIComponent(cat) %>"><%= cat %></a>
+             href="/account/wallet?category=<%= encodeURIComponent(cat) %>"><%= cat %></a>
         <% }); %>
         <div class="chip-divider"></div>
+        <%# The tax filter sits with the category chips because it's the same
+            kind of question -- "show me a subset" -- and because the export
+            pill below inherits whatever is active, so filtering to deductible
+            and exporting is two taps. %>
+        <a class="chip <%= filters.deductible ? 'active' : '' %>"
+           href="/account/wallet<%= filters.deductible ? '' : '?deductible=1' %>">Tax deductible</a>
+        <div class="chip-divider"></div>
         <a class="chip <%= (filters.from === quickFilters.today.from && filters.to === quickFilters.today.to) ? 'active' : '' %>"
-           href="/account/receipts?from=<%= quickFilters.today.from %>&to=<%= quickFilters.today.to %>">Today</a>
+           href="/account/wallet?from=<%= quickFilters.today.from %>&to=<%= quickFilters.today.to %>">Today</a>
         <a class="chip <%= (filters.from === quickFilters.thisWeek.from && filters.to === quickFilters.thisWeek.to) ? 'active' : '' %>"
-           href="/account/receipts?from=<%= quickFilters.thisWeek.from %>&to=<%= quickFilters.thisWeek.to %>">This week</a>
+           href="/account/wallet?from=<%= quickFilters.thisWeek.from %>&to=<%= quickFilters.thisWeek.to %>">This week</a>
       </div>
     <% } %>
 
-    <form class="w-card search-card" method="GET" action="/account/receipts">
+    <form class="w-card search-card" method="GET" action="/account/wallet">
       <details <%= (filters.search || filters.from || filters.to) ? 'open' : '' %>>
         <summary>Search by store or date</summary>
         <div class="w-field">
@@ -303,10 +299,11 @@
         </div>
         <button class="w-btn" type="submit" style="margin-top: 12px;">Search</button>
         <% if (filters.search || filters.from || filters.to) { %>
-          <div class="clear-search"><a href="/account/receipts">Clear search</a></div>
+          <div class="clear-search"><a href="/account/wallet">Clear search</a></div>
         <% } %>
       </details>
     </form>
+    <% } %>
 
     <% if (receipts.length === 0 && (filters.search || filters.from || filters.to || filters.category)) { %>
       <div class="w-card empty-state">
@@ -324,59 +321,90 @@
       </div>
     <% } else { %>
       <div class="section-row">
-        <div class="section-label">All receipts</div>
-        <a class="export-pill" href="/account/receipts/export?search=<%= encodeURIComponent(filters.search) %>&from=<%= encodeURIComponent(filters.from) %>&to=<%= encodeURIComponent(filters.to) %>&category=<%= encodeURIComponent(filters.category) %>">
+        <div class="section-label"><%= isFullWallet ? 'All receipts' : 'Recent receipts' %></div>
+        <%# Export belongs with the full list: on the home page it would offer
+            to export five rows while the filters that shape it live elsewhere. %>
+        <% if (isFullWallet) { %>
+        <a class="export-pill" href="/account/receipts/export?search=<%= encodeURIComponent(filters.search) %>&from=<%= encodeURIComponent(filters.from) %>&to=<%= encodeURIComponent(filters.to) %>&category=<%= encodeURIComponent(filters.category) %>&deductible=<%= filters.deductible ? '1' : '' %>">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12M7 10l5 5 5-5M4 21h16"/></svg>
-          Export<%= (filters.search || filters.from || filters.to || filters.category) ? ' (filtered)' : '' %>
+          Export<%= filters.deductible ? ' tax receipts' : (filters.search || filters.from || filters.to || filters.category) ? ' (filtered)' : '' %>
         </a>
+        <% } %>
       </div>
 
-      <%
-        // Group consecutive receipts by day so each date only prints one
-        // heading -- r.date is already formatted per-item with the right
-        // UTC/local basis for its kind (see the merge step in the route),
-        // so grouping just has to compare that same string, not re-derive it.
-        let lastDayLabel = null;
-      %>
-      <% receipts.forEach(function(r, i) { %>
-        <% if (r.date !== lastDayLabel) { lastDayLabel = r.date; %>
-          <div class="day-heading"><%= r.date.toUpperCase() %></div>
-          <div class="w-card" style="margin-bottom: 14px;">
-        <% } %>
-            <%# A scanned receipt used to open its raw .jpg -- first by navigating
-                to it, which trapped anyone running the app from their home
-                screen, then in an in-app image viewer. Both showed the picture
-                and nothing else, while the subtotal, tax number and payment
-                method read off that picture sat unused in the database. It now
-                opens the same kind of page a tapped receipt does, with the
-                photo on it as the supporting evidence. %>
-            <a class="receipt-row" href="<%= r.kind === 'scanned' ? '/account/receipts/scanned/' + r.id : r.link %>">
-              <div>
-                <div class="merchant-name"><%= r.merchantName %></div>
-                <div class="receipt-date"><%= r.date %></div>
-                <% if (r.aiCategory || r.kind === 'scanned') { %>
-                  <div class="badges">
-                    <% if (r.aiCategory) { %><span class="badge badge-category"><%= r.aiCategory %></span><% } %>
-                    <%# "Worth checking", not "Possibly deductible". The old wording read as a
-                        determination the app is in no position to make -- whether something can
-                        actually be claimed turns on what it was bought for and the rules where
-                        the person files, neither of which is on the receipt. The tooltip carries
-                        the AI's reasoning and says plainly that it isn't advice. %>
-                    <% if (r.aiTaxDeductible) { %><span class="badge badge-tax" title="<%= r.aiReasoning ? r.aiReasoning + ' — ' : '' %>This is an AI suggestion, not tax advice. Check with a tax professional.">Worth checking at tax time</span><% } %>
-                    <%# Told, not hidden: this receipt is here because their card
-                        was recognised, not because they tapped. %>
-                    <% if (r.autoSaved) { %><span class="badge badge-auto" title="Saved automatically — your card was recognised at this business. You can turn this off in Settings.">Saved automatically</span><% } %>
-                    <% if (r.kind === 'scanned') { %><span class="badge badge-scanned">Scanned</span><% } %>
-                  </div>
-                <% } %>
-              </div>
-              <div class="receipt-total">$<%= r.total %></div>
-            </a>
-        <% if (i === receipts.length - 1 || receipts[i + 1].date !== r.date) { %>
-          </div>
-        <% } %>
-      <% }); %>
+      <%- include('partials/receipt-list', { receipts: receipts }) %>
+
+      <%# The way into the full history. Only on the home page -- the wallet
+          already IS the full history, so from there it would lead nowhere. %>
+      <% if (!isFullWallet) { %>
+        <a class="wallet-cta" href="/account/wallet">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 7a2 2 0 0 1 2-2h13a1 1 0 0 1 1 1v2"/><path d="M3 7v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-3"/><path d="M21 11h-5a2 2 0 0 0 0 4h5v-4Z"/></svg>
+          My Wallet
+          <% if (totalReceiptCount > receipts.length) { %>
+            <span class="wallet-cta-count">all <%= totalReceiptCount %></span>
+          <% } %>
+        </a>
+      <% } %>
     <% } %>
+
+      <%# Setup progress sits BELOW the receipts, not above them. A checklist
+          at 100% was the first thing between a customer and the receipts they
+          opened the app for. Still on the home page only -- the wallet is the
+          full history and nothing else. %>
+      <% if (!isFullWallet) { %>
+      <div class="w-card setup-card">
+        <div class="setup-head">
+          <div class="setup-eyebrow">Setup progress</div>
+          <div class="setup-pct"><%= setup.percent %>%</div>
+        </div>
+        <div class="setup-bar"><div class="setup-bar-fill" style="width: <%= setup.percent %>%;"></div></div>
+
+        <a class="setup-row <%= setup.walletCreated ? 'done' : '' %>" href="/account/settings">
+          <% if (setup.walletCreated) { %><div class="setup-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div><% } else { %><div class="setup-check"></div><% } %>
+          <div class="setup-row-body">
+            <div class="setup-row-title">Create your wallet</div>
+            <div class="setup-row-sub"><%= setup.walletCreated ? "View your account details." : "View your account details." %></div>
+          </div>
+          <div class="setup-row-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg></div>
+        </a>
+        <a class="setup-row <%= setup.canSignInAnywhere ? 'done' : '' %>" href="/account/settings">
+          <% if (setup.canSignInAnywhere) { %><div class="setup-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div><% } else { %><div class="setup-check"></div><% } %>
+          <div class="setup-row-body">
+            <div class="setup-row-title">Set a password</div>
+            <div class="setup-row-sub"><%= setup.canSignInAnywhere ? "You can sign in from any device." : "So you can sign in on any device, not just this one." %></div>
+          </div>
+          <div class="setup-row-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg></div>
+        </a>
+        <%# One step, not two: tapping a ReceipTap and scanning a paper receipt
+            are different routes to the same milestone -- a receipt in the wallet.
+            Links at the scan page when it's still to do, since that screen offers
+            both the camera and a file upload. %>
+        <a class="setup-row <%= setup.firstReceipt ? 'done' : '' %>" href="<%= setup.firstReceipt ? '/account/receipts' : '/account/receipts/scan' %>">
+          <% if (setup.firstReceipt) { %><div class="setup-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div><% } else { %><div class="setup-check"></div><% } %>
+          <div class="setup-row-body">
+            <div class="setup-row-title">Scan, save or upload your first receipt</div>
+            <div class="setup-row-sub"><%= setup.firstReceipt ? "Your receipts are all in one place." : "Tap a ReceipTap at checkout, or snap a paper receipt yourself." %></div>
+          </div>
+          <div class="setup-row-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg></div>
+        </a>
+        <a class="setup-row <%= setup.homeScreenAdded ? 'done' : '' %>" href="/account/install">
+          <% if (setup.homeScreenAdded) { %><div class="setup-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div><% } else { %><div class="setup-check"></div><% } %>
+          <div class="setup-row-body">
+            <div class="setup-row-title">Add ReceipTap to your home screen</div>
+            <div class="setup-row-sub"><%= setup.homeScreenAdded ? "One tap to your receipts, and alerts on your phone." : "Open it like an app, and get alerts on your phone." %></div>
+          </div>
+          <div class="setup-row-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg></div>
+        </a>
+        <a class="setup-row <%= setup.partnerProgram ? 'done' : '' %>" href="/partner-program">
+          <% if (setup.partnerProgram) { %><div class="setup-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div><% } else { %><div class="setup-check"></div><% } %>
+          <div class="setup-row-body">
+            <div class="setup-row-title">Join our Partner Program</div>
+            <div class="setup-row-sub"><%= setup.partnerProgram ? "You're a ReceipTap partner — earn " + affiliateRate + "% for as long as they stay." : "Earn " + affiliateRate + "% recurring commission on every business you refer. Free to join." %></div>
+          </div>
+          <div class="setup-row-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg></div>
+        </a>
+      </div>
+      <% } %>
   </div>
 
   <a href="/account/receipts/scan" class="fab" aria-label="Scan a receipt">+</a>
@@ -385,6 +413,42 @@
   <%- include('partials/image-viewer') %>
   <%- include('partials/push-controls') %>
   <script>
+    // Marking receipts before a tax export means working down the list, so
+    // this posts in place rather than reloading the page each time. The button
+    // is disabled while in flight so a double-tap can't send two opposite
+    // writes and land on whichever reply arrives last.
+    async function toggleDeductible(btn) {
+      if (btn.disabled) return;
+      var next = btn.getAttribute('aria-pressed') !== 'true';
+      btn.disabled = true;
+      try {
+        var res = await fetch(
+          '/account/receipts/' + btn.dataset.kind + '/' + btn.dataset.id + '/deductible',
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ deductible: next }),
+          }
+        );
+        if (!res.ok) throw new Error('save failed');
+        var data = await res.json();
+        btn.setAttribute('aria-pressed', data.deductible ? 'true' : 'false');
+        btn.classList.toggle('on', Boolean(data.deductible));
+        var note = btn.parentElement.querySelector('.ded-note');
+        // Say who decided, so a row the customer has ruled on is
+        // distinguishable from one still carrying the AI's guess.
+        if (note) note.textContent = data.source === 'customer' ? 'you marked this' : data.source === 'ai' ? 'AI suggestion' : '';
+      } catch (err) {
+        // Leave the button showing what the server still believes rather than
+        // a state that was never saved, and say so in place -- a modal dialog
+        // would block the page mid-list for a recoverable failure.
+        var failNote = btn.parentElement.querySelector('.ded-note');
+        if (failNote) failNote.textContent = "couldn't save — tap to retry";
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
     var acctMenu = document.getElementById('acct-menu');
     var acctBackdrop = document.getElementById('acct-backdrop');
     var acctBtn = document.getElementById('acct-btn');

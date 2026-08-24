@@ -274,11 +274,23 @@
   <div class="pm-modal-overlay" id="add-pm-modal" onclick="if (event.target === this) closeAddPmModal();">
     <div class="pm-modal-box">
       <h2>Add payment method</h2>
-      <form id="add-pm-form">
-        <div id="card-element"></div>
-        <div id="card-errors"></div>
-        <button type="submit" class="pm-modal-save-btn" id="add-pm-submit">Save card</button>
-      </form>
+      <%# Without a publishable key Stripe.js can't build the card field, so
+          #card-element stayed an empty box and "Save card" was a silent
+          no-op (the submit handler bails on `if (!stripe) return`). Say so
+          instead of rendering a form that cannot work. %>
+      <% if (stripePublishableKey) { %>
+        <form id="add-pm-form">
+          <div id="card-element"></div>
+          <div id="card-errors"></div>
+          <button type="submit" class="pm-modal-save-btn" id="add-pm-submit">Save card</button>
+        </form>
+      <% } else { %>
+        <div class="banner error" style="margin-bottom:4px;">
+          Card entry isn't available right now — this server is missing its Stripe
+          publishable key, so the card field can't load. Nothing you enter would be
+          saved. Please try again shortly.
+        </div>
+      <% } %>
       <button type="button" onclick="closeAddPmModal();" class="pm-modal-cancel-btn">Cancel</button>
     </div>
   </div>
@@ -287,6 +299,13 @@
   <script>
     var stripe = <%- stripePublishableKey ? "Stripe('" + stripePublishableKey + "')" : 'null' %>;
     var elements, cardElement;
+
+    if (!stripe) {
+      console.error(
+        '[billing] STRIPE_PUBLISHABLE_KEY is not set on this server — the card ' +
+        'field cannot be rendered. Set it in the environment and redeploy.'
+      );
+    }
 
     if (stripe) {
       elements = stripe.elements();
@@ -314,7 +333,8 @@
       document.getElementById('add-pm-modal').classList.remove('open');
     }
 
-    document.getElementById('add-pm-form').addEventListener('submit', async function (e) {
+    var addPmForm = document.getElementById('add-pm-form');
+    if (addPmForm) addPmForm.addEventListener('submit', async function (e) {
       e.preventDefault();
       if (!stripe) return;
       var submitBtn = document.getElementById('add-pm-submit');

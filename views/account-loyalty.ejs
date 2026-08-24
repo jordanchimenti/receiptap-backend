@@ -49,6 +49,23 @@
     /* receiptap.css's .empty-state is the light theme's -- it sets
        background: var(--paper-raised), which renders white on these dark
        pages. Override it explicitly rather than inheriting it. */
+    /* Section headings sit between cards, so the gap above is larger than the
+       gap below -- the heading should read as belonging to the cards under it
+       rather than floating between two groups. First one loses the top gap. */
+    .rewards-section { margin: 0; }
+    .rewards-section + .rewards-section { margin-top: 26px; }
+    .rewards-section-title {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 12.5px; font-weight: 700; letter-spacing: 0.06em;
+      text-transform: uppercase; color: var(--w-ink-soft);
+      margin: 0 0 10px; padding: 0 2px;
+    }
+    .rewards-section-count {
+      font-size: 11.5px; font-weight: 700; letter-spacing: 0;
+      color: var(--w-ink-soft); background: var(--w-card);
+      border: 1px solid var(--w-line); border-radius: 999px;
+      min-width: 20px; text-align: center; padding: 1px 7px;
+    }
     .rewards-search { padding: 12px 14px; margin-bottom: 14px; }
     .rewards-search-row { display: flex; align-items: center; gap: 10px; }
     .rewards-search-icon { width: 17px; height: 17px; color: var(--w-ink-soft); flex: none; }
@@ -146,48 +163,33 @@
         No cards match that business.
       </div>
 
-      <% cards.forEach(function(card) { %>
-        <% var isFull = card.stamps >= card.stampsRequired; %>
-        <div class="loyalty-card" data-card-id="<%= card.id %>" data-merchant="<%= card.merchantName.toLowerCase() %>"
-             style="background: <%= card.design.background %>; color: <%= card.design.accent %>;">
-          <div class="stamp-head">
-            <div class="stamp-logo">
-              <% if (card.design.logoUrl) { %><img src="<%= card.design.logoUrl %>" alt="" /><% } else { %>
-                <span class="stamp-monogram"><%= card.design.monogram %></span>
-              <% } %>
-            </div>
-            <div class="stamp-head-text">
-              <div class="loyalty-merchant"><%= card.merchantName %></div>
-              <div class="loyalty-sub">
-                <% if (isFull) { %>
-                  Card full — redeem for <%= card.rewardLabel %>
-                <% } else { %>
-                  <% var stampsLeft = card.stampsRequired - card.stamps; %>
-                  <%= stampsLeft %> stamp<%= stampsLeft === 1 ? '' : 's' %> from <%= card.rewardLabel %>
-                <% } %>
-              </div>
-            </div>
-          </div>
+      <%# Full cards lead: they're the only ones with something to do, and in a
+          single updatedAt-ordered list a redeemable card sinks below cards that
+          are barely started. Each section is hidden by filterRewards() when the
+          search empties it, so a heading never sits above nothing. %>
+      <% if (readyCards.length > 0) { %>
+        <section class="rewards-section" data-rewards-section>
+          <h2 class="rewards-section-title">
+            Ready to redeem
+            <span class="rewards-section-count"><%= readyCards.length %></span>
+          </h2>
+          <% readyCards.forEach(function(card) { %>
+            <%- include('partials/loyalty-card', { card: card }) %>
+          <% }); %>
+        </section>
+      <% } %>
 
-          <div class="punch-row">
-            <% for (var p = 1; p <= card.stampsRequired; p++) { %>
-              <div class="punch-hole <%= p <= card.stamps ? 'filled' : '' %>"><%= p <= card.stamps ? '✓' : p %></div>
-            <% } %>
-          </div>
-
-          <div class="stamp-foot">
-            <div class="stamp-foot-reward">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 12v9H4v-9"/><path d="M2 7h20v5H2z"/><path d="M12 22V7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7Z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7Z"/></svg>
-              <span><%= card.rewardLabel %></span>
-            </div>
-            <div><%= card.stamps %> / <%= card.stampsRequired %></div>
-          </div>
-
-          <% if (isFull) { %>
-            <button type="button" class="loyalty-btn" onclick="openLoyaltyModal('<%= card.id %>')">Redeem Reward</button>
-          <% } %>
-        </div>
-      <% }); %>
+      <% if (inProgressCards.length > 0) { %>
+        <section class="rewards-section" data-rewards-section>
+          <h2 class="rewards-section-title">
+            Collecting stamps
+            <span class="rewards-section-count"><%= inProgressCards.length %></span>
+          </h2>
+          <% inProgressCards.forEach(function(card) { %>
+            <%- include('partials/loyalty-card', { card: card }) %>
+          <% }); %>
+        </section>
+      <% } %>
     <% } %>
   </div>
 
@@ -229,6 +231,16 @@
         var hit = !q || (el.dataset.merchant || '').indexOf(q) !== -1;
         el.style.display = hit ? '' : 'none';
         if (hit) shown++;
+      });
+
+      // A section whose every card just got filtered out would otherwise leave
+      // its heading and count stranded above empty space.
+      document.querySelectorAll('[data-rewards-section]').forEach(function (section) {
+        var visible = Array.prototype.filter.call(
+          section.querySelectorAll('.loyalty-card'),
+          function (el) { return el.style.display !== 'none'; }
+        ).length;
+        section.style.display = visible ? '' : 'none';
       });
       // Only speak up once they've actually typed -- an empty box that
       // matches nothing means they have no cards, which the page already says.

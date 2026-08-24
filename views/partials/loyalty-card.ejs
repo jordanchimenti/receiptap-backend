@@ -1,0 +1,44 @@
+<%# One loyalty card. Included from views/account-loyalty.ejs for both
+    the "Ready to redeem" and "Collecting stamps" sections -- the two
+    render an identical card, so this lives in one place rather than
+    being duplicated per section and drifting. Expects `card`. %>
+      <% var isFull = card.stamps >= card.stampsRequired; %>
+      <div class="loyalty-card" data-card-id="<%= card.id %>" data-merchant="<%= card.merchantName.toLowerCase() %>"
+           style="background: <%= card.design.background %>; color: <%= card.design.accent %>;">
+        <div class="stamp-head">
+          <div class="stamp-logo">
+            <% if (card.design.logoUrl) { %><img src="<%= card.design.logoUrl %>" alt="" /><% } else { %>
+              <span class="stamp-monogram"><%= card.design.monogram %></span>
+            <% } %>
+          </div>
+          <div class="stamp-head-text">
+            <div class="loyalty-merchant"><%= card.merchantName %></div>
+            <div class="loyalty-sub">
+              <% if (isFull) { %>
+                Card full — redeem for <%= card.rewardLabel %>
+              <% } else { %>
+                <% var stampsLeft = card.stampsRequired - card.stamps; %>
+                <%= stampsLeft %> stamp<%= stampsLeft === 1 ? '' : 's' %> from <%= card.rewardLabel %>
+              <% } %>
+            </div>
+          </div>
+        </div>
+
+        <div class="punch-row">
+          <% for (var p = 1; p <= card.stampsRequired; p++) { %>
+            <div class="punch-hole <%= p <= card.stamps ? 'filled' : '' %>"><%= p <= card.stamps ? '✓' : p %></div>
+          <% } %>
+        </div>
+
+        <div class="stamp-foot">
+          <div class="stamp-foot-reward">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 12v9H4v-9"/><path d="M2 7h20v5H2z"/><path d="M12 22V7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7Z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7Z"/></svg>
+            <span><%= card.rewardLabel %></span>
+          </div>
+          <div><%= card.stamps %> / <%= card.stampsRequired %></div>
+        </div>
+
+        <% if (isFull) { %>
+          <button type="button" class="loyalty-btn" onclick="openLoyaltyModal('<%= card.id %>')">Redeem Reward</button>
+        <% } %>
+      </div>

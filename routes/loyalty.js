@@ -16,6 +16,7 @@
 const express = require('express');
 const router = express.Router();
 const prisma = require('../lib/prisma');
+const { splitLoyaltyCards } = require('../lib/loyaltyCardSections');
 const fileStorage = require('../lib/fileStorage');
 const normalizeEmail = require('../lib/normalizeEmail');
 const { notifyLoyaltyCardFull } = require('../services/notificationService');
@@ -175,9 +176,7 @@ router.get('/account/loyalty', async (req, res) => {
     }),
   ]);
 
-  res.render('account-loyalty', {
-    customerEmail: customer?.email || '',
-    cards: cards
+  const visibleCards = cards
       .filter((c) => c.merchant.loyaltyProgram) // hide cards for a merchant that has since removed their program entirely
       .map((c) => {
         const program = c.merchant.loyaltyProgram;
@@ -193,7 +192,18 @@ router.get('/account/loyalty', async (req, res) => {
           rewardLabel: program.rewardLabel,
           design,
         };
-      }),
+      });
+
+  // Redeemable cards first -- see lib/loyaltyCardSections.js for why.
+  const { ready, inProgress } = splitLoyaltyCards(visibleCards);
+
+  res.render('account-loyalty', {
+    customerEmail: customer?.email || '',
+    // Kept for the "no cards at all" empty state, which is a different message
+    // from "no cards match that search".
+    cards: visibleCards,
+    readyCards: ready,
+    inProgressCards: inProgress,
   });
 });
 

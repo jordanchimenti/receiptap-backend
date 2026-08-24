@@ -201,39 +201,9 @@
           <div class="w-field"><label for="addressCountry">Country</label><input type="text" id="addressCountry" name="addressCountry" value="<%= merchant.addressCountry || '' %>" placeholder="Canada" /></div>
         </div>
     </div>
-    <div class="w-card panel">
-      <h2>Your profile</h2>
-      <p style="font-size:12.5px; color:var(--w-ink-soft); margin:-8px 0 14px; line-height:1.5;">About you, not the business. Never shown to customers.</p>
-      <div class="photo-row">
-        <% if (merchant.profilePhotoUrl) { %>
-          <img class="photo-avatar" src="<%= merchant.profilePhotoUrl %>" alt="Your photo" />
-        <% } else { %>
-          <div class="photo-avatar-placeholder"><%= (merchant.ownerName || merchant.businessName || '?').charAt(0) %></div>
-        <% } %>
-        <div class="photo-input-wrap">
-          <input type="file" name="profilePhoto" accept="image/png,image/jpeg,image/webp" />
-          <div class="photo-hint">PNG, JPG, or WEBP — up to 2MB.</div>
-        </div>
-      </div>
-      <div class="w-field"><label for="ownerName">Your name</label><input type="text" id="ownerName" name="ownerName" value="<%= merchant.ownerName || '' %>" placeholder="Your first and last name" /></div>
-      <div class="w-field"><label for="ownerPhone">Your phone (optional)</label><input type="text" id="ownerPhone" name="ownerPhone" value="<%= merchant.ownerPhone || '' %>" placeholder="416-555-1234" /></div>
-    </div>
 
     <div class="save-bar"><button type="submit" class="w-btn">Save changes</button></div>
     </form>
-
-    <div class="w-card panel">
-      <h2>Change password</h2>
-      <% if (passwordError) { %><div class="banner error"><%= passwordError %></div><% } %>
-      <% if (passwordSuccess) { %><div class="banner success">Password changed.</div><% } %>
-      <form method="POST" action="/dashboard/settings/account/password">
-        <input type="hidden" name="redirectTo" value="/account/business/settings" />
-        <div class="w-field"><label for="currentPassword">Current password</label><input type="password" id="currentPassword" name="currentPassword" required /></div>
-        <div class="w-field"><label for="newPassword">New password</label><input type="password" id="newPassword" name="newPassword" required minlength="8" /></div>
-        <div class="w-field"><label for="confirmNewPassword">Confirm new password</label><input type="password" id="confirmNewPassword" name="confirmNewPassword" required minlength="8" /></div>
-        <button type="submit" class="w-btn" style="margin-top:4px;">Change password</button>
-      </form>
-    </div>
 
     <div class="w-card panel">
       <h2>POS connection</h2>

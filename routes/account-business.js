@@ -378,22 +378,28 @@ router.get('/account/business/settings', requireAuth, async (req, res) => {
     businessProfileError: req.query.businessProfileError || null,
     businessProfileSuccess: req.query.businessProfileSuccess === '1',
     addressSuccess: req.query.addressSuccess === '1',
-    passwordError: req.query.passwordError || null,
-    passwordSuccess: req.query.passwordSuccess === '1',
     posError: req.query.posError || null,
     disconnectAllSuccess: req.query.disconnectAllSuccess === '1',
     purgeDays: DEACTIVATED_MERCHANT_PURGE_DAYS,
   });
 });
 
-// This page's contents were folded into Business Settings -- it was a second
-// place to edit Merchant.email and the merchant's own profile, which meant two
-// pages writing the same columns. Kept as a redirect rather than deleted: the
-// path is bookmarkable, and several POST handlers still send `redirectTo` here
-// after saving.
-router.get('/account/business/account', requireAuth, (req, res) => {
-  const qs = req.originalUrl.includes('?') ? '?' + req.originalUrl.split('?')[1] : '';
-  res.redirect('/account/business/settings' + qs);
+// Profile Settings: photo, owner name, owner phone, password, and log out --
+// everything that's about the PERSON running the account rather than the
+// business itself. Used to be folded into Business Settings (a redirect
+// sat here for a while, when that was the only place these fields lived),
+// but that meant "who am I" and "what's my business" were one long page.
+// Split back out, listed above Business Settings on the More menu
+// (views/business-more.ejs).
+router.get('/account/business/account', requireAuth, async (req, res) => {
+  const merchant = await prisma.merchant.findUnique({ where: { id: req.session.merchantId } });
+  res.render('business-account', {
+    merchant,
+    profileError: req.query.profileError || null,
+    profileSuccess: req.query.profileSuccess === '1',
+    passwordError: req.query.passwordError || null,
+    passwordSuccess: req.query.passwordSuccess === '1',
+  });
 });
 
 // Danger Zone's "Disconnect all tiles" -- fully releases every ReceipTap

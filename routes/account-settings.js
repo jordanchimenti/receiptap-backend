@@ -77,32 +77,38 @@ router.get('/dashboard/settings/account', requireAuth, async (req, res) => {
   });
 });
 
-// POST /dashboard/settings/account/profile — the wallet's generic Settings
-// page's "Merchant Profile" panel: photo, owner name, login email, and an
-// optional phone number. Distinct from POST .../business above, which edits
-// businessName -- this route never touches it. Reuses the same
-// email-uniqueness check that route already has, since both write to the
-// same Merchant.email column.
+// POST /dashboard/settings/account/profile — photo, owner name, an optional
+// phone number, and (on the pages that still render it) login email.
+// Distinct from POST .../business above, which edits businessName -- this
+// route never touches it.
+//
+// email is handled only if the form actually included the field --
+// views/business-account.ejs deliberately doesn't (login email lives on
+// Business Settings' own card there), and posting without it must not trip
+// "Email is required." for a field this form never asked about. Same
+// 'field' in req.body reasoning as POST .../business-all below.
 router.post('/dashboard/settings/account/profile', requireAuth, handleProfilePhotoUpload, async (req, res) => {
   const { ownerName, email, ownerPhone, redirectTo } = req.body;
   const destination = settingsRedirectTarget(redirectTo);
+  const data = { ownerName: ownerName || null, ownerPhone: ownerPhone || null };
 
-  if (!email) {
-    return res.redirect(`${destination}?profileError=` + encodeURIComponent('Email is required.'));
-  }
-  const normalizedEmail = email.trim().toLowerCase();
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
-    return res.redirect(`${destination}?profileError=` + encodeURIComponent('Enter a valid email address.'));
+  if ('email' in req.body) {
+    if (!email) {
+      return res.redirect(`${destination}?profileError=` + encodeURIComponent('Email is required.'));
+    }
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+      return res.redirect(`${destination}?profileError=` + encodeURIComponent('Enter a valid email address.'));
+    }
+    const existing = await prisma.merchant.findFirst({
+      where: { email: normalizedEmail, NOT: { id: req.session.merchantId } },
+    });
+    if (existing) {
+      return res.redirect(`${destination}?profileError=` + encodeURIComponent('That email is already in use by another account.'));
+    }
+    data.email = normalizedEmail;
   }
 
-  const existing = await prisma.merchant.findFirst({
-    where: { email: normalizedEmail, NOT: { id: req.session.merchantId } },
-  });
-  if (existing) {
-    return res.redirect(`${destination}?profileError=` + encodeURIComponent('That email is already in use by another account.'));
-  }
-
-  const data = { ownerName: ownerName || null, email: normalizedEmail, ownerPhone: ownerPhone || null };
   if (req.file) {
     data.profilePhotoUrl = await fileStorage.put('profile-photos', req.file, { prefix: req.session.merchantId });
   }

@@ -1,0 +1,109 @@
+<!-- views/business-account.ejs -->
+<!-- Profile Settings: who's running the account, not what the business is.
+     Split out of views/business-settings.ejs on purpose -- "Your profile"
+     (photo/name/phone), password, and log out are about the PERSON, while
+     everything on Business Settings prints on a receipt or describes the
+     business itself. See GET /account/business/account,
+     routes/account-business.js, for why this URL used to just redirect
+     there.
+
+     Two separate forms, not one merged like Business Settings' -- "Your
+     profile" needs multipart/form-data for the photo upload, and mixing
+     that with the password fields would mean uploading a photo re-sends
+     (empty) password fields, and vice versa. -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Profile Settings - ReceipTap Business</title>
+  <link rel="stylesheet" href="/css/receiptap.css" />
+  <%- include('partials/wallet-dark-theme') %>
+  <style>
+    .biz-header { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+    .panel { padding: 18px; margin-bottom: 16px; }
+    .panel h2 { font-size: 14.5px; margin: 0 0 14px; }
+    .w-field { margin-bottom: 14px; }
+    .w-field:last-child { margin-bottom: 0; }
+    .w-field label { display: block; font-size: 12.5px; font-weight: 600; color: var(--w-ink-soft); margin-bottom: 6px; }
+    .w-field input {
+      width: 100%; box-sizing: border-box; background: var(--w-card-raised); border: 1px solid var(--w-line);
+      color: var(--w-ink); border-radius: 10px; padding: 11px 13px; font-size: 14.5px; font-family: inherit;
+    }
+    .banner { padding: 11px 14px; border-radius: 10px; font-size: 13px; margin-bottom: 14px; }
+    .banner.success { background: rgba(5,107,254,0.12); border: 1px solid rgba(5,107,254,0.35); color: var(--w-accent); }
+    .banner.error { background: rgba(255,69,58,0.12); border: 1px solid rgba(255,69,58,0.35); color: var(--w-danger); }
+    .photo-row { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; }
+    .photo-avatar { width: 56px; height: 56px; border-radius: 50%; object-fit: cover; flex: none; }
+    .photo-avatar-placeholder {
+      width: 56px; height: 56px; border-radius: 50%; flex: none; display: flex; align-items: center;
+      justify-content: center; background: var(--w-accent-wash); color: var(--w-accent);
+      font-family: var(--font-display); font-size: 22px; font-weight: 700; text-transform: uppercase;
+    }
+    .photo-input-wrap { flex: 1; min-width: 0; }
+    .photo-input-wrap input[type="file"] { font-size: 12.5px; color: var(--w-ink-soft); max-width: 100%; }
+    .photo-hint { font-size: 11.5px; color: var(--w-ink-soft); margin-top: 5px; }
+    .logout-card { padding: 0; }
+    .logout-btn {
+      width: 100%; background: none; border: none; padding: 16px; cursor: pointer; font-family: inherit;
+      font-size: 14.5px; font-weight: 600; color: var(--w-danger);
+    }
+  </style>
+</head>
+<body>
+  <div class="w-shell">
+    <div class="biz-header">
+      <a href="/account/business/more" class="w-btn-icon" aria-label="Back">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      </a>
+      <div>
+        <div class="w-eyebrow">Business</div>
+        <h1 class="w-title" style="font-size:20px;">Profile Settings</h1>
+      </div>
+    </div>
+
+    <div class="w-card panel">
+      <h2>Your profile</h2>
+      <% if (profileError) { %><div class="banner error"><%= profileError %></div><% } %>
+      <% if (profileSuccess) { %><div class="banner success">Profile updated.</div><% } %>
+      <p style="font-size:12.5px; color:var(--w-ink-soft); margin:-8px 0 14px; line-height:1.5;">About you, not the business. Never shown to customers.</p>
+      <form method="POST" action="/dashboard/settings/account/profile" enctype="multipart/form-data">
+        <input type="hidden" name="redirectTo" value="/account/business/account" />
+        <div class="photo-row">
+          <% if (merchant.profilePhotoUrl) { %>
+            <img class="photo-avatar" src="<%= merchant.profilePhotoUrl %>" alt="Your photo" />
+          <% } else { %>
+            <div class="photo-avatar-placeholder"><%= (merchant.ownerName || merchant.businessName || '?').charAt(0) %></div>
+          <% } %>
+          <div class="photo-input-wrap">
+            <input type="file" name="profilePhoto" accept="image/png,image/jpeg,image/webp" />
+            <div class="photo-hint">PNG, JPG, or WEBP — up to 2MB.</div>
+          </div>
+        </div>
+        <div class="w-field"><label for="ownerName">Your name</label><input type="text" id="ownerName" name="ownerName" value="<%= merchant.ownerName || '' %>" placeholder="Your first and last name" /></div>
+        <div class="w-field"><label for="ownerPhone">Your phone (optional)</label><input type="text" id="ownerPhone" name="ownerPhone" value="<%= merchant.ownerPhone || '' %>" placeholder="416-555-1234" /></div>
+        <button type="submit" class="w-btn" style="margin-top:14px;">Save profile</button>
+      </form>
+    </div>
+
+    <div class="w-card panel">
+      <h2>Change password</h2>
+      <% if (passwordError) { %><div class="banner error"><%= passwordError %></div><% } %>
+      <% if (passwordSuccess) { %><div class="banner success">Password changed.</div><% } %>
+      <form method="POST" action="/dashboard/settings/account/password">
+        <input type="hidden" name="redirectTo" value="/account/business/account" />
+        <div class="w-field"><label for="currentPassword">Current password</label><input type="password" id="currentPassword" name="currentPassword" required /></div>
+        <div class="w-field"><label for="newPassword">New password</label><input type="password" id="newPassword" name="newPassword" required minlength="8" /></div>
+        <div class="w-field"><label for="confirmNewPassword">Confirm new password</label><input type="password" id="confirmNewPassword" name="confirmNewPassword" required minlength="8" /></div>
+        <button type="submit" class="w-btn" style="margin-top:4px;">Change password</button>
+      </form>
+    </div>
+
+    <div class="w-card logout-card">
+      <form method="POST" action="/logout" style="margin:0;">
+        <button type="submit" class="logout-btn">Log out</button>
+      </form>
+    </div>
+  </div>
+</body>
+</html>

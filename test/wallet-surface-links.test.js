@@ -27,11 +27,16 @@ const DOWNLOAD_ENDPOINTS = /^\/dashboard\/[a-z-]+\/(pdf-)?export\b/;
 //                        '/account/business/pos' (routes/account-settings.js)
 //   business-all      -- settingsRedirectTarget(redirectTo), WALLET_SETTINGS_PATHS
 //   password          -- same settingsRedirectTarget round-trip
+//   profile           -- same settingsRedirectTarget round-trip; posted from
+//                        views/business-account.ejs, redirectTo
+//                        '/account/business/account', which is itself in
+//                        WALLET_SETTINGS_PATHS
 //   deactivate        -- destroys the session and redirects to /login
 const ROUND_TRIPS_SURFACE = new Set([
   '/dashboard/settings/account/disconnect-pos',
   '/dashboard/settings/account/business-all',
   '/dashboard/settings/account/password',
+  '/dashboard/settings/account/profile',
   '/dashboard/settings/account/deactivate',
 ]);
 

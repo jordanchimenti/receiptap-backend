@@ -127,22 +127,50 @@
         <div class="w-field-row" style="display:flex; gap:10px;">
           <div class="w-field" style="flex:0 0 108px;">
             <label for="taxNumberLabel">Tax type</label>
-            <input type="text" id="taxNumberLabel" name="taxNumberLabel" value="<%= receiptTheme ? (receiptTheme.taxNumberLabel || '') : '' %>" placeholder="GST/HST" maxlength="20" />
+            <select id="taxNumberLabel" name="taxNumberLabel">
+              <option value="" <%= (!taxNumberLabelIsCustom && !(receiptTheme ? (receiptTheme.taxNumberLabel || '') : '')) ? 'selected' : '' %>>Default</option>
+              <% taxNumberLabelGroups.forEach(function (group) { %>
+                <optgroup label="<%= group.region %>">
+                  <% group.labels.forEach(function (opt) { %>
+                    <option value="<%= opt %>" <%= (!taxNumberLabelIsCustom && (receiptTheme ? (receiptTheme.taxNumberLabel || '') : '') === opt) ? 'selected' : '' %>><%= opt %></option>
+                  <% }); %>
+                </optgroup>
+              <% }); %>
+              <option value="<%= customTaxLabelValue %>" <%= taxNumberLabelIsCustom ? 'selected' : '' %>>Custom…</option>
+            </select>
           </div>
           <div class="w-field" style="flex:1;">
             <label for="profileGstHst">Tax registration number</label>
             <input type="text" id="profileGstHst" name="gstHstNumber" value="<%= receiptTheme ? (receiptTheme.gstHstNumber || '') : '' %>" placeholder="123456789 RT0001" />
           </div>
         </div>
+        <div class="w-field tax-custom-field" id="taxNumberLabel-custom-wrap" data-for="taxNumberLabel" <%= taxNumberLabelIsCustom ? '' : 'hidden' %>>
+          <label for="taxNumberLabelCustom">Custom tax type</label>
+          <input type="text" id="taxNumberLabelCustom" name="taxNumberLabelCustom" maxlength="20" value="<%= taxNumberLabelIsCustom ? (receiptTheme ? (receiptTheme.taxNumberLabel || '') : '') : '' %>" placeholder="e.g. TPS + TVQ" />
+        </div>
         <div class="w-field-row" style="display:flex; gap:10px;">
           <div class="w-field" style="flex:0 0 108px;">
             <label for="taxNumber2Label">Second type</label>
-            <input type="text" id="taxNumber2Label" name="taxNumber2Label" value="<%= receiptTheme ? (receiptTheme.taxNumber2Label || '') : '' %>" placeholder="QST" maxlength="20" />
+            <select id="taxNumber2Label" name="taxNumber2Label">
+              <option value="" <%= (!taxNumber2LabelIsCustom && !(receiptTheme ? (receiptTheme.taxNumber2Label || '') : '')) ? 'selected' : '' %>>Default</option>
+              <% taxNumberLabelGroups.forEach(function (group) { %>
+                <optgroup label="<%= group.region %>">
+                  <% group.labels.forEach(function (opt) { %>
+                    <option value="<%= opt %>" <%= (!taxNumber2LabelIsCustom && (receiptTheme ? (receiptTheme.taxNumber2Label || '') : '') === opt) ? 'selected' : '' %>><%= opt %></option>
+                  <% }); %>
+                </optgroup>
+              <% }); %>
+              <option value="<%= customTaxLabelValue %>" <%= taxNumber2LabelIsCustom ? 'selected' : '' %>>Custom…</option>
+            </select>
           </div>
           <div class="w-field" style="flex:1;">
             <label for="taxNumber2">Second registration number</label>
             <input type="text" id="taxNumber2" name="taxNumber2" value="<%= receiptTheme ? (receiptTheme.taxNumber2 || '') : '' %>" placeholder="Only if you're registered for two" />
           </div>
+        </div>
+        <div class="w-field tax-custom-field" id="taxNumber2Label-custom-wrap" data-for="taxNumber2Label" <%= taxNumber2LabelIsCustom ? '' : 'hidden' %>>
+          <label for="taxNumber2LabelCustom">Custom second type</label>
+          <input type="text" id="taxNumber2LabelCustom" name="taxNumber2LabelCustom" maxlength="20" value="<%= taxNumber2LabelIsCustom ? (receiptTheme ? (receiptTheme.taxNumber2Label || '') : '') : '' %>" placeholder="e.g. TPS + TVQ" />
         </div>
         <div class="field-hint">Both print on every receipt you issue. If you're registered in Quebec you'll have a QST number as well as GST/HST — your customers need both to claim their tax back.</div>
         <div class="w-field">
@@ -287,6 +315,24 @@
     function closeDisconnectAllModal() {
       document.getElementById('disconnect-all-modal').classList.remove('open');
     }
+
+    // Reveal the free-text box only while its dropdown sits on "Custom…".
+    // Server-side, resolveTaxNumberLabel() reads the same pair, so a merchant
+    // who picks Custom and types nothing saves a blank rather than the
+    // sentinel value.
+    Array.prototype.forEach.call(
+      document.querySelectorAll('.tax-custom-field'),
+      function (wrap) {
+        var select = document.getElementById(wrap.dataset.for);
+        if (!select) return;
+        var sync = function () {
+          var isCustom = select.value === '<%= customTaxLabelValue %>';
+          wrap.hidden = !isCustom;
+          if (isCustom) wrap.querySelector('input').focus();
+        };
+        select.addEventListener('change', sync);
+      }
+    );
   </script>
 </body>
 </html>

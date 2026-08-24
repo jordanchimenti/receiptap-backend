@@ -36,6 +36,11 @@ const { getBaseUrl, getSelfUrl } = require('../lib/baseUrl');
 const QRCode = require('qrcode');
 const { createTestReceiptToken } = require('../lib/testReceiptToken');
 const {
+  TAX_NUMBER_LABEL_GROUPS,
+  CUSTOM_TAX_LABEL,
+  isCustomTaxNumberLabel,
+} = require('../lib/taxLabels');
+const {
   createCheckoutSession,
   createPortalSession,
   createSetupIntent,
@@ -354,9 +359,20 @@ router.get('/account/business/settings', requireAuth, async (req, res) => {
     prisma.merchant.findUnique({ where: { id: req.session.merchantId } }),
     prisma.receiptTheme.findUnique({ where: { merchantId: req.session.merchantId } }),
   ]);
+  const taxNumberLabel = (receiptTheme && receiptTheme.taxNumberLabel) || '';
+  const taxNumber2Label = (receiptTheme && receiptTheme.taxNumber2Label) || '';
   res.render('business-settings', {
     merchant,
     receiptTheme,
+    // Tax type is a dropdown rather than free text, same reasoning as the
+    // Receipt design page's tax label: the common regimes spelled one way.
+    // "Custom" stays for anything the list doesn't cover, and a label the
+    // merchant already saved that isn't a preset opens the dropdown there
+    // with their wording intact instead of silently becoming something else.
+    taxNumberLabelGroups: TAX_NUMBER_LABEL_GROUPS,
+    customTaxLabelValue: CUSTOM_TAX_LABEL,
+    taxNumberLabelIsCustom: isCustomTaxNumberLabel(taxNumberLabel),
+    taxNumber2LabelIsCustom: isCustomTaxNumberLabel(taxNumber2Label),
     businessError: req.query.businessError || null,
     businessSuccess: req.query.businessSuccess === '1',
     businessProfileError: req.query.businessProfileError || null,

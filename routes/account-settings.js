@@ -7,6 +7,7 @@ const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcrypt');
 const prisma = require('../lib/prisma');
+const { resolveTaxNumberLabel } = require('../lib/taxLabels');
 const { stripe } = require('../services/stripeService');
 const { uploadProfilePhoto } = require('./billing');
 const { DEACTIVATED_MERCHANT_PURGE_DAYS } = require('../config/retention');
@@ -193,9 +194,19 @@ router.post('/dashboard/settings/account/business-all', requireAuth, handleProfi
   if ('gstHstNumber' in b) themeData.gstHstNumber = b.gstHstNumber || null;
   // Label and second registration number travel with it -- see the comment on
   // ReceiptTheme.taxNumber2 for why one slot wasn't enough.
-  if ('taxNumberLabel' in b) themeData.taxNumberLabel = (b.taxNumberLabel || '').trim().slice(0, 20) || null;
+  // Both labels arrive from a dropdown now. resolveTaxNumberLabel turns the
+  // "Custom…" sentinel into whatever was typed beside it, and leaves a preset
+  // alone -- so picking Custom and typing nothing stores a blank rather than
+  // printing "__custom__" on every receipt.
+  if ('taxNumberLabel' in b) {
+    themeData.taxNumberLabel =
+      resolveTaxNumberLabel(b.taxNumberLabel, b.taxNumberLabelCustom).slice(0, 20) || null;
+  }
   if ('taxNumber2' in b) themeData.taxNumber2 = (b.taxNumber2 || '').trim() || null;
-  if ('taxNumber2Label' in b) themeData.taxNumber2Label = (b.taxNumber2Label || '').trim().slice(0, 20) || null;
+  if ('taxNumber2Label' in b) {
+    themeData.taxNumber2Label =
+      resolveTaxNumberLabel(b.taxNumber2Label, b.taxNumber2LabelCustom).slice(0, 20) || null;
+  }
 
   await Promise.all([
     prisma.merchant.update({ where: { id: merchantId }, data: merchantData }),

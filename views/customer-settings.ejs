@@ -76,18 +76,24 @@
       </div>
     </div>
 
+    <% if (prefsSuccess) { %><div class="success-note" style="margin-bottom:14px;">Settings saved.</div><% } %>
+
+    <%# Profile, Saving receipts and Reward emails are one form with one save.
+        Three separate saves meant three round trips to change three settings,
+        and a shopper who edited all three and pressed the last button silently
+        lost the first two. The sticky .save-bar (partials/wallet-dark-theme)
+        is only sound because these three are the page's ONLY general-purpose
+        form -- password, recognition and delete stay separate below, since a
+        floating "Save changes" can't stand for "delete my account". %>
+    <form method="POST" action="/account/settings/preferences">
     <div class="w-card settings-card">
       <h2>Profile</h2>
       <p class="sub"><%= customer.email %></p>
-      <% if (profileSuccess) { %><div class="success-note">Name updated.</div><% } %>
       <% if (profileError) { %><div class="w-error"><%= profileError %></div><% } %>
-      <form method="POST" action="/account/settings/profile">
-        <div class="w-field">
-          <label>Display name</label>
-          <input type="text" name="name" value="<%= customer.name || '' %>" placeholder="Your name" />
-        </div>
-        <button type="submit" class="w-btn">Save name</button>
-      </form>
+      <div class="w-field">
+        <label>Display name</label>
+        <input type="text" name="name" value="<%= customer.name || '' %>" placeholder="Your name" />
+      </div>
     </div>
 
     <%# Saving receipts. Sits above Card recognition because it applies to
@@ -99,14 +105,10 @@
         When you tap a ReceipTap and you're signed in, the receipt saves to your wallet on its own.
         Turn this off if you'd rather choose each time with the Save button.
       </p>
-      <% if (autoSaveSuccess) { %><div class="success-note">Saved.</div><% } %>
-      <form method="POST" action="/account/settings/auto-save" style="margin:0;">
-        <div class="pref-row">
-          <label for="autoSaveOnTap">Save receipts when I tap</label>
-          <span class="sw"><input type="checkbox" id="autoSaveOnTap" name="autoSaveOnTap" <%= customer.autoSaveOnTap ? 'checked' : '' %> /></span>
-        </div>
-        <button type="submit" class="w-btn" style="margin-top:14px;">Save preference</button>
-      </form>
+      <div class="pref-row">
+        <label for="autoSaveOnTap">Save receipts when I tap</label>
+        <span class="sw"><input type="checkbox" id="autoSaveOnTap" name="autoSaveOnTap" <%= customer.autoSaveOnTap ? 'checked' : '' %> /></span>
+      </div>
     </div>
 
     <%# Stamp card emails. Only the EMAIL is optional -- the Alerts tab always
@@ -118,15 +120,14 @@
         When a stamp card fills up, we email you which reward is waiting and where.
         Turn this off and you'll still see it in Alerts — you just won't get the email.
       </p>
-      <% if (loyaltyEmailsSuccess) { %><div class="success-note">Saved.</div><% } %>
-      <form method="POST" action="/account/settings/reward-emails" style="margin:0;">
-        <div class="pref-row">
-          <label for="loyaltyEmails">Email me when a card is full</label>
-          <span class="sw"><input type="checkbox" id="loyaltyEmails" name="loyaltyEmails" <%= customer.loyaltyEmails ? 'checked' : '' %> /></span>
-        </div>
-        <button type="submit" class="w-btn" style="margin-top:14px;">Save preference</button>
-      </form>
+      <div class="pref-row">
+        <label for="loyaltyEmails">Email me when a card is full</label>
+        <span class="sw"><input type="checkbox" id="loyaltyEmails" name="loyaltyEmails" <%= customer.loyaltyEmails ? 'checked' : '' %> /></span>
+      </div>
     </div>
+
+    <div class="save-bar"><button type="submit" class="w-btn">Save changes</button></div>
+    </form>
 
     <%# Cross-merchant recognition. Shown only when a link actually exists --
         a shopper who has never consented shouldn't be told about a feature

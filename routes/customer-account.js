@@ -1040,10 +1040,10 @@ router.get('/account/settings', requireCustomerAuth, async (req, res) => {
   res.render('customer-settings', {
     customer,
     recognitionLinks,
-    autoSaveSuccess: req.query.autoSaveSuccess === '1',
-    loyaltyEmailsSuccess: req.query.loyaltyEmailsSuccess === '1',
+    // One save for the whole preferences form now -- see the comment above the
+    // form in views/customer-settings.ejs.
+    prefsSuccess: req.query.saved === '1',
     profileError: req.query.profileError || null,
-    profileSuccess: req.query.profileSuccess === '1',
     passwordError: req.query.passwordError || null,
     passwordSuccess: req.query.passwordSuccess === '1',
     recognitionRevoked: req.query.recognitionRevoked === '1',
@@ -1053,23 +1053,23 @@ router.get('/account/settings', requireCustomerAuth, async (req, res) => {
 // POST /account/settings/auto-save — the shopper choosing whether tapping a
 // puck saves the receipt by itself. Posted from a form rather than toggled
 // live, so the stored value always matches what they last confirmed.
-router.post('/account/settings/auto-save', requireCustomerAuth, async (req, res) => {
+// Profile name and both notification preferences save together -- the page
+// presents them as one form with one button, so splitting the write across
+// three endpoints would just be three round trips and three chances for one
+// of them to fail on its own.
+//
+// Both checkboxes are read as "present means on": an unchecked box submits
+// nothing at all, which is exactly how a single form expresses false.
+router.post('/account/settings/preferences', requireCustomerAuth, async (req, res) => {
   await prisma.customer.update({
     where: { id: req.session.customerId },
-    data: { autoSaveOnTap: req.body.autoSaveOnTap === 'on' },
+    data: {
+      name: (req.body.name || '').trim() || null,
+      autoSaveOnTap: req.body.autoSaveOnTap === 'on',
+      loyaltyEmails: req.body.loyaltyEmails === 'on',
+    },
   });
-  res.redirect('/account/settings?autoSaveSuccess=1');
-});
-
-// POST /account/settings/reward-emails — the email half of a full-card alert.
-// The Notification row is written regardless (services/notificationService.js);
-// this only governs whether we also email about it.
-router.post('/account/settings/reward-emails', requireCustomerAuth, async (req, res) => {
-  await prisma.customer.update({
-    where: { id: req.session.customerId },
-    data: { loyaltyEmails: req.body.loyaltyEmails === 'on' },
-  });
-  res.redirect('/account/settings?loyaltyEmailsSuccess=1');
+  res.redirect('/account/settings?saved=1');
 });
 
 // POST /account/settings/recognition/revoke — the shopper turning off
@@ -1088,12 +1088,6 @@ router.post('/account/settings/recognition/revoke', requireCustomerAuth, async (
     await revokeIdentifierByHash(shopperId, row.identifierType, row.identifierValueHash, row.sourcePlatform);
   }
   res.redirect('/account/settings?recognitionRevoked=1');
-});
-
-router.post('/account/settings/profile', requireCustomerAuth, async (req, res) => {
-  const { name } = req.body;
-  await prisma.customer.update({ where: { id: req.session.customerId }, data: { name: (name || '').trim() || null } });
-  res.redirect('/account/settings?profileSuccess=1');
 });
 
 // A customer who signed up via Google/Apple/Microsoft has no passwordHash

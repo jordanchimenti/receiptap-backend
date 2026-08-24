@@ -52,6 +52,16 @@
     /* Section headings sit between cards, so the gap above is larger than the
        gap below -- the heading should read as belonging to the cards under it
        rather than floating between two groups. First one loses the top gap. */
+    /* Same pill tabs as views/business-emails.ejs, so the two filters in the
+       app look like the same control. Those are links (server-filtered); these
+       are buttons, because the filtering happens here on the page. */
+    .tabs { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+    .tab-btn {
+      font-size: 12.5px; font-weight: 700; padding: 8px 14px; border-radius: 999px;
+      border: 1px solid var(--w-line); background: var(--w-card-raised);
+      color: var(--w-ink-soft); font-family: inherit; cursor: pointer;
+    }
+    .tab-btn.active { background: var(--w-accent); border-color: var(--w-accent); color: #fff; }
     .rewards-section { margin: 0; }
     .rewards-section + .rewards-section { margin-top: 26px; }
     .rewards-section-title {
@@ -159,6 +169,20 @@
         </div>
       </div>
 
+      <%# Client-side, unlike the server-rendered tabs on business-emails.ejs:
+          every card is already on the page (loyalty cards aren't paginated),
+          so filtering here costs no round trip and composes with the search
+          box -- a card shows only if its group is active AND it matches the
+          query. Defaults to All so the page never opens hiding something. %>
+      <div class="tabs" role="group" aria-label="Filter cards">
+        <button type="button" class="tab-btn" data-tab="ready" aria-pressed="false"
+                onclick="setRewardsTab('ready')">Claim rewards (<%= readyCards.length %>)</button>
+        <button type="button" class="tab-btn" data-tab="progress" aria-pressed="false"
+                onclick="setRewardsTab('progress')">In progress (<%= inProgressCards.length %>)</button>
+        <button type="button" class="tab-btn active" data-tab="all" aria-pressed="true"
+                onclick="setRewardsTab('all')">All (<%= cards.length %>)</button>
+      </div>
+
       <div id="rewards-none" class="empty-state" style="display:none;">
         No cards match that business.
       </div>
@@ -168,7 +192,7 @@
           are barely started. Each section is hidden by filterRewards() when the
           search empties it, so a heading never sits above nothing. %>
       <% if (readyCards.length > 0) { %>
-        <section class="rewards-section" data-rewards-section>
+        <section class="rewards-section" data-rewards-section data-group="ready">
           <h2 class="rewards-section-title">
             Ready to redeem
             <span class="rewards-section-count"><%= readyCards.length %></span>
@@ -180,7 +204,7 @@
       <% } %>
 
       <% if (inProgressCards.length > 0) { %>
-        <section class="rewards-section" data-rewards-section>
+        <section class="rewards-section" data-rewards-section data-group="progress">
           <h2 class="rewards-section-title">
             Collecting stamps
             <span class="rewards-section-count"><%= inProgressCards.length %></span>
@@ -219,6 +243,17 @@
     // Card filtering. Matches anywhere in the business name, not just the
     // start, because people search for the word they remember ("coffee")
     // rather than what the shop is filed under ("The Coffee House").
+    // The whole visibility rule, kept as one pure function so it can be tested
+    // without a DOM (test/loyalty-card-filter.test.js extracts and runs this
+    // exact source). Two filters, one decision: the card's group has to be in
+    // the active tab AND its name has to match the query.
+    function rewardCardMatches(group, merchantName, tab, query) {
+      var inTab = tab === 'all' || group === tab;
+      if (!inTab) return false;
+      if (!query) return true;
+      return (merchantName || '').indexOf(query) !== -1;
+    }
+
     function filterRewards() {
       var box = document.getElementById('rewards-search');
       if (!box) return;
@@ -227,24 +262,55 @@
       wrap.classList.toggle('searching', q.length > 0);
 
       var shown = 0;
-      document.querySelectorAll('.loyalty-card').forEach(function (el) {
-        var hit = !q || (el.dataset.merchant || '').indexOf(q) !== -1;
-        el.style.display = hit ? '' : 'none';
-        if (hit) shown++;
+      document.querySelectorAll('[data-rewards-section]').forEach(function (section) {
+        // Two independent filters, one visibility decision: the card's group
+        // has to be in the active tab AND its name has to match the query.
+        var group = section.dataset.group;
+        var visibleHere = 0;
+
+        section.querySelectorAll('.loyalty-card').forEach(function (el) {
+          var hit = rewardCardMatches(group, el.dataset.merchant || '', activeRewardsTab, q);
+          el.style.display = hit ? '' : 'none';
+          if (hit) visibleHere++;
+        });
+
+        // A section whose every card just got filtered out would otherwise
+        // leave its heading and count stranded above empty space.
+        section.style.display = visibleHere ? '' : 'none';
+        shown += visibleHere;
       });
 
-      // A section whose every card just got filtered out would otherwise leave
-      // its heading and count stranded above empty space.
-      document.querySelectorAll('[data-rewards-section]').forEach(function (section) {
-        var visible = Array.prototype.filter.call(
-          section.querySelectorAll('.loyalty-card'),
-          function (el) { return el.style.display !== 'none'; }
-        ).length;
-        section.style.display = visible ? '' : 'none';
+      // Say which filter emptied the list, rather than one message for both.
+      // An untyped box that matches nothing means they have no cards at all,
+      // which the page already says elsewhere -- so search only speaks up once
+      // they've actually typed.
+      var note = document.getElementById('rewards-none');
+      if (shown > 0) {
+        note.style.display = 'none';
+      } else if (q) {
+        note.textContent = 'No cards match that business.';
+        note.style.display = '';
+      } else if (activeRewardsTab === 'ready') {
+        note.textContent = 'No cards are full yet — keep collecting.';
+        note.style.display = '';
+      } else if (activeRewardsTab === 'progress') {
+        note.textContent = 'No cards in progress — every card you have is ready to claim.';
+        note.style.display = '';
+      } else {
+        note.style.display = 'none';
+      }
+    }
+
+    var activeRewardsTab = 'all';
+
+    function setRewardsTab(tab) {
+      activeRewardsTab = tab;
+      document.querySelectorAll('.tab-btn').forEach(function (btn) {
+        var on = btn.dataset.tab === tab;
+        btn.classList.toggle('active', on);
+        btn.setAttribute('aria-pressed', on ? 'true' : 'false');
       });
-      // Only speak up once they've actually typed -- an empty box that
-      // matches nothing means they have no cards, which the page already says.
-      document.getElementById('rewards-none').style.display = (q && shown === 0) ? '' : 'none';
+      filterRewards();
     }
 
     function clearRewardsSearch() {

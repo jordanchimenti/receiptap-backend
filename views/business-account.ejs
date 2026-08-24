@@ -81,6 +81,10 @@
           </div>
         </div>
         <div class="w-field"><label for="ownerName">Your name</label><input type="text" id="ownerName" name="ownerName" value="<%= merchant.ownerName || '' %>" placeholder="Your first and last name" /></div>
+        <%# The email this account signed up and logs in with -- the same
+            Merchant.email column POST .../business-all edits from Business
+            Settings' own "Business profile" card, not a second one. %>
+        <div class="w-field"><label for="email">Email</label><input type="email" id="email" name="email" value="<%= merchant.email %>" required /></div>
         <div class="w-field"><label for="ownerPhone">Your phone (optional)</label><input type="text" id="ownerPhone" name="ownerPhone" value="<%= merchant.ownerPhone || '' %>" placeholder="416-555-1234" /></div>
         <button type="submit" class="w-btn" style="margin-top:14px;">Save profile</button>
       </form>

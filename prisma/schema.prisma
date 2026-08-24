@@ -651,6 +651,10 @@ model Customer {
   appleId      String?  @unique // set if they signed in with Apple instead of email
   microsoftId  String?  @unique // set if they signed in with Microsoft instead of email
   name         String?
+  // Optional personal contact number -- about the customer, not their
+  // receipts. Never printed anywhere or shown to a merchant; matches
+  // Merchant.ownerPhone's "about you" framing on the business side.
+  phone        String?
   createdAt    DateTime @default(now())
 
   // "Forgot password?" flow -- token is single-use (cleared on success) and

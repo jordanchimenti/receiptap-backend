@@ -1437,6 +1437,7 @@ router.post('/account/settings/preferences', requireCustomerAuth, async (req, re
     where: { id: req.session.customerId },
     data: {
       name: (req.body.name || '').trim() || null,
+      phone: (req.body.phone || '').trim() || null,
       autoSaveOnTap: req.body.autoSaveOnTap === 'on',
       loyaltyEmails: req.body.loyaltyEmails === 'on',
     },

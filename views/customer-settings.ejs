@@ -94,6 +94,10 @@
         <label>Display name</label>
         <input type="text" name="name" value="<%= customer.name || '' %>" placeholder="Your name" />
       </div>
+      <div class="w-field">
+        <label>Phone (optional)</label>
+        <input type="text" name="phone" value="<%= customer.phone || '' %>" placeholder="416-555-1234" />
+      </div>
     </div>
 
     <%# Saving receipts. Sits above Card recognition because it applies to

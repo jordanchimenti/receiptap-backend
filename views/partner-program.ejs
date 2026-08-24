@@ -46,10 +46,14 @@
     }
     /* The logo's "Receip" wordmark is dark navy, meant for a light background
        -- same paper-toned chip used on the auth pages so it stays legible. */
+    /* The spacing between the back button and the logo comes from this gap
+       now, not a margin on .nav-back -- with the two grouped, a margin would
+       add to the gap, and would still be there with no back button rendered. */
+    .nav-left { display: flex; align-items: center; gap: 12px; min-width: 0; }
     .nav-back {
       width: 36px; height: 36px; flex: none; border-radius: 50%; border: 1px solid var(--ms-line);
       background: var(--ms-card-raised); color: var(--ms-ink); cursor: pointer;
-      display: flex; align-items: center; justify-content: center; margin-right: 10px; font-family: inherit;
+      display: flex; align-items: center; justify-content: center; font-family: inherit;
     }
     .logo-chip { display: inline-block; background: var(--paper); border-radius: 10px; padding: 7px 12px; }
     .logo-chip img { display: block; height: 24px; }
@@ -226,12 +230,18 @@
         the app. Running from the home screen there is no browser chrome and no
         back button, so the only way out was tapping the logo -- which nobody
         reads as "back". Same dead end the scanned-receipt viewer had. %>
-    <% if (showBack) { %>
-      <button type="button" class="nav-back" onclick="goBack()" aria-label="Back">
-        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M15 18l-6-6 6-6"/></svg>
-      </button>
-    <% } %>
-    <a href="<%= isMerchant ? dashboardPath : '/' %>" class="logo-chip"><img src="/images/receiptap-logo.png" alt="ReceipTap" /></a>
+    <%# Back button and logo travel together as one left-hand group. The nav is
+        justify-content: space-between, so as three separate children the logo
+        was pushed into the middle of the bar. Grouped, it sits beside the back
+        button -- and still sits left when there's no back button to sit beside. %>
+    <div class="nav-left">
+      <% if (showBack) { %>
+        <button type="button" class="nav-back" onclick="goBack()" aria-label="Back">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M15 18l-6-6 6-6"/></svg>
+        </button>
+      <% } %>
+      <a href="<%= isMerchant ? dashboardPath : '/' %>" class="logo-chip"><img src="/images/receiptap-logo.png" alt="ReceipTap" /></a>
+    </div>
     <div class="nav-links">
       <% if (isMerchant) { %>
         <a href="<%= dashboardPath %>" class="nav-cta">Your referral link</a>

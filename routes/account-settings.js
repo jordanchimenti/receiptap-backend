@@ -18,6 +18,20 @@ function requireAuth(req, res, next) {
   next();
 }
 
+// Help & support. Replaces what used to be a bare mailto: link in the
+// sidebar (partials/dashboard-header.ejs) and on the billing page
+// (views/billing.ejs) -- see views/support.ejs for why that stranded people.
+router.get('/dashboard/support', requireAuth, async (req, res) => {
+  const merchant = await prisma.merchant.findUnique({
+    where: { id: req.session.merchantId },
+    select: { email: true },
+  });
+  res.render('support', {
+    supportEmail: 'support@receiptap.com',
+    merchantEmail: merchant?.email || '',
+  });
+});
+
 // Shared allowlist for "where should this settings action redirect back
 // to" -- same reasoning as lib/safeRedirect.js's safeNextPath, kept local
 // to this file since these are POST-body redirect targets, not the

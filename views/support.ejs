@@ -1,0 +1,85 @@
+<!-- views/support.ejs -->
+<!-- Help & support for the navy merchant dashboard. Replaces the mailto:
+     links in partials/dashboard-header.ejs's sidebar and views/billing.ejs
+     -- a raw mail link hands the merchant to their Mail app with nothing to
+     come back to, and does nothing visible if they have no mail account
+     configured on that device. Mirrors views/account-support.ejs, the
+     wallet's dark-theme equivalent built for the same reason, just in this
+     page's own navy/paper design system. -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Help &amp; Support - ReceipTap</title>
+  <link rel="stylesheet" href="/css/receiptap.css" />
+  <style>
+    .support-card { max-width: 480px; }
+    .support-card-body { padding: 18px 20px 20px; }
+    .support-card-body p { font-size: 13.5px; color: var(--ink-soft); line-height: 1.6; margin: 0 0 16px; }
+    .email-row {
+      display: flex; align-items: center; gap: 10px; background: var(--app-bg);
+      border: 1px solid var(--card-line); border-radius: 12px; padding: 13px 15px; margin-bottom: 16px;
+    }
+    .email-text {
+      flex: 1; min-width: 0; font-size: 14.5px; font-weight: 600; color: var(--ink);
+      overflow: hidden; text-overflow: ellipsis;
+    }
+    .copy-btn {
+      flex: none; border: none; cursor: pointer; border-radius: 999px; padding: 8px 14px;
+      background: var(--teal-wash); color: var(--teal-deep); font-size: 12.5px; font-weight: 700; font-family: inherit;
+    }
+    .support-note { font-size: 12px; color: var(--ink-soft); line-height: 1.55; margin-top: 16px; }
+  </style>
+</head>
+<body>
+  <%- include('partials/dashboard-header') %>
+
+  <div class="topbar">
+    <div>
+      <h1>Help &amp; support</h1>
+      <p class="sub">Setup questions, POS trouble, anything else.</p>
+    </div>
+  </div>
+
+  <div class="app-body">
+    <div class="card support-card">
+      <div class="card-head"><h2>Email us</h2></div>
+      <div class="support-card-body">
+        <p>Tell us what happened and we'll get back to you. If it's about a specific receipt or payout, the date and amount help us find it faster.</p>
+
+        <div class="email-row">
+          <div class="email-text" id="support-email"><%= supportEmail %></div>
+          <button type="button" class="copy-btn" id="copy-btn" onclick="copyEmail()">Copy</button>
+        </div>
+
+        <%# Still offered, just no longer the only route -- see the file
+            comment above. %>
+        <a class="btn btn-secondary" href="mailto:<%= supportEmail %>" style="width:auto; display:inline-block;">Open mail app</a>
+
+        <div class="support-note">Signed in as <%= merchantEmail %> — mention this address and we'll find your account faster.</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    async function copyEmail() {
+      var btn = document.getElementById('copy-btn');
+      var email = document.getElementById('support-email').textContent.trim();
+      try {
+        await navigator.clipboard.writeText(email);
+        btn.textContent = 'Copied';
+      } catch (err) {
+        // Clipboard access can be refused; selecting the text lets them copy
+        // it by hand rather than leaving them with a button that did nothing.
+        var range = document.createRange();
+        range.selectNodeContents(document.getElementById('support-email'));
+        window.getSelection().removeAllRanges();
+        window.getSelection().addRange(range);
+        btn.textContent = 'Select & copy';
+      }
+      setTimeout(function () { btn.textContent = 'Copy'; }, 2500);
+    }
+  </script>
+</body>
+</html>

@@ -101,7 +101,8 @@
   <div class="rail-help">
     <strong>Need a hand?</strong>
     <span>Setup questions, POS trouble, anything else.</span>
-    <a href="mailto:support@receiptap.com">Email support</a>
+    <%# A page, not a mailto: -- see views/support.ejs for why. %>
+    <a href="/dashboard/support">Help &amp; support</a>
   </div>
   <form method="POST" action="/logout" style="margin:6px 0 0;">
     <button type="submit" class="rail-help-out" style="width:100%;background:none;border:none;color:#7C8399;font-family:var(--font-body);font-size:12.5px;padding:9px;cursor:pointer;">Log out</button>

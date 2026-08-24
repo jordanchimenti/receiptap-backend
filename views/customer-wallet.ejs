@@ -24,14 +24,12 @@
     .summary-num.accent { color: var(--w-accent); }
     .summary-stat:last-child { text-align: right; }
 
-    .wallet-cta {
-      display: flex; align-items: center; justify-content: center; gap: 9px;
-      margin-top: 4px; padding: 14px; border-radius: 12px;
-      background: var(--w-card); border: 1px solid var(--w-line);
-      color: var(--w-ink); font-size: 14px; font-weight: 700; text-decoration: none;
-    }
-    .wallet-cta:hover { background: var(--w-card-raised); }
-    .wallet-cta-count { font-size: 12px; font-weight: 600; color: var(--w-ink-soft); }
+    /* Colour, radius and weight all come from .w-btn. This only adds the
+       breathing room either side -- 16px above so it clears the summary card,
+       22px below so it doesn't crowd the receipts under it. */
+    .wallet-cta { margin: 16px 0 22px; border-radius: 14px; }
+    /* --w-ink-soft is a grey for dark backgrounds; on brand blue it disappears. */
+    .wallet-cta-count { font-size: 12.5px; font-weight: 600; color: rgba(255,255,255,0.72); }
     .section-row { display: flex; align-items: center; justify-content: space-between; margin: 4px 0 12px; }
     .section-label { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--w-ink-soft); }
     .export-pill {
@@ -252,6 +250,18 @@
       </div>
     </div>
 
+    <%# The way into the full history, directly under the month summary: the
+        two things a customer wants off this page are "what did I spend" and
+        "show me everything". Built on .w-btn rather than a hand-rolled colour,
+        so it can't drift from the brand blue every other primary button uses. %>
+    <a class="w-btn wallet-cta" href="/account/wallet">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M3 7a2 2 0 0 1 2-2h13a1 1 0 0 1 1 1v2"/><path d="M3 7v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-3"/><path d="M21 11h-5a2 2 0 0 0 0 4h5v-4Z"/></svg>
+      My Wallet
+      <% if (totalReceiptCount > receiptsShown) { %>
+        <span class="wallet-cta-count">all <%= totalReceiptCount %></span>
+      <% } %>
+    </a>
+
     <% } %>
 
     <%# Search, category chips and the tax filter belong to the full wallet.
@@ -333,18 +343,6 @@
       </div>
 
       <%- include('partials/receipt-list', { receipts: receipts }) %>
-
-      <%# The way into the full history. Only on the home page -- the wallet
-          already IS the full history, so from there it would lead nowhere. %>
-      <% if (!isFullWallet) { %>
-        <a class="wallet-cta" href="/account/wallet">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 7a2 2 0 0 1 2-2h13a1 1 0 0 1 1 1v2"/><path d="M3 7v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-3"/><path d="M21 11h-5a2 2 0 0 0 0 4h5v-4Z"/></svg>
-          My Wallet
-          <% if (totalReceiptCount > receipts.length) { %>
-            <span class="wallet-cta-count">all <%= totalReceiptCount %></span>
-          <% } %>
-        </a>
-      <% } %>
     <% } %>
 
       <%# Setup progress sits BELOW the receipts, not above them. A checklist

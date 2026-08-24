@@ -11,8 +11,11 @@
 %>
 <div class="w-tabbar">
   <a class="w-tab <%= activeTab === 'receipts' ? 'active' : '' %>" href="/account/receipts">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 2h12v20l-3-2-3 2-3-2-3 2Z"/><path d="M9 8h6M9 12h6"/></svg>
-    Receipts
+    <%# The same icon and label the Business section's first tab uses
+        (partials/business-tab-bar.ejs), so the personal and business sides
+        name their home the same way. %>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg>
+    Dashboard
   </a>
   <a class="w-tab <%= activeTab === 'scan' ? 'active' : '' %>" href="/account/receipts/scan">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 8V6a2 2 0 0 1 2-2h2M4 16v2a2 2 0 0 0 2 2h2M20 8V6a2 2 0 0 0-2-2h-2M20 16v2a2 2 0 0 1-2 2h-2"/><circle cx="12" cy="12" r="3.5"/></svg>

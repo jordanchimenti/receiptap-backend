@@ -8,7 +8,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title><%= isFullWallet ? 'My Wallet' : 'Receipts' %> - ReceipTap</title>
+  <title><%= isFullWallet ? 'My Wallet' : 'Dashboard' %> - ReceipTap</title>
   <link rel="stylesheet" href="/css/receiptap.css" />
   <%- include('partials/wallet-dark-theme') %>
   <style>
@@ -186,7 +186,7 @@
     <div class="wallet-header">
       <div>
         <div class="w-eyebrow">ReceipTap</div>
-        <h1 class="w-title"><%= isFullWallet ? 'My Wallet' : 'Receipts' %></h1>
+        <h1 class="w-title"><%= isFullWallet ? 'My Wallet' : 'Dashboard' %></h1>
       </div>
       <%# Was a plain link to Settings. It's a menu now, because turning phone
           notifications back OFF had nowhere to live -- every surface could

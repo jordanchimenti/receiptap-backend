@@ -33,6 +33,7 @@ const {
   warrantySource,
 } = require('../lib/receiptWarranty');
 const { csvCell } = require('../lib/csvCell');
+const { generateTaxExportPDF } = require('../services/generateTaxExportPDF');
 const { receiptDateLabels } = require('../lib/receiptDateLabels');
 const { parseMoneyToCents, parseDateOrNull } = require('../lib/parseReceiptFields');
 const { findDuplicateReceipt } = require('../lib/findDuplicateReceipt');
@@ -1045,22 +1046,19 @@ router.post('/account/receipts/deductible-categories', requireCustomerAuth, asyn
   res.redirect('/account/wallet?deductible=1&rulesSaved=1');
 });
 
-// GET /account/receipts/export — CSV of whatever the wallet's current filters match
-//
-// Includes SCANNED receipts as well as tapped ones. It used to export only
-// transactions, so a customer who photographed their paper receipts got a tax
-// export missing exactly the receipts they'd gone to the trouble of capturing.
-router.get('/account/receipts/export', requireCustomerAuth, async (req, res) => {
-  const { search, from, to, category } = req.query;
-  const deductible = req.query.deductible === '1';
+// Shared by both export formats (CSV below, PDF further down) so the two
+// documents can never disagree on which rows matched the current filters --
+// the exact drift risk deductibleWhereClause's own comment warns about,
+// just between two export FORMATS instead of the screen and one export.
+async function buildExportRows(customerId, { search, from, to, category, deductible }) {
   const rules = await prisma.customer.findUnique({
-    where: { id: req.session.customerId },
+    where: { id: customerId },
     select: { deductibleCategories: true },
   });
   const deductibleCategories = rules?.deductibleCategories || [];
   const f = { search, from, to, category, deductible, deductibleCategories };
-  const where = buildWalletWhere(req.session.customerId, f);
-  const scanWhere = buildScannedReceiptWhere(req.session.customerId, f);
+  const where = buildWalletWhere(customerId, f);
+  const scanWhere = buildScannedReceiptWhere(customerId, f);
 
   const [transactions, scanned] = await Promise.all([
     prisma.transaction.findMany({ where, include: { merchant: true }, orderBy: { createdAt: 'desc' } }),
@@ -1088,6 +1086,21 @@ router.get('/account/receipts/export', requireCustomerAuth, async (req, res) => 
     })),
   ].sort((a, b) => b.date - a.date);
 
+  return { rows, deductibleCategories };
+}
+
+// GET /account/receipts/export — CSV of whatever the wallet's current filters match
+//
+// Includes SCANNED receipts as well as tapped ones. It used to export only
+// transactions, so a customer who photographed their paper receipts got a tax
+// export missing exactly the receipts they'd gone to the trouble of capturing.
+router.get('/account/receipts/export', requireCustomerAuth, async (req, res) => {
+  const { search, from, to, category } = req.query;
+  const deductible = req.query.deductible === '1';
+  const { rows, deductibleCategories } = await buildExportRows(req.session.customerId, {
+    search, from, to, category, deductible,
+  });
+
   const header = 'receipt_id,type,date,business,total,category,tax_deductible,decided_by';
   const csv = [header]
     .concat(
@@ -1114,6 +1127,58 @@ router.get('/account/receipts/export', requireCustomerAuth, async (req, res) => 
     `attachment; filename="receiptap-${deductible ? 'tax-deductible' : 'my'}-receipts.csv"`
   );
   res.send(csv);
+});
+
+// GET /account/receipts/export/pdf — same rows as the CSV export above, as a
+// printable document instead of spreadsheet data. Same filters, same
+// buildExportRows call, so the two formats can never disagree on which
+// receipts matched.
+router.get('/account/receipts/export/pdf', requireCustomerAuth, async (req, res) => {
+  const { search, from, to, category } = req.query;
+  const deductible = req.query.deductible === '1';
+  const [{ rows, deductibleCategories }, customer] = await Promise.all([
+    buildExportRows(req.session.customerId, { search, from, to, category, deductible }),
+    prisma.customer.findUnique({ where: { id: req.session.customerId }, select: { email: true, name: true } }),
+  ]);
+
+  let totalCents = 0;
+  let deductibleTotalCents = 0;
+  const exportRows = rows.map((r) => {
+    const rowDeductible = isDeductible(r.row, deductibleCategories);
+    totalCents += r.total;
+    if (rowDeductible) deductibleTotalCents += r.total;
+    return {
+      date: r.date.toLocaleDateString('en-US', { dateStyle: 'medium' }),
+      business: r.business,
+      category: r.category,
+      total: (r.total / 100).toFixed(2),
+      deductible: rowDeductible,
+      source: deductibleSource(r.row, deductibleCategories),
+    };
+  });
+
+  let buffer;
+  try {
+    buffer = await generateTaxExportPDF({
+      customerName: customer?.name || customer?.email || '',
+      rows: exportRows,
+      totalLabel: (totalCents / 100).toFixed(2),
+      deductibleTotalLabel: (deductibleTotalCents / 100).toFixed(2),
+      filtered: Boolean(search || from || to || category),
+      deductibleOnly: deductible,
+      generatedAt: new Date().toLocaleDateString('en-US', { dateStyle: 'medium' }),
+    });
+  } catch (err) {
+    console.error('[export] PDF generation failed:', err.message);
+    return res.status(500).send('Failed to generate PDF. Please try again.');
+  }
+
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader(
+    'Content-Disposition',
+    `attachment; filename="receiptap-${deductible ? 'tax-deductible' : 'my'}-receipts.pdf"`
+  );
+  res.send(buffer);
 });
 
 // --- Scan a receipt (photo/upload -> AI-extracted draft -> customer confirms) ---

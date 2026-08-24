@@ -1,0 +1,86 @@
+<!-- views/tax-export-pdf.ejs -->
+<!-- Rendered to PDF by services/generateTaxExportPDF.js, not served as a
+     page anyone visits directly -- plain print-friendly HTML (light, not
+     the wallet's dark theme), since dark backgrounds waste ink and print
+     poorly. Expects: customerName, rows (already formatted strings, see
+     buildExportRows/the PDF route in routes/customer-account.js),
+     totalLabel, deductibleTotalLabel, filtered, deductibleOnly,
+     generatedAt. -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>ReceipTap tax export</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Helvetica Neue', Arial, sans-serif; color: #1c1b19; margin: 0; padding: 0;
+      font-size: 11px;
+    }
+    .header { margin-bottom: 18px; }
+    .header h1 { font-size: 18px; margin: 0 0 4px; }
+    .header .sub { color: #5c5a54; font-size: 11px; margin: 2px 0; }
+    table { width: 100%; border-collapse: collapse; }
+    th {
+      text-align: left; font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.04em;
+      color: #5c5a54; border-bottom: 1.5px solid #1c1b19; padding: 6px 8px;
+    }
+    td { padding: 7px 8px; border-bottom: 1px solid #e4e0d6; vertical-align: top; }
+    th.num, td.num { text-align: right; font-variant-numeric: tabular-nums; }
+    tr.deductible td.deductible-cell { color: #0350be; font-weight: 600; }
+    tfoot td { border-bottom: none; border-top: 1.5px solid #1c1b19; font-weight: 700; padding-top: 8px; }
+    .empty { padding: 24px 8px; color: #5c5a54; text-align: center; }
+    .disclaimer { margin-top: 20px; font-size: 9.5px; color: #5c5a54; line-height: 1.5; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>ReceipTap — Tax export</h1>
+    <p class="sub"><%= customerName %></p>
+    <p class="sub">
+      Generated <%= generatedAt %><% if (deductibleOnly) { %> · Tax-deductible receipts only<% } %><% if (filtered) { %> · Filtered<% } %>
+    </p>
+  </div>
+
+  <% if (rows.length === 0) { %>
+    <div class="empty">No receipts match these filters.</div>
+  <% } else { %>
+    <table>
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Business</th>
+          <th>Category</th>
+          <th class="num">Amount</th>
+          <th>Deductible</th>
+          <th>Decided by</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% rows.forEach(function (r) { %>
+          <tr class="<%= r.deductible ? 'deductible' : '' %>">
+            <td><%= r.date %></td>
+            <td><%= r.business %></td>
+            <td><%= r.category || '—' %></td>
+            <td class="num">$<%= r.total %></td>
+            <td class="deductible-cell"><%= r.deductible ? 'Yes' : 'No' %></td>
+            <td><%= r.source === 'receipt' ? 'You' : r.source === 'category' ? 'Category rule' : '—' %></td>
+          </tr>
+        <% }); %>
+      </tbody>
+      <tfoot>
+        <tr>
+          <td colspan="3">Total</td>
+          <td class="num">$<%= totalLabel %></td>
+          <td colspan="2">Deductible: $<%= deductibleTotalLabel %></td>
+        </tr>
+      </tfoot>
+    </table>
+  <% } %>
+
+  <p class="disclaimer">
+    Not tax advice. "Deductible" reflects your own per-receipt answers and category rules in ReceipTap --
+    whether you can actually claim an item depends on your situation and where you file.
+  </p>
+</body>
+</html>

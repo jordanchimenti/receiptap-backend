@@ -50,10 +50,11 @@
     .wallet-cta { margin: 8px 0 22px; border-radius: 14px; }
     .section-row { display: flex; align-items: center; justify-content: space-between; margin: 4px 0 12px; }
     .section-label { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--w-ink-soft); }
+    .export-group { display: flex; align-items: center; gap: 8px; flex: none; }
     .export-pill {
       display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600;
       color: var(--w-ink); background: var(--w-card-raised); border: 1px solid var(--w-line);
-      border-radius: 999px; padding: 7px 14px; text-decoration: none;
+      border-radius: 999px; padding: 7px 14px; text-decoration: none; white-space: nowrap;
     }
     /* A plain link, not another .w-btn -- the CTA above the list already
        carries the primary "go to My Wallet" action, and a second full-width
@@ -468,12 +469,30 @@
       <div class="section-row">
         <div class="section-label"><%= isFullWallet ? 'All receipts' : 'Recent receipts' %></div>
         <%# Export belongs with the full list: on the home page it would offer
-            to export five rows while the filters that shape it live elsewhere. %>
-        <% if (isFullWallet) { %>
-        <a class="export-pill" href="/account/receipts/export?search=<%= encodeURIComponent(filters.search) %>&from=<%= encodeURIComponent(filters.from) %>&to=<%= encodeURIComponent(filters.to) %>&category=<%= encodeURIComponent(filters.category) %>&deductible=<%= filters.deductible ? '1' : '' %>">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12M7 10l5 5 5-5M4 21h16"/></svg>
-          Export<%= filters.deductible ? ' tax receipts' : (filters.search || filters.from || filters.to || filters.category) ? ' (filtered)' : '' %>
-        </a>
+            to export five rows while the filters that shape it live elsewhere.
+            Same query string for both formats -- built once so the two links
+            can't drift apart on which filters they carry. %>
+        <% if (isFullWallet) {
+          const exportQs = 'search=' + encodeURIComponent(filters.search) +
+            '&from=' + encodeURIComponent(filters.from) +
+            '&to=' + encodeURIComponent(filters.to) +
+            '&category=' + encodeURIComponent(filters.category) +
+            '&deductible=' + (filters.deductible ? '1' : '');
+          const exportLabel = filters.deductible ? ' tax receipts' : (filters.search || filters.from || filters.to || filters.category) ? ' (filtered)' : '';
+        %>
+        <div class="export-group">
+          <a class="export-pill" href="/account/receipts/export?<%= exportQs %>">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12M7 10l5 5 5-5M4 21h16"/></svg>
+            Export<%= exportLabel %>
+          </a>
+          <%# PDF is the same rows, formatted to open and read directly rather
+              than data you import into a spreadsheet first -- see
+              services/generateTaxExportPDF.js. %>
+          <a class="export-pill" href="/account/receipts/export/pdf?<%= exportQs %>">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12M7 10l5 5 5-5M4 21h16"/></svg>
+            PDF
+          </a>
+        </div>
         <% } %>
       </div>
 

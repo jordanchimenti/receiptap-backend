@@ -95,6 +95,20 @@
       <h1>Welcome, <%= affiliateName %></h1>
   <% } %>
 
+  <%# Earnings first, matching views/business-referrals.ejs. What a
+      partner opens this page to see is what they are making -- the
+      link, the rate and payout setup are set once and rarely revisited. %>
+  <div class="mrc-card">
+    <div class="mrc-label">Monthly recurring commission</div>
+    <% if (monthlyRecurringCommission !== null) { %>
+      <div class="mrc-value">$<%= monthlyRecurringCommission %><span class="mrc-unit">/mo</span></div>
+      <div class="mrc-sub"><%= activeReferralCount %> active referral<%= activeReferralCount === 1 ? '' : 's' %> at <%= rate %>% each</div>
+    <% } else { %>
+      <div class="mrc-value">—</div>
+      <div class="mrc-sub">Not available right now.</div>
+    <% } %>
+  </div>
+
   <div class="referral-card">
     <strong>Your referral link</strong>
     <div class="referral-link-row">
@@ -144,17 +158,6 @@
       </div>
     </div>
   <% } %>
-
-  <div class="mrc-card">
-    <div class="mrc-label">Monthly recurring commission</div>
-    <% if (monthlyRecurringCommission !== null) { %>
-      <div class="mrc-value">$<%= monthlyRecurringCommission %><span class="mrc-unit">/mo</span></div>
-      <div class="mrc-sub"><%= activeReferralCount %> active referral<%= activeReferralCount === 1 ? '' : 's' %> at <%= rate %>% each</div>
-    <% } else { %>
-      <div class="mrc-value">—</div>
-      <div class="mrc-sub">Not available right now.</div>
-    <% } %>
-  </div>
 
   <% if (typeof connectError !== 'undefined' && connectError) { %>
     <div class="rate-banner paused" style="margin-top:12px;">

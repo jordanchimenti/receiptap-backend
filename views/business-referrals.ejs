@@ -115,6 +115,20 @@
     <% if (codeError) { %><div class="banner error"><%= codeError %></div><% } %>
     <% if (codeSuccess) { %><div class="banner success">Your link is updated.</div><% } %>
 
+    <%# Earnings first. What a partner opens this page to see is what
+        they are making -- the link, the rate and the payout setup are
+        all things they set up once and rarely revisit. %>
+    <div class="w-card mrc-card">
+      <div class="mrc-label">Monthly recurring commission</div>
+      <% if (monthlyRecurringCommission !== null) { %>
+        <div class="mrc-value">$<%= monthlyRecurringCommission %><span class="mrc-unit">/mo</span></div>
+        <div class="mrc-sub"><%= activeReferralCount %> active referral<%= activeReferralCount === 1 ? '' : 's' %> at <%= rate %>% each</div>
+      <% } else { %>
+        <div class="mrc-value">—</div>
+        <div class="mrc-sub">Not available right now.</div>
+      <% } %>
+    </div>
+
     <div class="w-card panel">
       <h2>Your referral link</h2>
       <p class="panel-sub">Refer other businesses to ReceipTap and earn <%= rate %>% recurring commission on every payment they make — the same flat rate every ReceipTap partner earns, merchant or not.</p>
@@ -145,17 +159,6 @@
         businesses you refer whether or not your own ReceipTap subscription is active.
       </div>
       <div class="flat-rate-tag">One flat rate for every ReceipTap partner — no tiers</div>
-    </div>
-
-    <div class="w-card mrc-card">
-      <div class="mrc-label">Monthly recurring commission</div>
-      <% if (monthlyRecurringCommission !== null) { %>
-        <div class="mrc-value">$<%= monthlyRecurringCommission %><span class="mrc-unit">/mo</span></div>
-        <div class="mrc-sub"><%= activeReferralCount %> active referral<%= activeReferralCount === 1 ? '' : 's' %> at <%= rate %>% each</div>
-      <% } else { %>
-        <div class="mrc-value">—</div>
-        <div class="mrc-sub">Not available right now.</div>
-      <% } %>
     </div>
 
     <div class="w-card panel">

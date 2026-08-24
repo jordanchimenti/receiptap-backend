@@ -15,7 +15,7 @@
     .wallet-header { display: flex; align-items: flex-start; justify-content: space-between; }
 
     .summary-card {
-      padding: 20px 22px; margin: 18px 0 20px; display: flex; align-items: center; justify-content: space-between;
+      padding: 20px 22px; margin: 18px 0 10px; display: flex; align-items: center; justify-content: space-between;
       background: radial-gradient(120% 140% at 100% 0%, var(--w-accent-wash) 0%, var(--w-card) 60%);
       border-color: rgba(5,107,254,0.3);
     }
@@ -47,9 +47,7 @@
     }
     .rule-row:last-of-type { border-bottom: none; }
     .rule-row input { width: 18px; height: 18px; accent-color: var(--w-accent); flex: none; }
-    .wallet-cta { margin: 16px 0 22px; border-radius: 14px; }
-    /* --w-ink-soft is a grey for dark backgrounds; on brand blue it disappears. */
-    .wallet-cta-count { font-size: 12.5px; font-weight: 600; color: rgba(255,255,255,0.72); }
+    .wallet-cta { margin: 8px 0 22px; border-radius: 14px; }
     .section-row { display: flex; align-items: center; justify-content: space-between; margin: 4px 0 12px; }
     .section-label { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--w-ink-soft); }
     .export-pill {
@@ -61,7 +59,7 @@
        carries the primary "go to My Wallet" action, and a second full-width
        blue button right after five rows would out-compete it for attention. */
     .more-receipts {
-      display: block; text-align: center; margin-top: 4px; padding: 12px;
+      display: block; text-align: center; margin-top: -6px; padding: 12px;
       color: var(--w-accent); font-size: 13.5px; font-weight: 600; text-decoration: none;
     }
 
@@ -333,9 +331,6 @@
     <a class="w-btn wallet-cta" href="/account/wallet">
       <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M3 7a2 2 0 0 1 2-2h13a1 1 0 0 1 1 1v2"/><path d="M3 7v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-3"/><path d="M21 11h-5a2 2 0 0 0 0 4h5v-4Z"/></svg>
       My Wallet
-      <% if (totalReceiptCount > receiptsShown) { %>
-        <span class="wallet-cta-count">all <%= totalReceiptCount %></span>
-      <% } %>
     </a>
 
     <% } %>

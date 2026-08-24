@@ -1573,6 +1573,10 @@ router.get('/account/more', requireCustomerAuth, async (req, res) => {
     view,
     merchantStatus,
     isAffiliate,
+    // The Partner Program row's own sub-description names the rate --
+    // passed rather than hardcoded so it can't drift from what a referral
+    // actually pays, same reasoning as affiliateRate in renderWallet above.
+    affiliateRate: REGULAR_AFFILIATE_RATE,
   });
 });
 

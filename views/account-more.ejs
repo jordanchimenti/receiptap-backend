@@ -1,7 +1,9 @@
 <!-- views/account-more.ejs -->
 <!-- The wallet's "More" page, reached from the bottom tab bar / top-right
      avatar. Mostly lists things that are real for a customer today
-     (spending, rewards, settings, support, log out). The Personal/Business
+     (spending, rewards, settings, support). Log out lives on Settings now
+     (views/customer-settings.ejs), alongside the account's other actions.
+     The Personal/Business
      toggle below is modeled on a reference design where one account has a
      switchable "mode" -- ReceipTap doesn't work that way (Customer and
      Merchant are two entirely separate logins/sessions), so "Business"
@@ -31,16 +33,6 @@
     }
     .menu-row-label { flex: 1; font-size: 14.5px; font-weight: 600; }
     .menu-row-chevron { color: var(--w-ink-soft); }
-    .menu-row.danger .menu-row-icon { background: rgba(255,69,58,0.12); color: var(--w-danger); }
-    .menu-row.danger .menu-row-label { color: var(--w-danger); }
-    /* The log-out row is a <button>, and browsers give buttons
-       text-align: center. With the label set to flex: 1 that centred "Log out"
-       inside the space AFTER the icon, so it sat visibly right of centre.
-       Centring the icon and label together as a group is what actually reads
-       as centred -- and this row has no chevron to balance against, unlike
-       every other row here. */
-    .menu-row.danger { justify-content: center; }
-    .menu-row.danger .menu-row-label { flex: none; }
     .email-note { font-size: 12.5px; color: var(--w-ink-soft); padding: 0 4px; margin-top: 4px; word-break: break-all; }
 
     .view-toggle {
@@ -185,16 +177,6 @@
       </a>
     </div>
 
-    <div class="w-card" style="margin-top: 26px;">
-      <form method="POST" action="/account/logout" style="margin:0;">
-        <button type="submit" class="menu-row danger" style="width:100%; border:none; background:none; cursor:pointer; font-family:inherit;">
-          <div class="menu-row-icon">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>
-          </div>
-          <div class="menu-row-label">Log out</div>
-        </button>
-      </form>
-    </div>
   </div>
 
   <%- include('partials/wallet-tab-bar', { activeTab: 'more' }) %>

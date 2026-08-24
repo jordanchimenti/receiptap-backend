@@ -25,17 +25,6 @@
       display: flex; align-items: center; gap: 14px; padding: 16px 18px; text-decoration: none;
       color: var(--w-ink); border-bottom: 1px solid var(--w-line);
     }
-    /* Same treatment the personal More page gives its log-out row. */
-    .menu-row.danger .menu-row-icon { background: rgba(255,69,58,0.12); color: var(--w-danger); }
-    .menu-row.danger .menu-row-label { color: var(--w-danger); }
-    /* The log-out row is a <button>, and browsers give buttons
-       text-align: center. With the label set to flex: 1 that centred "Log out"
-       inside the space AFTER the icon, so it sat visibly right of centre.
-       Centring the icon and label together as a group is what actually reads
-       as centred -- and this row has no chevron to balance against, unlike
-       every other row here. */
-    .menu-row.danger { justify-content: center; }
-    .menu-row.danger .menu-row-label { flex: none; }
     .menu-row:last-child { border-bottom: none; }
     .menu-row-icon {
       width: 36px; height: 36px; border-radius: 10px; background: var(--w-accent-wash); color: var(--w-accent);
@@ -254,16 +243,6 @@
       </a>
     </div>
 
-    <div class="w-card" style="margin-top: 26px;">
-      <form method="POST" action="/logout" style="margin:0;">
-        <button type="submit" class="menu-row danger" style="width:100%; border:none; background:none; cursor:pointer; font-family:inherit;">
-          <div class="menu-row-icon">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>
-          </div>
-          <div class="menu-row-label">Log out</div>
-        </button>
-      </form>
-    </div>
   </div>
 
   <%- include('partials/business-tab-bar', { active: 'more' }) %>

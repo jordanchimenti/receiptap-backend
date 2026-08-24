@@ -195,6 +195,19 @@
       </form>
     </div>
 
+    <%# Was a menu row at the bottom of views/account-more.ejs -- moved here
+        alongside the rest of account-level actions (password, deletion)
+        instead, the same reasoning views/business-account.ejs's Profile
+        Settings page already applies on the business side. %>
+    <div class="w-card" style="padding: 16px 18px; margin-bottom: 16px;">
+      <form method="POST" action="/account/logout" style="margin:0;">
+        <button type="submit"
+          style="width:100%; background:none; border:none; text-align:left; cursor:pointer; font-family:inherit; padding:0; color:var(--w-danger); font-size:14.5px; font-weight:700;">
+          Log out
+        </button>
+      </form>
+    </div>
+
     <div class="section-label">Legal</div>
     <div class="w-card">
       <%# No target="_blank": in the installed app that replaces the whole app

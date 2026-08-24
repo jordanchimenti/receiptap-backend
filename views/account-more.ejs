@@ -33,6 +33,13 @@
     }
     .menu-row-label { flex: 1; font-size: 14.5px; font-weight: 600; }
     .menu-row-chevron { color: var(--w-ink-soft); }
+    /* Same body-wrapper pattern as views/business-more.ejs's Setup section:
+       a row with a second line needs its label to stop stretching (flex: 1
+       moves to the wrapper instead), or the icon drifts to vertically
+       center against two lines instead of sitting level with the first. */
+    .menu-row-body { flex: 1; min-width: 0; }
+    .menu-row-body .menu-row-label { flex: none; }
+    .menu-row-sub { font-size: 12px; color: var(--w-ink-soft); margin-top: 3px; line-height: 1.45; }
     .email-note { font-size: 12.5px; color: var(--w-ink-soft); padding: 0 4px; margin-top: 4px; word-break: break-all; }
 
     .view-toggle {
@@ -119,7 +126,10 @@
         <div class="menu-row-icon">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20V10M12 20V4M20 20v-7"/></svg>
         </div>
-        <div class="menu-row-label">Track your spending</div>
+        <div class="menu-row-body">
+          <div class="menu-row-label">Track your spending</div>
+          <div class="menu-row-sub">Monthly totals and spending by category.</div>
+        </div>
         <div class="menu-row-chevron">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>
         </div>
@@ -128,7 +138,10 @@
         <div class="menu-row-icon">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="8" width="18" height="13" rx="2"/><path d="M12 8v13M3 13h18"/><path d="M12 8c-2 0-3-1.3-3-2.5S10 3 12 3s3 1.3 3 2.5S14 8 12 8Z"/></svg>
         </div>
-        <div class="menu-row-label">My Rewards</div>
+        <div class="menu-row-body">
+          <div class="menu-row-label">My Rewards</div>
+          <div class="menu-row-sub">Stamp cards from every shop you've saved a receipt at.</div>
+        </div>
         <div class="menu-row-chevron">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>
         </div>
@@ -144,7 +157,10 @@
         <div class="menu-row-icon">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3v18"/><path d="M17 8.5c0-1.9-2.2-3-5-3s-5 1.1-5 3 2.2 2.6 5 3 5 1.4 5 3.2-2.2 2.8-5 2.8-5-1.1-5-2.9"/></svg>
         </div>
-        <div class="menu-row-label"><%= isAffiliate ? 'Partner Program earnings' : 'Partner Program' %></div>
+        <div class="menu-row-body">
+          <div class="menu-row-label"><%= isAffiliate ? 'Partner Program earnings' : 'Partner Program' %></div>
+          <div class="menu-row-sub">Refer businesses and earn recurring commission.</div>
+        </div>
         <div class="menu-row-chevron">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>
         </div>
@@ -153,7 +169,10 @@
         <div class="menu-row-icon">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>
         </div>
-        <div class="menu-row-label">Settings</div>
+        <div class="menu-row-body">
+          <div class="menu-row-label">Settings</div>
+          <div class="menu-row-sub">Profile, password, and notification preferences.</div>
+        </div>
         <div class="menu-row-chevron">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>
         </div>
@@ -170,7 +189,10 @@
         <div class="menu-row-icon">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 0 1 5 0c0 1.5-2.5 2-2.5 3.5"/><circle cx="12" cy="17" r="0.6" fill="currentColor"/></svg>
         </div>
-        <div class="menu-row-label">Help &amp; support</div>
+        <div class="menu-row-body">
+          <div class="menu-row-label">Help &amp; support</div>
+          <div class="menu-row-sub">Email us about a receipt, a reward, or anything else.</div>
+        </div>
         <div class="menu-row-chevron">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>
         </div>

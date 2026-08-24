@@ -376,7 +376,6 @@ router.get('/account/business/settings', requireAuth, async (req, res) => {
     businessError: req.query.businessError || null,
     businessSuccess: req.query.businessSuccess === '1',
     addressSuccess: req.query.addressSuccess === '1',
-    posError: req.query.posError || null,
     disconnectAllSuccess: req.query.disconnectAllSuccess === '1',
     purgeDays: DEACTIVATED_MERCHANT_PURGE_DAYS,
   });

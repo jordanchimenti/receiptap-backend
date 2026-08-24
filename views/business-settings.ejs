@@ -50,13 +50,6 @@
     .banner.success { background: rgba(5,107,254,0.12); border: 1px solid rgba(5,107,254,0.35); color: var(--w-accent); }
     .banner.error { background: rgba(255,69,58,0.12); border: 1px solid rgba(255,69,58,0.35); color: var(--w-danger); }
 
-    .pos-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--w-line); gap: 12px; }
-    .pos-row:last-child { border-bottom: none; }
-    .pos-row p { font-size: 13px; margin: 0; color: var(--w-ink); }
-    .disconnect-btn { background: none; border: 1px solid var(--w-danger); color: var(--w-danger); border-radius: 999px; padding: 7px 14px; font-size: 12px; font-weight: 700; cursor: pointer; font-family: inherit; white-space: nowrap; }
-    .empty { text-align: center; padding: 16px 10px; color: var(--w-ink-soft); font-size: 13px; }
-    .empty a { color: var(--w-accent); text-decoration: none; font-weight: 600; }
-
     .danger-panel { border-color: rgba(255,69,58,0.35); }
     .danger-panel h2 { color: var(--w-danger); }
     .danger-panel p { font-size: 12.5px; color: var(--w-ink-soft); line-height: 1.5; margin: 0 0 14px; }
@@ -202,33 +195,6 @@
 
     <div class="save-bar"><button type="submit" class="w-btn">Save changes</button></div>
     </form>
-
-    <div class="w-card panel">
-      <h2>POS connection</h2>
-      <% if (posError) { %><div class="banner error"><%= posError %></div><% } %>
-      <%
-        const connectedPos = [
-          merchant.squareMerchantId && { provider: 'square', label: 'Square' },
-          merchant.cloverMerchantId && { provider: 'clover', label: 'Clover' },
-          merchant.lightspeedDomainPrefix && { provider: 'lightspeed', label: `Lightspeed (${merchant.lightspeedDomainPrefix})` },
-          merchant.shopifyShopDomain && { provider: 'shopify', label: `Shopify (${merchant.shopifyShopDomain})` },
-        ].filter(Boolean);
-      %>
-      <% if (connectedPos.length) { %>
-        <% connectedPos.forEach(function(pos) { %>
-          <div class="pos-row">
-            <p>Connected via <strong><%= pos.label %></strong></p>
-            <form method="POST" action="/dashboard/settings/account/disconnect-pos" onsubmit="return confirm('Disconnect this POS? Its sales will stop generating receipts until you reconnect.');">
-              <input type="hidden" name="provider" value="<%= pos.provider %>" />
-              <input type="hidden" name="redirectTo" value="/account/business/settings" />
-              <button type="submit" class="disconnect-btn">Disconnect</button>
-            </form>
-          </div>
-        <% }); %>
-      <% } else { %>
-        <div class="empty">No POS connected. Connect one from the <a href="/account/business/pos">POS connection</a> page.</div>
-      <% } %>
-    </div>
 
     <div class="w-card panel danger-panel">
       <h2>Danger zone</h2>

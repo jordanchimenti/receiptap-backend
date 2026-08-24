@@ -142,7 +142,13 @@
     .sticky-cta.show { transform: translate(-50%, 0); }
     .sticky-cta svg { flex: none; }
     @media (prefers-reduced-motion: reduce) { .sticky-cta { transition: none; } }
-    .maths-fine { font-size: 12.5px; color: var(--ms-ink-soft); line-height: 1.6; margin: 22px 0 0; }
+    /* Centred with a max-width and auto margins, the same pairing .section-lead
+       and .rate-band p use -- centring alone would leave three ~960px lines
+       ragged on both edges, which reads worse than the left-aligned original. */
+    .maths-fine {
+      font-size: 12.5px; color: var(--ms-ink-soft); line-height: 1.6;
+      text-align: center; max-width: 560px; margin: 22px auto 0;
+    }
 
     .section { padding: 72px 6vw; max-width: 960px; margin: 0 auto; }
     .section h2 { font-family: var(--font-display); font-size: clamp(23px, 3vw, 32px); letter-spacing: -0.015em; margin: 0 0 10px; text-align: center; }

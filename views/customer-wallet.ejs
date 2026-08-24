@@ -75,8 +75,16 @@
 
     /* The divider moved to .receipt-line, which now wraps the link AND the
        deductible strip -- left on .receipt-row it drew a line between a
-       receipt and its own toggle. */
-    .receipt-line { border-bottom: 1px solid var(--w-line); }
+       receipt and its own toggle.
+
+       display: block is not decorative -- receiptap.css has its OWN
+       unrelated .receipt-line (the itemized rows on a receipt detail page,
+       display: flex; justify-content: space-between) that loads before this
+       block. Without overriding it here, this wrapper inherits that flex
+       row and squeezes .receipt-row and .ded-strip into side-by-side
+       columns instead of stacking them, cramming the total into half the
+       width it needs. */
+    .receipt-line { display: block; border-bottom: 1px solid var(--w-line); }
     .receipt-line:last-child { border-bottom: none; }
     .receipt-row {
       display: flex; justify-content: space-between; align-items: flex-start;
@@ -90,8 +98,11 @@
       border: 1px solid var(--w-line); background: var(--w-card-raised); color: var(--w-ink-soft);
     }
     .ded-toggle .ded-dot {
+      /* Hollow, not filled -- a filled dot in a muted colour still reads as
+         "on" at a glance. Off has to look visibly empty next to on's solid
+         accent-filled dot below. */
       width: 8px; height: 8px; border-radius: 50%;
-      background: var(--w-line); border: 1px solid var(--w-line);
+      background: transparent; border: 1px solid var(--w-ink-soft);
     }
     .ded-toggle.on { border-color: var(--w-accent); color: var(--w-accent); background: var(--w-accent-wash); }
     .ded-toggle.on .ded-dot { background: var(--w-accent); border-color: var(--w-accent); }

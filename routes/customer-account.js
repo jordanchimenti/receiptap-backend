@@ -785,6 +785,12 @@ async function renderWallet(req, res, { isFullWallet }) {
     })),
   ].sort((a, b) => b.sortDate - a.sortDate);
 
+  // The home page's "Recent receipts" is this month, not "the last five ever"
+  // -- a customer scrolling their dashboard in January shouldn't be looking
+  // at a receipt from October. The full wallet is unaffected; it's still
+  // every receipt, which is the whole reason it's a separate page.
+  const monthReceipts = merged.filter((r) => r.sortDate >= monthStart);
+
   const categories = [...new Set([...categoryRows, ...scannedCategoryRows].map((r) => r.aiCategory))].sort();
 
   // Setup progress -- the shopper equivalent of the merchant checklist on
@@ -815,10 +821,13 @@ async function renderWallet(req, res, { isFullWallet }) {
 
   res.render('customer-wallet', {
     isFullWallet,
-    // The home shows a handful; the wallet shows everything. Sliced here, not
-    // in the query, because the month summary and category chips are built
-    // from the same rows and must still count them all.
-    receiptsShown: isFullWallet ? merged.length : Math.min(RECENT_RECEIPT_LIMIT, merged.length),
+    // The home shows a handful FROM THIS MONTH; the wallet shows everything.
+    // Sliced here, not in the query, because the month summary and category
+    // chips are built from the same rows and must still count them all.
+    receiptsShown: isFullWallet ? merged.length : Math.min(RECENT_RECEIPT_LIMIT, monthReceipts.length),
+    // Deliberately all-time, not this-month -- it's what tells the "My
+    // Wallet" CTA whether there's more to see, and a customer with receipts
+    // from last month but none yet this one still has more to see.
     totalReceiptCount: merged.length,
     customerEmail: customer?.email || '',
     customerName: customer?.name || null,
@@ -833,7 +842,7 @@ async function renderWallet(req, res, { isFullWallet }) {
       receiptCount: merged.length,
     },
     categories,
-    receipts: isFullWallet ? merged : merged.slice(0, RECENT_RECEIPT_LIMIT),
+    receipts: isFullWallet ? merged : monthReceipts.slice(0, RECENT_RECEIPT_LIMIT),
     filters: { search: search || '', from: from || '', to: to || '', category: category || '', deductible },
     // The customer's standing rule, and the full list to choose from -- the
     // panel offers every category the model can assign, not only the ones they

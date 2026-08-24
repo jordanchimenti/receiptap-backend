@@ -57,6 +57,13 @@
       color: var(--w-ink); background: var(--w-card-raised); border: 1px solid var(--w-line);
       border-radius: 999px; padding: 7px 14px; text-decoration: none;
     }
+    /* A plain link, not another .w-btn -- the CTA above the list already
+       carries the primary "go to My Wallet" action, and a second full-width
+       blue button right after five rows would out-compete it for attention. */
+    .more-receipts {
+      display: block; text-align: center; margin-top: 4px; padding: 12px;
+      color: var(--w-accent); font-size: 13.5px; font-weight: 600; text-decoration: none;
+    }
 
     .chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
     .chip {
@@ -428,6 +435,15 @@
         <div class="empty-title">No receipts match</div>
         <div class="empty-sub">Try a different filter, store name, or date range.</div>
       </div>
+    <% } else if (receipts.length === 0 && !isFullWallet && totalReceiptCount > 0) { %>
+      <%# Not the same as "no receipts yet" -- this customer has a history,
+          just nothing THIS month. "Add first receipt" would be wrong advice
+          to give someone who's already added several. %>
+      <div class="w-card empty-state">
+        <div class="empty-title">No receipts this month</div>
+        <div class="empty-sub">Your past receipts are still in your wallet.</div>
+        <a href="/account/wallet" class="w-btn" style="width:auto; padding:12px 24px;">View My Wallet</a>
+      </div>
     <% } else if (receipts.length === 0) { %>
       <div class="w-card empty-state">
         <div class="empty-icon">
@@ -451,6 +467,15 @@
       </div>
 
       <%- include('partials/receipt-list', { receipts: receipts }) %>
+
+      <%# A second way to "My Wallet" -- the CTA card above the summary makes
+          the same trip, but sits above the list rather than after it, where
+          someone who scrolled through what's shown and wants more expects a
+          next step. Same condition as that card's own "all N" badge: only
+          shown when there's actually somewhere further to go. %>
+      <% if (!isFullWallet && totalReceiptCount > receiptsShown) { %>
+        <a class="more-receipts" href="/account/wallet">See all <%= totalReceiptCount %> receipts</a>
+      <% } %>
     <% } %>
 
       <%# Setup progress sits BELOW the receipts, not above them. A checklist

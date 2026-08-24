@@ -164,6 +164,8 @@
     .warranty-edit button[type="submit"] { border-color: var(--w-accent); color: var(--w-accent); }
     .warranty-edit-hint { font-size: 10.5px; color: var(--w-ink-soft); }
 
+    .search-rules-row { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 16px; }
+    .search-rules-row .search-card, .search-rules-row .rules-card { flex: 1; min-width: 0; margin-bottom: 0; }
     .search-card { padding: 16px; margin-bottom: 16px; }
     .search-row { display: flex; gap: 10px; }
     .search-row .w-field { flex: 1; margin-bottom: 0; }
@@ -359,6 +361,7 @@
       </div>
     <% } %>
 
+    <div class="search-rules-row">
     <form class="w-card search-card" method="GET" action="/account/wallet">
       <details <%= (filters.search || filters.from || filters.to || filters.category) ? 'open' : '' %>>
         <summary>Search by store, category or date</summary>
@@ -435,6 +438,7 @@
         <button type="submit" class="w-btn" style="margin-top:14px;">Save categories</button>
       </form>
     </details>
+    </div>
     <% } %>
 
     <% if (receipts.length === 0 && (filters.search || filters.from || filters.to || filters.category)) { %>

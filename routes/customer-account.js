@@ -23,6 +23,7 @@ const { deleteShopperEverywhere } = require('../services/dataRetentionService');
 const prisma = require('../lib/prisma');
 const { isDeductible, deductibleSource, contradictsAi, deductibleWhereClause } = require('../lib/receiptDeductible');
 const { csvCell } = require('../lib/csvCell');
+const { receiptDateLabels } = require('../lib/receiptDateLabels');
 const { parseMoneyToCents, parseDateOrNull } = require('../lib/parseReceiptFields');
 const { findDuplicateReceipt } = require('../lib/findDuplicateReceipt');
 const { listNotifications, markAllRead, notifyReceiptSaved, notifyReceiptDeleted } = require('../services/notificationService');
@@ -668,7 +669,11 @@ async function renderWallet(req, res, { isFullWallet }) {
       kind: 'transaction',
       total: (t.total / 100).toFixed(2),
       sortDate: t.createdAt,
-      date: t.createdAt.toLocaleDateString('en-US', { dateStyle: 'medium' }),
+      // A tapped receipt's createdAt is a real instant, so it carries a time.
+      ...(() => {
+        const l = receiptDateLabels(t.createdAt);
+        return { month: l.month, date: l.day, time: l.time };
+      })(),
       merchantName: t.merchant.businessName,
       aiCategory: t.aiCategory,
       aiTaxDeductible: t.aiTaxDeductible,
@@ -686,13 +691,17 @@ async function renderWallet(req, res, { isFullWallet }) {
       kind: 'scanned',
       total: (r.total / 100).toFixed(2),
       sortDate: r.purchaseDate || r.createdAt,
-      // purchaseDate is a pure calendar date (from a plain <input type="date">,
-      // stored as UTC midnight) with no real time-of-day meaning -- format it
-      // in UTC too, or a negative local offset rolls it back a day on display.
-      // createdAt is a real timestamp, so that one displays in local time as usual.
-      date: r.purchaseDate
-        ? r.purchaseDate.toLocaleDateString('en-US', { dateStyle: 'medium', timeZone: 'UTC' })
-        : r.createdAt.toLocaleDateString('en-US', { dateStyle: 'medium' }),
+      // purchaseDate is a pure calendar date (a plain <input type="date">
+      // stored as UTC midnight) with no time-of-day meaning, so it's labelled
+      // in UTC -- see lib/receiptDateLabels.js for why local would move it.
+      // Its only real time is whatever the photo itself printed. With no
+      // purchaseDate at all, createdAt is a genuine instant and carries one.
+      ...(() => {
+        const l = r.purchaseDate
+          ? receiptDateLabels(r.purchaseDate, { utc: true, printedTime: r.purchaseTimeText })
+          : receiptDateLabels(r.createdAt);
+        return { month: l.month, date: l.day, time: l.time };
+      })(),
       merchantName: r.merchantName,
       aiCategory: r.aiCategory,
       // These were hardcoded null because ScannedReceipt had no such columns.

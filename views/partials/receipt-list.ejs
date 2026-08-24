@@ -9,14 +9,14 @@
     drifts between them is a receipt that looks like two different receipts. %>
     <%
       // Group consecutive receipts by day so each date only prints one
-      // heading -- r.date is already formatted per-item with the right
+      // heading -- r.month is already formatted per-item with the right
       // UTC/local basis for its kind (see the merge step in the route),
       // so grouping just has to compare that same string, not re-derive it.
-      let lastDayLabel = null;
+      let lastMonthLabel = null;
     %>
     <% receipts.forEach(function(r, i) { %>
-      <% if (r.date !== lastDayLabel) { lastDayLabel = r.date; %>
-        <div class="day-heading"><%= r.date.toUpperCase() %></div>
+      <% if (r.month !== lastMonthLabel) { lastMonthLabel = r.month; %>
+        <div class="day-heading"><%= r.month.toUpperCase() %></div>
         <div class="w-card" style="margin-bottom: 14px;">
       <% } %>
           <%# A scanned receipt used to open its raw .jpg -- first by navigating
@@ -30,7 +30,11 @@
           <a class="receipt-row" href="<%= r.kind === 'scanned' ? '/account/receipts/scanned/' + r.id : r.link %>">
             <div>
               <div class="merchant-name"><%= r.merchantName %></div>
-              <div class="receipt-date"><%= r.date %></div>
+              <%# The heading above says the month; this says which day, and the
+                  time when there is a real one -- a scanned receipt holding
+                  only a calendar date has no time to show unless the paper
+                  printed one. %>
+              <div class="receipt-date"><%= r.date %><% if (r.time) { %> · <%= r.time %><% } %></div>
               <% if (r.aiCategory || r.kind === 'scanned') { %>
                 <div class="badges">
                   <% if (r.aiCategory) { %><span class="badge badge-category"><%= r.aiCategory %></span><% } %>
@@ -68,7 +72,7 @@
             </span>
           </div>
           </div>
-      <% if (i === receipts.length - 1 || receipts[i + 1].date !== r.date) { %>
+      <% if (i === receipts.length - 1 || receipts[i + 1].month !== r.month) { %>
         </div>
       <% } %>
     <% }); %>

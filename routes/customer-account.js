@@ -1180,7 +1180,18 @@ router.get('/account/more', requireCustomerAuth, async (req, res) => {
       : { exists: false };
   }
 
-  res.render('account-more', { customerEmail: customer?.email || '', view, merchantStatus });
+  // Partner Program row: an affiliate signed in here goes straight to their
+  // earnings, anyone else to the page that explains the programme. Sending a
+  // non-affiliate at /affiliate/dashboard would bounce them to a login form
+  // for an account they don't have yet, which is a poor first thing to see.
+  const isAffiliate = Boolean(req.session?.affiliateId);
+
+  res.render('account-more', {
+    customerEmail: customer?.email || '',
+    view,
+    merchantStatus,
+    isAffiliate,
+  });
 });
 
 // GET /account/spending — real spending analytics from this customer's own

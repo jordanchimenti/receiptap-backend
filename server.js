@@ -302,6 +302,45 @@ setTimeout(() => {
   }, RETENTION_PURGE_INTERVAL_MS);
 }, RETENTION_PURGE_BOOT_DELAY_MS);
 
+// Warranty reminders: same interval-on-boot shape as retention purge above,
+// as its own independent timer. WARRANTY_REMINDERS_ENABLED gates actually
+// sending -- unset (or anything but the literal string "true") keeps every
+// run in dry-run (log what WOULD be sent, notify nobody, stamp nothing),
+// same "new automated job ships off by default" convention as
+// RETENTION_PURGE_ENABLED. There is no way to go live except by explicitly
+// setting this in the environment.
+const { sendDueWarrantyReminders } = require('./services/warrantyReminderService');
+const WARRANTY_REMINDERS_ENABLED = process.env.WARRANTY_REMINDERS_ENABLED === 'true';
+const WARRANTY_REMINDER_INTERVAL_MS = 24 * 60 * 60 * 1000; // daily
+const WARRANTY_REMINDER_BOOT_DELAY_MS = 90 * 1000; // stagger past the retention purge's own boot delay
+
+let warrantyReminderRunning = false;
+
+async function runWarrantyReminders() {
+  if (warrantyReminderRunning) {
+    console.warn('[warranty] previous reminder run still in progress -- skipping this tick');
+    return;
+  }
+  warrantyReminderRunning = true;
+  try {
+    const dryRun = !WARRANTY_REMINDERS_ENABLED;
+    console.log(`[warranty] starting daily reminder run (dryRun: ${dryRun})`);
+    const result = await sendDueWarrantyReminders({ dryRun });
+    console.log('[warranty] sendDueWarrantyReminders:', JSON.stringify(result.details), result.error || '');
+  } catch (err) {
+    console.error('[warranty] daily reminder run failed:', err);
+  } finally {
+    warrantyReminderRunning = false;
+  }
+}
+
+setTimeout(() => {
+  runWarrantyReminders().catch((err) => console.error('[warranty] unexpected error:', err));
+  setInterval(() => {
+    runWarrantyReminders().catch((err) => console.error('[warranty] unexpected error:', err));
+  }, WARRANTY_REMINDER_INTERVAL_MS);
+}, WARRANTY_REMINDER_BOOT_DELAY_MS);
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   require('./lib/fileStorage').assertProductionStorage();

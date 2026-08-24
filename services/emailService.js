@@ -140,6 +140,40 @@ async function sendLoyaltyRewardReadyEmail({ email, name, merchantName, reward }
   });
 }
 
+// Sent twice per receipt at most -- 14 days out, then 3 days out (see
+// services/warrantyReminderService.js, which dedupes each stage separately
+// so this is never called twice for the same stage). Called only through
+// notificationService.notifyWarrantyExpiring, same as the loyalty email
+// above: opt-out/suppression checks and failure-swallowing live there, not
+// here.
+async function sendWarrantyExpiringEmail({ email, name, merchantName, totalLabel, expiresLabel, stage, linkUrl }) {
+  const daysLabel = stage === '3d' ? '3 days' : 'about 2 weeks';
+  const subject = `Your ${escapeHtml(merchantName)} warranty expires in ${daysLabel}`;
+
+  if (!resend) {
+    console.log(`[emailService] RESEND_API_KEY not set -- warranty reminder email for ${email}: ${subject}`);
+    return;
+  }
+
+  await send({
+    from: FROM_ADDRESS,
+    to: email,
+    subject,
+    html: `
+      <p>Hi${name ? ' ' + name : ''},</p>
+      <p>The estimated warranty on your <strong>${escapeHtml(totalLabel)}</strong> purchase at
+        <strong>${escapeHtml(merchantName)}</strong> ends <strong>${escapeHtml(expiresLabel)}</strong> --
+        ${daysLabel} from now.</p>
+      <p>If anything's wrong with it, now's the time to look into a repair or replacement while it's still covered.</p>
+      ${actionButton(linkUrl, 'View receipt')}
+      <p style="color:#666; font-size:12px; margin-top:24px;">
+        This is an estimate based on what was purchased, not a copy of your actual warranty terms --
+        check the receipt or manufacturer for the real coverage details.
+      </p>
+    `,
+  });
+}
+
 // Merchant-controlled text (business name, reward label) goes into an HTML
 // email -- escape it rather than trusting it, the same way every other
 // merchant-supplied string is escaped before it reaches a page.
@@ -151,4 +185,9 @@ function escapeHtml(value) {
     .replace(/"/g, '&quot;');
 }
 
-module.exports = { sendPasswordResetEmail, sendVerificationEmail, sendLoyaltyRewardReadyEmail };
+module.exports = {
+  sendPasswordResetEmail,
+  sendVerificationEmail,
+  sendLoyaltyRewardReadyEmail,
+  sendWarrantyExpiringEmail,
+};

@@ -27,6 +27,11 @@ const {
   overridesCategoryRule,
   deductibleWhereClause,
 } = require('../lib/receiptDeductible');
+const {
+  effectiveWarrantyMonths,
+  computeWarrantyExpiry,
+  warrantySource,
+} = require('../lib/receiptWarranty');
 const { csvCell } = require('../lib/csvCell');
 const { receiptDateLabels } = require('../lib/receiptDateLabels');
 const { parseMoneyToCents, parseDateOrNull } = require('../lib/parseReceiptFields');
@@ -518,6 +523,32 @@ router.post('/receipt/:transactionId/save', requireCustomerAuth, async (req, res
 
 // --- The wallet itself ------------------------------------------------------
 
+// "Warranty until Mar 2027" on a row, or null if there's nothing to show --
+// no estimate, or one that's already passed (an expired badge on every old
+// receipt would be noise, not a service). UTC, to match how
+// warrantyExpiresAt itself is computed (lib/receiptWarranty.js) off a
+// purchase date that may itself be UTC-midnight-only with no time-of-day
+// meaning (a ScannedReceipt.purchaseDate) -- local-time formatting could
+// print the wrong month for a date within a few hours of UTC midnight.
+function warrantyExpiresLabel(warrantyExpiresAt) {
+  if (!warrantyExpiresAt || warrantyExpiresAt <= new Date()) return null;
+  return warrantyExpiresAt.toLocaleDateString('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' });
+}
+
+// Text for the tappable warranty control below the row -- null means don't
+// show the control at all. Shown whenever there's an actual estimate or
+// answer to correct (months !== null); not shown just because a receipt was
+// categorized, or every coffee run would carry a permanent "Add warranty"
+// tap target nobody asked for. Correcting a wrong estimate is v1; adding one
+// from scratch where the AI found nothing is a later, separate feature.
+function warrantyBadgeText(warrantyExpiresAt, months) {
+  if (months === null) return null;
+  const label = warrantyExpiresLabel(warrantyExpiresAt);
+  if (label) return `Warranty until ${label}`;
+  if (warrantyExpiresAt) return 'Warranty expired'; // was set, now in the past
+  return 'No warranty'; // months === 0, the customer said so explicitly
+}
+
 // Shared by the wallet page and its CSV export, so the two can never drift
 // out of sync on what "the current filters" actually match.
 function buildWalletWhere(customerId, { search, from, to, category, deductible, deductibleCategories = [] }) {
@@ -708,6 +739,13 @@ async function renderWallet(req, res, { isFullWallet }) {
       deductible: isDeductible(t, deductibleCategories),
       deductibleSource: deductibleSource(t, deductibleCategories),
       deductibleOverridesRule: overridesCategoryRule(t, deductibleCategories),
+      // Same "computed once here" reasoning as deductibility above -- the
+      // badge and its inline edit form must never disagree.
+      warrantyMonths: effectiveWarrantyMonths(t),
+      warrantyExpiresAt: t.warrantyExpiresAt,
+      warrantyExpiresLabel: warrantyExpiresLabel(t.warrantyExpiresAt),
+      warrantyBadgeText: warrantyBadgeText(t.warrantyExpiresAt, effectiveWarrantyMonths(t)),
+      warrantySource: warrantySource(t),
       autoSaved: t.autoSavedViaRecognition,
       link: `/receipt/${t.id}`,
     })),
@@ -737,6 +775,11 @@ async function renderWallet(req, res, { isFullWallet }) {
       deductible: isDeductible(r, deductibleCategories),
       deductibleSource: deductibleSource(r, deductibleCategories),
       deductibleOverridesRule: overridesCategoryRule(r, deductibleCategories),
+      warrantyMonths: effectiveWarrantyMonths(r),
+      warrantyExpiresAt: r.warrantyExpiresAt,
+      warrantyExpiresLabel: warrantyExpiresLabel(r.warrantyExpiresAt),
+      warrantyBadgeText: warrantyBadgeText(r.warrantyExpiresAt, effectiveWarrantyMonths(r)),
+      warrantySource: warrantySource(r),
       autoSaved: false, // a scanned receipt was uploaded by hand, never matched
       link: r.imageUrl,
     })),
@@ -855,6 +898,72 @@ router.post('/account/receipts/:kind/:id/deductible', requireCustomerAuth, async
     source: deductibleSource(updated, cats),
     overridesRule: overridesCategoryRule(updated, cats),
     category: updated.aiCategory || null,
+  });
+});
+
+// POST /account/receipts/:kind/:id/warranty — the customer correcting the
+// AI's warranty-length estimate on one receipt (they bought AppleCare, or
+// the guess was for the wrong item). See lib/receiptWarranty.js.
+router.post('/account/receipts/:kind/:id/warranty', requireCustomerAuth, async (req, res) => {
+  const { kind, id } = req.params;
+  if (kind !== 'transaction' && kind !== 'scanned') {
+    return res.status(404).json({ error: 'Unknown receipt type' });
+  }
+
+  // Tri-state, same reasoning as the deductible route: 'clear' hands the
+  // receipt back to the AI's estimate rather than freezing today's number.
+  // 0 is a real answer ("no warranty"), not treated as falsy/absent.
+  const raw = req.body?.months;
+  let months;
+  if (raw === 'clear' || raw === null || raw === undefined || raw === '') {
+    months = null;
+  } else {
+    const parsed = Number(raw);
+    if (!Number.isInteger(parsed) || parsed < 0) {
+      return res.status(400).json({ error: 'months must be a non-negative whole number' });
+    }
+    months = parsed;
+  }
+
+  const model = kind === 'transaction' ? prisma.transaction : prisma.scannedReceipt;
+
+  // Ownership via updateMany, same reasoning as the deductible route above:
+  // a receipt id is a guessable cuid.
+  // purchaseDate only exists on ScannedReceipt -- Transaction has no such
+  // column (createdAt IS the purchase moment there), so the select can't be
+  // shared verbatim between the two models the way the rest of this route is.
+  const existing = await model.findFirst({
+    where: { id, customerId: req.session.customerId },
+    select:
+      kind === 'scanned'
+        ? { createdAt: true, purchaseDate: true, aiWarrantyMonths: true, warrantyExpiresAt: true }
+        : { createdAt: true, aiWarrantyMonths: true, warrantyExpiresAt: true },
+  });
+  if (!existing) return res.status(404).json({ error: 'Not found' });
+
+  const purchaseDate = kind === 'scanned' ? existing.purchaseDate || existing.createdAt : existing.createdAt;
+  const effectiveMonths = effectiveWarrantyMonths({ aiWarrantyMonths: existing.aiWarrantyMonths, warrantyMonths: months });
+  const newExpiry = computeWarrantyExpiry(purchaseDate, effectiveMonths);
+
+  // Reset both reminder flags whenever the effective expiry actually
+  // changes -- a stale "already sent" flag from the wrong original date
+  // would otherwise silently suppress the reminder for the corrected one.
+  const expiryChanged = String(existing.warrantyExpiresAt) !== String(newExpiry);
+
+  const { count } = await model.updateMany({
+    where: { id, customerId: req.session.customerId },
+    data: {
+      warrantyMonths: months,
+      warrantyExpiresAt: newExpiry,
+      ...(expiryChanged ? { warranty14dReminderSentAt: null, warranty3dReminderSentAt: null } : {}),
+    },
+  });
+  if (count === 0) return res.status(404).json({ error: 'Not found' });
+
+  res.json({
+    warrantyMonths: effectiveMonths,
+    warrantyExpiresAt: newExpiry,
+    source: warrantySource({ aiWarrantyMonths: existing.aiWarrantyMonths, warrantyMonths: months }),
   });
 });
 

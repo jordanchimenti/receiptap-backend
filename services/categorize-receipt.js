@@ -8,6 +8,7 @@
 
 const Anthropic = require('@anthropic-ai/sdk');
 const prisma = require('../lib/prisma');
+const { computeWarrantyExpiry, effectiveWarrantyMonths } = require('../lib/receiptWarranty');
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -19,12 +20,15 @@ const CATEGORIES = [
 
 /**
  * Categorizes a single transaction using the merchant name and line items.
- * Returns { category, reasoning } or null on any failure -- callers should
- * treat null as "skip categorization for now," not an error.
+ * Returns { category, reasoning, warrantyMonths } or null on any failure --
+ * callers should treat null as "skip categorization for now," not an error.
  *
  * Deliberately does NOT answer tax deductibility. See the note at the top of
  * lib/receiptDeductible.js: the model can say what was bought, not whether a
- * particular person is entitled to claim it.
+ * particular person is entitled to claim it. Warranty length is different --
+ * a typical manufacturer/store warranty is a fact about the product, not the
+ * buyer's circumstances, so the model IS allowed to estimate it directly (see
+ * lib/receiptWarranty.js for how a customer's own correction still wins).
  */
 async function categorizeTransaction({ merchantName, lineItems }) {
   if (!process.env.ANTHROPIC_API_KEY) {
@@ -47,12 +51,21 @@ Merchant: ${merchantName}
 Items: ${itemsSummary}
 
 Respond with ONLY a JSON object, no other text, in this exact shape:
-{"category": one of [${CATEGORIES.map((c) => `"${c}"`).join(', ')}], "reasoning": "one short sentence on why this category fits"}
+{"category": one of [${CATEGORIES.map((c) => `"${c}"`).join(', ')}], "reasoning": "one short sentence on why this category fits", "warrantyMonths": integer or null}
 
 Categorise what was BOUGHT. Do not judge whether it is tax deductible: that
 depends on who is filing, what the purchase was for, and where they file,
 none of which is on the receipt. The customer decides which of their own
-categories count as deductible.`,
+categories count as deductible.
+
+"warrantyMonths": your best estimate, in whole months, of the typical
+manufacturer or store warranty for this purchase (e.g. 12 for a standard
+one-year electronics warranty, 24 for many appliances). Use null for
+anything that doesn't typically carry one -- food, groceries, travel,
+entertainment, services, or apparel with no specific product warranty. If a
+line item itself names a protection plan or extended warranty (e.g.
+"AppleCare", "2-Year Protection Plan"), use that plan's length instead of
+guessing the base manufacturer term.`,
         },
       ],
     });
@@ -66,9 +79,16 @@ categories count as deductible.`,
       parsed.category = 'Other';
     }
 
+    // Anything other than a positive whole number means "no typical
+    // warranty" -- including a model that ignores the null instruction and
+    // sends a string, 0, or a fraction.
+    const warrantyMonths =
+      Number.isInteger(parsed.warrantyMonths) && parsed.warrantyMonths > 0 ? parsed.warrantyMonths : null;
+
     return {
       category: parsed.category,
       reasoning: String(parsed.reasoning || '').slice(0, 300),
+      warrantyMonths,
     };
   } catch (err) {
     console.error('[categorize-receipt] categorization failed:', err.message);
@@ -91,12 +111,25 @@ function categorizeInBackground(transaction, merchantName) {
   categorizeTransaction({ merchantName, lineItems: transaction.lineItems })
     .then((result) => {
       if (!result) return;
+      // Transaction has no separate purchase-date column -- createdAt IS the
+      // purchase moment, since the webhook that creates the row fires at
+      // sale time (see lib/receiptDateLabels.js).
+      //
+      // warrantyExpiresAt is keyed to whichever number is EFFECTIVE, not
+      // just this fresh AI estimate -- categorizeInBackground only runs once
+      // per receipt (guarded by aiCategorizedAt at every call site), so a
+      // customer override normally can't exist yet, but if one somehow does
+      // (a race with the override route) it must keep governing the stored
+      // expiry rather than being silently overwritten by the AI's guess.
+      const months = effectiveWarrantyMonths({ aiWarrantyMonths: result.warrantyMonths, warrantyMonths: transaction.warrantyMonths });
       return prisma.transaction.update({
         where: { id: transaction.id },
         data: {
           aiCategory: result.category,
           aiReasoning: result.reasoning,
           aiCategorizedAt: new Date(),
+          aiWarrantyMonths: result.warrantyMonths,
+          warrantyExpiresAt: computeWarrantyExpiry(transaction.createdAt, months),
         },
       });
     })
@@ -122,11 +155,18 @@ function categorizeScannedInBackground(scannedReceipt) {
   })
     .then((result) => {
       if (!result) return;
+      // purchaseDate is the true purchase date for a scanned receipt (typed
+      // in by the customer); createdAt (the upload time) is only the
+      // fallback for the receipts old enough not to have one. Same
+      // effective-months precedence as categorizeInBackground above.
+      const months = effectiveWarrantyMonths({ aiWarrantyMonths: result.warrantyMonths, warrantyMonths: scannedReceipt.warrantyMonths });
       return prisma.scannedReceipt.update({
         where: { id: scannedReceipt.id },
         data: {
           ...(scannedReceipt.aiCategory ? {} : { aiCategory: result.category }),
           aiReasoning: result.reasoning,
+          aiWarrantyMonths: result.warrantyMonths,
+          warrantyExpiresAt: computeWarrantyExpiry(scannedReceipt.purchaseDate || scannedReceipt.createdAt, months),
         },
       });
     })

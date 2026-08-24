@@ -38,6 +38,10 @@
               <% if (r.aiCategory || r.kind === 'scanned') { %>
                 <div class="badges">
                   <% if (r.aiCategory) { %><span class="badge badge-category"><%= r.aiCategory %></span><% } %>
+                  <%# Only the "still active" case, and only as a passive fact
+                      here -- editing it lives below, outside the link (see
+                      .warranty-badge). %>
+                  <% if (r.warrantyExpiresLabel) { %><span class="badge badge-warranty">Warranty until <%= r.warrantyExpiresLabel %></span><% } %>
                   <%# Told, not hidden: this receipt is here because their card
                       was recognised, not because they tapped. %>
                   <% if (r.autoSaved) { %><span class="badge badge-auto" title="Saved automatically — your card was recognised at this business. You can turn this off in Settings.">Saved automatically</span><% } %>
@@ -50,25 +54,49 @@
           <%# Outside the <a>, not inside it: a button nested in a link is
               invalid, and every tap on it would navigate to the receipt
               instead of toggling. aria-pressed carries the state for anyone
-              not seeing the colour. Positioned absolutely (see .ded-toggle
-              in customer-wallet.ejs) into the corner above .receipt-total --
-              a sibling here, not a descendant of .receipt-row, is what makes
-              that possible. %>
-          <button type="button"
-                  class="ded-toggle <%= r.deductible ? 'on' : '' %>"
-                  aria-pressed="<%= r.deductible ? 'true' : 'false' %>"
-                  data-kind="<%= r.kind === 'scanned' ? 'scanned' : 'transaction' %>"
-                  data-id="<%= r.id %>"
-                  onclick="toggleDeductible(this)">
-            <span class="ded-dot" aria-hidden="true"></span>Tax deductible
-          </button>
-          <%# Says which of the two mechanisms is currently answering: this
-              receipt specifically, or the customer's rule for its category. %>
+              not seeing the colour. Sits in .ded-strip, directly under the
+              badges row (category, warranty) rather than the row's corner --
+              a sibling of .receipt-row, not a descendant, is what makes that
+              possible. %>
           <div class="ded-strip">
+            <button type="button"
+                    class="ded-toggle <%= r.deductible ? 'on' : '' %>"
+                    aria-pressed="<%= r.deductible ? 'true' : 'false' %>"
+                    data-kind="<%= r.kind === 'scanned' ? 'scanned' : 'transaction' %>"
+                    data-id="<%= r.id %>"
+                    onclick="toggleDeductible(this)">
+              <span class="ded-dot" aria-hidden="true"></span>Tax deductible
+            </button>
+            <%# Says which of the two mechanisms is currently answering: this
+                receipt specifically, or the customer's rule for its category. %>
             <span class="ded-note"
                   title="You decide what's deductible — the category was read off the receipt, but whether you can claim it depends on your situation and where you file. Not tax advice.">
               <% if (r.deductibleSource === 'receipt') { %>you marked this<% } else if (r.deductibleSource === 'category') { %><%= r.aiCategory %> is deductible<% } %>
             </span>
+            <%# Also outside the <a>, same reason as .ded-toggle above. Tap to
+                edit in place -- see openWarrantyEdit/saveWarranty in
+                customer-wallet.ejs -- rather than a modal, matching how a
+                failed deductible save recovers in place instead of a dialog.
+                Only shown when there's an actual estimate/answer to correct
+                (see warrantyBadgeText in routes/customer-account.js) -- not
+                on every categorized receipt, or a coffee run would carry a
+                permanent "Add warranty" tap target nobody asked for. %>
+            <% if (r.warrantyBadgeText) { %>
+              <button type="button" class="warranty-badge" onclick="openWarrantyEdit(this)"><%= r.warrantyBadgeText %></button>
+              <%# A <button> can't contain an <input> (same content-model rule
+                  as a <button> inside an <a>), so this is a sibling form,
+                  hidden until the badge above is tapped, rather than content
+                  swapped into the badge itself. %>
+              <form class="warranty-edit"
+                    data-kind="<%= r.kind === 'scanned' ? 'scanned' : 'transaction' %>"
+                    data-id="<%= r.id %>"
+                    onsubmit="return saveWarranty(event, this)">
+                <input type="number" name="months" min="0" value="<%= r.warrantyMonths %>" />
+                <span class="warranty-edit-hint">months, 0 = none</span>
+                <button type="submit">Save</button>
+                <button type="button" onclick="closeWarrantyEdit(this)">Cancel</button>
+              </form>
+            <% } %>
           </div>
           </div>
       <% if (i === receipts.length - 1 || receipts[i + 1].month !== r.month) { %>

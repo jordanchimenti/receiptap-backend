@@ -11,7 +11,7 @@
 // notification couldn't be sent.
 
 const prisma = require('../lib/prisma');
-const { sendLoyaltyRewardReadyEmail } = require('./emailService');
+const { sendLoyaltyRewardReadyEmail, sendWarrantyExpiringEmail } = require('./emailService');
 const { isEmailSuppressed } = require('./emailSuppressionService');
 const { sendToCustomer } = require('./pushService');
 
@@ -85,6 +85,48 @@ async function sendPushSafely(customerId, payload) {
   }
 }
 
+// --- Warranty reminders ------------------------------------------------------
+// Fired by services/warrantyReminderService.js's daily scan, at most twice
+// per receipt (stage '14d', then '3d' -- each deduped independently there).
+// In-app + email only, deliberately no push for this one (easy to add later
+// as one more entry below, same shape as the loyalty Promise.all).
+
+async function notifyWarrantyExpiring({ customerId, merchantName, totalCents, expiresAt, linkUrl, stage }) {
+  const customer = await prisma.customer.findUnique({ where: { id: customerId } });
+  if (!customer) return null;
+
+  const expiresLabel = expiresAt.toLocaleDateString('en-US', {
+    month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC',
+  });
+  const daysLabel = stage === '3d' ? '3 days' : 'about 2 weeks';
+
+  const notification = await prisma.notification.create({
+    data: {
+      customerId,
+      type: 'WARRANTY_EXPIRING',
+      title: stage === '3d' ? 'Warranty ending in 3 days' : 'Warranty ending soon',
+      body: `${money(totalCents)} at ${merchantName} — estimated warranty ends ${expiresLabel}.`,
+      linkUrl,
+    },
+  });
+
+  await sendWarrantyExpiringEmailSafely({
+    customer, merchantName, totalLabel: money(totalCents), expiresLabel, stage, linkUrl,
+  });
+
+  return notification;
+}
+
+async function sendWarrantyExpiringEmailSafely({ customer, merchantName, totalLabel, expiresLabel, stage, linkUrl }) {
+  try {
+    await sendWarrantyExpiringEmail({
+      email: customer.email, name: customer.name, merchantName, totalLabel, expiresLabel, stage, linkUrl,
+    });
+  } catch (err) {
+    console.error(`[notificationService] warranty email to ${customer.email} failed:`, err.message);
+  }
+}
+
 // --- Receipt activity -------------------------------------------------------
 // Deliberately in-app only: no email, no push. A loyalty card filling up is
 // news the customer couldn't otherwise know. Saving or deleting a receipt is
@@ -144,6 +186,7 @@ async function markAllRead(customerId) {
 
 module.exports = {
   notifyLoyaltyCardFull,
+  notifyWarrantyExpiring,
   notifyReceiptSaved,
   notifyReceiptDeleted,
   listNotifications,

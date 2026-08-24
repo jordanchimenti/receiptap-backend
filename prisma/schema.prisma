@@ -265,6 +265,24 @@ model Transaction {
   // return -- see lib/receiptDeductible.js for how the two combine.
   taxDeductible Boolean?
 
+  // Warranty tracking -- same shape as deductibility: the model estimates
+  // from what was bought, the customer's own number (if they give one)
+  // always wins. See lib/receiptWarranty.js.
+  aiWarrantyMonths          Int? // the model's estimate; null = not the kind of purchase that typically carries one
+  warrantyMonths            Int? // customer's correction; null = defer to the AI, 0 = "no warranty" (explicit)
+  // Stored, not derived on read -- computeWarrantyExpiry() in
+  // lib/receiptWarranty.js is the ONLY place this is computed, called from
+  // both the categorization write path and the override route, so the
+  // reminder job's date-range scan can never disagree with what the wallet
+  // shows on screen.
+  warrantyExpiresAt         DateTime?
+  // Per-stage dedupe so the daily reminder job never double-sends. Reset to
+  // null by the override route whenever warrantyExpiresAt changes -- a
+  // stale flag from the wrong original date would otherwise silently
+  // suppress the reminder the customer actually needs after a correction.
+  warranty14dReminderSentAt DateTime?
+  warranty3dReminderSentAt  DateTime?
+
   // Merchant expense tracking — set only if a DIFFERENT merchant claims this
   // as a purchase they made (buying from another ReceipTap merchant)
   collectedByMerchantId String?
@@ -277,6 +295,7 @@ model Transaction {
   @@index([merchantId])
   @@index([customerId])
   @@index([collectedByMerchantId])
+  @@index([warrantyExpiresAt])
 }
 
 // ---------------------------------------------------------------------------
@@ -780,7 +799,16 @@ model ScannedReceipt {
   lineItems Json?
   createdAt DateTime @default(now())
 
+  // Warranty tracking -- same fields and precedence as Transaction, see the
+  // comment there and lib/receiptWarranty.js.
+  aiWarrantyMonths          Int?
+  warrantyMonths            Int?
+  warrantyExpiresAt         DateTime?
+  warranty14dReminderSentAt DateTime?
+  warranty3dReminderSentAt  DateTime?
+
   @@index([customerId])
+  @@index([warrantyExpiresAt])
 }
 
 // ---------------------------------------------------------------------------

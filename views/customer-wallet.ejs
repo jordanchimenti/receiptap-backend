@@ -83,24 +83,19 @@
        block. Without overriding it here, this wrapper inherits that flex
        row and squeezes .receipt-row and .ded-strip into side-by-side
        columns instead of stacking them, cramming the total into half the
-       width it needs.
-
-       position: relative + the top padding reserve a strip for .ded-toggle,
-       positioned absolutely into it below -- the toggle sits above
-       .receipt-total in the corner, but can't be DOM-nested inside
-       .receipt-row (that's an <a>; a button inside a link is invalid, and
-       every tap on it would navigate instead of toggling). Absolute
-       positioning is what lets it sit in the corner while staying a sibling
-       the link can't swallow taps for. */
-    .receipt-line { display: block; position: relative; padding-top: 32px; border-bottom: 1px solid var(--w-line); }
+       width it needs. */
+    .receipt-line { display: block; border-bottom: 1px solid var(--w-line); }
     .receipt-line:last-child { border-bottom: none; }
     .receipt-row {
       display: flex; justify-content: space-between; align-items: flex-start;
-      padding: 0 18px 10px; text-decoration: none; color: var(--w-ink);
+      padding: 16px 18px 10px; text-decoration: none; color: var(--w-ink);
     }
-    .ded-strip { display: flex; align-items: center; gap: 10px; padding: 0 18px 14px; }
+    /* Sits directly under the badges row -- category, warranty -- rather
+       than in the row's corner, so it reads as "more about this purchase"
+       the way the badges above it do, not as a second control competing
+       with the total. */
+    .ded-strip { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px; padding: 0 18px 14px; }
     .ded-toggle {
-      position: absolute; top: 8px; right: 18px; z-index: 1;
       display: inline-flex; align-items: center; gap: 7px;
       font-size: 11.5px; font-weight: 700; font-family: inherit; cursor: pointer;
       padding: 5px 11px; border-radius: 999px;
@@ -129,6 +124,28 @@
     .badge-category { background: var(--w-accent-wash); color: var(--w-accent); }
     .badge-tax { background: rgba(5,107,254,0.15); color: var(--w-accent); }
     .badge-scanned { background: var(--w-card-raised); color: var(--w-ink-soft); border: 1px solid var(--w-line); }
+    /* Green, same token as the marked-deductible toggle -- a receipt still
+       under warranty is a similarly unambiguous "good news, covered" fact. */
+    .badge-warranty { background: var(--w-ok-wash); color: var(--w-ok); }
+
+    .warranty-badge {
+      font-family: inherit; font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 999px;
+      border: 1px solid var(--w-line); background: var(--w-card-raised); color: var(--w-ink-soft); cursor: pointer;
+    }
+    .warranty-edit {
+      display: none; align-items: center; gap: 6px;
+    }
+    .warranty-edit.open { display: flex; }
+    .warranty-edit input {
+      width: 56px; font-family: inherit; font-size: 12.5px; padding: 4px 7px;
+      border-radius: 8px; border: 1px solid var(--w-line); background: var(--w-bg); color: var(--w-ink);
+    }
+    .warranty-edit button {
+      font-family: inherit; font-size: 11px; font-weight: 700; padding: 4px 9px; border-radius: 999px;
+      border: 1px solid var(--w-line); background: var(--w-card-raised); color: var(--w-ink-soft); cursor: pointer;
+    }
+    .warranty-edit button[type="submit"] { border-color: var(--w-accent); color: var(--w-accent); }
+    .warranty-edit-hint { font-size: 10.5px; color: var(--w-ink-soft); }
 
     .search-card { padding: 16px; margin-bottom: 16px; }
     .search-row { display: flex; gap: 10px; }
@@ -541,6 +558,69 @@
       } finally {
         btn.disabled = false;
       }
+    }
+
+    // Swaps the badge for its sibling .warranty-edit form -- see the comment
+    // in views/partials/receipt-list.ejs on why this is two elements
+    // (button + form) rather than one, an <input> injected into the badge.
+    function openWarrantyEdit(btn) {
+      btn.style.display = 'none';
+      var form = btn.nextElementSibling;
+      form.classList.add('open');
+      form.querySelector('input').focus();
+    }
+
+    function closeWarrantyEdit(cancelBtn) {
+      var form = cancelBtn.closest('.warranty-edit');
+      form.classList.remove('open');
+      form.previousElementSibling.style.display = '';
+    }
+
+    // Mirrors warrantyBadgeText() in routes/customer-account.js in miniature
+    // -- just enough to redraw the badge from the save response without a
+    // page reload, same as toggleDeductible's note-text logic above.
+    function warrantyBadgeLabel(warrantyExpiresAt, months) {
+      if (warrantyExpiresAt) {
+        var expiry = new Date(warrantyExpiresAt);
+        if (expiry > new Date()) {
+          return 'Warranty until ' + expiry.toLocaleDateString('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' });
+        }
+        return 'Warranty expired';
+      }
+      return months === 0 ? 'No warranty' : 'Add warranty';
+    }
+
+    async function saveWarranty(event, form) {
+      event.preventDefault();
+      var input = form.querySelector('input[name="months"]');
+      var badge = form.previousElementSibling;
+      var submitBtn = form.querySelector('button[type="submit"]');
+      submitBtn.disabled = true;
+      try {
+        var res = await fetch(
+          '/account/receipts/' + form.dataset.kind + '/' + form.dataset.id + '/warranty',
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ months: input.value === '' ? 'clear' : input.value }),
+          }
+        );
+        if (!res.ok) throw new Error('save failed');
+        var data = await res.json();
+        badge.textContent = warrantyBadgeLabel(data.warrantyExpiresAt, data.warrantyMonths);
+        input.value = data.warrantyMonths === null ? '' : data.warrantyMonths;
+        form.classList.remove('open');
+        badge.style.display = '';
+      } catch (err) {
+        // Leave the form open showing what was actually typed rather than a
+        // state that was never saved -- same recover-in-place reasoning as
+        // toggleDeductible above, no modal.
+        var hint = form.querySelector('.warranty-edit-hint');
+        if (hint) hint.textContent = "couldn't save — try again";
+      } finally {
+        submitBtn.disabled = false;
+      }
+      return false;
     }
 
     var acctMenu = document.getElementById('acct-menu');

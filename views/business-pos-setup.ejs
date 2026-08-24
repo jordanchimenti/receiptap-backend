@@ -95,7 +95,7 @@
             <select onchange="assignPuck('<%= loc.id %>', this.value)">
               <option value="">Select a puck…</option>
               <% pucks.forEach(function(p) { %>
-                <option value="<%= p.id %>" <%= p.posLocationId === loc.id ? 'selected' : '' %>><%= p.id.slice(0, 4).toUpperCase() %></option>
+                <option value="<%= p.id %>" <%= p.posLocationId === loc.id ? 'selected' : '' %>><%= p.id %></option>
               <% }); %>
             </select>
           </div>
@@ -125,7 +125,7 @@
           <select onchange="assignCloverPuck(this.value)">
             <option value="">Select a puck…</option>
             <% pucks.forEach(function(p) { %>
-              <option value="<%= p.id %>" <%= p.posLocationId === cloverMerchantId ? 'selected' : '' %>><%= p.id.slice(0, 4).toUpperCase() %></option>
+              <option value="<%= p.id %>" <%= p.posLocationId === cloverMerchantId ? 'selected' : '' %>><%= p.id %></option>
             <% }); %>
           </select>
         </div>
@@ -154,7 +154,7 @@
           <select onchange="assignLightspeedPuck(this.value)">
             <option value="">Select a puck…</option>
             <% pucks.forEach(function(p) { %>
-              <option value="<%= p.id %>" <%= p.posLocationId === lightspeedDomainPrefix ? 'selected' : '' %>><%= p.id.slice(0, 4).toUpperCase() %></option>
+              <option value="<%= p.id %>" <%= p.posLocationId === lightspeedDomainPrefix ? 'selected' : '' %>><%= p.id %></option>
             <% }); %>
           </select>
         </div>
@@ -186,7 +186,7 @@
           <select onchange="assignShopifyPuck(this.value)">
             <option value="">Select a puck…</option>
             <% pucks.forEach(function(p) { %>
-              <option value="<%= p.id %>" <%= p.posLocationId === shopifyShopDomain ? 'selected' : '' %>><%= p.id.slice(0, 4).toUpperCase() %></option>
+              <option value="<%= p.id %>" <%= p.posLocationId === shopifyShopDomain ? 'selected' : '' %>><%= p.id %></option>
             <% }); %>
           </select>
         </div>

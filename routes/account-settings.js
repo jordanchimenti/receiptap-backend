@@ -163,38 +163,58 @@ router.post('/dashboard/settings/account/business', requireAuth, async (req, res
 // a replacement, and the field-ownership rules below are copied from them
 // deliberately rather than reinvented:
 //
-//   Merchant      businessName, email, ownerName, ownerPhone, profilePhotoUrl,
-//                 businessEmail, industry, address*
+//   Merchant      businessName, businessEmail, industry, address*
 //   ReceiptTheme  phone, gstHstNumber      (both print on a receipt)
 //
+// email, ownerName, ownerPhone and profilePhotoUrl are ALSO merchantData
+// fields this route knows how to write, but views/business-settings.ejs no
+// longer renders any of them -- those moved to views/business-account.ejs's
+// own Profile Settings page, which posts to its OWN route instead
+// (POST .../profile below). Left handled here rather than stripped out: a
+// future page could still legitimately submit one of these through this
+// route, and the `'field' in req.body` guard already makes that safe to
+// leave in place -- nothing currently does, so in practice these branches
+// never run, but there's no correctness reason to delete them.
 // `'field' in req.body` rather than a truthiness check throughout: an absent
 // key means "this form didn't render that input, leave it alone", while
 // present-but-empty is a real clear. Getting that backwards would let this
-// page silently wipe a value another page owns.
+// page silently wipe a value another page owns -- which is exactly what
+// would happen to businessName if Profile Settings' submission were ever
+// treated as authoritative for every field instead of just its own.
 router.post('/dashboard/settings/account/business-all', requireAuth, handleProfilePhotoUpload, async (req, res) => {
   const b = req.body;
   const destination = settingsRedirectTarget(b.redirectTo);
   const merchantId = req.session.merchantId;
   const fail = (msg) => res.redirect(`${destination}?businessError=` + encodeURIComponent(msg));
 
-  if (!b.businessName || !b.email) {
-    return fail('Business name and email are both required.');
+  if (!b.businessName) {
+    return fail('Business name is required.');
   }
 
-  const normalizedEmail = b.email.trim().toLowerCase();
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
-    return fail('Enter a valid email address.');
+  const merchantData = { businessName: b.businessName };
+
+  // Login email is 'email' in b -- present only from forms that still
+  // render it. views/business-settings.ejs stopped rendering it once login
+  // email moved to views/business-account.ejs's own Profile Settings page
+  // (POST .../profile), so this whole block is now conditional the same
+  // way the rest of the fields already are.
+  if ('email' in b) {
+    if (!b.email) return fail('Email is required.');
+    const normalizedEmail = b.email.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+      return fail('Enter a valid email address.');
+    }
+    const clash = await prisma.merchant.findFirst({
+      where: { email: normalizedEmail, NOT: { id: merchantId } },
+    });
+    if (clash) return fail('That email is already in use by another account.');
+    merchantData.email = normalizedEmail;
   }
-  const clash = await prisma.merchant.findFirst({
-    where: { email: normalizedEmail, NOT: { id: merchantId } },
-  });
-  if (clash) return fail('That email is already in use by another account.');
 
   if (b.businessEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(b.businessEmail)) {
     return fail('Enter a valid business email.');
   }
 
-  const merchantData = { businessName: b.businessName, email: normalizedEmail };
   const only = (key, value) => { if (key in b) merchantData[key] = value; };
   only('ownerName', b.ownerName || null);
   only('ownerPhone', b.ownerPhone || null);

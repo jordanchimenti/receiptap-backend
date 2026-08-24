@@ -1,24 +1,29 @@
 <!-- views/business-settings.ejs -->
-<!-- Dark reskin of views/account-settings.ejs's content, PLUS two new
-     panels (Business Profile, Business Address) and a bulk "Disconnect all
-     tiles" danger-zone action that only exist here -- the real dashboard's
-     account-settings.ejs doesn't have them (see routes/account-settings.js
-     for the new write routes: business-profile, business-address). Same
-     locals otherwise (see GET /account/business/settings in
-     routes/account-business.js). Posts to routes/account-settings.js with
-     a hidden redirectTo field so they land back here instead of the real
-     dashboard -- see settingsRedirectTarget() there. Deactivation is
+<!-- Dark reskin of views/account-settings.ejs's content, PLUS a Business
+     Address panel and a bulk "Disconnect all tiles" danger-zone action that
+     only exist here -- the real dashboard's account-settings.ejs doesn't
+     have them (see routes/account-settings.js for the write route:
+     business-address). Same locals otherwise (see GET
+     /account/business/settings in routes/account-business.js). Posts to
+     routes/account-settings.js with a single hidden redirectTo field, right
+     after the <form> tag rather than owned by any one card, so they land
+     back here instead of the real dashboard regardless of which card ends
+     up first -- see settingsRedirectTarget() there. Deactivation is
      unchanged: same warning copy verbatim, same route (it destroys the
      session regardless of entry point, so there's no "return to wallet"
      concept for it).
 
-     Business Profile's phone/GST-HST fields are the SAME ReceiptTheme
-     fields Receipt Design edits -- what actually prints on a customer's
-     receipt -- reused rather than duplicated, so there's only ever one
-     value on file. Business email/website and the full Business Address
-     also print on every receipt/PDF (see views/receipt.ejs's
-     businessAddressLines and views/receipt-layouts/*.ejs) -- Industry is
-     the one Merchant field here that's account-only, never shown. -->
+     Everything about the PERSON running the account -- photo, owner name,
+     login email, password, log out -- moved to its own page,
+     views/business-account.ejs ("Profile Settings"). What's left here is
+     only what's about the business itself, and Business information's
+     phone/GST-HST fields are the SAME ReceiptTheme fields Receipt Design
+     edits -- what actually prints on a customer's receipt -- reused rather
+     than duplicated, so there's only ever one value on file. Business
+     email/website and the full Business Address also print on every
+     receipt/PDF (see views/receipt.ejs's businessAddressLines and
+     views/receipt-layouts/*.ejs) -- Industry is the one Merchant field here
+     that's account-only, never shown. -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -97,26 +102,19 @@
         Merchant.email, so having two of them was a way to have the same column
         edited in two places. enctype is multipart for the profile photo. %>
     <form method="POST" action="/dashboard/settings/account/business-all" enctype="multipart/form-data">
-
-    <div class="w-card panel">
-      <h2>Business profile</h2>
-      <% if (businessError) { %><div class="banner error"><%= businessError %></div><% } %>
-      <% if (businessSuccess) { %><div class="banner success">Business info updated.</div><% } %>
-              <input type="hidden" name="redirectTo" value="/account/business/settings" />
-        <div class="w-field"><label for="businessName">Business name</label><input type="text" id="businessName" name="businessName" value="<%= merchant.businessName %>" required /></div>
-        <div class="w-field"><label for="email">Email</label><input type="email" id="email" name="email" value="<%= merchant.email %>" required /></div>
-        <div class="w-field"><label for="businessPhone">Phone (optional)</label><input type="text" id="businessPhone" name="phone" value="<%= receiptTheme ? (receiptTheme.phone || '') : '' %>" placeholder="416-555-1234" /></div>
-        <div class="field-hint">Shown on the receipts your customers receive. Leave blank to not show one.</div>
-    </div>
+    <input type="hidden" name="redirectTo" value="/account/business/settings" />
 
     <div class="w-card panel">
       <h2>Business information</h2>
-      <% if (businessProfileError) { %><div class="banner error"><%= businessProfileError %></div><% } %>
-      <% if (businessProfileSuccess) { %><div class="banner success">Business profile updated.</div><% } %>
+      <% if (businessError) { %><div class="banner error"><%= businessError %></div><% } %>
+      <% if (businessSuccess) { %><div class="banner success">Business info updated.</div><% } %>
 
         <p style="font-size:12.5px; color:var(--w-ink-soft); margin:-8px 0 14px; line-height:1.5;">Shown on the receipts your customers receive.</p>
+        <div class="w-field"><label for="businessName">Business name</label><input type="text" id="businessName" name="businessName" value="<%= merchant.businessName %>" required /></div>
+        <div class="w-field"><label for="businessPhone">Phone (optional)</label><input type="text" id="businessPhone" name="phone" value="<%= receiptTheme ? (receiptTheme.phone || '') : '' %>" placeholder="416-555-1234" /></div>
+        <div class="field-hint">Leave phone blank to not show one.</div>
         <div class="w-field"><label for="businessEmail">Business email (optional)</label><input type="email" id="businessEmail" name="businessEmail" value="<%= merchant.businessEmail || '' %>" placeholder="hello@yourbusiness.com" /></div>
-        <div class="field-hint">Separate from your login email above.</div>
+        <div class="field-hint">Separate from your login email, which lives on <a href="/account/business/account" style="color:var(--w-accent);">Profile Settings</a> now.</div>
         <%# Two slots, each with its own label. Canada is the reason: a Quebec
             merchant is registered for GST/HST *and* QST and has to show both,
             and BC/Saskatchewan/Manitoba carry a PST number alongside GST. With

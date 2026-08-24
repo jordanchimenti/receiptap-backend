@@ -375,8 +375,6 @@ router.get('/account/business/settings', requireAuth, async (req, res) => {
     taxNumber2LabelIsCustom: isCustomTaxNumberLabel(taxNumber2Label),
     businessError: req.query.businessError || null,
     businessSuccess: req.query.businessSuccess === '1',
-    businessProfileError: req.query.businessProfileError || null,
-    businessProfileSuccess: req.query.businessProfileSuccess === '1',
     addressSuccess: req.query.addressSuccess === '1',
     posError: req.query.posError || null,
     disconnectAllSuccess: req.query.disconnectAllSuccess === '1',

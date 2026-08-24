@@ -125,12 +125,24 @@
     .receipt-total {
       font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 700; font-size: 15.5px;
       border-top: none; margin-top: 0; padding-top: 0; color: var(--w-ink);
+      /* .receipt-row is align-items: flex-start so the left column (name,
+         date, badges) stacks from the top -- align-self overrides just the
+         total to center against the row's full height instead of pinning
+         to the top alongside the merchant name. */
+      align-self: center;
     }
     .badges { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
     .badge { font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 999px; }
     .badge-category { background: var(--w-accent-wash); color: var(--w-accent); }
     .badge-tax { background: rgba(5,107,254,0.15); color: var(--w-accent); }
     .badge-scanned { background: var(--w-card-raised); color: var(--w-ink-soft); border: 1px solid var(--w-line); }
+    /* Neutral, like badge-scanned -- a payment method is a fact about the
+       receipt, not a status worth calling out in colour the way the category
+       or warranty badges are. */
+    .badge-payment {
+      background: var(--w-card-raised); color: var(--w-ink-soft); border: 1px solid var(--w-line);
+      font-family: var(--font-mono); font-variant-numeric: tabular-nums;
+    }
     /* Green, same token as the marked-deductible toggle -- a receipt still
        under warranty is a similarly unambiguous "good news, covered" fact. */
     .badge-warranty { background: var(--w-ok-wash); color: var(--w-ok); }

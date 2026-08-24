@@ -35,13 +35,17 @@
                   only a calendar date has no time to show unless the paper
                   printed one. %>
               <div class="receipt-date"><%= r.date %><% if (r.time) { %> · <%= r.time %><% } %></div>
-              <% if (r.aiCategory || r.kind === 'scanned') { %>
+              <% if (r.aiCategory || r.kind === 'scanned' || r.paymentLabel) { %>
                 <div class="badges">
                   <% if (r.aiCategory) { %><span class="badge badge-category"><%= r.aiCategory %></span><% } %>
                   <%# Only the "still active" case, and only as a passive fact
                       here -- editing it lives below, outside the link (see
                       .warranty-badge). %>
                   <% if (r.warrantyExpiresLabel) { %><span class="badge badge-warranty">Warranty until <%= r.warrantyExpiresLabel %></span><% } %>
+                  <%# What was actually paid with, when the POS or the photo
+                      reported it -- null on a cash sale or a provider that
+                      doesn't capture card details, never a guess. %>
+                  <% if (r.paymentLabel) { %><span class="badge badge-payment"><%= r.paymentLabel %></span><% } %>
                   <%# Told, not hidden: this receipt is here because their card
                       was recognised, not because they tapped. %>
                   <% if (r.autoSaved) { %><span class="badge badge-auto" title="Saved automatically — your card was recognised at this business. You can turn this off in Settings.">Saved automatically</span><% } %>

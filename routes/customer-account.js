@@ -523,6 +523,40 @@ router.post('/receipt/:transactionId/save', requireCustomerAuth, async (req, res
 
 // --- The wallet itself ------------------------------------------------------
 
+// "Visa •••• 6123" for a tapped receipt, built fresh from cardBrand/cardLast4
+// rather than reusing Transaction.paymentMethod -- that column means
+// different things per POS provider (Square formats it exactly like this,
+// but Shopify stores the payment GATEWAY name there instead, e.g.
+// "shopify_payments", not a card brand). cardBrand/cardLast4 are the two
+// fields every provider that captures this populates consistently.
+//
+// Falls back to paymentMethod when it's already a card-shaped string ("••••"
+// present) -- real Square transactions from before this app captured
+// cardBrand/cardLast4 separately only have this older combined field, and
+// those receipts shouldn't lose their payment info just because a later
+// migration added columns nothing backfilled. Shown as-is when it's this
+// fallback (Square's own casing/spacing), not reformatted to match the
+// fresh case below -- a legacy row looking slightly different is an
+// acceptable rough edge, not worth re-parsing a free-text string over.
+//
+// Null on a cash sale or a provider that doesn't report card details at all
+// (Lightspeed's X-Series payload didn't, per CLAUDE.md) -- no badge, not a
+// guess.
+function cardLabel(cardBrand, cardLast4, paymentMethod) {
+  if (cardBrand && cardLast4) return `${formatCardBrand(cardBrand)} •••• ${cardLast4}`;
+  if (paymentMethod && paymentMethod.includes('••••')) return paymentMethod;
+  return null;
+}
+
+// Square reports brand in shouting-caps with underscores ("AMERICAN_EXPRESS");
+// title-case only when the whole string is uppercase, so a brand that
+// arrives already nicely cased (Shopify sends "Visa") is left alone.
+function formatCardBrand(brand) {
+  const spaced = brand.replace(/_/g, ' ');
+  if (spaced !== spaced.toUpperCase()) return spaced;
+  return spaced.replace(/\S+/g, (word) => word[0] + word.slice(1).toLowerCase());
+}
+
 // "Warranty until Mar 2027" on a row, or null if there's nothing to show --
 // no estimate, or one that's already passed (an expired badge on every old
 // receipt would be noise, not a service). UTC, to match how
@@ -746,6 +780,7 @@ async function renderWallet(req, res, { isFullWallet }) {
       warrantyExpiresLabel: warrantyExpiresLabel(t.warrantyExpiresAt),
       warrantyBadgeText: warrantyBadgeText(t.warrantyExpiresAt, effectiveWarrantyMonths(t)),
       warrantySource: warrantySource(t),
+      paymentLabel: cardLabel(t.cardBrand, t.cardLast4, t.paymentMethod),
       autoSaved: t.autoSavedViaRecognition,
       link: `/receipt/${t.id}`,
     })),
@@ -780,6 +815,10 @@ async function renderWallet(req, res, { isFullWallet }) {
       warrantyExpiresLabel: warrantyExpiresLabel(r.warrantyExpiresAt),
       warrantyBadgeText: warrantyBadgeText(r.warrantyExpiresAt, effectiveWarrantyMonths(r)),
       warrantySource: warrantySource(r),
+      // Already formatted exactly like this by the photo-extraction pass
+      // (see the ScannedReceipt.paymentMethod schema comment) -- shown as-is,
+      // not reformatted like the tapped-receipt case above.
+      paymentLabel: r.paymentMethod || null,
       autoSaved: false, // a scanned receipt was uploaded by hand, never matched
       link: r.imageUrl,
     })),

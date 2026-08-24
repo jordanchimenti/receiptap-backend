@@ -99,6 +99,17 @@
     <form method="POST" action="/dashboard/settings/account/business-all" enctype="multipart/form-data">
 
     <div class="w-card panel">
+      <h2>Business profile</h2>
+      <% if (businessError) { %><div class="banner error"><%= businessError %></div><% } %>
+      <% if (businessSuccess) { %><div class="banner success">Business info updated.</div><% } %>
+              <input type="hidden" name="redirectTo" value="/account/business/settings" />
+        <div class="w-field"><label for="businessName">Business name</label><input type="text" id="businessName" name="businessName" value="<%= merchant.businessName %>" required /></div>
+        <div class="w-field"><label for="email">Email</label><input type="email" id="email" name="email" value="<%= merchant.email %>" required /></div>
+        <div class="w-field"><label for="businessPhone">Phone (optional)</label><input type="text" id="businessPhone" name="phone" value="<%= receiptTheme ? (receiptTheme.phone || '') : '' %>" placeholder="416-555-1234" /></div>
+        <div class="field-hint">Shown on the receipts your customers receive. Leave blank to not show one.</div>
+    </div>
+
+    <div class="w-card panel">
       <h2>Business information</h2>
       <% if (businessProfileError) { %><div class="banner error"><%= businessProfileError %></div><% } %>
       <% if (businessProfileSuccess) { %><div class="banner success">Business profile updated.</div><% } %>
@@ -172,17 +183,6 @@
           </select>
         </div>
         <div class="field-hint">For your own records only — not shown on receipts.</div>
-    </div>
-
-    <div class="w-card panel">
-      <h2>Business profile</h2>
-      <% if (businessError) { %><div class="banner error"><%= businessError %></div><% } %>
-      <% if (businessSuccess) { %><div class="banner success">Business info updated.</div><% } %>
-              <input type="hidden" name="redirectTo" value="/account/business/settings" />
-        <div class="w-field"><label for="businessName">Business name</label><input type="text" id="businessName" name="businessName" value="<%= merchant.businessName %>" required /></div>
-        <div class="w-field"><label for="email">Email</label><input type="email" id="email" name="email" value="<%= merchant.email %>" required /></div>
-        <div class="w-field"><label for="businessPhone">Phone (optional)</label><input type="text" id="businessPhone" name="phone" value="<%= receiptTheme ? (receiptTheme.phone || '') : '' %>" placeholder="416-555-1234" /></div>
-        <div class="field-hint">Shown on the receipts your customers receive. Leave blank to not show one.</div>
     </div>
 
     <div class="w-card panel">

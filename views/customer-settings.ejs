@@ -88,8 +88,11 @@
     <form method="POST" action="/account/settings/preferences">
     <div class="w-card settings-card">
       <h2>Profile</h2>
-      <p class="sub"><%= customer.email %></p>
       <% if (profileError) { %><div class="w-error"><%= profileError %></div><% } %>
+      <div class="w-field">
+        <label>Email</label>
+        <input type="email" name="email" value="<%= customer.email %>" required />
+      </div>
       <div class="w-field">
         <label>Display name</label>
         <input type="text" name="name" value="<%= customer.name || '' %>" placeholder="Your name" />

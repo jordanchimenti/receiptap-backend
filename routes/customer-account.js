@@ -1432,10 +1432,25 @@ router.get('/account/settings', requireCustomerAuth, async (req, res) => {
 //
 // Both checkboxes are read as "present means on": an unchecked box submits
 // nothing at all, which is exactly how a single form expresses false.
+//
+// Login email lives in this same form/route now too -- it's account-level,
+// same as name and phone, and splitting it into its own Save button would
+// undercut the "one form, one button" reasoning above just for this field.
 router.post('/account/settings/preferences', requireCustomerAuth, async (req, res) => {
+  const fail = (msg) => res.redirect('/account/settings?profileError=' + encodeURIComponent(msg));
+
+  const email = (req.body.email || '').trim().toLowerCase();
+  if (!email) return fail('Email is required.');
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return fail('Enter a valid email address.');
+  const clash = await prisma.customer.findFirst({
+    where: { email, NOT: { id: req.session.customerId } },
+  });
+  if (clash) return fail('That email is already in use by another account.');
+
   await prisma.customer.update({
     where: { id: req.session.customerId },
     data: {
+      email,
       name: (req.body.name || '').trim() || null,
       phone: (req.body.phone || '').trim() || null,
       autoSaveOnTap: req.body.autoSaveOnTap === 'on',

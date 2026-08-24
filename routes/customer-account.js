@@ -21,7 +21,12 @@ const fileStorage = require('../lib/fileStorage');
 const { REGULAR_AFFILIATE_RATE } = require('../services/affiliateRates');
 const { deleteShopperEverywhere } = require('../services/dataRetentionService');
 const prisma = require('../lib/prisma');
-const { isDeductible, deductibleSource, contradictsAi, deductibleWhereClause } = require('../lib/receiptDeductible');
+const {
+  isDeductible,
+  deductibleSource,
+  overridesCategoryRule,
+  deductibleWhereClause,
+} = require('../lib/receiptDeductible');
 const { csvCell } = require('../lib/csvCell');
 const { receiptDateLabels } = require('../lib/receiptDateLabels');
 const { parseMoneyToCents, parseDateOrNull } = require('../lib/parseReceiptFields');
@@ -515,12 +520,12 @@ router.post('/receipt/:transactionId/save', requireCustomerAuth, async (req, res
 
 // Shared by the wallet page and its CSV export, so the two can never drift
 // out of sync on what "the current filters" actually match.
-function buildWalletWhere(customerId, { search, from, to, category, deductible }) {
+function buildWalletWhere(customerId, { search, from, to, category, deductible, deductibleCategories = [] }) {
   return {
     customerId,
     ...(search ? { merchant: { businessName: { contains: search, mode: 'insensitive' } } } : {}),
     ...(category ? { aiCategory: category } : {}),
-    ...(deductible ? deductibleWhereClause(true) : {}),
+    ...(deductible ? deductibleWhereClause(true, deductibleCategories) : {}),
     ...(from || to
       ? {
           createdAt: {
@@ -539,12 +544,12 @@ function buildWalletWhere(customerId, { search, from, to, category, deductible }
 // happened) is what a date-range search should mean, not createdAt (when
 // the customer got around to uploading it, which could be much later for
 // an old paper receipt).
-function buildScannedReceiptWhere(customerId, { search, from, to, category, deductible }) {
+function buildScannedReceiptWhere(customerId, { search, from, to, category, deductible, deductibleCategories = [] }) {
   return {
     customerId,
     ...(search ? { merchantName: { contains: search, mode: 'insensitive' } } : {}),
     ...(category ? { aiCategory: category } : {}),
-    ...(deductible ? deductibleWhereClause(true) : {}),
+    ...(deductible ? deductibleWhereClause(true, deductibleCategories) : {}),
     ...(from || to
       ? {
           purchaseDate: {
@@ -576,8 +581,21 @@ async function renderWallet(req, res, { isFullWallet }) {
   // Only '1' turns it on -- an absent or malformed value must mean "no filter",
   // not "show me nothing".
   const deductible = req.query.deductible === '1';
-  const where = buildWalletWhere(req.session.customerId, { search, from, to, category, deductible });
-  const scanWhere = buildScannedReceiptWhere(req.session.customerId, { search, from, to, category, deductible });
+
+  // Fetched before the parallel block below rather than inside it, because the
+  // customer's chosen categories are an INPUT to the where-clauses --
+  // deductibility is their rule now, not the model's. One extra round trip on a
+  // route that already fought the connection pool, so it selects one column
+  // rather than the whole row; the full customer still comes back below.
+  const customerRules = await prisma.customer.findUnique({
+    where: { id: req.session.customerId },
+    select: { deductibleCategories: true },
+  });
+  const deductibleCategories = customerRules?.deductibleCategories || [];
+
+  const walletFilters = { search, from, to, category, deductible, deductibleCategories };
+  const where = buildWalletWhere(req.session.customerId, walletFilters);
+  const scanWhere = buildScannedReceiptWhere(req.session.customerId, walletFilters);
   const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
 
   // "Today"/"This week" quick-filter chips -- real date-range links using
@@ -591,6 +609,13 @@ async function renderWallet(req, res, { isFullWallet }) {
   const quickFilters = {
     today: { from: toISO(todayDate), to: toISO(todayDate) },
     thisWeek: { from: toISO(new Date(todayDate.getTime() - 6 * 24 * 60 * 60 * 1000)), to: toISO(todayDate) },
+    // Calendar month, not a rolling 30 days -- it has to line up with the
+    // "This month" total in the summary card above the list, or the same page
+    // shows two different answers to the same question.
+    thisMonth: {
+      from: toISO(new Date(todayDate.getFullYear(), todayDate.getMonth(), 1)),
+      to: toISO(todayDate),
+    },
   };
 
   // Six of the ten queries this page used to run exist only because the lists
@@ -680,9 +705,9 @@ async function renderWallet(req, res, { isFullWallet }) {
       aiReasoning: t.aiReasoning,
       // The effective answer and who gave it -- computed once here so the row,
       // the toggle and the export can't each decide it differently.
-      deductible: isDeductible(t),
-      deductibleSource: deductibleSource(t),
-      deductibleContradictsAi: contradictsAi(t),
+      deductible: isDeductible(t, deductibleCategories),
+      deductibleSource: deductibleSource(t, deductibleCategories),
+      deductibleOverridesRule: overridesCategoryRule(t, deductibleCategories),
       autoSaved: t.autoSavedViaRecognition,
       link: `/receipt/${t.id}`,
     })),
@@ -709,9 +734,9 @@ async function renderWallet(req, res, { isFullWallet }) {
       // tapped one does instead of being silently undeductible.
       aiTaxDeductible: r.aiTaxDeductible,
       aiReasoning: r.aiReasoning,
-      deductible: isDeductible(r),
-      deductibleSource: deductibleSource(r),
-      deductibleContradictsAi: contradictsAi(r),
+      deductible: isDeductible(r, deductibleCategories),
+      deductibleSource: deductibleSource(r, deductibleCategories),
+      deductibleOverridesRule: overridesCategoryRule(r, deductibleCategories),
       autoSaved: false, // a scanned receipt was uploaded by hand, never matched
       link: r.imageUrl,
     })),
@@ -767,6 +792,12 @@ async function renderWallet(req, res, { isFullWallet }) {
     categories,
     receipts: isFullWallet ? merged : merged.slice(0, RECENT_RECEIPT_LIMIT),
     filters: { search: search || '', from: from || '', to: to || '', category: category || '', deductible },
+    // The customer's standing rule, and the full list to choose from -- the
+    // panel offers every category the model can assign, not only the ones they
+    // happen to have receipts in yet.
+    deductibleCategories,
+    allCategories: CATEGORIES,
+    rulesSaved: req.query.rulesSaved === '1',
     quickFilters,
   });
 }
@@ -810,17 +841,51 @@ router.post('/account/receipts/:kind/:id/deductible', requireCustomerAuth, async
   });
   if (count === 0) return res.status(404).json({ error: 'Not found' });
 
-  const updated = await model.findUnique({
-    where: { id },
-    select: { taxDeductible: true, aiTaxDeductible: true, aiReasoning: true },
-  });
+  const [updated, rules] = await Promise.all([
+    model.findUnique({ where: { id }, select: { taxDeductible: true, aiCategory: true } }),
+    prisma.customer.findUnique({
+      where: { id: req.session.customerId },
+      select: { deductibleCategories: true },
+    }),
+  ]);
+  const cats = rules?.deductibleCategories || [];
 
   res.json({
-    deductible: isDeductible(updated),
-    source: deductibleSource(updated),
-    contradictsAi: contradictsAi(updated),
-    aiReasoning: updated.aiReasoning || null,
+    deductible: isDeductible(updated, cats),
+    source: deductibleSource(updated, cats),
+    overridesRule: overridesCategoryRule(updated, cats),
+    category: updated.aiCategory || null,
   });
+});
+
+// POST /account/receipts/deductible-categories — the customer setting which of
+// their categories count as tax deductible.
+//
+// This is the primary mechanism now. The AI says what was bought; whether that
+// is claimable depends on who is filing, which only they know. See the note at
+// the top of lib/receiptDeductible.js.
+//
+// Stored as a whitelist rather than per-category rows: it's one small set the
+// customer edits as a whole, and a set makes "nothing is deductible" (the
+// default) representable without a special case.
+router.post('/account/receipts/deductible-categories', requireCustomerAuth, async (req, res) => {
+  // A form posts one value per ticked box, so a single tick arrives as a
+  // string and none at all as undefined -- both have to mean a valid set.
+  const raw = req.body?.categories;
+  const submitted = Array.isArray(raw) ? raw : raw == null ? [] : [raw];
+
+  // Only categories the model actually assigns are accepted. Without this the
+  // field would take arbitrary strings from the form, and a typo would be a
+  // rule that silently matches nothing.
+  const allowed = new Set(CATEGORIES);
+  const categories = [...new Set(submitted.filter((c) => allowed.has(c)))];
+
+  await prisma.customer.update({
+    where: { id: req.session.customerId },
+    data: { deductibleCategories: categories },
+  });
+
+  res.redirect('/account/wallet?deductible=1&rulesSaved=1');
 });
 
 // GET /account/receipts/export — CSV of whatever the wallet's current filters match
@@ -831,8 +896,14 @@ router.post('/account/receipts/:kind/:id/deductible', requireCustomerAuth, async
 router.get('/account/receipts/export', requireCustomerAuth, async (req, res) => {
   const { search, from, to, category } = req.query;
   const deductible = req.query.deductible === '1';
-  const where = buildWalletWhere(req.session.customerId, { search, from, to, category, deductible });
-  const scanWhere = buildScannedReceiptWhere(req.session.customerId, { search, from, to, category, deductible });
+  const rules = await prisma.customer.findUnique({
+    where: { id: req.session.customerId },
+    select: { deductibleCategories: true },
+  });
+  const deductibleCategories = rules?.deductibleCategories || [];
+  const f = { search, from, to, category, deductible, deductibleCategories };
+  const where = buildWalletWhere(req.session.customerId, f);
+  const scanWhere = buildScannedReceiptWhere(req.session.customerId, f);
 
   const [transactions, scanned] = await Promise.all([
     prisma.transaction.findMany({ where, include: { merchant: true }, orderBy: { createdAt: 'desc' } }),
@@ -871,8 +942,10 @@ router.get('/account/receipts/export', requireCustomerAuth, async (req, res) => 
           csvCell(r.business),
           (r.total / 100).toFixed(2),
           csvCell(r.category || ''),
-          isDeductible(r.row) ? 'yes' : 'no',
-          deductibleSource(r.row), // customer | ai | none -- an accountant can see which rows were reviewed
+          isDeductible(r.row, deductibleCategories) ? 'yes' : 'no',
+          // receipt | category | none -- an accountant can see which rows the
+          // customer ruled on directly and which follow a category rule.
+          deductibleSource(r.row, deductibleCategories),
         ].join(',')
       )
     )

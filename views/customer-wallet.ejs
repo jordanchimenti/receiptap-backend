@@ -27,6 +27,26 @@
     /* Colour, radius and weight all come from .w-btn. This only adds the
        breathing room either side -- 16px above so it clears the summary card,
        22px below so it doesn't crowd the receipts under it. */
+    .rules-card { padding: 16px; margin-bottom: 16px; }
+    .rules-card summary {
+      display: flex; align-items: center; justify-content: space-between; gap: 10px;
+      font-size: 13px; font-weight: 700; color: var(--w-ink); cursor: pointer; list-style: none;
+    }
+    .rules-card summary::-webkit-details-marker { display: none; }
+    .rules-count { font-size: 11.5px; font-weight: 600; color: var(--w-ink-soft); }
+    .rules-sub { font-size: 12.5px; color: var(--w-ink-soft); line-height: 1.5; margin: 12px 0 14px; }
+    .rules-filter {
+      display: block; text-align: center; margin-bottom: 14px; padding: 9px 12px;
+      border-radius: 999px; border: 1px solid var(--w-line); background: var(--w-card-raised);
+      color: var(--w-ink-soft); font-size: 12.5px; font-weight: 700; text-decoration: none;
+    }
+    .rules-filter.active { border-color: var(--w-accent); color: var(--w-accent); background: var(--w-accent-wash); }
+    .rule-row {
+      display: flex; align-items: center; gap: 10px; padding: 9px 0;
+      border-bottom: 1px solid var(--w-line); font-size: 14px; cursor: pointer;
+    }
+    .rule-row:last-of-type { border-bottom: none; }
+    .rule-row input { width: 18px; height: 18px; accent-color: var(--w-accent); flex: none; }
     .wallet-cta { margin: 16px 0 22px; border-radius: 14px; }
     /* --w-ink-soft is a grey for dark backgrounds; on brand blue it disappears. */
     .wallet-cta-count { font-size: 12.5px; font-weight: 600; color: rgba(255,255,255,0.72); }
@@ -269,34 +289,47 @@
         the wallet page is one tap away. %>
     <% if (isFullWallet) { %>
     <% if (categories.length > 0) { %>
+      <%# Time only. Category and tax filters moved to the panels below -- as
+          one row these were three different questions ("what kind", "is it
+          claimable", "when") wearing the same control, and the row grew by one
+          chip for every category a customer ever shopped in. %>
       <div class="chips">
-        <a class="chip <%= !filters.category ? 'active' : '' %>" href="/account/wallet">All</a>
-        <% categories.forEach(function(cat) { %>
-          <a class="chip <%= filters.category === cat ? 'active' : '' %>"
-             href="/account/wallet?category=<%= encodeURIComponent(cat) %>"><%= cat %></a>
+        <% var range = filters.from + '|' + filters.to; %>
+        <a class="chip <%= !filters.from && !filters.to ? 'active' : '' %>"
+           href="/account/wallet<%= filters.category ? '?category=' + encodeURIComponent(filters.category) : '' %>">All</a>
+        <% [
+             { key: 'today',     label: 'Today'      },
+             { key: 'thisWeek',  label: 'This week'  },
+             { key: 'thisMonth', label: 'This month' },
+           ].forEach(function (q) { var r = quickFilters[q.key]; %>
+          <a class="chip <%= range === r.from + '|' + r.to ? 'active' : '' %>"
+             href="/account/wallet?from=<%= r.from %>&to=<%= r.to %><%= filters.category ? '&category=' + encodeURIComponent(filters.category) : '' %>"><%= q.label %></a>
         <% }); %>
-        <div class="chip-divider"></div>
-        <%# The tax filter sits with the category chips because it's the same
-            kind of question -- "show me a subset" -- and because the export
-            pill below inherits whatever is active, so filtering to deductible
-            and exporting is two taps. %>
-        <a class="chip <%= filters.deductible ? 'active' : '' %>"
-           href="/account/wallet<%= filters.deductible ? '' : '?deductible=1' %>">Tax deductible</a>
-        <div class="chip-divider"></div>
-        <a class="chip <%= (filters.from === quickFilters.today.from && filters.to === quickFilters.today.to) ? 'active' : '' %>"
-           href="/account/wallet?from=<%= quickFilters.today.from %>&to=<%= quickFilters.today.to %>">Today</a>
-        <a class="chip <%= (filters.from === quickFilters.thisWeek.from && filters.to === quickFilters.thisWeek.to) ? 'active' : '' %>"
-           href="/account/wallet?from=<%= quickFilters.thisWeek.from %>&to=<%= quickFilters.thisWeek.to %>">This week</a>
       </div>
     <% } %>
 
     <form class="w-card search-card" method="GET" action="/account/wallet">
-      <details <%= (filters.search || filters.from || filters.to) ? 'open' : '' %>>
-        <summary>Search by store or date</summary>
+      <details <%= (filters.search || filters.from || filters.to || filters.category) ? 'open' : '' %>>
+        <summary>Search by store, category or date</summary>
         <div class="w-field">
           <label>Business name</label>
           <input type="text" name="search" placeholder="e.g. Tip Top Tint" value="<%= filters.search %>" />
         </div>
+        <%# Category was a chip per category, which meant the filter row grew
+            without limit as a customer shopped in more places. A select holds
+            any number of them in fixed space, and only offers categories this
+            customer actually has receipts in. %>
+        <% if (categories.length > 0) { %>
+          <div class="w-field">
+            <label for="category-filter">Category</label>
+            <select id="category-filter" name="category">
+              <option value="">All categories</option>
+              <% categories.forEach(function (cat) { %>
+                <option value="<%= cat %>" <%= filters.category === cat ? 'selected' : '' %>><%= cat %></option>
+              <% }); %>
+            </select>
+          </div>
+        <% } %>
         <div class="search-row">
           <div class="w-field">
             <label>From</label>
@@ -308,11 +341,49 @@
           </div>
         </div>
         <button class="w-btn" type="submit" style="margin-top: 12px;">Search</button>
-        <% if (filters.search || filters.from || filters.to) { %>
+        <% if (filters.search || filters.from || filters.to || filters.category) { %>
           <div class="clear-search"><a href="/account/wallet">Clear search</a></div>
         <% } %>
       </details>
     </form>
+
+    <%# Which categories count as deductible is the customer's call, not the
+        model's: it turns on who is filing and what the purchase was for,
+        neither of which is on the receipt. The model categorises; this decides
+        what those categories mean for THIS person. A single receipt can still
+        disagree via its own toggle -- a category rule can't tell a laptop from
+        a birthday gift bought at the same shop. %>
+    <details class="w-card rules-card" id="deductible-rules" <%= (rulesSaved || filters.deductible) ? 'open' : '' %>>
+      <summary>
+        Tax deductible categories
+        <span class="rules-count">
+          <%= deductibleCategories.length ? deductibleCategories.length + ' selected' : 'none yet' %>
+        </span>
+      </summary>
+      <% if (rulesSaved) { %><div class="banner success" style="margin:12px 0 0;">Saved.</div><% } %>
+      <p class="rules-sub">
+        Pick the categories you can claim. Receipts in them are marked deductible
+        automatically. Nothing here is tax advice — what you can actually claim
+        depends on your situation and where you file.
+      </p>
+      <%# The "show me only those" filter lives here rather than up in the time
+          chips: it's the same subject as the checkboxes under it, and this is
+          the two-tap path to a tax export -- filter, then Export. %>
+      <a class="rules-filter <%= filters.deductible ? 'active' : '' %>"
+         href="/account/wallet<%= filters.deductible ? '' : '?deductible=1' %>">
+        <%= filters.deductible ? 'Showing deductible only — show everything' : 'Show only deductible receipts' %>
+      </a>
+      <form method="POST" action="/account/receipts/deductible-categories">
+        <% allCategories.forEach(function (cat) { %>
+          <label class="rule-row">
+            <input type="checkbox" name="categories" value="<%= cat %>"
+                   <%= deductibleCategories.indexOf(cat) !== -1 ? 'checked' : '' %> />
+            <span><%= cat %></span>
+          </label>
+        <% }); %>
+        <button type="submit" class="w-btn" style="margin-top:14px;">Save categories</button>
+      </form>
+    </details>
     <% } %>
 
     <% if (receipts.length === 0 && (filters.search || filters.from || filters.to || filters.category)) { %>
@@ -435,7 +506,12 @@
         var note = btn.parentElement.querySelector('.ded-note');
         // Say who decided, so a row the customer has ruled on is
         // distinguishable from one still carrying the AI's guess.
-        if (note) note.textContent = data.source === 'customer' ? 'you marked this' : data.source === 'ai' ? 'AI suggestion' : '';
+        if (note) {
+          note.textContent =
+            data.source === 'receipt' ? 'you marked this'
+            : data.source === 'category' ? (data.category || 'category') + ' is deductible'
+            : '';
+        }
       } catch (err) {
         // Leave the button showing what the server still believes rather than
         // a state that was never saved, and say so in place -- a modal dialog

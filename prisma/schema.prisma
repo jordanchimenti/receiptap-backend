@@ -657,6 +657,20 @@ model Customer {
   // decisions, and someone may reasonably want one without the other.
   autoSaveOnTap Boolean @default(true)
 
+  // Which AI categories THIS customer treats as tax deductible.
+  //
+  // Deductibility isn't a property of a receipt, it's a property of the person
+  // filing: whether they're self-employed, what the purchase was actually for,
+  // and the rules where they file. None of that is on the receipt, so the model
+  // was never in a position to decide it -- it can only say what was bought.
+  // The customer says which of their own categories count, which is a claim
+  // they're entitled to make about their own affairs.
+  //
+  // Empty by default: nothing is deductible until they say it is. A per-receipt
+  // override still beats this (Transaction.taxDeductible), for the laptop and
+  // the birthday gift bought at the same shop.
+  deductibleCategories String[] @default([])
+
   referredByAffiliateId String?
   referredByAffiliate   Affiliate? @relation("CustomerReferrals", fields: [referredByAffiliateId], references: [id])
   referralAttributedAt  DateTime?

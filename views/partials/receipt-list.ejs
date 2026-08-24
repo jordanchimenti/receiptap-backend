@@ -38,12 +38,6 @@
               <% if (r.aiCategory || r.kind === 'scanned') { %>
                 <div class="badges">
                   <% if (r.aiCategory) { %><span class="badge badge-category"><%= r.aiCategory %></span><% } %>
-                  <%# "Worth checking", not "Possibly deductible". The old wording read as a
-                      determination the app is in no position to make -- whether something can
-                      actually be claimed turns on what it was bought for and the rules where
-                      the person files, neither of which is on the receipt. The tooltip carries
-                      the AI's reasoning and says plainly that it isn't advice. %>
-                  <% if (r.aiTaxDeductible) { %><span class="badge badge-tax" title="<%= r.aiReasoning ? r.aiReasoning + ' — ' : '' %>This is an AI suggestion, not tax advice. Check with a tax professional.">Worth checking at tax time</span><% } %>
                   <%# Told, not hidden: this receipt is here because their card
                       was recognised, not because they tapped. %>
                   <% if (r.autoSaved) { %><span class="badge badge-auto" title="Saved automatically — your card was recognised at this business. You can turn this off in Settings.">Saved automatically</span><% } %>
@@ -66,9 +60,11 @@
                     onclick="toggleDeductible(this)">
               <span class="ded-dot" aria-hidden="true"></span>Tax deductible
             </button>
+            <%# Says which of the two mechanisms is currently answering: this
+                receipt specifically, or the customer's rule for its category. %>
             <span class="ded-note"
-                  title="<%= r.aiReasoning ? r.aiReasoning + ' — ' : '' %>An AI suggestion, not tax advice. Whether you can actually claim it depends on what it was for and the rules where you file.">
-              <% if (r.deductibleSource === 'customer') { %>you marked this<% } else if (r.deductibleSource === 'ai') { %>AI suggestion<% } %>
+                  title="You decide what's deductible — the category was read off the receipt, but whether you can claim it depends on your situation and where you file. Not tax advice.">
+              <% if (r.deductibleSource === 'receipt') { %>you marked this<% } else if (r.deductibleSource === 'category') { %><%= r.aiCategory %> is deductible<% } %>
             </span>
           </div>
           </div>

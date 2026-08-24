@@ -19,8 +19,12 @@ const CATEGORIES = [
 
 /**
  * Categorizes a single transaction using the merchant name and line items.
- * Returns { category, taxDeductible, reasoning } or null on any failure —
- * callers should treat null as "skip categorization for now," not an error.
+ * Returns { category, reasoning } or null on any failure -- callers should
+ * treat null as "skip categorization for now," not an error.
+ *
+ * Deliberately does NOT answer tax deductibility. See the note at the top of
+ * lib/receiptDeductible.js: the model can say what was bought, not whether a
+ * particular person is entitled to claim it.
  */
 async function categorizeTransaction({ merchantName, lineItems }) {
   if (!process.env.ANTHROPIC_API_KEY) {
@@ -37,15 +41,18 @@ async function categorizeTransaction({ merchantName, lineItems }) {
       messages: [
         {
           role: 'user',
-          content: `Classify this purchase for personal/business expense tracking.
+          content: `Categorise this purchase for expense tracking.
 
 Merchant: ${merchantName}
 Items: ${itemsSummary}
 
 Respond with ONLY a JSON object, no other text, in this exact shape:
-{"category": one of [${CATEGORIES.map((c) => `"${c}"`).join(', ')}], "taxDeductible": true|false, "reasoning": "one short sentence explaining the tax deductibility call"}
+{"category": one of [${CATEGORIES.map((c) => `"${c}"`).join(', ')}], "reasoning": "one short sentence on why this category fits"}
 
-"taxDeductible" should reflect whether this purchase COULD plausibly be a legitimate business expense (be moderate, not aggressive — e.g. a laptop from an electronics store: true; a birthday gift or entertainment for personal use: false). This is a helpful suggestion for the user's own records, not tax advice.`,
+Categorise what was BOUGHT. Do not judge whether it is tax deductible: that
+depends on who is filing, what the purchase was for, and where they file,
+none of which is on the receipt. The customer decides which of their own
+categories count as deductible.`,
         },
       ],
     });
@@ -61,7 +68,6 @@ Respond with ONLY a JSON object, no other text, in this exact shape:
 
     return {
       category: parsed.category,
-      taxDeductible: Boolean(parsed.taxDeductible),
       reasoning: String(parsed.reasoning || '').slice(0, 300),
     };
   } catch (err) {
@@ -89,7 +95,6 @@ function categorizeInBackground(transaction, merchantName) {
         where: { id: transaction.id },
         data: {
           aiCategory: result.category,
-          aiTaxDeductible: result.taxDeductible,
           aiReasoning: result.reasoning,
           aiCategorizedAt: new Date(),
         },
@@ -121,7 +126,6 @@ function categorizeScannedInBackground(scannedReceipt) {
         where: { id: scannedReceipt.id },
         data: {
           ...(scannedReceipt.aiCategory ? {} : { aiCategory: result.category }),
-          aiTaxDeductible: result.taxDeductible,
           aiReasoning: result.reasoning,
         },
       });

@@ -18,6 +18,11 @@ model Merchant {
   businessName    String
   ownerName       String? // the person's own name, e.g. "Welcome back, Jordan" -- distinct from businessName
   ownerPhone      String? // the person's own phone number, optional -- account/login contact info, not shown on a receipt (that's ReceiptTheme.phone, a separate field)
+  // ISO 3166-1 alpha-2 of the country picked in the phone input's dropdown
+  // (see lib/countryPhoneCodes.js) -- lets the dropdown remember what was
+  // selected rather than resetting to the default on every page load.
+  // Cosmetic pairing with ownerPhone only; never validated against it.
+  ownerPhoneCountry String? @default("CA")
   profilePhotoUrl String? // the person's own avatar photo, shown top-right in the dashboard rail
   email           String    @unique
   passwordHash    String? // null for accounts created via "Sign in with Google" that never set a password
@@ -121,6 +126,7 @@ model Merchant {
   purgeLogsInitiated PurgeLog[]
   emailSuppressions  EmailSuppression[]
   notifications      Notification[]
+  merchantNotifications MerchantNotification[]
 
   // Affiliate program -- set if this merchant signed up via someone's
   // referral link. A merchant can ALSO be an affiliate themselves (their own
@@ -288,7 +294,59 @@ model Transaction {
   collectedByMerchantId String?
   collectedByMerchant   Merchant? @relation("CollectedExpenses", fields: [collectedByMerchantId], references: [id])
 
+  // --- Seller identity + tax snapshot ---------------------------------------
+  // What was actually true about the merchant on the sale date, resolved from
+  // Merchant + ReceiptTheme (or their documented defaults, if no ReceiptTheme
+  // row exists yet -- see lib/receiptSnapshot.js) at the moment this row is
+  // written, and never touched again. Merchant and ReceiptTheme themselves
+  // stay fully mutable -- this is what lets a receipt keep stating what was
+  // true on its own date after the merchant later edits their profile.
+  // Nullability mirrors the source column's own nullability.
+  //
+  // sellerName is what was actually PRINTED (theme.displayName ||
+  // merchant.businessName) -- sellerLegalName is Merchant.businessName
+  // unconditionally, even when a displayName overrode it on the receipt, so
+  // the legal entity behind the sale is still on record when the two differ.
+  sellerName              String
+  sellerLegalName         String?
+  sellerAddressLine1      String?
+  sellerAddressLine2      String?
+  sellerAddressCity       String?
+  sellerAddressRegion     String?
+  sellerAddressPostalCode String?
+  sellerAddressCountry    String?
+  sellerGstHstNumber      String?
+  sellerTaxNumberLabel    String?
+  sellerTaxNumber2        String?
+  sellerTaxNumber2Label   String?
+  sellerTaxLabel          String  @default("Tax")
+
+  // ISO 4217 code read from the POS payload, where the provider reports one.
+  // Square and Shopify orders both carry a currency on their money fields;
+  // Clover and Lightspeed don't expose one anywhere this app already fetches,
+  // so those two handlers leave this null rather than guess.
+  currency String?
+
+  // Second tax amount in cents, pairing with sellerTaxNumber2/Label above the
+  // same way ReceiptTheme.taxNumber2 already pairs with gstHstNumber. Schema
+  // only -- no handler populates this yet, since no POS payload gives a
+  // reliable type-attributed split (Square's order.taxes[] and Shopify's
+  // tax_lines[] are both free-text-named, not GST/PST-typed).
+  tax2 Int?
+
+  // Why this was bought. Same field, same reasoning, as
+  // ScannedReceipt.businessPurpose -- NOT on any POS payload, since a
+  // register has no way to ask. It's the taxpayer's own note, and for US
+  // travel, meals, gifts and listed property it's a hard requirement under
+  // section 274(d) regardless of whether the receipt was tapped or
+  // photographed: a receipt proves what was spent, never what it was for.
+  // Settable only by the customer who claimed this transaction (see
+  // POST /account/receipts/tapped/:id/purpose in routes/customer-account.js
+  // and the gated section on views/receipt.ejs) -- null until they do.
+  businessPurpose String?
+
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   shopperConsents ShopperConsent[]
 
@@ -310,6 +368,9 @@ model ReceiptTheme {
   displayName  String? // shown on receipts instead of Merchant.businessName, if set -- lets a merchant show a nicer/different name to customers without renaming their actual account
   location     String? // free-text address/location line, shown on receipts if set -- e.g. "123 Main St, Springfield" -- not tied to any Location model, just display text
   phone        String?
+  // See Merchant.ownerPhoneCountry's comment -- same pairing, same purpose,
+  // for the phone number that prints on receipts instead of the owner's own.
+  phoneCountry String? @default("CA")
   primaryColor String  @default("#111111")
   accentColor  String  @default("#2563eb")
 
@@ -317,7 +378,8 @@ model ReceiptTheme {
   footerText String?
 
   // Receipt compliance -- gstHstNumber is what lets a Canadian customer claim
-  // an input tax credit (CRA requires it on receipts for purchases $30+).
+  // an input tax credit (CRA requires it on receipts for purchases $100+ --
+  // raised from $30 by SOR/2021-63, effective April 20, 2021).
   // taxLabel is customizable since "Tax" isn't always accurate: a merchant
   // might charge GST/HST alone, or GST/HST + a provincial tax like PST/QST.
   // The merchant's tax registration number, and what to call it. The label
@@ -536,6 +598,34 @@ model Notification {
   @@index([customerId, readAt])
 }
 
+// The merchant-facing equivalent of Notification above -- same shape, same
+// read/unread semantics, kept as a SEPARATE model rather than making
+// Notification.customerId optional and overloading one table for two
+// different recipients. A merchant and a customer are different sessions,
+// different dashboards, different tab bars (business-tab-bar.ejs vs
+// wallet-tab-bar.ejs); a shared table would mean either side's query could
+// accidentally pull the other's rows if a `where` clause were ever written
+// slightly wrong. See services/merchantNotificationService.js.
+model MerchantNotification {
+  id         String   @id @default(cuid())
+  merchantId String
+  merchant   Merchant @relation(fields: [merchantId], references: [id])
+
+  type  String // "LOYALTY_CARD_FILLED" | "BILLING_PROBLEM" | "POS_CONNECTION_FAILED" | "PAYOUT_COMPLETED"
+  title String
+  body  String
+
+  // Where tapping it goes -- e.g. /account/business/loyalty for a filled
+  // card, /account/business/billing for a billing problem.
+  linkUrl String?
+
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([merchantId, createdAt])
+  @@index([merchantId, readAt])
+}
+
 // ---------------------------------------------------------------------------
 // PushSubscription — one browser that agreed to receive push notifications.
 // A customer can have several (phone, laptop, a second browser), so pushes fan
@@ -655,6 +745,8 @@ model Customer {
   // receipts. Never printed anywhere or shown to a merchant; matches
   // Merchant.ownerPhone's "about you" framing on the business side.
   phone        String?
+  // See Merchant.ownerPhoneCountry's comment -- same pairing, same purpose.
+  phoneCountry String? @default("CA")
   createdAt    DateTime @default(now())
 
   // "Forgot password?" flow -- token is single-use (cleared on success) and
@@ -761,9 +853,9 @@ model ScannedReceipt {
 
   // The merchant's tax registration number. Worth capturing specifically:
   // claiming an input tax credit in Canada requires the supplier's GST/HST
-  // number on the receipt for purchases over $30, so a wallet that drops it
-  // makes those receipts useless for exactly the person most likely to keep
-  // them.
+  // number on the receipt for purchases over $100 (raised from $30 by
+  // SOR/2021-63, effective April 20, 2021), so a wallet that drops it makes
+  // those receipts useless for exactly the person most likely to keep them.
   taxNumber String?
 
   // A second registration number, where the receipt prints one. Canadian
@@ -775,7 +867,8 @@ model ScannedReceipt {
   taxNumber2 String?
 
   // The buyer's name, when the receipt prints one. Required by CRA for an
-  // input tax credit once a purchase reaches $150 -- below that the supplier
+  // input tax credit once a purchase reaches $500 (raised from $150 by
+  // SOR/2021-63, effective April 20, 2021) -- below that the supplier
   // details are enough, above it the recipient has to be named on the
   // document itself. Most retail receipts don't print it; invoices do.
   buyerName String?
@@ -802,6 +895,7 @@ model ScannedReceipt {
 
   lineItems Json?
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Warranty tracking -- same fields and precedence as Transaction, see the
   // comment there and lib/receiptWarranty.js.
@@ -811,8 +905,39 @@ model ScannedReceipt {
   warranty14dReminderSentAt DateTime?
   warranty3dReminderSentAt  DateTime?
 
+  // Second tax amount in cents, pairing with taxNumber2 above the same way
+  // Transaction.tax2 pairs with sellerTaxNumber2 -- see the comment there.
+  // Not extracted by the AI scan pass yet; schema only, for symmetry.
+  tax2 Int?
+
+  shareLinks ScannedReceiptShareLink[]
+
   @@index([customerId])
   @@index([warrantyExpiresAt])
+}
+
+// A time-limited, unauthenticated link to one scanned receipt's photo -- see
+// lib/receiptShareLink.js for the token/expiry design. onDelete: Cascade,
+// unlike this app's usual RESTRICT-and-keep-forever pattern for audit
+// tables (LegalAcceptance, ShopperConsent, etc.): a share link is an active
+// convenience, not a record that has to outlive what it points at, so it
+// should simply disappear along with the receipt it was for.
+model ScannedReceiptShareLink {
+  id               String         @id @default(cuid())
+  scannedReceiptId String
+  scannedReceipt   ScannedReceipt @relation(fields: [scannedReceiptId], references: [id], onDelete: Cascade)
+
+  // Plaintext, not hashed -- see the file comment in lib/receiptShareLink.js
+  // for why this matches Customer.resetToken rather than
+  // Transaction.cardFingerprintHash.
+  token     String    @unique
+  expiresAt DateTime
+  // Set on regenerate, never cleared -- rows are kept as history rather than
+  // overwritten, same append-only reasoning as PurgeLog/LegalAcceptance.
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([scannedReceiptId])
 }
 
 // ---------------------------------------------------------------------------

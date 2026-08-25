@@ -27,6 +27,19 @@
               opens the same kind of page a tapped receipt does, with the
               photo on it as the supporting evidence. %>
           <div class="receipt-line">
+          <%# Checkbox lives outside .receipt-line-body, as a flex sibling of
+              it rather than a descendant of .receipt-row -- an <input> can't
+              nest inside an <a> either, same content-model rule as the
+              buttons below. Only rendered on the full wallet (showSelection),
+              which is also the only place Export/PDF live. %>
+          <% if (showSelection) { %>
+            <label class="receipt-select">
+              <input type="checkbox" class="receipt-checkbox"
+                     value="<%= r.kind === 'scanned' ? 'scanned' : 'transaction' %>:<%= r.id %>"
+                     aria-label="Select this receipt for export" />
+            </label>
+          <% } %>
+          <div class="receipt-line-body">
           <a class="receipt-row" href="<%= r.kind === 'scanned' ? '/account/receipts/scanned/' + r.id : r.link %>">
             <div>
               <div class="merchant-name"><%= r.merchantName %></div>
@@ -101,6 +114,7 @@
                 <button type="button" onclick="closeWarrantyEdit(this)">Cancel</button>
               </form>
             <% } %>
+          </div>
           </div>
           </div>
       <% if (i === receipts.length - 1 || receipts[i + 1].month !== r.month) { %>

@@ -1,6 +1,7 @@
 // services/cloverService.js
 
 const prisma = require('../lib/prisma');
+const { notifyPosConnectionFailed } = require('./merchantNotificationService');
 
 // Clover splits "authorize" (browser redirect) and "token/API calls" across
 // two different domains -- unlike Square, which uses the same host for both.
@@ -61,7 +62,22 @@ async function getValidAccessToken(merchant) {
 
   if (stillFresh) return merchant.cloverAccessToken;
 
-  const refreshed = await refreshAccessToken(merchant.cloverRefreshToken);
+  let refreshed;
+  try {
+    refreshed = await refreshAccessToken(merchant.cloverRefreshToken);
+  } catch (err) {
+    // A refresh failure means the authorization itself is dead (revoked,
+    // expired refresh token) -- a genuine "reconnect Clover" signal, not a
+    // one-off API blip, so it's the one POS failure point that's worth
+    // surfacing to the merchant rather than just logging. Re-thrown after
+    // notifying so the caller's existing error handling is unchanged.
+    try {
+      await notifyPosConnectionFailed({ merchantId: merchant.id, provider: 'Clover' });
+    } catch (notifyErr) {
+      console.error('[cloverService] POS-connection-failed notification failed:', notifyErr.message);
+    }
+    throw err;
+  }
   await prisma.merchant.update({
     where: { id: merchant.id },
     data: {

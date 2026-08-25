@@ -174,6 +174,39 @@ async function sendWarrantyExpiringEmail({ email, name, merchantName, totalLabel
   });
 }
 
+// Sent when a merchant's subscription goes PAST_DUE or CANCELED (see
+// services/stripeService.js's handleWebhookEvent). Deliberately email, not
+// just the in-app bell: a payment problem can eventually restrict dashboard
+// access, so relying on a notification that lives INSIDE the dashboard the
+// merchant might be about to lose access to is exactly backwards. Called
+// only through services/merchantNotificationService.js, which swallows
+// failures the same way notificationService.js does for the customer side.
+async function sendBillingProblemEmail({ email, name, businessName, status }) {
+  const isCanceled = status === 'CANCELED';
+  const subject = isCanceled
+    ? 'Your ReceipTap subscription was canceled'
+    : "There's a problem with your ReceipTap payment";
+
+  if (!resend) {
+    console.log(`[emailService] RESEND_API_KEY not set -- billing problem email for ${email}: ${subject}`);
+    return;
+  }
+
+  await send({
+    from: FROM_ADDRESS,
+    to: email,
+    subject,
+    html: `
+      <p>Hi${name ? ' ' + name : ''},</p>
+      ${isCanceled
+        ? `<p>The ReceipTap subscription for <strong>${escapeHtml(businessName)}</strong> has been canceled.</p>`
+        : `<p>We couldn't process the latest payment for <strong>${escapeHtml(businessName)}</strong>'s ReceipTap subscription.</p>`}
+      <p>${isCanceled ? 'Resubscribe' : 'Update your payment method'} to keep receipts, loyalty cards, and your dashboard working without interruption.</p>
+      ${actionButton('/account/business/billing', isCanceled ? 'Resubscribe' : 'Update payment method')}
+    `,
+  });
+}
+
 // Merchant-controlled text (business name, reward label) goes into an HTML
 // email -- escape it rather than trusting it, the same way every other
 // merchant-supplied string is escaped before it reaches a page.
@@ -190,4 +223,5 @@ module.exports = {
   sendVerificationEmail,
   sendLoyaltyRewardReadyEmail,
   sendWarrantyExpiringEmail,
+  sendBillingProblemEmail,
 };

@@ -22,6 +22,7 @@
 
 const crypto = require('crypto');
 const prisma = require('../lib/prisma');
+const { notifyPosConnectionFailed } = require('./merchantNotificationService');
 
 const LIGHTSPEED_AUTH_BASE_URL = 'https://secure.retail.lightspeed.app';
 const LIGHTSPEED_API_VERSION = '2026-07';
@@ -117,7 +118,20 @@ async function getValidAccessToken(merchant) {
 
   if (stillFresh) return merchant.lightspeedAccessToken;
 
-  const refreshed = await refreshAccessToken(merchant.lightspeedDomainPrefix, merchant.lightspeedRefreshToken);
+  let refreshed;
+  try {
+    refreshed = await refreshAccessToken(merchant.lightspeedDomainPrefix, merchant.lightspeedRefreshToken);
+  } catch (err) {
+    // Same reasoning as cloverService.js's getValidAccessToken: a refresh
+    // failure means the authorization itself is dead, which is worth
+    // surfacing to the merchant, unlike a one-off API blip elsewhere.
+    try {
+      await notifyPosConnectionFailed({ merchantId: merchant.id, provider: 'Lightspeed' });
+    } catch (notifyErr) {
+      console.error('[lightspeedService] POS-connection-failed notification failed:', notifyErr.message);
+    }
+    throw err;
+  }
   await prisma.merchant.update({
     where: { id: merchant.id },
     data: {

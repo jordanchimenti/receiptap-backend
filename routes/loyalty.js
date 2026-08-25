@@ -20,6 +20,7 @@ const { splitLoyaltyCards } = require('../lib/loyaltyCardSections');
 const fileStorage = require('../lib/fileStorage');
 const normalizeEmail = require('../lib/normalizeEmail');
 const { notifyLoyaltyCardFull } = require('../services/notificationService');
+const { notifyMerchantLoyaltyCardFilled } = require('../services/merchantNotificationService');
 
 function requireCustomerAuth(req, res, next) {
   if (!req.session?.customerId) return res.status(401).json({ error: 'Not signed in' });
@@ -136,6 +137,13 @@ async function notifyIfJustFilled(stamps, program, merchantId, customerId) {
     await notifyLoyaltyCardFull({ merchantId, customerId, program });
   } catch (err) {
     console.error('[loyalty] card-full notification failed:', err.message);
+  }
+  // Separate try/catch on purpose: a failure notifying the merchant must
+  // never be blamed on, or block, the customer's own notification above.
+  try {
+    await notifyMerchantLoyaltyCardFilled({ merchantId, customerId, program });
+  } catch (err) {
+    console.error('[loyalty] merchant card-full notification failed:', err.message);
   }
 }
 

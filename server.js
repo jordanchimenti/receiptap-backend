@@ -100,6 +100,7 @@ app.use(
 );// --- Route modules built across this project -------------------------------
 const { ownerFlag } = require('./middleware/ownerFlag');
 const { countUnread: countUnreadNotifications } = require('./services/notificationService');
+const { countUnread: countUnreadMerchantNotifications } = require('./services/merchantNotificationService');
 const pushService = require('./services/pushService');
 
 app.use(ownerFlag);
@@ -107,6 +108,7 @@ app.use(require('./routes/auth'));           // signup / login / logout
 app.use(require('./routes/legal'));          // /legal/terms, /legal/privacy, /legal/dpa -- stub pages linked from signup
 app.use(require('./routes/pucks'));          // /r/:puckId tap routing, /claim/:puckId
 app.use(require('./routes/receipt'));        // /receipt/:transactionId
+app.use(require('./routes/receiptShare'));   // /share/receipt/:token -- scanned-receipt share links
 app.use(require('./routes/webhooks'));       // /webhooks/pos/square, /webhooks/pos/clover, /webhooks/pos/lightspeed, /webhooks/pos/shopify
 
 // Demo-account gate: a free, no-card merchant (Merchant.isDemoAccount) can
@@ -194,6 +196,16 @@ app.use(require('./routes/email-capture'));         // email/Google capture gate
 // each route remember to fetch it. Signed-out requests and non-wallet paths
 // skip the query entirely.
 app.use('/account', async (req, res, next) => {
+  // Business pages have their own unread-count middleware right below --
+  // skip entirely rather than let this one ALSO wrap res.render for them.
+  // /account is a prefix of /account/business, so without this check both
+  // middlewares would chain on every business page, and a merchant who is
+  // ALSO a wallet customer with unread personal alerts could see THAT count
+  // bleed onto their business Notifications tab whenever their own business
+  // count happened to be exactly zero (see the code comment on the business
+  // middleware for exactly why that race exists).
+  if (req.path.startsWith('/business')) return next();
+
   res.locals.unreadCount = 0;
   // Every wallet page can offer the notification switch, so the keys go on
   // locals here rather than being threaded through each route individually.
@@ -226,6 +238,30 @@ app.use('/account', async (req, res, next) => {
 });
 
 app.use(require('./routes/customer-account'));    // consumer wallet: /account/*
+
+// Same shape as the customer unread-count middleware above, kept entirely
+// separate (see that middleware's comment on /business) rather than shared,
+// since a merchant and customer session are different logins with different
+// unread counts even when it's the same person signed into both.
+app.use('/account/business', async (req, res, next) => {
+  res.locals.unreadCount = 0;
+  if (!req.session?.merchantId) return next();
+
+  const pending = countUnreadMerchantNotifications(req.session.merchantId).catch((err) => {
+    console.error('[business] unread notification count failed:', err.message);
+    return 0;
+  });
+
+  const render = res.render.bind(res);
+  res.render = function (view, options, callback) {
+    pending.then((count) => {
+      if (res.locals.unreadCount === 0) res.locals.unreadCount = count;
+      render(view, options, callback);
+    });
+  };
+
+  next();
+});
 app.use(require('./routes/account-business'));    // wallet's dark reskin of the merchant dashboard: /account/business/*
 app.use(require('./routes/loyalty'));               // punch cards: join/earn/self-serve redeem, /account/loyalty
 app.use(require('./routes/billing'));               // ReceipTap's own subscription billing (Stripe)

@@ -1,0 +1,107 @@
+<!-- views/business-notifications.ejs -->
+<!-- The business side's Notifications tab -- merchant-facing equivalent of
+     views/account-notifications.ejs (the customer Alerts tab). No push
+     controls here: PushSubscription is a customer-only feature (see
+     services/pushService.js), merchants have no equivalent yet.
+
+     Opening the tab marks everything read -- same "wasUnread captured
+     before markAllRead" trick as the customer page, so this one render can
+     still show which rows were new. -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Notifications - ReceipTap</title>
+  <link rel="stylesheet" href="/css/receiptap.css" />
+  <%- include('partials/wallet-dark-theme') %>
+  <style>
+    .biz-header { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+
+    .note {
+      display: flex; align-items: flex-start; gap: 13px; padding: 15px 16px; border-radius: 16px;
+      background: var(--w-card); border: 1px solid var(--w-line); margin-bottom: 10px;
+      text-decoration: none; color: inherit;
+    }
+    .note.unread { border-color: rgba(5,107,254,0.4); background: var(--w-accent-wash); }
+    .note-icon {
+      width: 36px; height: 36px; border-radius: 10px; flex: none; display: flex; align-items: center;
+      justify-content: center; background: var(--w-card-raised); color: var(--w-accent);
+    }
+    .note.unread .note-icon { background: rgba(5,107,254,0.18); }
+    .note-icon.removed { background: rgba(255,69,58,0.12); color: var(--w-danger); }
+    .note.unread .note-icon.removed { background: rgba(255,69,58,0.20); }
+    .note-icon.reward { background: rgba(48,209,88,0.14); color: #30d158; }
+    .note.unread .note-icon.reward { background: rgba(48,209,88,0.22); }
+    .note-body { flex: 1; min-width: 0; }
+    .note-title { font-size: 14.5px; font-weight: 700; color: var(--w-ink); }
+    .note-text { font-size: 12.5px; color: var(--w-ink-soft); margin-top: 3px; line-height: 1.5; }
+    .note-when { font-size: 11px; color: var(--w-ink-soft); margin-top: 6px; }
+    .note-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--w-accent); flex: none; margin-top: 6px; }
+
+    /* receiptap.css's .empty-state is the light theme's -- override for dark. */
+    .empty-state {
+      background: var(--w-card);
+      border: 1px dashed var(--w-line); border-radius: 18px; padding: 40px 24px; margin-top: 8px;
+      text-align: center; color: var(--w-ink-soft); font-size: 13.5px; line-height: 1.6;
+    }
+    .empty-icon {
+      width: 46px; height: 46px; border-radius: 50%; margin: 0 auto 14px;
+      background: var(--w-card-raised); display: flex; align-items: center; justify-content: center;
+      color: var(--w-accent);
+    }
+  </style>
+</head>
+<body>
+  <div class="w-shell">
+    <div class="biz-header">
+      <div>
+        <div class="w-eyebrow">Your business</div>
+        <h1 class="w-title" style="font-size:20px;">Notifications</h1>
+      </div>
+    </div>
+
+    <% if (notifications.length === 0) { %>
+      <div class="empty-state">
+        <div class="empty-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+        </div>
+        Nothing yet. We'll tell you here about full stamp cards, billing problems, POS connection issues, and Partner Program payouts.
+      </div>
+    <% } else { %>
+      <% notifications.forEach(function(note) { %>
+        <a class="note <%= note.wasUnread ? 'unread' : '' %>" href="<%= note.linkUrl || '/account/business' %>">
+          <%
+            var iconTone = note.type === 'LOYALTY_CARD_FILLED' ? 'reward'
+                         : note.type === 'PAYOUT_COMPLETED' ? 'reward'
+                         : note.type === 'BILLING_PROBLEM' ? 'removed'
+                         : note.type === 'POS_CONNECTION_FAILED' ? 'removed'
+                         : '';
+          %>
+          <div class="note-icon <%= iconTone %>">
+            <% if (note.type === 'LOYALTY_CARD_FILLED') { %>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 12v9H4v-9"/><path d="M2 7h20v5H2z"/><path d="M12 22V7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7Z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7Z"/></svg>
+            <% } else if (note.type === 'PAYOUT_COMPLETED') { %>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M9.5 9.5h3.75a1.75 1.75 0 1 1 0 3.5h-2.5a1.75 1.75 0 1 0 0 3.5H14"/></svg>
+            <% } else if (note.type === 'BILLING_PROBLEM') { %>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/><path d="M6 15h4"/></svg>
+            <% } else if (note.type === 'POS_CONNECTION_FAILED') { %>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 9V5a2 2 0 0 1 2-2h2M4 15v4a2 2 0 0 0 2 2h2M20 9V5a2 2 0 0 0-2-2h-2M20 15v4a2 2 0 0 1-2 2h-2"/><path d="M4 4l16 16"/></svg>
+            <% } else { %>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 2h12v20l-3-2-3 2-3-2-3 2Z"/><path d="M9 8h6M9 12h6"/></svg>
+            <% } %>
+          </div>
+          <div class="note-body">
+            <div class="note-title"><%= note.title %></div>
+            <div class="note-text"><%= note.body %></div>
+            <div class="note-when"><%= note.whenText %></div>
+          </div>
+          <% if (note.wasUnread) { %><div class="note-dot"></div><% } %>
+        </a>
+      <% }); %>
+    <% } %>
+  </div>
+
+  <%- include('partials/business-tab-bar', { active: 'notifications' }) %>
+</body>
+</html>

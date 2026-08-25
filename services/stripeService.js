@@ -1,6 +1,7 @@
 const Stripe = require('stripe');
 const prisma = require('../lib/prisma');
 const { MERCHANT_AFFILIATE_RATE, REGULAR_AFFILIATE_RATE } = require('./affiliateRates');
+const { notifyBillingProblem, notifyPayoutCompleted } = require('./merchantNotificationService');
 
 const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2024-06-20' })
@@ -338,6 +339,16 @@ async function tryPayCommission(commission, affiliate) {
       where: { id: commission.id },
       data: { status: 'PAID', stripeTransferId: transfer.id, paidAt: new Date() },
     });
+    // Only a MERCHANT-type affiliate has a business-side notification feed to
+    // land in -- a REGULAR affiliate is a wallet Customer, who has no
+    // equivalent here (see prisma/schema.prisma's Affiliate.merchantId).
+    if (affiliate.merchantId) {
+      try {
+        await notifyPayoutCompleted({ merchantId: affiliate.merchantId, amountCents: commission.amountCents });
+      } catch (err) {
+        console.error(`[stripeService] payout notification for commission ${commission.id} failed:`, err.message);
+      }
+    }
   } catch (err) {
     console.error(`Failed to pay affiliate commission ${commission.id}:`, err.message);
     await prisma.commission.update({ where: { id: commission.id }, data: { status: 'FAILED' } });
@@ -480,6 +491,7 @@ async function handleWebhookEvent(event) {
         data: { stripeSubscriptionId: sub.id, subscriptionStatus: status },
       });
       await syncPuckReturnWindows(merchant.id, status);
+      await notifyBillingProblemIfNewlyBad(merchant, status);
       break;
     }
     case 'customer.subscription.deleted': {
@@ -491,14 +503,21 @@ async function handleWebhookEvent(event) {
         data: { subscriptionStatus: 'CANCELED' },
       });
       await syncPuckReturnWindows(merchant.id, 'CANCELED');
+      await notifyBillingProblemIfNewlyBad(merchant, 'CANCELED');
       break;
     }
     case 'invoice.payment_failed': {
       const invoice = event.data.object;
-      await prisma.merchant.updateMany({
-        where: { stripeCustomerId: invoice.customer },
+      // findFirst-then-update, not the previous blind updateMany: notifying
+      // the merchant needs an id and their pre-update status in hand, not
+      // just a where-clause that happens to match zero or one row.
+      const merchant = await prisma.merchant.findFirst({ where: { stripeCustomerId: invoice.customer } });
+      if (!merchant) break;
+      await prisma.merchant.update({
+        where: { id: merchant.id },
         data: { subscriptionStatus: 'PAST_DUE' },
       });
+      await notifyBillingProblemIfNewlyBad(merchant, 'PAST_DUE');
       break;
     }
     case 'invoice.payment_succeeded': {
@@ -508,6 +527,29 @@ async function handleWebhookEvent(event) {
     default:
       // Not every event type needs handling — safe to ignore the rest.
       break;
+  }
+}
+
+// Pure decision, no DB/email side effects -- keeps a merchant already
+// sitting at PAST_DUE from getting renotified on every subsequent unrelated
+// Stripe event for the same subscription. `oldStatus` must be the status
+// BEFORE this webhook's update was written.
+function isNewBillingProblem(oldStatus, newStatus) {
+  if (oldStatus === newStatus) return false;
+  return newStatus === 'PAST_DUE' || newStatus === 'CANCELED';
+}
+
+// `merchant` here is always the PRE-update row (every call site above fetches
+// it before writing the new status), so merchant.subscriptionStatus is the
+// OLD value. Wrapped so a notification failure (a bad Resend key, a DB
+// hiccup) can never take down webhook processing itself -- the
+// subscriptionStatus write above already happened and must stand regardless.
+async function notifyBillingProblemIfNewlyBad(merchant, newStatus) {
+  if (!isNewBillingProblem(merchant.subscriptionStatus, newStatus)) return;
+  try {
+    await notifyBillingProblem({ merchantId: merchant.id, status: newStatus });
+  } catch (err) {
+    console.error('[stripeService] billing-problem notification failed:', err.message);
   }
 }
 
@@ -553,4 +595,6 @@ module.exports = {
   payAffiliateCommission,
   payPendingCommissionsForAffiliate,
   runScheduledPayouts,
+  notifyBillingProblemIfNewlyBad,
+  isNewBillingProblem,
 };

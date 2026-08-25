@@ -1,17 +1,23 @@
 <!-- views/partials/business-tab-bar.ejs -->
 <!-- Persistent bottom tab bar for the wallet's dark "Business" section's
-     three top-level pages: Dashboard (business-overview.ejs, served at
-     /account/business itself), ReceipTaps (business-pucks.ejs), and More
-     (business-more.ejs). Reuses the same .w-tabbar/.w-tab classes the
-     customer wallet's own tab bar uses (partials/wallet-dark-theme.ejs) --
-     the two bars are never shown on the same page, since a merchant
-     session's Business pages and the wallet's Personal pages are always
-     separate views. The sub-pages reachable from More (Receipts, Analytics,
+     four top-level pages: Dashboard (business-overview.ejs, served at
+     /account/business itself), ReceipTaps (business-pucks.ejs),
+     Notifications (business-notifications.ejs), and More (business-
+     more.ejs). Reuses the same .w-tabbar/.w-tab classes the customer
+     wallet's own tab bar uses (partials/wallet-dark-theme.ejs) -- the two
+     bars are never shown on the same page, since a merchant session's
+     Business pages and the wallet's Personal pages are always separate
+     views. The sub-pages reachable from More (Receipts, Analytics,
      Customers, Customer emails, Receipt design, Partner Program, POS
      connection, Setup guide, Business Settings, Settings, Billing) keep
      their existing back-button header instead of this tab bar, same as
      every other wallet sub-page.
-     Local: `active` -- one of 'dashboard' | 'pucks' | 'more'. -->
+     Local: `active` -- one of 'dashboard' | 'pucks' | 'notifications' | 'more'.
+     `unreadCount` comes from res.locals (server.js's /account/business
+     middleware), same pattern as wallet-tab-bar.ejs's Alerts badge. -->
+<%
+  var unread = typeof unreadCount !== 'undefined' ? unreadCount : 0;
+%>
 <div class="w-tabbar">
   <a class="w-tab <%= active === 'dashboard' ? 'active' : '' %>" href="/account/business">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg>
@@ -20,6 +26,13 @@
   <a class="w-tab <%= active === 'pucks' ? 'active' : '' %>" href="/account/business/pucks">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="12" rx="9" ry="5.5"/><path d="M3 12v2c0 3 4 5.5 9 5.5s9-2.5 9-5.5v-2"/></svg>
     ReceipTaps
+  </a>
+  <a class="w-tab <%= active === 'notifications' ? 'active' : '' %>" href="/account/business/notifications">
+    <span class="w-tab-icon-wrap">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+      <% if (unread > 0) { %><span class="w-tab-badge"><%= unread > 9 ? '9+' : unread %></span><% } %>
+    </span>
+    Notifications
   </a>
   <a class="w-tab <%= active === 'more' ? 'active' : '' %>" href="/account/business/more">
     <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>

@@ -22,6 +22,12 @@ const prisma = require('../lib/prisma');
 const { deleteShopperByEmail } = require('../services/dataRetentionService');
 const { DEACTIVATED_MERCHANT_PURGE_DAYS } = require('../config/retention');
 const claimLimit = require('../lib/claimAttemptLimit');
+const { relativeTime } = require('../lib/relativeTime');
+const { COUNTRIES_WITH_FLAGS } = require('../lib/countryPhoneCodes');
+const {
+  listNotifications: listMerchantNotifications,
+  markAllRead: markAllMerchantNotificationsRead,
+} = require('../services/merchantNotificationService');
 
 const { computeOverviewData, computeReceiptsHubData, computePucksData } = require('./merchant-dashboard');
 const { computeAnalyticsData } = require('./analytics');
@@ -121,6 +127,27 @@ router.get('/account/business/more', requireAuth, async (req, res) => {
   const merchant = await prisma.merchant.findUnique({ where: { id: req.session.merchantId } });
   const { paymentMethods } = await listPaymentMethods(merchant);
   res.render('business-more', { merchant, hasFullAccess: paymentMethods.length > 0 });
+});
+
+// Same "wasUnread captured before markAllRead" pattern as the customer
+// Alerts tab (routes/customer-account.js's /account/notifications) -- the
+// tab clears its own badge, so this route's res.locals.unreadCount = 0
+// wins over the middleware in server.js that would otherwise fill it in.
+router.get('/account/business/notifications', requireAuth, async (req, res) => {
+  const rows = await listMerchantNotifications(req.session.merchantId);
+  const notifications = rows.map((note) => ({
+    type: note.type,
+    title: note.title,
+    body: note.body,
+    linkUrl: note.linkUrl,
+    wasUnread: note.readAt === null,
+    whenText: relativeTime(note.createdAt),
+  }));
+
+  await markAllMerchantNotificationsRead(req.session.merchantId);
+  res.locals.unreadCount = 0;
+
+  res.render('business-notifications', { notifications });
 });
 
 router.get('/account/business/receipts', requireAuth, requireFullBusinessAccess, async (req, res) => {
@@ -364,6 +391,7 @@ router.get('/account/business/settings', requireAuth, async (req, res) => {
   res.render('business-settings', {
     merchant,
     receiptTheme,
+    countries: COUNTRIES_WITH_FLAGS,
     // Tax type is a dropdown rather than free text, same reasoning as the
     // Receipt design page's tax label: the common regimes spelled one way.
     // "Custom" stays for anything the list doesn't cover, and a label the
@@ -392,6 +420,7 @@ router.get('/account/business/account', requireAuth, async (req, res) => {
   const merchant = await prisma.merchant.findUnique({ where: { id: req.session.merchantId } });
   res.render('business-account', {
     merchant,
+    countries: COUNTRIES_WITH_FLAGS,
     profileError: req.query.profileError || null,
     profileSuccess: req.query.profileSuccess === '1',
     passwordError: req.query.passwordError || null,

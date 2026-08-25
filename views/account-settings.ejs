@@ -52,7 +52,10 @@
           </div>
           <div class="field">
             <label for="businessPhone">Phone (optional)</label>
-            <input type="text" id="businessPhone" name="phone" value="<%= receiptTheme ? (receiptTheme.phone || '') : '' %>" placeholder="416-555-1234" />
+            <%- include('partials/phone-input', {
+              fieldName: 'phone', countryFieldName: 'phoneCountry', id: 'businessPhone',
+              value: receiptTheme ? receiptTheme.phone : '', selectedCountry: receiptTheme ? receiptTheme.phoneCountry : null,
+            }) %>
             <div class="hint">Shown on the receipts your customers receive. Leave blank to not show one.</div>
           </div>
           <button type="submit" class="btn btn-primary" style="width:auto;">Save</button>

@@ -85,7 +85,10 @@
             Merchant.email column POST .../business-all edits from Business
             Settings' own "Business profile" card, not a second one. %>
         <div class="w-field"><label for="email">Email</label><input type="email" id="email" name="email" value="<%= merchant.email %>" required /></div>
-        <div class="w-field"><label for="ownerPhone">Your phone (optional)</label><input type="text" id="ownerPhone" name="ownerPhone" value="<%= merchant.ownerPhone || '' %>" placeholder="416-555-1234" /></div>
+        <div class="w-field"><label for="ownerPhone">Your phone (optional)</label><%- include('partials/phone-input', {
+          fieldName: 'ownerPhone', countryFieldName: 'ownerPhoneCountry', id: 'ownerPhone',
+          value: merchant.ownerPhone, selectedCountry: merchant.ownerPhoneCountry,
+        }) %></div>
         <button type="submit" class="w-btn" style="margin-top:14px;">Save profile</button>
       </form>
     </div>

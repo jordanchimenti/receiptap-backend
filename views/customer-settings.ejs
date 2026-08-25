@@ -99,7 +99,10 @@
       </div>
       <div class="w-field">
         <label>Phone (optional)</label>
-        <input type="text" name="phone" value="<%= customer.phone || '' %>" placeholder="416-555-1234" />
+        <%- include('partials/phone-input', {
+          fieldName: 'phone', countryFieldName: 'phoneCountry',
+          value: customer.phone, selectedCountry: customer.phoneCountry,
+        }) %>
       </div>
     </div>
 

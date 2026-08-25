@@ -1,0 +1,41 @@
+<%
+  /* views/partials/phone-input.ejs
+     Country-code dropdown (flag + dial code) paired with the actual number
+     field. Meant to sit INSIDE an existing <div class="w-field">/<div
+     class="field"> wrapper, in place of a bare <input> -- both this app's
+     themes already style any <input>/<select> nested in one of those
+     wrappers identically (see wallet-dark-theme.ejs's ".w-field input,
+     .w-field select" and receiptap.css's ".field input, .field select"), so
+     this partial adds zero new CSS of its own, just a flex row layout.
+
+     Locals:
+       fieldName        -- name attribute for the number <input> (e.g. "phone")
+       countryFieldName -- name attribute for the country <select> (e.g. "phoneCountry")
+       countries        -- lib/countryPhoneCodes.js's COUNTRIES_WITH_FLAGS -- the
+                            route rendering this page must require() that module
+                            itself and pass the array through; this partial can't
+                            require it directly (EJS resolves require() against
+                            the process's cwd, not the .ejs file's own path)
+       value            -- current number string
+       selectedCountry  -- current ISO2 ("CA" if unset)
+       placeholder      -- placeholder for the number input
+       id               -- optional id prefix, so a <label for="..."> outside this partial still targets the number input
+  */
+  const currentIso2 = (typeof selectedCountry !== 'undefined' && selectedCountry) || 'CA';
+  const inputId = typeof id !== 'undefined' ? id : fieldName;
+%>
+<div style="display:flex; gap:8px; align-items:flex-start;">
+  <div style="flex:0 0 150px; min-width:0;">
+    <select name="<%= countryFieldName %>" aria-label="Country code">
+      <% countries.forEach(function (c) { %>
+        <option value="<%= c.iso2 %>" <%= c.iso2 === currentIso2 ? 'selected' : '' %>>
+          <%= c.flag %> <%= c.name %> +<%= c.dialCode %>
+        </option>
+      <% }); %>
+    </select>
+  </div>
+  <div style="flex:1 1 auto; min-width:0;">
+    <input type="text" id="<%= inputId %>" name="<%= fieldName %>" value="<%= value || '' %>"
+           placeholder="<%= typeof placeholder !== 'undefined' ? placeholder : '416-555-1234' %>" />
+  </div>
+</div>

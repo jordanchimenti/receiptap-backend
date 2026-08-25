@@ -7,6 +7,7 @@ const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcrypt');
 const prisma = require('../lib/prisma');
+const { COUNTRIES_WITH_FLAGS } = require('../lib/countryPhoneCodes');
 const { resolveTaxNumberLabel } = require('../lib/taxLabels');
 const { stripe } = require('../services/stripeService');
 const { uploadProfilePhoto } = require('./billing');
@@ -68,6 +69,7 @@ router.get('/dashboard/settings/account', requireAuth, async (req, res) => {
   res.render('account-settings', {
     merchant,
     receiptTheme,
+    countries: COUNTRIES_WITH_FLAGS,
     businessError: req.query.businessError || null,
     businessSuccess: req.query.businessSuccess === '1',
     passwordError: req.query.passwordError || null,
@@ -88,9 +90,9 @@ router.get('/dashboard/settings/account', requireAuth, async (req, res) => {
 // "Email is required." for a field this form never asked about. Same
 // 'field' in req.body reasoning as POST .../business-all below.
 router.post('/dashboard/settings/account/profile', requireAuth, handleProfilePhotoUpload, async (req, res) => {
-  const { ownerName, email, ownerPhone, redirectTo } = req.body;
+  const { ownerName, email, ownerPhone, ownerPhoneCountry, redirectTo } = req.body;
   const destination = settingsRedirectTarget(redirectTo);
-  const data = { ownerName: ownerName || null, ownerPhone: ownerPhone || null };
+  const data = { ownerName: ownerName || null, ownerPhone: ownerPhone || null, ownerPhoneCountry: ownerPhoneCountry || null };
 
   if ('email' in req.body) {
     if (!email) {
@@ -118,7 +120,7 @@ router.post('/dashboard/settings/account/profile', requireAuth, handleProfilePho
 
 // POST /dashboard/settings/account/business — update business name/email.
 router.post('/dashboard/settings/account/business', requireAuth, async (req, res) => {
-  const { businessName, email, phone, redirectTo } = req.body;
+  const { businessName, email, phone, phoneCountry, redirectTo } = req.body;
   const destination = settingsRedirectTarget(redirectTo);
 
   if (!businessName || !email) {
@@ -138,7 +140,7 @@ router.post('/dashboard/settings/account/business', requireAuth, async (req, res
   // "leave it alone" rather than "clear it", so a form that doesn't render the
   // input can't wipe a saved number; present-but-empty is a real clear, since
   // the field is optional.
-  const phoneWrite = 'phone' in req.body ? { phone: phone || null } : {};
+  const phoneWrite = 'phone' in req.body ? { phone: phone || null, phoneCountry: phoneCountry || null } : {};
   await Promise.all([
     prisma.merchant.update({
       where: { id: req.session.merchantId },
@@ -218,6 +220,7 @@ router.post('/dashboard/settings/account/business-all', requireAuth, handleProfi
   const only = (key, value) => { if (key in b) merchantData[key] = value; };
   only('ownerName', b.ownerName || null);
   only('ownerPhone', b.ownerPhone || null);
+  only('ownerPhoneCountry', b.ownerPhoneCountry || null);
   only('businessEmail', b.businessEmail || null);
   only('industry', b.industry || null);
   only('addressLine1', b.addressLine1 || null);
@@ -231,6 +234,7 @@ router.post('/dashboard/settings/account/business-all', requireAuth, handleProfi
   // Both live on ReceiptTheme because both print on a receipt.
   const themeData = {};
   if ('phone' in b) themeData.phone = b.phone || null;
+  if ('phoneCountry' in b) themeData.phoneCountry = b.phoneCountry || null;
   if ('gstHstNumber' in b) themeData.gstHstNumber = b.gstHstNumber || null;
   // Label and second registration number travel with it -- see the comment on
   // ReceiptTheme.taxNumber2 for why one slot wasn't enough.

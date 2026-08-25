@@ -104,7 +104,10 @@
 
         <p style="font-size:12.5px; color:var(--w-ink-soft); margin:-8px 0 14px; line-height:1.5;">Shown on the receipts your customers receive.</p>
         <div class="w-field"><label for="businessName">Business name</label><input type="text" id="businessName" name="businessName" value="<%= merchant.businessName %>" required /></div>
-        <div class="w-field"><label for="businessPhone">Phone (optional)</label><input type="text" id="businessPhone" name="phone" value="<%= receiptTheme ? (receiptTheme.phone || '') : '' %>" placeholder="416-555-1234" /></div>
+        <div class="w-field"><label for="businessPhone">Phone (optional)</label><%- include('partials/phone-input', {
+          fieldName: 'phone', countryFieldName: 'phoneCountry', id: 'businessPhone',
+          value: receiptTheme ? receiptTheme.phone : '', selectedCountry: receiptTheme ? receiptTheme.phoneCountry : null,
+        }) %></div>
         <div class="field-hint">Leave phone blank to not show one.</div>
         <div class="w-field"><label for="businessEmail">Business email (optional)</label><input type="email" id="businessEmail" name="businessEmail" value="<%= merchant.businessEmail || '' %>" placeholder="hello@yourbusiness.com" /></div>
         <div class="field-hint">Separate from your login email, which lives on <a href="/account/business/account" style="color:var(--w-accent);">Profile Settings</a> now.</div>

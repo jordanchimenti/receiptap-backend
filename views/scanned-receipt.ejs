@@ -127,8 +127,8 @@
 
       <div class="r-sec">
         <div class="r-sec-title">Original photo</div>
-        <a href="javascript:void 0" onclick="openImageViewer('<%= receipt.imageUrl %>', '<%= receipt.merchantName.replace(/'/g, "\\'") %>'); return false;">
-          <img class="r-photo" src="<%= receipt.imageUrl %>" alt="Photo of the receipt from <%= receipt.merchantName %>" />
+        <a href="javascript:void 0" onclick="openImageViewer('/account/receipts/scanned/<%= receipt.id %>/image', '<%= receipt.merchantName.replace(/'/g, "\\'") %>'); return false;">
+          <img class="r-photo" src="/account/receipts/scanned/<%= receipt.id %>/image" alt="Photo of the receipt from <%= receipt.merchantName %>" />
         </a>
         <div class="r-missing" style="margin-top:10px;">
           This photo is the record that actually supports a claim — the figures above

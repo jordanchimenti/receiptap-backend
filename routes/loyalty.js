@@ -355,7 +355,7 @@ async function saveLoyaltyProgram(merchantId, body, file) {
   // path when this submit actually carried a new file.
   // Reuses theme-settings' logo upload, which is memory-backed now, so this
   // has to store the buffer rather than reference a filename on disk.
-  if (file) data.cardLogoUrl = await fileStorage.put('logos', file, { prefix: merchantId });
+  if (file) data.cardLogoUrl = await fileStorage.putPublic('logos', file, { prefix: merchantId });
 
   await prisma.loyaltyProgram.upsert({ where: { merchantId }, create: { merchantId, ...data }, update: data });
 

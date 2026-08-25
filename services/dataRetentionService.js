@@ -53,7 +53,7 @@ function deleteUploadedFile(webPath) {
   // Delegates so a purge reaches remote objects too, not just local files.
   // Fire-and-forget on purpose: a storage hiccup must not fail a purge, and
   // fileStorage.remove already logs its own failures.
-  fileStorage.remove(webPath).catch(() => {});
+  fileStorage.removePublic(webPath).catch(() => {});
 }
 
 async function writePurgeLog({ jobName, dryRun, details, error, initiatedByMerchantId, startedAt }) {

@@ -21,6 +21,7 @@ const { TAX_LABEL_GROUPS, TAX_LABEL_OPTIONS, CUSTOM_TAX_LABEL, isCustomTaxLabel,
 const { SHOPPER_CONSENT } = require('../config/legal');
 const { getBaseUrl } = require('../lib/baseUrl');
 const { createTestReceiptToken, verifyTestReceiptToken } = require('../lib/testReceiptToken');
+const { buildSellerSnapshot } = require('../lib/receiptSnapshot');
 
 function requireAuth(req, res, next) {
   if (!req.session?.merchantId) return res.redirect('/login');
@@ -182,7 +183,10 @@ router.get('/dashboard/settings/receipt', requireAuth, async (req, res) => {
 // -- a demo account has no real transactions to get confused with in the
 // first place.
 router.post('/dashboard/settings/receipt/test-sale', requireAuth, async (req, res) => {
-  const merchant = await prisma.merchant.findUnique({ where: { id: req.session.merchantId } });
+  const merchant = await prisma.merchant.findUnique({
+    where: { id: req.session.merchantId },
+    include: { receiptTheme: true },
+  });
   if (!merchant?.isDemoAccount) {
     return res.status(403).json({ error: 'Test receipts are only available on the free demo tier.' });
   }
@@ -209,6 +213,8 @@ router.post('/dashboard/settings/receipt/test-sale', requireAuth, async (req, re
       discountTotal: 0,
       total,
       paymentMethod: 'Test sale — no real payment',
+      currency: null,
+      ...buildSellerSnapshot(merchant),
     },
   });
 
@@ -364,6 +370,12 @@ router.get('/dashboard/settings/receipt/preview/:layoutId', async (req, res) => 
     previewBarcodeMarkup = previewBarcodeValue ? barcodeSvg(previewBarcodeValue) : null;
   }
 
+  // No real sale behind a live edit preview -- isSynthetic: true, so this
+  // reads previewTheme/merchant directly, reflecting the merchant's UNSAVED
+  // edits (query params), which is the entire point of this page. There is
+  // no seller* snapshot to read: nothing has been sold yet.
+  const previewSeller = resolveSellerForRender({}, { theme: previewTheme, merchant, isSynthetic: true });
+
   res.render('receipt', {
     merchant,
     // The preview must show what will ACTUALLY be issued, floor included --
@@ -371,6 +383,7 @@ router.get('/dashboard/settings/receipt/preview/:layoutId', async (req, res) => 
     // real receipt (correctly) still prints it. Cents matching the sample
     // sale below: $15.26 total, $1.76 tax.
     theme: applyComplianceFloor(previewTheme, { total: 1526, tax: 176 }),
+    seller: previewSeller,
     barcodeValue: previewBarcodeValue,
     barcodeMarkup: previewBarcodeMarkup,
     canRecogniseCard: false, // a preview has no real card behind it
@@ -574,7 +587,7 @@ async function saveReceiptSettings(merchantId, body, file) {
   // silently wipe the logo on every save.
   let logoUrl = existingTheme ? existingTheme.logoUrl : null;
   if (file) {
-    logoUrl = await fileStorage.put('logos', file, { prefix: merchantId });
+    logoUrl = await fileStorage.putPublic('logos', file, { prefix: merchantId });
   }
 
   // If they've turned the review toggle on, require a real, well-formed URL —

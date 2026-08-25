@@ -221,7 +221,7 @@ router.post('/dashboard/billing/account', requireAuth, handlePhotoUpload, async 
   const { ownerName } = req.body;
   const data = { ownerName: ownerName || null };
   if (req.file) {
-    data.profilePhotoUrl = await fileStorage.put('profile-photos', req.file, { prefix: req.session.merchantId });
+    data.profilePhotoUrl = await fileStorage.putPublic('profile-photos', req.file, { prefix: req.session.merchantId });
   }
   await prisma.merchant.update({
     where: { id: req.session.merchantId },

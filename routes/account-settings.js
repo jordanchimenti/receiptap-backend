@@ -110,7 +110,7 @@ router.post('/dashboard/settings/account/profile', requireAuth, handleProfilePho
   }
 
   if (req.file) {
-    data.profilePhotoUrl = await fileStorage.put('profile-photos', req.file, { prefix: req.session.merchantId });
+    data.profilePhotoUrl = await fileStorage.putPublic('profile-photos', req.file, { prefix: req.session.merchantId });
   }
   await prisma.merchant.update({ where: { id: req.session.merchantId }, data });
   res.redirect(`${destination}?profileSuccess=1`);
@@ -226,7 +226,7 @@ router.post('/dashboard/settings/account/business-all', requireAuth, handleProfi
   only('addressRegion', b.addressRegion || null);
   only('addressPostalCode', b.addressPostalCode || null);
   only('addressCountry', b.addressCountry || null);
-  if (req.file) merchantData.profilePhotoUrl = await fileStorage.put('profile-photos', req.file, { prefix: merchantId });
+  if (req.file) merchantData.profilePhotoUrl = await fileStorage.putPublic('profile-photos', req.file, { prefix: merchantId });
 
   // Both live on ReceiptTheme because both print on a receipt.
   const themeData = {};

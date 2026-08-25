@@ -58,6 +58,10 @@ const RESET_TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hour
 // disk otherwise. The photo is the record a tax authority actually accepts, so
 // it must not live somewhere a redeploy erases.
 const ALLOWED_SCAN_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
+// Content-Type for the proxy/preview routes below, derived from the stored
+// key's extension since a private-bucket download doesn't hand one back the
+// way a public URL fetch would.
+const SCAN_EXT_MIME = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp' };
 
 const uploadReceiptScan = multer({
   storage: multer.memoryStorage(),
@@ -73,10 +77,16 @@ const uploadReceiptScan = multer({
 function handleReceiptScanUpload(req, res, next) {
   uploadReceiptScan(req, res, (err) => {
     if (!err) return next();
+    // The type-rejection case is overwhelmingly an iPhone shooting HEIC, which
+    // this doesn't accept (see docs/KNOWN_ISSUES.md) -- naming PNG/JPG/WEBP
+    // means nothing to someone who doesn't know what format their camera
+    // uses. The in-page camera button is named specifically because it's the
+    // one upload path that can't hit this at all: it goes through
+    // canvas.toBlob() (views/scan-receipt.ejs), which always produces PNG.
     const message =
       err.code === 'LIMIT_FILE_SIZE'
         ? 'Photo file is too large (5MB max).'
-        : 'Please upload a valid image file (PNG, JPG, or WEBP).';
+        : "That photo format isn't supported. Try taking the photo with the camera button above, or change your iPhone's camera setting to \"Most Compatible\" under Settings > Camera > Formats.";
     res.redirect(`/account/receipts/scan?error=${encodeURIComponent(message)}`);
   });
 }
@@ -1046,22 +1056,54 @@ router.post('/account/receipts/deductible-categories', requireCustomerAuth, asyn
   res.redirect('/account/wallet?deductible=1&rulesSaved=1');
 });
 
+// Parses the "select all" checkboxes' comma-joined "kind:id" pairs (see
+// .receipt-checkbox in partials/receipt-list.ejs) into the two id lists
+// buildExportRows needs. An unrecognized kind or missing id is dropped
+// rather than thrown on -- a stray query param shouldn't 500 an export.
+function parseSelectedIds(raw) {
+  const txnIds = [];
+  const scanIds = [];
+  if (!raw) return { txnIds, scanIds };
+  raw.split(',').forEach((pair) => {
+    const [kind, id] = pair.split(':');
+    if (kind === 'transaction' && id) txnIds.push(id);
+    else if (kind === 'scanned' && id) scanIds.push(id);
+  });
+  return { txnIds, scanIds };
+}
+
 // Shared by both export formats (CSV below, PDF further down) so the two
 // documents can never disagree on which rows matched the current filters --
 // the exact drift risk deductibleWhereClause's own comment warns about,
 // just between two export FORMATS instead of the screen and one export.
-async function buildExportRows(customerId, { search, from, to, category, deductible }) {
+async function buildExportRows(customerId, { search, from, to, category, deductible, ids }) {
   const rules = await prisma.customer.findUnique({
     where: { id: customerId },
     select: { deductibleCategories: true },
   });
   const deductibleCategories = rules?.deductibleCategories || [];
-  const f = { search, from, to, category, deductible, deductibleCategories };
-  const where = buildWalletWhere(customerId, f);
-  const scanWhere = buildScannedReceiptWhere(customerId, f);
+
+  let where, scanWhere;
+  if (ids && (ids.txnIds.length || ids.scanIds.length)) {
+    // A hand-picked set from the wallet's checkboxes overrides the filters
+    // entirely -- exactly what's checked, not whatever the filters would
+    // separately match (see .select-all-row in customer-wallet.ejs).
+    // Scoped by customerId same as buildWalletWhere, since ids are guessable
+    // cuids -- same reasoning as the deductible-toggle route's updateMany.
+    where = { id: { in: ids.txnIds }, customerId };
+    scanWhere = { id: { in: ids.scanIds }, customerId };
+  } else {
+    const f = { search, from, to, category, deductible, deductibleCategories };
+    where = buildWalletWhere(customerId, f);
+    scanWhere = buildScannedReceiptWhere(customerId, f);
+  }
 
   const [transactions, scanned] = await Promise.all([
-    prisma.transaction.findMany({ where, include: { merchant: true }, orderBy: { createdAt: 'desc' } }),
+    // No merchant include needed -- business name comes from the sellerName
+    // snapshot below, frozen at sale time, not a live join. Same reasoning as
+    // routes/receipt.js: a shopper's tax export must keep stating what the
+    // seller was called on the sale date, not whatever they're called today.
+    prisma.transaction.findMany({ where, orderBy: { createdAt: 'desc' } }),
     prisma.scannedReceipt.findMany({ where: scanWhere, orderBy: { createdAt: 'desc' } }),
   ]);
 
@@ -1070,7 +1112,7 @@ async function buildExportRows(customerId, { search, from, to, category, deducti
       id: t.id,
       kind: 'tapped',
       date: t.createdAt,
-      business: t.merchant.businessName,
+      business: t.sellerName,
       total: t.total,
       category: t.aiCategory,
       row: t,
@@ -1097,8 +1139,9 @@ async function buildExportRows(customerId, { search, from, to, category, deducti
 router.get('/account/receipts/export', requireCustomerAuth, async (req, res) => {
   const { search, from, to, category } = req.query;
   const deductible = req.query.deductible === '1';
+  const ids = parseSelectedIds(req.query.ids);
   const { rows, deductibleCategories } = await buildExportRows(req.session.customerId, {
-    search, from, to, category, deductible,
+    search, from, to, category, deductible, ids,
   });
 
   const header = 'receipt_id,type,date,business,total,category,tax_deductible,decided_by';
@@ -1136,8 +1179,9 @@ router.get('/account/receipts/export', requireCustomerAuth, async (req, res) => 
 router.get('/account/receipts/export/pdf', requireCustomerAuth, async (req, res) => {
   const { search, from, to, category } = req.query;
   const deductible = req.query.deductible === '1';
+  const ids = parseSelectedIds(req.query.ids);
   const [{ rows, deductibleCategories }, customer] = await Promise.all([
-    buildExportRows(req.session.customerId, { search, from, to, category, deductible }),
+    buildExportRows(req.session.customerId, { search, from, to, category, deductible, ids }),
     prisma.customer.findUnique({ where: { id: req.session.customerId }, select: { email: true, name: true } }),
   ]);
 
@@ -1164,6 +1208,7 @@ router.get('/account/receipts/export/pdf', requireCustomerAuth, async (req, res)
       rows: exportRows,
       totalLabel: (totalCents / 100).toFixed(2),
       deductibleTotalLabel: (deductibleTotalCents / 100).toFixed(2),
+      selected: Boolean(ids.txnIds.length || ids.scanIds.length),
       filtered: Boolean(search || from || to || category),
       deductibleOnly: deductible,
       generatedAt: new Date().toLocaleDateString('en-US', { dateStyle: 'medium' }),
@@ -1209,10 +1254,11 @@ router.post('/account/receipts/scan', requireCustomerAuth, handleReceiptScanUplo
 
   // Stored first, so the review page's <img> has something to point at, and
   // so a photo is never left only in memory. Extraction reads the same buffer
-  // rather than re-fetching what was just written.
-  let imageUrl;
+  // rather than re-fetching what was just written. putPrivate() -- this photo
+  // must never be reachable except through the proxy/preview routes below.
+  let imageKey;
   try {
-    imageUrl = await fileStorage.put('receipt-scans', req.file, { prefix: req.session.customerId });
+    imageKey = await fileStorage.putPrivate('receipt-scans', req.file, { prefix: req.session.customerId });
   } catch (err) {
     console.error('[scan] storing the photo failed:', err.message);
     return res.redirect('/account/receipts/scan?error=' + encodeURIComponent("We couldn't save that photo — please try again."));
@@ -1220,7 +1266,7 @@ router.post('/account/receipts/scan', requireCustomerAuth, handleReceiptScanUplo
   const extracted = await extractReceiptData(req.file.buffer, req.file.mimetype);
 
   res.render('scan-receipt-review', {
-    imageUrl,
+    imageKey,
     duplicate: null,
     couldNotRead: !extracted,
     merchantName: extracted?.merchantName || '',
@@ -1249,14 +1295,46 @@ router.post('/account/receipts/scan', requireCustomerAuth, handleReceiptScanUplo
   });
 });
 
+// Serves the just-uploaded photo back to the review screen. There's no
+// ScannedReceipt row yet at this point (that's only created on /confirm
+// below), so this can't check ownership against a DB row the way the
+// scanned-receipt proxy route does -- instead it relies on buildKey() always
+// prefixing a key with the uploading customer's own ID, and rejects anything
+// that doesn't match that customer's key shape exactly. `key` arrives via a
+// query string the browser builds from the hidden field on the review form,
+// so it must be treated as attacker-controlled, not trusted just because the
+// server generated the value in the first place.
+router.get('/account/receipts/scan/preview', requireCustomerAuth, async (req, res) => {
+  const key = typeof req.query.key === 'string' ? req.query.key : '';
+  if (!fileStorage.isValidScanKey(key, req.session.customerId)) {
+    return res.status(404).end();
+  }
+
+  let stream;
+  try {
+    stream = await fileStorage.getPrivate(key);
+  } catch (err) {
+    console.error('[scan] streaming preview image failed:', err.message);
+    return res.status(404).end();
+  }
+
+  res.set('Cache-Control', 'private, no-store');
+  res.set('Content-Type', SCAN_EXT_MIME[path.extname(key).toLowerCase()] || 'application/octet-stream');
+  stream.on('error', (err) => {
+    console.error('[scan] preview image stream error:', err.message);
+    if (!res.headersSent) res.status(404).end();
+  });
+  stream.pipe(res);
+});
+
 router.post('/account/receipts/scan/confirm', requireCustomerAuth, async (req, res) => {
-  const { imageUrl, merchantName, date, total, category, lineItems, paymentMethod, receiptNumber } = req.body;
+  const { imageKey, merchantName, date, total, category, lineItems, paymentMethod, receiptNumber } = req.body;
 
   // Re-renders the review page with whatever they had typed still in place --
   // losing a hand-corrected total to an error message would be its own bug.
   const backToReview = (error, duplicate = null) =>
     res.render('scan-receipt-review', {
-      imageUrl,
+      imageKey,
       duplicate,
       couldNotRead: false,
       merchantName: merchantName || '',
@@ -1271,7 +1349,13 @@ router.post('/account/receipts/scan/confirm', requireCustomerAuth, async (req, r
       error,
     });
 
-  if (!imageUrl || !merchantName || !total) {
+  // The hidden imageKey field is user-controlled (round-tripped through the
+  // browser), so it's checked against the same key shape as the preview
+  // route -- not just "is it present" -- before it's ever persisted. A
+  // tampered key fails the same generic message as a missing one; this path
+  // is an attack attempt, not a normal user mistake, so it gets no more
+  // detail than that.
+  if (!imageKey || !fileStorage.isValidScanKey(imageKey, req.session.customerId) || !merchantName || !total) {
     return backToReview('Merchant name and total are required.');
   }
 
@@ -1306,7 +1390,7 @@ router.post('/account/receipts/scan/confirm', requireCustomerAuth, async (req, r
     saved = await prisma.scannedReceipt.create({
       data: {
         customerId: req.session.customerId,
-        imageUrl,
+        imageUrl: imageKey,
         merchantName: merchantName.trim().slice(0, 200),
         purchaseDate: parseDateOrNull(date),
         total: totalCents,
@@ -1407,6 +1491,34 @@ router.get('/account/receipts/scanned/:id', requireCustomerAuth, async (req, res
   });
 });
 
+// Streams a saved receipt's photo. Auth-gated and ownership-checked the same
+// way as the page above -- the point of the private bucket is that this is
+// the *only* way to reach the image, so this check is the whole security
+// boundary, not a redundant one.
+router.get('/account/receipts/scanned/:id/image', requireCustomerAuth, async (req, res) => {
+  const receipt = await prisma.scannedReceipt.findUnique({ where: { id: req.params.id } });
+
+  if (!receipt || receipt.customerId !== req.session.customerId) {
+    return res.redirect('/account/receipts');
+  }
+
+  let stream;
+  try {
+    stream = await fileStorage.getPrivate(receipt.imageUrl);
+  } catch (err) {
+    console.error('[scan] streaming receipt image failed:', err.message);
+    return res.status(404).end();
+  }
+
+  res.set('Cache-Control', 'private, no-store');
+  res.set('Content-Type', SCAN_EXT_MIME[path.extname(receipt.imageUrl).toLowerCase()] || 'application/octet-stream');
+  stream.on('error', (err) => {
+    console.error('[scan] receipt image stream error:', err.message);
+    if (!res.headersSent) res.status(404).end();
+  });
+  stream.pipe(res);
+});
+
 // The customer's own note on why they bought it -- the one thing on this page
 // that never came off the paper. Editable after the fact because the reason
 // is often clearer a week later than it was at the till.
@@ -1437,7 +1549,7 @@ router.post('/account/receipts/scanned/:id/delete', requireCustomerAuth, async (
   // The photo goes too. Leaving it behind would keep an image of someone's
   // receipt after they asked for it to be gone. fileStorage handles either
   // backend, including files written before remote storage was switched on.
-  await fileStorage.remove(receipt.imageUrl);
+  await fileStorage.removePrivate(receipt.imageUrl);
 
   try {
     await notifyReceiptDeleted({

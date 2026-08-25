@@ -2,7 +2,10 @@
 <!-- Step 2 of 2: shows what Claude read off the photo (or a blank form if
      it couldn't read it, or the upload has no data yet) for the customer
      to confirm or correct. Nothing is saved until this form submits to
-     POST /account/receipts/scan/confirm. locals: imageUrl, couldNotRead,
+     POST /account/receipts/scan/confirm. locals: imageKey (a private-bucket
+     storage key, not a URL -- rendered via GET /account/receipts/scan/preview,
+     the only thing allowed to read it back before a ScannedReceipt row
+     exists), couldNotRead,
      merchantName, date, total, category, lineItems (JSON string, carried
      through as a hidden field -- not editable in this version),
      paymentMethod, receiptNumber (both optional -- only ever what the
@@ -110,8 +113,8 @@
       <h1 class="w-title" style="font-size:20px;">Confirm details</h1>
     </div>
 
-    <img class="preview-thumb" src="<%= imageUrl %>" alt="Uploaded receipt"
-         style="cursor: zoom-in;" onclick="openImageViewer('<%= imageUrl %>', 'Your photo')" />
+    <img class="preview-thumb" src="/account/receipts/scan/preview?key=<%= encodeURIComponent(imageKey) %>" alt="Uploaded receipt"
+         style="cursor: zoom-in;" onclick="openImageViewer('/account/receipts/scan/preview?key=<%= encodeURIComponent(imageKey) %>', 'Your photo')" />
 
     <% if (typeof error !== 'undefined' && error) { %>
       <div class="w-error"><%= error %></div>
@@ -146,7 +149,7 @@
     %>
 
     <form method="POST" action="/account/receipts/scan/confirm">
-      <input type="hidden" name="imageUrl" value="<%= imageUrl %>" />
+      <input type="hidden" name="imageKey" value="<%= imageKey %>" />
       <input type="hidden" name="lineItems" value='<%- lineItems %>' />
 
       <input
@@ -299,7 +302,7 @@
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>
         <%# Was a plain link to the .jpg, which stranded anyone running the
             app from their home screen -- see partials/image-viewer.ejs. %>
-        Original photo attached — <a href="javascript:void 0" onclick="openImageViewer('<%= imageUrl %>', 'Your photo'); return false;">view full size</a>
+        Original photo attached — <a href="javascript:void 0" onclick="openImageViewer('/account/receipts/scan/preview?key=<%= encodeURIComponent(imageKey) %>', 'Your photo'); return false;">view full size</a>
       </p>
 
       <%# Carried on the form so the next submit is the customer's answer to the

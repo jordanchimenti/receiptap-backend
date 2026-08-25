@@ -135,6 +135,32 @@
           are read from it. Tax authorities accept a legible image; keep it.
         </div>
       </div>
+
+      <div class="r-sec">
+        <div class="r-sec-title">Share with your accountant</div>
+        <% if (shareLinkActive) { %>
+          <div class="r-note">
+            Anyone with this link can view this receipt — no ReceipTap account needed.
+            Expires <%= shareLink.expiresAt.toLocaleDateString('en-US', { dateStyle: 'long' }) %>.
+          </div>
+          <div class="w-field" style="margin: 10px 0;">
+            <input type="text" readonly value="<%= baseUrl %>/share/receipt/<%= shareLink.token %>" onclick="this.select()" />
+          </div>
+          <form method="POST" action="/account/receipts/scanned/<%= receipt.id %>/share"
+                onsubmit="return confirm('Regenerating creates a new link and the old one stops working — including any copy you already sent. Continue?');">
+            <button type="submit" class="w-btn" style="width:100%;">Regenerate link</button>
+          </form>
+        <% } else { %>
+          <div class="r-missing">
+            No active link. Create one to let your accountant view this receipt's photo
+            without needing to log in — it stops working after
+            <%= shareLinkDays %> days, or sooner if you regenerate it.
+          </div>
+          <form method="POST" action="/account/receipts/scanned/<%= receipt.id %>/share" style="margin-top:10px;">
+            <button type="submit" class="w-btn" style="width:100%;">Create share link</button>
+          </form>
+        <% } %>
+      </div>
     </div>
 
     <form method="POST" action="/account/receipts/scanned/<%= receipt.id %>/delete"

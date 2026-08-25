@@ -45,24 +45,24 @@ test('tax stays hidden when none was charged, if that is what they chose', () =>
 
 test('line detail is left to the merchant below the CRA threshold', () => {
   // A pharmacy or a clinic has a real reason not to itemise into a wallet,
-  // and under $150 no rule says they must.
+  // and under $500 no rule says they must.
   const t = applyComplianceFloor(ALL_OFF, { total: ITEM_DETAIL_REQUIRED_FROM_CENTS - 1, tax: 500 });
   assert.strictEqual(t.showItemQuantity, false);
   assert.strictEqual(t.showItemUnitPrice, false);
   assert.strictEqual(t.showItemLineTotal, false);
 });
 
-test('line detail is forced from $150 up, where CRA requires it', () => {
+test('line detail is forced from $500 up, where CRA requires it', () => {
   const t = applyComplianceFloor(ALL_OFF, { total: ITEM_DETAIL_REQUIRED_FROM_CENTS, tax: 1950 });
   assert.strictEqual(t.showItemQuantity, true);
   assert.strictEqual(t.showItemUnitPrice, true);
   assert.strictEqual(t.showItemLineTotal, true);
 });
 
-test('the threshold is inclusive -- exactly $150 already requires detail', () => {
-  assert.strictEqual(ITEM_DETAIL_REQUIRED_FROM_CENTS, 15000);
-  const at = applyComplianceFloor(ALL_OFF, { total: 15000, tax: 0 });
-  const below = applyComplianceFloor(ALL_OFF, { total: 14999, tax: 0 });
+test('the threshold is inclusive -- exactly $500 already requires detail', () => {
+  assert.strictEqual(ITEM_DETAIL_REQUIRED_FROM_CENTS, 50000);
+  const at = applyComplianceFloor(ALL_OFF, { total: 50000, tax: 0 });
+  const below = applyComplianceFloor(ALL_OFF, { total: 49999, tax: 0 });
   assert.strictEqual(at.showItemLineTotal, true);
   assert.strictEqual(below.showItemLineTotal, false);
 });

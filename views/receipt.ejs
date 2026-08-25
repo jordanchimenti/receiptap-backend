@@ -5,7 +5,14 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title><%= theme.displayName || merchant.businessName %> - Receipt</title>
+  <%# `seller` arrives pre-resolved from the route (lib/receiptSnapshot.js's
+      resolveSellerForRender) -- a real transaction's frozen seller* fields,
+      or the live theme/merchant fallback for the two synthetic callers
+      (theme-settings.js's live preview, demo.js's marketing demo). The
+      template never resolves this itself: computing it here would mean
+      duck-typing on `transaction`'s shape again, the exact silent-fallback
+      failure mode this snapshot was built to remove. %>
+  <title><%= seller.name %> - Receipt</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <style>
     :root {
@@ -181,6 +188,16 @@
     .warranty-card .warranty-row:last-child { margin-bottom: 0; }
     .warranty-card .warranty-label { font-weight: 600; color: #333; }
     .warranty-card .warranty-details { white-space: pre-wrap; }
+    .purpose-card .purpose-note { font-size: 13px; color: #333; line-height: 1.55; margin-bottom: 10px; }
+    .purpose-card .purpose-empty { font-size: 12.5px; color: #777; line-height: 1.5; margin-bottom: 12px; }
+    .purpose-card input[type=text] {
+      width: 100%; box-sizing: border-box; padding: 11px 13px; font-size: 14px;
+      border: 1px solid #ddd; border-radius: 8px; margin-bottom: 10px; font-family: inherit;
+    }
+    .purpose-card button.primary {
+      width: 100%; padding: 11px; background: var(--accent); color: #fff;
+      border: none; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 14px;
+    }
     .scan-card { background: #fff; border-radius: 12px; padding: 16px; text-align: center; margin-top: 10px; }
     .barcode-wrap { max-width: 260px; margin: 0 auto 8px; }
     .barcode-wrap svg { display: block; width: 100%; height: auto; }
@@ -223,17 +240,19 @@
     </div>
   <% } %>
   <%
-    // Business Settings' address fields (routes/account-settings.js), formatted
-    // for the receipt/PDF's compliance footer -- kept as separate lines here
-    // rather than baked into one string so each layout can join them with
-    // whatever spacing/line-break markup fits its own style.
+    // Seller's address fields, formatted for the receipt/PDF's compliance
+    // footer -- kept as separate lines here rather than baked into one string
+    // so each layout can join them with whatever spacing/line-break markup
+    // fits its own style. Sourced from `seller` (see lib/receiptSnapshot.js),
+    // not merchant.address* directly, so this stays frozen on a real receipt
+    // the same way the rest of the seller identity does.
     const businessAddressLines = [
-      [merchant.addressLine1, merchant.addressLine2].filter(Boolean).join(', '),
-      [[merchant.addressCity, merchant.addressRegion].filter(Boolean).join(', '), merchant.addressPostalCode].filter(Boolean).join('  '),
-      merchant.addressCountry,
+      [seller.addressLine1, seller.addressLine2].filter(Boolean).join(', '),
+      [[seller.addressCity, seller.addressRegion].filter(Boolean).join(', '), seller.addressPostalCode].filter(Boolean).join('  '),
+      seller.addressCountry,
     ].filter(Boolean);
   %>
-  <%- include('receipt-layouts/' + (theme.layoutId || 'classic'), { merchant, theme, transaction, businessAddressLines, isPreview: typeof isPreview !== 'undefined' ? isPreview : false, isMerchantCopy, logoPlaceholderText: typeof logoPlaceholderText !== 'undefined' ? logoPlaceholderText : undefined }) %>
+  <%- include('receipt-layouts/' + (theme.layoutId || 'classic'), { merchant, theme, transaction, seller, businessAddressLines, isPreview: typeof isPreview !== 'undefined' ? isPreview : false, isMerchantCopy, logoPlaceholderText: typeof logoPlaceholderText !== 'undefined' ? logoPlaceholderText : undefined }) %>
 
   <div class="actions" style="max-width:420px; margin: 10px auto 0;">
     <button class="action-button" style="border:none; cursor:pointer;" onclick="handleSaveClick('photo')">
@@ -371,6 +390,29 @@
         </div>
       <% } %>
       <a class="action-button" style="background:#555;" href="/receipt/<%= transaction.id %>/warranty">Register Warranty</a>
+    <% } %>
+    <%# Only the shopper who claimed THIS transaction sees this -- see isOwner
+        in routes/receipt.js. A tapped receipt has no other way to record why
+        something was bought; the register can't ask. Same field, same
+        section as ScannedReceipt's, on views/scanned-receipt.ejs. %>
+    <% if (typeof isOwner !== 'undefined' && isOwner) { %>
+      <div class="warranty-card purpose-card">
+        <div class="warranty-title">What it was for</div>
+        <% if (transaction.businessPurpose) { %>
+          <div class="purpose-note"><%= transaction.businessPurpose %></div>
+        <% } else { %>
+          <div class="purpose-empty">
+            No note yet. If you might claim this, a line saying why you bought it
+            is worth adding — the receipt can prove what you spent, but never what
+            it was for, and that reason is exactly what a deduction turns on.
+          </div>
+        <% } %>
+        <form method="POST" action="/account/receipts/tapped/<%= transaction.id %>/purpose">
+          <input type="text" name="businessPurpose" value="<%= transaction.businessPurpose || '' %>"
+                 placeholder="e.g. Client lunch — Acme contract review" maxlength="300" />
+          <button type="submit" class="primary">Save note</button>
+        </form>
+      </div>
     <% } %>
     <% if (theme.footerText) { %>
       <div class="footer-text"><%= theme.footerText %></div>

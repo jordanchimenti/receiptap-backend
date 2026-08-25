@@ -1,0 +1,41 @@
+<!-- views/shared-receipt-expired.ejs -->
+<!-- Shown for a token that WAS real -- matched a row -- but has since
+     expired or been revoked by a regenerate. Deliberately not the same
+     response as a token that never existed at all (a plain 404, handled in
+     routes/receiptShare.js) -- this one gets an actual page and a clear next
+     step, since a real link that stopped working deserves better than
+     looking like a broken app. No receipt-specific detail is shown here on
+     purpose: whoever has an old link isn't necessarily still someone the
+     shopper wants to see even that much. -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>Link Expired — ReceipTap</title>
+  <style>
+    body {
+      font-family: 'Helvetica Neue', Arial, sans-serif; color: #1c1b19; margin: 0;
+      background: #f4f2ec; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+      padding: 24px;
+    }
+    .card { max-width: 380px; text-align: center; background: #fff; border: 1px solid #e4e0d6; border-radius: 14px; padding: 32px 26px; }
+    .mark {
+      width: 52px; height: 52px; border-radius: 50%; margin: 0 auto 18px; display: flex;
+      align-items: center; justify-content: center; background: rgba(220,38,38,0.10); color: #dc2626;
+    }
+    h1 { font-size: 19px; margin: 0 0 8px; }
+    p { font-size: 13.5px; color: #5c5a54; line-height: 1.5; margin: 0; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="mark">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v6M12 16.5v.01"/></svg>
+    </div>
+    <h1>This link has expired</h1>
+    <p>Ask them to share a new one from their ReceipTap wallet.</p>
+  </div>
+</body>
+</html>

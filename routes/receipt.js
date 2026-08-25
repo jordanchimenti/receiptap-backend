@@ -10,6 +10,7 @@ const { SHOPPER_CONSENT } = require('../config/legal');
 const { getBaseUrl } = require('../lib/baseUrl');
 const { claimReceiptForShopper } = require('../services/claimReceipt');
 const { applyComplianceFloor } = require('../lib/receiptComplianceFloor');
+const { resolveSellerForRender } = require('../lib/receiptSnapshot');
 
 // A merchant's own test receipt, opened from a QR on their phone. Declared
 // BEFORE /receipt/:transactionId or Express would read "test" as a
@@ -124,6 +125,11 @@ router.get('/receipt/:transactionId', async (req, res) => {
     barcodeMarkup = barcodeValue ? barcodeSvg(barcodeValue) : null;
   }
 
+  // Every real transaction was written with its own seller snapshot (see
+  // lib/receiptSnapshot.js) -- this is never the synthetic branch here, only
+  // in the live theme-editing preview and the marketing demo.
+  const seller = resolveSellerForRender(transaction, { theme: safeTheme, merchant });
+
   res.render('receipt', {
     merchant,
     // Forced on regardless of what the merchant switched off: a receipt
@@ -131,6 +137,7 @@ router.get('/receipt/:transactionId', async (req, res) => {
     // claim, and design preferences don't outrank that. See
     // lib/receiptComplianceFloor.js.
     theme: applyComplianceFloor(safeTheme, transaction),
+    seller,
     barcodeValue,
     barcodeMarkup,
     // Only Square exposes a card fingerprint, and only card sales carry one.
@@ -138,6 +145,13 @@ router.get('/receipt/:transactionId', async (req, res) => {
     canRecogniseCard: Boolean(transaction.cardFingerprintHash),
     googleClientId: process.env.GOOGLE_CLIENT_ID || '',
     alreadySignedUp: Boolean(req.session.customerId),
+    // Gates the "what was this for" note -- this is a public, unauthenticated
+    // page (anyone with the link can view it, by design; see the file
+    // comment), so editing a customer's own business-purpose note must only
+    // be offered to the shopper who actually claimed this specific
+    // transaction, never to another viewer of the same link and never on the
+    // merchant copy.
+    isOwner: !isMerchantCopy && Boolean(req.session.customerId) && req.session.customerId === transaction.customerId,
     loyaltyProgram,
     loyaltyCard,
     partnerReferralUrl,
@@ -185,10 +199,12 @@ router.get('/receipt/:transactionId/warranty', async (req, res) => {
   }
 
   const items = Array.isArray(transaction.lineItems) ? transaction.lineItems : [];
+  const seller = resolveSellerForRender(transaction, { theme, merchant });
 
   res.render('receipt-warranty', {
     merchant,
     theme,
+    seller,
     items,
     isSaved: Boolean(transaction.customerId),
     transaction: {

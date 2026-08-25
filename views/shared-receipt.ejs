@@ -1,0 +1,70 @@
+<!-- views/shared-receipt.ejs -->
+<!-- The public, read-only page a share link opens (routes/receiptShare.js).
+     Deliberately NOT views/scanned-receipt.ejs -- that page has edit/delete
+     controls meant for the shopper who owns the receipt, and whoever opens
+     this link (an accountant, most likely) isn't logged in and shouldn't be
+     able to change anything. Expects: receipt (a ScannedReceipt row), token
+     (this link's own token, for the image src below), money (cents ->
+     formatted string). -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <%# Unguessable (256 bits of entropy) is the real defense, but there is no
+      reason to also leave the door open to a crawler indexing this if the
+      link ever ends up somewhere public by accident. %>
+  <meta name="robots" content="noindex, nofollow" />
+  <title><%= receipt.merchantName %> — Shared Receipt</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Helvetica Neue', Arial, sans-serif; color: #1c1b19; margin: 0; padding: 32px 16px;
+      background: #f4f2ec;
+    }
+    .card {
+      max-width: 480px; margin: 0 auto; background: #fff; border: 1px solid #e4e0d6; border-radius: 14px;
+      padding: 26px 24px;
+    }
+    .eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #8a8677; margin-bottom: 6px; }
+    h1 { font-size: 20px; margin: 0 0 4px; }
+    .sub { color: #5c5a54; font-size: 13px; margin: 0 0 20px; }
+    .row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #efece3; font-size: 13.5px; }
+    .row:last-child { border-bottom: none; }
+    .row .k { color: #5c5a54; }
+    .row .v { font-weight: 600; text-align: right; }
+    .photo-wrap { margin-top: 20px; }
+    .photo-wrap img { width: 100%; border-radius: 10px; border: 1px solid #e4e0d6; display: block; }
+    .purpose { margin-top: 16px; font-size: 13px; color: #333; font-style: italic; }
+    .footer-note { max-width: 480px; margin: 18px auto 0; font-size: 11.5px; color: #8a8677; line-height: 1.5; text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="eyebrow">Shared via ReceipTap</div>
+    <h1><%= receipt.merchantName %></h1>
+    <p class="sub">
+      <%= receipt.purchaseDate ? receipt.purchaseDate.toLocaleDateString('en-US', { dateStyle: 'long', timeZone: 'UTC' }) : (receipt.createdAt ? receipt.createdAt.toLocaleDateString('en-US', { dateStyle: 'long' }) : 'Date not recorded') %>
+    </p>
+
+    <div class="row"><span class="k">Total</span><span class="v"><%= receipt.currency ? receipt.currency + ' ' : '$' %><%= money(receipt.total) %></span></div>
+    <% if (receipt.subtotal != null) { %><div class="row"><span class="k">Subtotal</span><span class="v">$<%= money(receipt.subtotal) %></span></div><% } %>
+    <% if (receipt.tax != null) { %><div class="row"><span class="k">Tax</span><span class="v">$<%= money(receipt.tax) %></span></div><% } %>
+    <% if (receipt.taxNumber) { %><div class="row"><span class="k">Tax number</span><span class="v"><%= receipt.taxNumber %></span></div><% } %>
+    <% if (receipt.taxNumber2) { %><div class="row"><span class="k">Second tax no.</span><span class="v"><%= receipt.taxNumber2 %></span></div><% } %>
+    <% if (receipt.receiptNumber) { %><div class="row"><span class="k">Receipt no.</span><span class="v"><%= receipt.receiptNumber %></span></div><% } %>
+    <% if (receipt.paymentMethod) { %><div class="row"><span class="k">Paid with</span><span class="v"><%= receipt.paymentMethod %></span></div><% } %>
+
+    <% if (receipt.businessPurpose) { %>
+      <div class="purpose">“<%= receipt.businessPurpose %>”</div>
+    <% } %>
+
+    <div class="photo-wrap">
+      <img src="/share/receipt/<%= token %>/image" alt="Photo of the receipt from <%= receipt.merchantName %>" />
+    </div>
+  </div>
+  <p class="footer-note">
+    This is a temporary link to a receipt shared from a ReceipTap wallet. Not tax advice.
+  </p>
+</body>
+</html>

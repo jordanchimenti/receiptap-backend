@@ -33,11 +33,15 @@ const {
   warrantySource,
 } = require('../lib/receiptWarranty');
 const { csvCell } = require('../lib/csvCell');
+const { missingSubstantiationFields } = require('../lib/receiptMissingFields');
+const { generateShareToken, computeExpiresAt, isShareLinkActive, shareLinkDays } = require('../lib/receiptShareLink');
 const { generateTaxExportPDF } = require('../services/generateTaxExportPDF');
 const { receiptDateLabels } = require('../lib/receiptDateLabels');
 const { parseMoneyToCents, parseDateOrNull } = require('../lib/parseReceiptFields');
 const { findDuplicateReceipt } = require('../lib/findDuplicateReceipt');
 const { listNotifications, markAllRead, notifyReceiptSaved, notifyReceiptDeleted } = require('../services/notificationService');
+const { relativeTime } = require('../lib/relativeTime');
+const { COUNTRIES_WITH_FLAGS } = require('../lib/countryPhoneCodes');
 const pushService = require('../services/pushService');
 const { REFERRAL_WINDOW_DAYS } = require('../lib/referralAttribution');
 const { listIdentifiersForShopper, revokeIdentifierByHash } = require('../services/shopperIdentity');
@@ -58,10 +62,7 @@ const RESET_TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hour
 // disk otherwise. The photo is the record a tax authority actually accepts, so
 // it must not live somewhere a redeploy erases.
 const ALLOWED_SCAN_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
-// Content-Type for the proxy/preview routes below, derived from the stored
-// key's extension since a private-bucket download doesn't hand one back the
-// way a public URL fetch would.
-const SCAN_EXT_MIME = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp' };
+const { SCAN_EXT_MIME } = fileStorage;
 
 const uploadReceiptScan = multer({
   storage: multer.memoryStorage(),
@@ -155,22 +156,6 @@ router.post('/account/push/unsubscribe', requireCustomerAuth, async (req, res) =
   await pushService.removeSubscription(req.body.endpoint);
   res.json({ success: true });
 });
-
-// "2 hours ago" reads better than a timestamp on something that just happened,
-// and everything on this page is recent by nature.
-function relativeTime(date) {
-  const minutes = Math.floor((Date.now() - date.getTime()) / 60000);
-  if (minutes < 1) return 'Just now';
-  if (minutes < 60) return `${minutes} minute${minutes === 1 ? '' : 's'} ago`;
-
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
-
-  const days = Math.floor(hours / 24);
-  if (days < 7) return `${days} day${days === 1 ? '' : 's'} ago`;
-
-  return date.toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' });
-}
 
 // --- Add to home screen ------------------------------------------------------
 // One page for both account types -- it's the same app either way. Reachable
@@ -1076,6 +1061,82 @@ function parseSelectedIds(raw) {
 // documents can never disagree on which rows matched the current filters --
 // the exact drift risk deductibleWhereClause's own comment warns about,
 // just between two export FORMATS instead of the screen and one export.
+// Tax registration number(s), formatted for display. Scanned receipts store
+// each one exactly as printed, label and all ("QST 1016551356 TQ 0001"), so
+// there's nothing to add. Tapped receipts store the label and number as
+// separate columns (Transaction.sellerGstHstNumber/sellerTaxNumberLabel),
+// since that's what the seller-snapshot at sale time actually captured --
+// joined back together here for display.
+function formatTaxNumbers(kind, row) {
+  if (kind === 'scanned') {
+    return [row.taxNumber, row.taxNumber2].filter(Boolean).join(' · ');
+  }
+  const parts = [];
+  if (row.sellerGstHstNumber) parts.push(`${row.sellerTaxNumberLabel || 'GST/HST'} ${row.sellerGstHstNumber}`);
+  if (row.sellerTaxNumber2) parts.push(`${row.sellerTaxNumber2Label || 'Tax'} ${row.sellerTaxNumber2}`);
+  return parts.join(' · ');
+}
+
+// The seller's address, formatted for display. Scanned receipts store
+// whatever address line the photo happened to show, as one string; tapped
+// receipts snapshot Merchant's structured address fields at sale time (see
+// lib/receiptSnapshot.js), joined here into the same single-line shape.
+function formatAddress(kind, row) {
+  if (kind === 'scanned') return row.merchantAddress || '';
+  return [
+    row.sellerAddressLine1,
+    row.sellerAddressLine2,
+    row.sellerAddressCity,
+    row.sellerAddressRegion,
+    row.sellerAddressPostalCode,
+    row.sellerAddressCountry,
+  ]
+    .filter(Boolean)
+    .join(', ');
+}
+
+// Everything the tax export needs beyond the five summary columns the CSV
+// already had -- one place so the CSV and PDF exports read the same values
+// off the same row and can't drift apart on what "the tax number" means for
+// a given kind. subtotal, tax, currency, paymentMethod and businessPurpose
+// share a field name across both models, so those pass through as-is;
+// everything else needs the per-kind mapping above.
+function exportDetailFor(kind, row) {
+  return {
+    currency: row.currency || null,
+    subtotal: row.subtotal, // cents or null
+    tax: row.tax, // cents or null
+    paymentMethod: row.paymentMethod || null,
+    businessPurpose: row.businessPurpose || null,
+    taxNumbers: formatTaxNumbers(kind, row),
+    address: formatAddress(kind, row),
+    buyerName: kind === 'scanned' ? row.buyerName || null : null,
+    purchaseTimeText: kind === 'scanned' ? row.purchaseTimeText || null : null,
+    receiptNumber: kind === 'scanned' ? row.receiptNumber || null : row.orderNumber || null,
+    missing: missingSubstantiationFields(kind, row),
+  };
+}
+
+// Ensures a scanned receipt has a working, unauthenticated link before it
+// goes into an export -- reusing an already-active one rather than creating
+// a fresh one every time. Unlike the shopper-triggered regenerate route
+// (POST /account/receipts/scanned/:id/share), exporting a PDF must never
+// invalidate a link already sent out in an EARLIER export just because a new
+// one was requested -- that would silently break a copy an accountant
+// already has open.
+async function getOrCreateActiveShareLink(scannedReceiptId) {
+  const now = new Date();
+  const existing = await prisma.scannedReceiptShareLink.findFirst({
+    where: { scannedReceiptId, revokedAt: null },
+    orderBy: { createdAt: 'desc' },
+  });
+  if (isShareLinkActive(existing, now)) return existing;
+
+  return prisma.scannedReceiptShareLink.create({
+    data: { scannedReceiptId, token: generateShareToken(), expiresAt: computeExpiresAt(now) },
+  });
+}
+
 async function buildExportRows(customerId, { search, from, to, category, deductible, ids }) {
   const rules = await prisma.customer.findUnique({
     where: { id: customerId },
@@ -1116,6 +1177,7 @@ async function buildExportRows(customerId, { search, from, to, category, deducti
       total: t.total,
       category: t.aiCategory,
       row: t,
+      ...exportDetailFor('tapped', t),
     })),
     ...scanned.map((r) => ({
       id: r.id,
@@ -1125,6 +1187,7 @@ async function buildExportRows(customerId, { search, from, to, category, deducti
       total: r.total,
       category: r.aiCategory,
       row: r,
+      ...exportDetailFor('scanned', r),
     })),
   ].sort((a, b) => b.date - a.date);
 
@@ -1144,25 +1207,59 @@ router.get('/account/receipts/export', requireCustomerAuth, async (req, res) => 
     search, from, to, category, deductible, ids,
   });
 
-  const header = 'receipt_id,type,date,business,total,category,tax_deductible,decided_by';
-  const csv = [header]
-    .concat(
-      rows.map((r) =>
-        [
-          r.id,
-          r.kind,
-          r.date.toISOString(),
-          csvCell(r.business),
-          (r.total / 100).toFixed(2),
-          csvCell(r.category || ''),
-          isDeductible(r.row, deductibleCategories) ? 'yes' : 'no',
-          // receipt | category | none -- an accountant can see which rows the
-          // customer ruled on directly and which follow a category rule.
-          deductibleSource(r.row, deductibleCategories),
-        ].join(',')
-      )
-    )
-    .join('\n');
+  // Beyond the original five columns, everything CRA/IRS substantiation
+  // actually asks about: currency (so two receipts in different currencies
+  // don't read as the same amount), the subtotal/tax split (not just the
+  // total), the seller's tax registration number(s) and address, how it was
+  // paid, the buyer's name and time of day where a scanned receipt printed
+  // them, a receipt/order number, the customer's own business-purpose note,
+  // and which of those a given row is missing -- see
+  // lib/receiptMissingFields.js. Money fields stay blank rather than "0.00"
+  // when null, same as everywhere else in this app: a receipt that didn't
+  // print a subtotal isn't the same fact as one that printed a zero subtotal.
+  const header = [
+    'receipt_id', 'type', 'date', 'business', 'total', 'currency', 'subtotal', 'tax',
+    'category', 'tax_deductible', 'decided_by', 'tax_numbers', 'payment_method', 'address',
+    'buyer_name', 'purchase_time', 'receipt_number', 'business_purpose', 'missing_fields', 'view_url',
+  ].join(',');
+  const baseUrl = getBaseUrl(req);
+  const csvRows = await Promise.all(
+    rows.map(async (r) => {
+      // Same reasoning as the PDF export's viewUrl: a tapped receipt's page
+      // is already public, a scanned receipt's photo lives behind the
+      // private-bucket proxy and needs the unauthenticated share link
+      // instead, or an accountant opening this CSV hits a login wall.
+      const viewUrl = r.kind === 'scanned'
+        ? `${baseUrl}/share/receipt/${(await getOrCreateActiveShareLink(r.id)).token}`
+        : `${baseUrl}/receipt/${r.id}`;
+
+      return [
+        r.id,
+        r.kind,
+        r.date.toISOString(),
+        csvCell(r.business),
+        (r.total / 100).toFixed(2),
+        r.currency || '',
+        r.subtotal != null ? (r.subtotal / 100).toFixed(2) : '',
+        r.tax != null ? (r.tax / 100).toFixed(2) : '',
+        csvCell(r.category || ''),
+        isDeductible(r.row, deductibleCategories) ? 'yes' : 'no',
+        // receipt | category | none -- an accountant can see which rows the
+        // customer ruled on directly and which follow a category rule.
+        deductibleSource(r.row, deductibleCategories),
+        csvCell(r.taxNumbers),
+        csvCell(r.paymentMethod || ''),
+        csvCell(r.address),
+        csvCell(r.buyerName || ''),
+        csvCell(r.purchaseTimeText || ''),
+        csvCell(r.receiptNumber || ''),
+        csvCell(r.businessPurpose || ''),
+        csvCell(r.missing.join('; ')),
+        viewUrl,
+      ].join(',');
+    })
+  );
+  const csv = [header].concat(csvRows).join('\n');
 
   res.setHeader('Content-Type', 'text/csv');
   res.setHeader(
@@ -1185,29 +1282,64 @@ router.get('/account/receipts/export/pdf', requireCustomerAuth, async (req, res)
     prisma.customer.findUnique({ where: { id: req.session.customerId }, select: { email: true, name: true } }),
   ]);
 
-  let totalCents = 0;
-  let deductibleTotalCents = 0;
-  const exportRows = rows.map((r) => {
+  // Grouped by currency rather than one blended total: summing a CAD row and
+  // a USD row into a single "$X" would be adding unlike units and calling
+  // the result a fact. The vastly more common case -- every row unspecified,
+  // or all one currency -- collapses back to a single plain total line in
+  // the template; only a genuine mix shows more than one line.
+  const currencyTotals = new Map();
+  const baseUrl = getBaseUrl(req);
+  const exportRows = await Promise.all(rows.map(async (r) => {
     const rowDeductible = isDeductible(r.row, deductibleCategories);
-    totalCents += r.total;
-    if (rowDeductible) deductibleTotalCents += r.total;
+    const currencyKey = r.currency || '';
+    if (!currencyTotals.has(currencyKey)) currencyTotals.set(currencyKey, { totalCents: 0, deductibleTotalCents: 0 });
+    const bucket = currencyTotals.get(currencyKey);
+    bucket.totalCents += r.total;
+    if (rowDeductible) bucket.deductibleTotalCents += r.total;
+
+    // Absolute, not relative -- a PDF is routinely opened outside a browser
+    // tab that has this app's origin to resolve a relative link against. A
+    // tapped receipt's page is already public (routes/receipt.js) and needs
+    // nothing extra; a scanned receipt's photo lives behind the private-
+    // bucket proxy, which requires the shopper's own login -- useless to
+    // hand an accountant, so this goes through the same unauthenticated
+    // share link the shopper's own receipt page offers, not the proxy.
+    const viewUrl = r.kind === 'scanned'
+      ? `${baseUrl}/share/receipt/${(await getOrCreateActiveShareLink(r.id)).token}`
+      : `${baseUrl}/receipt/${r.id}`;
+
     return {
+      kind: r.kind,
       date: r.date.toLocaleDateString('en-US', { dateStyle: 'medium' }),
       business: r.business,
       category: r.category,
       total: (r.total / 100).toFixed(2),
       deductible: rowDeductible,
       source: deductibleSource(r.row, deductibleCategories),
+      currency: r.currency || null,
+      subtotal: r.subtotal != null ? (r.subtotal / 100).toFixed(2) : null,
+      tax: r.tax != null ? (r.tax / 100).toFixed(2) : null,
+      taxNumbers: r.taxNumbers,
+      paymentMethod: r.paymentMethod,
+      address: r.address,
+      businessPurpose: r.businessPurpose,
+      missing: r.missing,
+      viewUrl,
     };
-  });
+  }));
+
+  const currencyGroups = [...currencyTotals.entries()].map(([currency, totals]) => ({
+    currency: currency || null,
+    totalLabel: (totals.totalCents / 100).toFixed(2),
+    deductibleTotalLabel: (totals.deductibleTotalCents / 100).toFixed(2),
+  }));
 
   let buffer;
   try {
     buffer = await generateTaxExportPDF({
       customerName: customer?.name || customer?.email || '',
       rows: exportRows,
-      totalLabel: (totalCents / 100).toFixed(2),
-      deductibleTotalLabel: (deductibleTotalCents / 100).toFixed(2),
+      currencyGroups,
       selected: Boolean(ids.txnIds.length || ids.scanIds.length),
       filtered: Boolean(search || from || to || category),
       deductibleOnly: deductible,
@@ -1241,7 +1373,7 @@ router.get('/account/receipts/scan', requireCustomerAuth, (req, res) => {
 // error re-render, and the save can't drift apart on which ones exist.
 const SCAN_DETAIL_FIELDS = ['merchantAddress', 'subtotal', 'tax', 'tip', 'currency', 'taxNumber',
   // Added for tax substantiation -- a second registration number (QST/PST
-  // alongside GST/HST), the buyer's name CRA wants above $150, the printed
+  // alongside GST/HST), the buyer's name CRA wants above $500, the printed
   // time, and the customer's own note on what the spend was for.
   'taxNumber2', 'buyerName', 'purchaseTimeText', 'businessPurpose'];
 
@@ -1464,16 +1596,9 @@ router.get('/account/receipts/scanned/:id', requireCustomerAuth, async (req, res
 
   // Say plainly which record-keeping fields this receipt does not carry.
   // Someone relying on it at tax time should learn that here, not from an
-  // auditor. Deliberately limited to fields a receipt is normally expected
-  // to print -- a missing tip line on a clothing purchase is not a gap.
-  const missing = [];
-  if (!receipt.taxNumber) missing.push('a tax registration number');
-  if (!receipt.receiptNumber) missing.push('a receipt number');
-  if (!receipt.paymentMethod) missing.push('how it was paid');
-  if (!receipt.purchaseTimeText) missing.push('the time of day');
-  // CRA only requires the buyer be named once a purchase reaches $150, so
-  // flagging it below that would be noise on almost every till receipt.
-  if (!receipt.buyerName && receipt.total >= 15000) missing.push('the buyer\'s name (CRA asks for it over $150)');
+  // auditor. Shared with the bulk tax export (lib/receiptMissingFields.js)
+  // so the two can never disagree about which fields count.
+  const missing = missingSubstantiationFields('scanned', receipt);
 
   const whenParts = [
     receipt.purchaseDate
@@ -1482,12 +1607,25 @@ router.get('/account/receipts/scanned/:id', requireCustomerAuth, async (req, res
     receipt.purchaseTimeText,
   ].filter(Boolean);
 
+  // The most recent link, active or not -- the template decides what to show
+  // (a live link + expiry, or a "create one" prompt) via isShareLinkActive(),
+  // the same check the public share route itself uses, so the two can never
+  // disagree about whether a given link still works.
+  const latestShareLink = await prisma.scannedReceiptShareLink.findFirst({
+    where: { scannedReceiptId: receipt.id },
+    orderBy: { createdAt: 'desc' },
+  });
+
   res.render('scanned-receipt', {
     receipt,
     items,
     missing,
     whenLabel: whenParts.join(' · '),
     money: (cents) => (cents / 100).toFixed(2),
+    shareLink: latestShareLink,
+    shareLinkActive: isShareLinkActive(latestShareLink, new Date()),
+    shareLinkDays: shareLinkDays(),
+    baseUrl: getBaseUrl(req),
   });
 });
 
@@ -1519,6 +1657,36 @@ router.get('/account/receipts/scanned/:id/image', requireCustomerAuth, async (re
   stream.pipe(res);
 });
 
+// (Re)generates the shopper's share link for one scanned receipt -- a
+// time-limited, unauthenticated link to hand to an accountant. One active
+// link per receipt: any existing non-revoked row is revoked (not deleted --
+// kept as history) in the same transaction that creates the fresh one, so a
+// regenerate can't ever leave two links both claiming to be "the" current
+// one. See lib/receiptShareLink.js for the token/expiry design.
+router.post('/account/receipts/scanned/:id/share', requireCustomerAuth, async (req, res) => {
+  const receipt = await prisma.scannedReceipt.findUnique({ where: { id: req.params.id } });
+  if (!receipt || receipt.customerId !== req.session.customerId) {
+    return res.redirect('/account/receipts');
+  }
+
+  const now = new Date();
+  await prisma.$transaction([
+    prisma.scannedReceiptShareLink.updateMany({
+      where: { scannedReceiptId: receipt.id, revokedAt: null },
+      data: { revokedAt: now },
+    }),
+    prisma.scannedReceiptShareLink.create({
+      data: {
+        scannedReceiptId: receipt.id,
+        token: generateShareToken(),
+        expiresAt: computeExpiresAt(now),
+      },
+    }),
+  ]);
+
+  res.redirect('/account/receipts/scanned/' + receipt.id);
+});
+
 // The customer's own note on why they bought it -- the one thing on this page
 // that never came off the paper. Editable after the fact because the reason
 // is often clearer a week later than it was at the till.
@@ -1533,6 +1701,26 @@ router.post('/account/receipts/scanned/:id/purpose', requireCustomerAuth, async 
     data: { businessPurpose: note || null },
   });
   res.redirect('/account/receipts/scanned/' + receipt.id);
+});
+
+// Same note, same reasoning, for a TAPPED receipt -- the register can't ask
+// why something was bought, so this is the only way that field ever gets
+// filled in for a POS sale. Lives here (not routes/receipt.js) because it's
+// a wallet-owner-only action gated by requireCustomerAuth, same as every
+// other customer-account write in this file; the form itself renders on the
+// public /receipt/:id page, gated there on being that receipt's own claimant
+// -- see the isOwner local in routes/receipt.js.
+router.post('/account/receipts/tapped/:id/purpose', requireCustomerAuth, async (req, res) => {
+  const transaction = await prisma.transaction.findUnique({ where: { id: req.params.id } });
+  if (!transaction || transaction.customerId !== req.session.customerId) {
+    return res.redirect('/account/receipts');
+  }
+  const note = typeof req.body.businessPurpose === 'string' ? req.body.businessPurpose.trim().slice(0, 300) : '';
+  await prisma.transaction.update({
+    where: { id: transaction.id },
+    data: { businessPurpose: note || null },
+  });
+  res.redirect('/receipt/' + transaction.id);
 });
 
 router.post('/account/receipts/scanned/:id/delete', requireCustomerAuth, async (req, res) => {
@@ -1588,6 +1776,7 @@ router.get('/account/settings', requireCustomerAuth, async (req, res) => {
 
   res.render('customer-settings', {
     customer,
+    countries: COUNTRIES_WITH_FLAGS,
     recognitionLinks,
     // One save for the whole preferences form now -- see the comment above the
     // form in views/customer-settings.ejs.
@@ -1630,6 +1819,7 @@ router.post('/account/settings/preferences', requireCustomerAuth, async (req, re
       email,
       name: (req.body.name || '').trim() || null,
       phone: (req.body.phone || '').trim() || null,
+      phoneCountry: (req.body.phoneCountry || '').trim() || null,
       autoSaveOnTap: req.body.autoSaveOnTap === 'on',
       loyaltyEmails: req.body.loyaltyEmails === 'on',
     },

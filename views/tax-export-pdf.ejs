@@ -3,9 +3,22 @@
      page anyone visits directly -- plain print-friendly HTML (light, not
      the wallet's dark theme), since dark backgrounds waste ink and print
      poorly. Expects: customerName, rows (already formatted strings, see
-     buildExportRows/the PDF route in routes/customer-account.js),
-     totalLabel, deductibleTotalLabel, filtered, deductibleOnly,
-     generatedAt. -->
+     buildExportRows/exportDetailFor and the PDF route in
+     routes/customer-account.js -- each row also carries kind ('scanned' or
+     'tapped'), currency, subtotal, tax, taxNumbers, paymentMethod, address,
+     businessPurpose, missing[], and viewUrl (an ABSOLUTE link back to the
+     receipt's own page -- scanned needs the customer's own login, tapped is
+     public by design, see routes/receipt.js)),
+     currencyGroups ([{ currency, totalLabel, deductibleTotalLabel }], one
+     entry per distinct currency among the matched rows -- a null `currency`
+     means "not recorded", not USD), selected, filtered, deductibleOnly,
+     generatedAt.
+
+     Two lines per receipt, not one wide row: tax number, the subtotal/tax
+     split, currency, payment method, a business-purpose note and a
+     "missing:" flag don't fit legibly as more columns in a portrait table,
+     so each receipt gets a lighter detail line underneath its summary line
+     instead. -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -25,10 +38,18 @@
       text-align: left; font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.04em;
       color: #5c5a54; border-bottom: 1.5px solid #1c1b19; padding: 6px 8px;
     }
-    td { padding: 7px 8px; border-bottom: 1px solid #e4e0d6; vertical-align: top; }
+    td { padding: 7px 8px 2px; vertical-align: top; }
     th.num, td.num { text-align: right; font-variant-numeric: tabular-nums; }
-    tr.deductible td.deductible-cell { color: #0350be; font-weight: 600; }
-    tfoot td { border-bottom: none; border-top: 1.5px solid #1c1b19; font-weight: 700; padding-top: 8px; }
+    tr.receipt-row.deductible td.deductible-cell { color: #0350be; font-weight: 600; }
+    tr.receipt-row td { border-bottom: none; }
+    tr.detail-row td { padding: 0 8px 9px; border-bottom: 1px solid #e4e0d6; font-size: 9.5px; color: #6b6862; line-height: 1.5; }
+    tr.detail-row .missing { color: #a15c00; }
+    tr.detail-row .purpose { color: #333; font-style: italic; }
+    tr.detail-row .view-link { color: #0350be; text-decoration: none; font-weight: 600; }
+    .totals { margin-top: 4px; }
+    .totals-row { display: flex; justify-content: space-between; padding: 6px 8px; font-weight: 700; }
+    .totals-row:not(:last-child) { border-bottom: 1px solid #e4e0d6; }
+    .totals-row .currency-label { font-weight: 400; color: #5c5a54; margin-right: 6px; }
     .empty { padding: 24px 8px; color: #5c5a54; text-align: center; }
     .disclaimer { margin-top: 20px; font-size: 9.5px; color: #5c5a54; line-height: 1.5; }
   </style>
@@ -38,7 +59,7 @@
     <h1>ReceipTap — Tax export</h1>
     <p class="sub"><%= customerName %></p>
     <p class="sub">
-      Generated <%= generatedAt %><% if (deductibleOnly) { %> · Tax-deductible receipts only<% } %><% if (filtered) { %> · Filtered<% } %>
+      Generated <%= generatedAt %><% if (deductibleOnly) { %> · Tax-deductible receipts only<% } %><% if (selected) { %> · Selected receipts<% } else if (filtered) { %> · Filtered<% } %>
     </p>
   </div>
 
@@ -58,29 +79,52 @@
       </thead>
       <tbody>
         <% rows.forEach(function (r) { %>
-          <tr class="<%= r.deductible ? 'deductible' : '' %>">
+          <tr class="receipt-row <%= r.deductible ? 'deductible' : '' %>">
             <td><%= r.date %></td>
             <td><%= r.business %></td>
             <td><%= r.category || '—' %></td>
-            <td class="num">$<%= r.total %></td>
+            <td class="num"><%= r.currency ? r.currency + ' ' : '$' %><%= r.total %></td>
             <td class="deductible-cell"><%= r.deductible ? 'Yes' : 'No' %></td>
             <td><%= r.source === 'receipt' ? 'You' : r.source === 'category' ? 'Category rule' : '—' %></td>
           </tr>
+          <tr class="detail-row">
+            <td colspan="6">
+              <%
+                const bits = [];
+                bits.push(r.taxNumbers ? r.taxNumbers : '(no tax number on file)');
+                if (r.subtotal != null || r.tax != null) {
+                  bits.push('Sub ' + (r.subtotal != null ? '$' + r.subtotal : '—') + ' + Tax ' + (r.tax != null ? '$' + r.tax : '—'));
+                }
+                if (r.currency) bits.push(r.currency);
+                if (r.paymentMethod) bits.push(r.paymentMethod);
+                if (r.address) bits.push(r.address);
+              %>
+              <%= bits.join(' · ') %><% if (!r.businessPurpose) { %> · <a class="view-link" href="<%= r.viewUrl %>"><%= r.kind === 'scanned' ? 'View photo →' : 'View receipt →' %></a><% } %>
+              <% if (r.businessPurpose) { %><br /><span class="purpose">“<%= r.businessPurpose %>”</span> · <a class="view-link" href="<%= r.viewUrl %>"><%= r.kind === 'scanned' ? 'View photo →' : 'View receipt →' %></a><% } %>
+              <% if (r.missing && r.missing.length) { %><br /><span class="missing">Missing: <%= r.missing.join(', ') %></span><% } %>
+            </td>
+          </tr>
         <% }); %>
       </tbody>
-      <tfoot>
-        <tr>
-          <td colspan="3">Total</td>
-          <td class="num">$<%= totalLabel %></td>
-          <td colspan="2">Deductible: $<%= deductibleTotalLabel %></td>
-        </tr>
-      </tfoot>
     </table>
+
+    <div class="totals">
+      <% currencyGroups.forEach(function (g) { %>
+        <div class="totals-row">
+          <span><% if (currencyGroups.length > 1 || g.currency) { %><span class="currency-label"><%= g.currency || 'Unspecified currency' %></span><% } %>Total</span>
+          <span>$<%= g.totalLabel %> <span class="currency-label">· Deductible $<%= g.deductibleTotalLabel %></span></span>
+        </div>
+      <% }); %>
+    </div>
   <% } %>
 
   <p class="disclaimer">
     Not tax advice. "Deductible" reflects your own per-receipt answers and category rules in ReceipTap --
     whether you can actually claim an item depends on your situation and where you file.
+    <% if (rows.some(r => r.missing && r.missing.length)) { %>
+      A row marked "Missing" is missing information CRA/IRS substantiation rules typically expect --
+      it doesn't mean the purchase isn't deductible, only that this record alone may not be enough to prove it.
+    <% } %>
   </p>
 </body>
 </html>

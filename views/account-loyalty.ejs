@@ -175,12 +175,12 @@
           box -- a card shows only if its group is active AND it matches the
           query. Defaults to All so the page never opens hiding something. %>
       <div class="tabs" role="group" aria-label="Filter cards">
-        <button type="button" class="tab-btn" data-tab="ready" aria-pressed="false"
-                onclick="setRewardsTab('ready')">Claim rewards (<%= readyCards.length %>)</button>
-        <button type="button" class="tab-btn" data-tab="progress" aria-pressed="false"
-                onclick="setRewardsTab('progress')">In progress (<%= inProgressCards.length %>)</button>
         <button type="button" class="tab-btn active" data-tab="all" aria-pressed="true"
                 onclick="setRewardsTab('all')">All (<%= cards.length %>)</button>
+        <button type="button" class="tab-btn" data-tab="progress" aria-pressed="false"
+                onclick="setRewardsTab('progress')">In progress (<%= inProgressCards.length %>)</button>
+        <button type="button" class="tab-btn" data-tab="ready" aria-pressed="false"
+                onclick="setRewardsTab('ready')">Claim rewards (<%= readyCards.length %>)</button>
       </div>
 
       <div id="rewards-none" class="empty-state" style="display:none;">

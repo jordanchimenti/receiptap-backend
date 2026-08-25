@@ -56,6 +56,11 @@
       color: var(--w-ink); background: var(--w-card-raised); border: 1px solid var(--w-line);
       border-radius: 999px; padding: 7px 14px; text-decoration: none; white-space: nowrap;
     }
+    .select-all-row { display: flex; align-items: center; justify-content: space-between; margin: -4px 0 10px; padding: 0 2px; }
+    .select-all-label { display: flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 600; color: var(--w-ink-soft); cursor: pointer; }
+    .select-all-label input { width: 16px; height: 16px; accent-color: var(--w-accent); cursor: pointer; }
+    .selection-count { font-size: 12.5px; color: var(--w-ink-soft); }
+
     /* A plain link, not another .w-btn -- the CTA above the list already
        carries the primary "go to My Wallet" action, and a second full-width
        blue button right after five rows would out-compete it for attention. */
@@ -83,15 +88,22 @@
        deductible strip -- left on .receipt-row it drew a line between a
        receipt and its own toggle.
 
-       display: block is not decorative -- receiptap.css has its OWN
-       unrelated .receipt-line (the itemized rows on a receipt detail page,
-       display: flex; justify-content: space-between) that loads before this
-       block. Without overriding it here, this wrapper inherits that flex
-       row and squeezes .receipt-row and .ded-strip into side-by-side
-       columns instead of stacking them, cramming the total into half the
-       width it needs. */
-    .receipt-line { display: block; border-bottom: 1px solid var(--w-line); }
+       display: flex here is deliberate, not the old receiptap.css collision
+       it looks like at a glance (that unrelated global .receipt-line --
+       itemized rows on a receipt detail page -- is display:flex;
+       justify-content:space-between and used to leak in here by accident).
+       .receipt-row and .ded-strip aren't direct children of .receipt-line
+       any more -- .receipt-line-body wraps both of them and stacks them
+       exactly as before, so the flex row here only ever lays out
+       [checkbox, receipt-line-body], never squeezes the total. */
+    .receipt-line { display: flex; align-items: flex-start; border-bottom: 1px solid var(--w-line); }
     .receipt-line:last-child { border-bottom: none; }
+    .receipt-line-body { flex: 1; min-width: 0; }
+    /* Full-height tap target, like the row it sits beside -- a receipt list
+       is tapped on the go, and a checkbox no bigger than its own tick mark
+       is an easy miss. */
+    .receipt-select { display: flex; align-items: center; padding: 0 0 0 16px; align-self: stretch; }
+    .receipt-select input { width: 20px; height: 20px; accent-color: var(--w-accent); cursor: pointer; }
     .receipt-row {
       display: flex; justify-content: space-between; align-items: flex-start;
       padding: 16px 18px 10px; text-decoration: none; color: var(--w-ink);
@@ -481,14 +493,14 @@
           const exportLabel = filters.deductible ? ' tax receipts' : (filters.search || filters.from || filters.to || filters.category) ? ' (filtered)' : '';
         %>
         <div class="export-group">
-          <a class="export-pill" href="/account/receipts/export?<%= exportQs %>">
+          <a class="export-pill" id="export-csv-link" data-base-href="/account/receipts/export?<%= exportQs %>" href="/account/receipts/export?<%= exportQs %>">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12M7 10l5 5 5-5M4 21h16"/></svg>
             Export<%= exportLabel %>
           </a>
           <%# PDF is the same rows, formatted to open and read directly rather
               than data you import into a spreadsheet first -- see
               services/generateTaxExportPDF.js. %>
-          <a class="export-pill" href="/account/receipts/export/pdf?<%= exportQs %>">
+          <a class="export-pill" id="export-pdf-link" data-base-href="/account/receipts/export/pdf?<%= exportQs %>" href="/account/receipts/export/pdf?<%= exportQs %>">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12M7 10l5 5 5-5M4 21h16"/></svg>
             PDF
           </a>
@@ -496,7 +508,22 @@
         <% } %>
       </div>
 
-      <%- include('partials/receipt-list', { receipts: receipts }) %>
+      <%# Lets someone export a hand-picked set instead of everything the
+          filters match -- checking any row narrows Export/PDF to just what's
+          checked (see updateSelectionState below); with nothing checked they
+          fall back to the filtered set as before. Only meaningful where the
+          checkboxes themselves render (showSelection, same isFullWallet gate). %>
+      <% if (isFullWallet) { %>
+        <div class="select-all-row">
+          <label class="select-all-label">
+            <input type="checkbox" id="select-all-checkbox" onchange="toggleSelectAll(this)" />
+            Select all
+          </label>
+          <span class="selection-count" id="selection-count"></span>
+        </div>
+      <% } %>
+
+      <%- include('partials/receipt-list', { receipts: receipts, showSelection: isFullWallet }) %>
 
       <%# A second way to "My Wallet" -- the CTA card above the summary makes
           the same trip, but sits above the list rather than after it, where
@@ -677,6 +704,51 @@
       }
       return false;
     }
+
+    // Checking any receipt narrows Export/PDF to just what's checked; with
+    // nothing checked they fall back to the filtered set the links already
+    // pointed at (data-base-href, captured server-side -- see the
+    // .export-group markup above). "Select all" only affects what's
+    // currently in the DOM, i.e. the filtered rows already on the page --
+    // there's no separate "everything matching the filters" concept to fall
+    // out of sync with.
+    var csvLink = document.getElementById('export-csv-link');
+    var pdfLink = document.getElementById('export-pdf-link');
+    var selectAllCheckbox = document.getElementById('select-all-checkbox');
+    var selectionCount = document.getElementById('selection-count');
+
+    function receiptCheckboxes() {
+      return Array.prototype.slice.call(document.querySelectorAll('.receipt-checkbox'));
+    }
+
+    function toggleSelectAll(checkbox) {
+      receiptCheckboxes().forEach(function (cb) { cb.checked = checkbox.checked; });
+      updateSelectionState();
+    }
+
+    function updateSelectionState() {
+      var checked = receiptCheckboxes().filter(function (cb) { return cb.checked; });
+      var boxes = receiptCheckboxes();
+
+      if (selectAllCheckbox) {
+        selectAllCheckbox.checked = boxes.length > 0 && checked.length === boxes.length;
+        selectAllCheckbox.indeterminate = checked.length > 0 && checked.length < boxes.length;
+      }
+      if (selectionCount) {
+        selectionCount.textContent = checked.length > 0 ? checked.length + ' selected' : '';
+      }
+
+      var ids = checked.map(function (cb) { return cb.value; }).join(',');
+      [csvLink, pdfLink].forEach(function (link) {
+        if (!link) return;
+        var base = link.dataset.baseHref;
+        link.href = ids ? base + '&ids=' + encodeURIComponent(ids) : base;
+      });
+    }
+
+    receiptCheckboxes().forEach(function (cb) {
+      cb.addEventListener('change', updateSelectionState);
+    });
 
     var acctMenu = document.getElementById('acct-menu');
     var acctBackdrop = document.getElementById('acct-backdrop');

@@ -8,6 +8,7 @@
 // review card, the loyalty punch card, and the social links in one pass.
 const express = require('express');
 const { applyComplianceFloor } = require('../lib/receiptComplianceFloor');
+const { resolveSellerForRender } = require('../lib/receiptSnapshot');
 const router = express.Router();
 const prisma = require('../lib/prisma');
 const { SHOPPER_CONSENT } = require('../config/legal');
@@ -48,11 +49,18 @@ router.get('/demo/receipt', async (req, res) => {
     ? `${getBaseUrl(req)}/signup?ref=${affiliate.referralCode}`
     : null;
 
+  // No real sale behind this tour -- isSynthetic: true, so this reads the
+  // live theme/merchant values (which is exactly what a demo SHOULD show:
+  // whatever the founder's account currently looks like) instead of
+  // requiring (and not having) a frozen seller* snapshot.
+  const seller = resolveSellerForRender({}, { theme, merchant, isSynthetic: true });
+
   res.render('receipt', {
     merchant,
     // Same floor the real thing gets, so the demo can't advertise a receipt
     // shape that would never be issued.
     theme: applyComplianceFloor(theme, { total: 1526, tax: 176 }),
+    seller,
     isPreview: true, // shows the "Your custom logo" placeholder box instead of a real image
     logoPlaceholderText: 'Your custom logo',
     googleClientId: process.env.GOOGLE_CLIENT_ID || '',

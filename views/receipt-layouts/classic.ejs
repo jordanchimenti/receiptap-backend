@@ -37,12 +37,12 @@
     </a>
   </div>
   <% if (theme.showLogo !== false && theme.logoUrl) { %>
-    <img class="merchant-logo" src="<%= theme.logoUrl %>" alt="<%= merchant.businessName %>" />
+    <img class="merchant-logo" src="<%= theme.logoUrl %>" alt="<%= seller.name %>" />
   <% } else if (typeof isPreview !== 'undefined' && isPreview) { %>
     <div class="logo-placeholder"><%= typeof logoPlaceholderText !== 'undefined' ? logoPlaceholderText : 'Custom Logo' %></div>
   <% } %>
   <% if (theme.showBusinessName !== false) { %>
-    <div class="business-name"><%= theme.displayName || merchant.businessName %></div>
+    <div class="business-name"><%= seller.name %></div>
   <% } %>
   <% if (theme.showPhone !== false && theme.phone) { %>
     <div class="location"><%= theme.phone %></div>
@@ -93,7 +93,7 @@
     <div class="totals-row"><span>Discount</span><span>-$<%= transaction.discount %></span></div>
   <% } %>
   <% if (theme.showTax !== false) { %>
-    <div class="totals-row"><span><%= theme.taxLabel || 'Tax' %></span><span>$<%= transaction.tax %></span></div>
+    <div class="totals-row"><span><%= seller.taxLabel %></span><span>$<%= transaction.tax %></span></div>
   <% } %>
   <% if (theme.showTotal !== false) { %>
     <div class="totals-row total<%= theme.totalProminent === false ? ' total-plain' : '' %>"><span>Total</span><span>$<%= transaction.total %></span></div>
@@ -123,11 +123,11 @@
       carries GST/HST and QST; printing only one leaves their customer unable
       to claim the other back. "GST/HST" is the fallback label, not a fact --
       a US or UK merchant sets their own. %>
-  <% if (theme.showTaxNumber !== false && theme.gstHstNumber) { %>
-    <div class="meta"><%= theme.taxNumberLabel || 'GST/HST' %> #<%= theme.gstHstNumber %></div>
+  <% if (theme.showTaxNumber !== false && seller.gstHstNumber) { %>
+    <div class="meta"><%= seller.taxNumberLabel || 'GST/HST' %> #<%= seller.gstHstNumber %></div>
   <% } %>
-  <% if (theme.showTaxNumber !== false && theme.taxNumber2) { %>
-    <div class="meta"><%= theme.taxNumber2Label || 'Tax' %> #<%= theme.taxNumber2 %></div>
+  <% if (theme.showTaxNumber !== false && seller.taxNumber2) { %>
+    <div class="meta"><%= seller.taxNumber2Label || 'Tax' %> #<%= seller.taxNumber2 %></div>
   <% } %>
   <% if (theme.showAddress !== false && businessAddressLines.length > 0) { %>
     <div class="meta"><% businessAddressLines.forEach(function(line, i) { %><%= line %><% if (i < businessAddressLines.length - 1) { %><br /><% } %><% }); %></div>

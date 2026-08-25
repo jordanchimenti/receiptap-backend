@@ -12,6 +12,7 @@ const { hashIdentifier } = require('../lib/hashIdentifier');
 const { autoSaveReceiptForKnownShopper } = require('../services/receiptAutoSave');
 const { awardLoyaltyStamps } = require('./loyalty');
 const { categorizeInBackground } = require('../services/categorize-receipt');
+const { buildSellerSnapshot } = require('../lib/receiptSnapshot');
 
 // The email a POS attached to a sale, if any. Only ever used as a lookup key
 // against an identifier the shopper recorded themselves -- never stored, and
@@ -72,7 +73,10 @@ router.post('/webhooks/pos/square', async (req, res) => {
     const payment = body.data.object.payment;
     if (payment.status !== 'COMPLETED') return res.sendStatus(200);
 
-    const merchant = await prisma.merchant.findFirst({ where: { squareMerchantId: body.merchant_id } });
+    const merchant = await prisma.merchant.findFirst({
+      where: { squareMerchantId: body.merchant_id },
+      include: { receiptTheme: true },
+    });
     if (!merchant) return res.sendStatus(404); // event from a Square account we don't recognize
 
     // Square retries webhook delivery and sends multiple event types per
@@ -106,6 +110,11 @@ router.post('/webhooks/pos/square', async (req, res) => {
         // those can differ under retry/latency. Square reports this directly.
         createdAt: new Date(payment.created_at),
         lineItems,
+        // Square's Money type always carries its own currency alongside the
+        // amount -- reliable, unlike Clover/Lightspeed below (see
+        // lib/receiptSnapshot.js's header comment for why those two stay null).
+        currency: order.total_money?.currency || null,
+        ...buildSellerSnapshot(merchant),
         // Already net of any discount -- Square's total_money/total_tax_money
         // are computed post-discount, so discountTotal below is shown on the
         // receipt as an informational line, not subtracted a second time.
@@ -251,7 +260,10 @@ router.post('/webhooks/pos/clover', async (req, res) => {
 });
 
 async function handleCloverOrderEvent(cloverMerchantId, orderId) {
-  const merchant = await prisma.merchant.findFirst({ where: { cloverMerchantId } });
+  const merchant = await prisma.merchant.findFirst({
+    where: { cloverMerchantId },
+    include: { receiptTheme: true },
+  });
   if (!merchant) return; // event from a Clover account we don't recognize
 
   const accessToken = await getValidCloverAccessToken(merchant);
@@ -338,6 +350,12 @@ async function handleCloverOrderEvent(cloverMerchantId, orderId) {
       authCode,
       amountTenderedCents,
       changeDueCents,
+      // Clover's Order object has no confirmed per-order currency field in
+      // this codebase (it's a merchant-account-level Clover setting this app
+      // doesn't fetch) -- left null rather than guessed, same "verify before
+      // trusting" discipline as the other best-effort fields above.
+      currency: null,
+      ...buildSellerSnapshot(merchant),
     },
   });
 
@@ -433,7 +451,10 @@ router.post('/webhooks/pos/lightspeed', async (req, res) => {
     const saleId = body.id || body.payload?.id || body.data?.id;
     if (!domainPrefix || !saleId) return res.sendStatus(200);
 
-    const merchant = await prisma.merchant.findFirst({ where: { lightspeedDomainPrefix: domainPrefix } });
+    const merchant = await prisma.merchant.findFirst({
+      where: { lightspeedDomainPrefix: domainPrefix },
+      include: { receiptTheme: true },
+    });
     if (!merchant) return res.sendStatus(404); // event from a Lightspeed retailer we don't recognize
 
     // Lightspeed retries webhook delivery, and sale.update can fire more
@@ -489,6 +510,10 @@ router.post('/webhooks/pos/lightspeed', async (req, res) => {
         // observed, not a mapping guess. The card/auth/tender columns are
         // left unset for the same reason; the receipt simply omits them.
         paymentMethod: null,
+        // No currency field confirmed anywhere on the Sale object this app
+        // fetches (same "don't guess" reasoning as Clover, above).
+        currency: null,
+        ...buildSellerSnapshot(merchant),
       },
     });
 
@@ -558,7 +583,10 @@ router.post('/webhooks/pos/shopify', async (req, res) => {
     const shopDomain = req.headers['x-shopify-shop-domain'];
     if (!shopDomain) return res.sendStatus(200);
 
-    const merchant = await prisma.merchant.findFirst({ where: { shopifyShopDomain: shopDomain } });
+    const merchant = await prisma.merchant.findFirst({
+      where: { shopifyShopDomain: shopDomain },
+      include: { receiptTheme: true },
+    });
     if (!merchant) return res.sendStatus(404); // event from a shop we don't recognize
 
     const transactionId = String(order.id);
@@ -612,6 +640,10 @@ router.post('/webhooks/pos/shopify', async (req, res) => {
         // webhook doesn't receive, so they stay null.
         cardBrand: order.payment_details?.credit_card_company || null,
         cardLast4: order.payment_details?.credit_card_last_four || null,
+        // A standard top-level field on every Shopify order -- reliable,
+        // unlike Clover/Lightspeed above.
+        currency: order.currency || null,
+        ...buildSellerSnapshot(merchant),
       },
     });
 

@@ -51,12 +51,12 @@
       </a>
     </div>
     <% if (theme.showLogo !== false && theme.logoUrl) { %>
-      <img class="merchant-logo" src="<%= theme.logoUrl %>" alt="<%= merchant.businessName %>" />
+      <img class="merchant-logo" src="<%= theme.logoUrl %>" alt="<%= seller.name %>" />
     <% } else if (typeof isPreview !== 'undefined' && isPreview) { %>
       <div class="logo-placeholder"><%= typeof logoPlaceholderText !== 'undefined' ? logoPlaceholderText : 'Custom Logo' %></div>
     <% } %>
     <% if (theme.showBusinessName !== false) { %>
-      <div class="business-name"><%= theme.displayName || merchant.businessName %></div>
+      <div class="business-name"><%= seller.name %></div>
     <% } %>
     <% if (theme.showPhone !== false && theme.phone) { %>
       <div class="location"><%= theme.phone %></div>
@@ -107,7 +107,7 @@
         <div class="totals-row"><span>Discount</span><span>-$<%= transaction.discount %></span></div>
       <% } %>
       <% if (theme.showTax !== false) { %>
-        <div class="totals-row"><span><%= theme.taxLabel || 'Tax' %></span><span>$<%= transaction.tax %></span></div>
+        <div class="totals-row"><span><%= seller.taxLabel %></span><span>$<%= transaction.tax %></span></div>
       <% } %>
       <% if (theme.showTotal !== false) { %>
         <% if (theme.totalProminent === false) { %>
@@ -138,11 +138,11 @@
             <div style="font-size:12px; color:#888; margin-top:4px;">Change $<%= (transaction.changeDueCents / 100).toFixed(2) %></div>
     <% } %>
 
-    <% if (theme.showTaxNumber !== false && theme.gstHstNumber) { %>
-      <div style="font-size:12px; color:#888; margin-top:8px;"><%= theme.taxNumberLabel || 'GST/HST' %> #<%= theme.gstHstNumber %></div>
+    <% if (theme.showTaxNumber !== false && seller.gstHstNumber) { %>
+      <div style="font-size:12px; color:#888; margin-top:8px;"><%= seller.taxNumberLabel || 'GST/HST' %> #<%= seller.gstHstNumber %></div>
     <% } %>
-    <% if (theme.showTaxNumber !== false && theme.taxNumber2) { %>
-      <div style="font-size:12px; color:#888; margin-top:2px;"><%= theme.taxNumber2Label || 'Tax' %> #<%= theme.taxNumber2 %></div>
+    <% if (theme.showTaxNumber !== false && seller.taxNumber2) { %>
+      <div style="font-size:12px; color:#888; margin-top:2px;"><%= seller.taxNumber2Label || 'Tax' %> #<%= seller.taxNumber2 %></div>
     <% } %>
     <% if (theme.showAddress !== false && businessAddressLines.length > 0) { %>
       <div style="font-size:12px; color:#888; margin-top:6px;"><% businessAddressLines.forEach(function(line, i) { %><%= line %><% if (i < businessAddressLines.length - 1) { %><br /><% } %><% }); %></div>

@@ -8,7 +8,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title><%= theme.displayName || merchant.businessName %> - Warranty</title>
+  <title><%= seller.name %> - Warranty</title>
   <style>
     :root { --primary: <%= theme.primaryColor %>; --accent: <%= theme.accentColor %>; }
     body {
@@ -50,8 +50,8 @@
 <body>
   <div class="sheet">
     <div class="biz">
-      <% if (theme.logoUrl) { %><img src="<%= theme.logoUrl %>" alt="<%= theme.displayName || merchant.businessName %>" /><% } %>
-      <div class="biz-name"><%= theme.displayName || merchant.businessName %></div>
+      <% if (theme.logoUrl) { %><img src="<%= theme.logoUrl %>" alt="<%= seller.name %>" /><% } %>
+      <div class="biz-name"><%= seller.name %></div>
     </div>
 
     <div class="card">
@@ -81,7 +81,7 @@
       <div class="card">
         <div class="sec-title">Your cover</div>
         <p class="lede" style="text-align:left; margin:0;">
-          <%= theme.displayName || merchant.businessName %> hasn't published warranty terms yet.
+          <%= seller.name %> hasn't published warranty terms yet.
           Contact them with the purchase details below to ask about cover.
         </p>
       </div>

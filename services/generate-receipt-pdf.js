@@ -8,6 +8,7 @@ const ejs = require('ejs');
 const path = require('path');
 const { chromium } = require('playwright');
 const { SHOPPER_CONSENT } = require('../config/legal');
+const { resolveSellerForRender } = require('../lib/receiptSnapshot');
 
 const VIEWS_DIR = path.join(__dirname, '..', 'views');
 
@@ -22,13 +23,22 @@ function formatTransactionForTemplate(transaction) {
 }
 
 async function renderReceiptHTML(transaction, merchant, theme) {
+  const safeTheme = theme || { layoutId: 'classic', primaryColor: '#111111', accentColor: '#2563eb', showWalletSave: false };
+  // receipt.ejs no longer resolves this itself -- every caller must, since
+  // the receipt_seller_snapshot migration (lib/receiptSnapshot.js). This is
+  // always a real, persisted transaction (a merchant's own past sale), never
+  // synthetic, so it must carry its own seller* snapshot -- resolveSellerForRender
+  // throws loudly if it doesn't, rather than silently reviving the live join
+  // this migration exists to remove.
+  const seller = resolveSellerForRender(transaction, { theme: safeTheme, merchant });
   return ejs.renderFile(
     path.join(VIEWS_DIR, 'receipt.ejs'),
     {
       merchant,
-      theme: theme || { layoutId: 'classic', primaryColor: '#111111', accentColor: '#2563eb', showWalletSave: false },
+      theme: safeTheme,
+      seller,
       googleClientId: '', // no need for a live Google button inside a static PDF
-      isMerchantCopy: true, // a merchant's own saved PDF -- referenced unguarded elsewhere in receipt.ejs; was missing here before this change (see PDF export bug note)
+      isMerchantCopy: true, // a merchant's own saved PDF -- referenced unguarded elsewhere in receipt.ejs
       shopperConsentText: SHOPPER_CONSENT,
       transaction: formatTransactionForTemplate(transaction),
     },

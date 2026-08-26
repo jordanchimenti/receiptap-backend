@@ -25,6 +25,10 @@
   const inputId = typeof id !== 'undefined' ? id : fieldName;
 %>
 <div style="display:flex; gap:8px; align-items:flex-start;">
+  <div style="flex:1 1 auto; min-width:0;">
+    <input type="text" id="<%= inputId %>" name="<%= fieldName %>" value="<%= value || '' %>"
+           placeholder="<%= typeof placeholder !== 'undefined' ? placeholder : '416-555-1234' %>" />
+  </div>
   <div style="flex:0 0 150px; min-width:0;">
     <select name="<%= countryFieldName %>" aria-label="Country code">
       <% countries.forEach(function (c) { %>
@@ -33,9 +37,5 @@
         </option>
       <% }); %>
     </select>
-  </div>
-  <div style="flex:1 1 auto; min-width:0;">
-    <input type="text" id="<%= inputId %>" name="<%= fieldName %>" value="<%= value || '' %>"
-           placeholder="<%= typeof placeholder !== 'undefined' ? placeholder : '416-555-1234' %>" />
   </div>
 </div>

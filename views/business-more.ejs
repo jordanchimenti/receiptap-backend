@@ -193,7 +193,10 @@
            nothing stamps until a customer saves a receipt. -->
       <a class="menu-row" href="/account/business/loyalty">
         <div class="menu-row-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 12v9H4v-9"/><path d="M2 7h20v5H2z"/><path d="M12 22V7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7Z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7Z"/></svg></div>
-        <div class="menu-row-label">Loyalty</div>
+        <div class="menu-row-body">
+          <div class="menu-row-label">Loyalty</div>
+          <div class="menu-row-sub">Set up a stamp card and rewards for repeat customers.</div>
+        </div>
         <div class="menu-row-chevron"><%- chevronIcon %></div>
       </a>
       <!-- Not locked, deliberately -- referring other businesses doesn't
@@ -204,17 +207,26 @@
            send this merchant on to for their actual referral link. -->
       <a class="menu-row" href="/partner-program?from=%2Faccount%2Fbusiness%2Freferrals">
         <div class="menu-row-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="8" cy="9" r="3"/><path d="M2.5 20c0-3 2.5-5.5 5.5-5.5s5.5 2.5 5.5 5.5"/><path d="M16 4.5c1.7.4 3 2 3 3.8s-1.3 3.4-3 3.8M18.5 14.3c1.8.6 3 2.3 3 4.2"/></svg></div>
-        <div class="menu-row-label">Partner Program</div>
+        <div class="menu-row-body">
+          <div class="menu-row-label">Partner Program</div>
+          <div class="menu-row-sub">Refer businesses and earn <%= merchantAffiliateRate %>% recurring commission.</div>
+        </div>
         <div class="menu-row-chevron"><%- chevronIcon %></div>
       </a>
       <a class="menu-row <%= !hasFullAccess ? 'locked' : '' %>" href="/account/business/pos">
         <div class="menu-row-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="4" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg></div>
-        <div class="menu-row-label">POS connection</div>
+        <div class="menu-row-body">
+          <div class="menu-row-label">POS connection</div>
+          <div class="menu-row-sub">Connect Square, Shopify, Clover, or Lightspeed.</div>
+        </div>
         <div class="menu-row-chevron"><%- !hasFullAccess ? lockIcon : chevronIcon %></div>
       </a>
       <a class="menu-row <%= !hasFullAccess ? 'locked' : '' %>" href="/account/business/pos/guides">
         <div class="menu-row-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 0 1 5 0c0 1.5-1.5 2-2 2.5S12 12.5 12 13.5"/><path d="M12 17h.01"/></svg></div>
-        <div class="menu-row-label">Setup guide</div>
+        <div class="menu-row-body">
+          <div class="menu-row-label">Setup guide</div>
+          <div class="menu-row-sub">Step-by-step instructions for your POS provider.</div>
+        </div>
         <div class="menu-row-chevron"><%- !hasFullAccess ? lockIcon : chevronIcon %></div>
       </a>
     </div>
@@ -223,22 +235,34 @@
     <div class="w-card">
       <a class="menu-row <%= !hasFullAccess ? 'locked' : '' %>" href="/account/business/receipts">
         <div class="menu-row-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 2h12v20l-3-2-3 2-3-2-3 2Z"/><path d="M9 8h6M9 12h6"/></svg></div>
-        <div class="menu-row-label">Receipts</div>
+        <div class="menu-row-body">
+          <div class="menu-row-label">Receipts</div>
+          <div class="menu-row-sub">Browse, search, and export every receipt you've issued.</div>
+        </div>
         <div class="menu-row-chevron"><%- !hasFullAccess ? lockIcon : chevronIcon %></div>
       </a>
       <a class="menu-row <%= !hasFullAccess ? 'locked' : '' %>" href="/account/business/analytics">
         <div class="menu-row-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg></div>
-        <div class="menu-row-label">Analytics</div>
+        <div class="menu-row-body">
+          <div class="menu-row-label">Analytics</div>
+          <div class="menu-row-sub">Sales, repeat customers, and growth over time.</div>
+        </div>
         <div class="menu-row-chevron"><%- !hasFullAccess ? lockIcon : chevronIcon %></div>
       </a>
       <a class="menu-row <%= !hasFullAccess ? 'locked' : '' %>" href="/account/business/customers">
         <div class="menu-row-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5"/><path d="M16 5.5a3.2 3.2 0 0 1 0 6M18 20c0-2.4-.9-4.2-2.3-5.3"/></svg></div>
-        <div class="menu-row-label">Customers</div>
+        <div class="menu-row-body">
+          <div class="menu-row-label">Customers</div>
+          <div class="menu-row-sub">Repeat customers, recognized automatically.</div>
+        </div>
         <div class="menu-row-chevron"><%- !hasFullAccess ? lockIcon : chevronIcon %></div>
       </a>
       <a class="menu-row <%= !hasFullAccess ? 'locked' : '' %>" href="/account/business/emails">
         <div class="menu-row-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="m3 7 9 6 9-6"/></svg></div>
-        <div class="menu-row-label">Customer emails</div>
+        <div class="menu-row-body">
+          <div class="menu-row-label">Customer emails</div>
+          <div class="menu-row-sub">Everyone who's captured an email from a receipt.</div>
+        </div>
         <div class="menu-row-chevron"><%- !hasFullAccess ? lockIcon : chevronIcon %></div>
       </a>
     </div>

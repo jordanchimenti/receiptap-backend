@@ -24,6 +24,7 @@ const { DEACTIVATED_MERCHANT_PURGE_DAYS } = require('../config/retention');
 const claimLimit = require('../lib/claimAttemptLimit');
 const { relativeTime } = require('../lib/relativeTime');
 const { COUNTRIES_WITH_FLAGS } = require('../lib/countryPhoneCodes');
+const { MERCHANT_AFFILIATE_RATE } = require('../services/affiliateRates');
 const {
   listNotifications: listMerchantNotifications,
   markAllRead: markAllMerchantNotificationsRead,
@@ -126,7 +127,7 @@ router.get('/account/business', requireAuth, async (req, res) => {
 router.get('/account/business/more', requireAuth, async (req, res) => {
   const merchant = await prisma.merchant.findUnique({ where: { id: req.session.merchantId } });
   const { paymentMethods } = await listPaymentMethods(merchant);
-  res.render('business-more', { merchant, hasFullAccess: paymentMethods.length > 0 });
+  res.render('business-more', { merchant, hasFullAccess: paymentMethods.length > 0, merchantAffiliateRate: MERCHANT_AFFILIATE_RATE });
 });
 
 // Same "wasUnread captured before markAllRead" pattern as the customer

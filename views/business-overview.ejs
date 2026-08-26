@@ -93,14 +93,6 @@
     .blank-title { font-size: 13.5px; font-weight: 700; margin-bottom: 4px; }
     .blank-sub { font-size: 12.5px; color: var(--w-ink-soft); line-height: 1.5; margin-bottom: 14px; }
 
-    .recent-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--w-line); }
-    .recent-row:last-child { border-bottom: none; }
-    .who-row { display: flex; align-items: center; gap: 10px; }
-    .who-av { width: 28px; height: 28px; border-radius: 50%; background: var(--w-card-raised); color: var(--w-ink-soft); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; text-transform: uppercase; flex-shrink: 0; }
-    .who-email { font-size: 13px; }
-    .recent-total { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 13.5px; font-weight: 700; text-align: right; }
-    .recent-when { font-size: 11px; color: var(--w-ink-soft); text-align: right; }
-
 
     .puck-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     .puck-card { background: var(--w-card-raised); border: 1px solid var(--w-line); border-radius: 12px; padding: 12px; text-decoration: none; color: var(--w-ink); }
@@ -337,29 +329,6 @@
           <div class="gs-note">Adding another ReceipTap? Claim it, then link it to the register it sits on.</div>
         <% } %>
       </div>
-
-    <div class="w-card panel">
-      <div class="panel-head"><h2>Recent receipts</h2><a href="/account/business/receipts">View all</a></div>
-      <% if (recent.length === 0) { %>
-        <div class="blank">
-          <div class="blank-title">No receipts yet</div>
-          <div class="blank-sub">Once your POS is connected and a customer taps a ReceipTap, their receipts land here within seconds.</div>
-        </div>
-      <% } else { %>
-        <% recent.forEach(function (r) { %>
-          <div class="recent-row">
-            <div class="who-row">
-              <div class="who-av"><%= r.identified ? r.who.charAt(0) : '·' %></div>
-              <span class="who-email" style="<%= r.identified ? '' : 'color:var(--w-ink-soft);' %>"><%= r.who %></span>
-            </div>
-            <div>
-              <div class="recent-total">$<%= r.total %></div>
-              <div class="recent-when"><%= r.when %></div>
-            </div>
-          </div>
-        <% }); %>
-      <% } %>
-    </div>
 
     <div class="w-card panel">
       <div class="panel-head"><h2>Your ReceipTaps</h2><a href="/account/business/pucks">See all</a></div>

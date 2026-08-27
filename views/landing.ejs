@@ -199,9 +199,11 @@
       box-shadow: 0 20px 60px rgba(0,0,0,0.18); background: #0b1410;
     }
     .impact-frame iframe { width: 100%; height: 1420px; border: 0; display: block; }
-    /* Weight contrast on the number, since h2 elsewhere on this page has no
-       explicit weight of its own to contrast against. */
-    .impact-title { font-weight: 500; }
+    /* Bigger than .section h2's shared clamp() on purpose -- this is the one
+       headline meant to hit like a big stat, not match the rest of the page's
+       section headers. Weight contrast on the number, since h2 elsewhere has
+       no explicit weight of its own to contrast against. */
+    .impact-title { font-size: clamp(32px, 5.5vw, 56px); font-weight: 500; }
     .impact-title strong { font-weight: 800; }
     .impact-subhead { font-size: 17px; font-weight: 600; color: var(--ink); margin: 10px 0 0; }
     .impact-link {
@@ -461,7 +463,7 @@
   <section class="section" style="text-align: center;">
     <div class="section-eyebrow">In partnership with GoodAPI</div>
     <h2 class="impact-title"><strong>300 billion</strong> paper receipts hit landfill every year.</h2>
-    <p class="impact-subhead">ReceipTap already stops that. And we don't stop there.</p>
+    <p class="impact-subhead">Every ReceipTap replaces a customer's paper receipt. Every monthly subscription plants a real tree.</p>
     <p class="section-lead" style="margin: 0 auto;">
       An estimated 300 billion paper receipts are printed worldwide every year, most headed
       straight to landfill. ReceipTap replaces yours entirely — and plants a real, verified

@@ -125,32 +125,6 @@
     .tl-step h3 { font-size: 16.5px; margin-bottom: 8px; }
     .tl-step p { font-size: 13.5px; color: var(--ink-soft); line-height: 1.6; margin: 0; }
 
-    /* ---------- Showcase: bento grid ---------- */
-    .bento { display: grid; grid-template-columns: repeat(6, 1fr); gap: 18px; margin-top: 40px; }
-    .bento-tile { background: var(--paper-raised); border: 1px solid var(--line); border-radius: 18px; padding: 26px; }
-    .bento-tile.large { grid-column: span 3; }
-    .bento-tile.small { grid-column: span 2; }
-    .bento-tile.large h3 { font-size: 18.5px; margin: 16px 0 8px; }
-    .bento-tile.large p { font-size: 14px; color: var(--ink-soft); line-height: 1.6; margin: 0; }
-    .bt-eyebrow {
-      font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
-      color: var(--teal-deep); margin-bottom: 10px;
-    }
-    .bento-tile.small h3 { font-size: 15.5px; margin-bottom: 6px; }
-    .bento-tile.small p { font-size: 13px; color: var(--ink-soft); line-height: 1.55; margin: 0; }
-
-    .mini-mockup {
-      background: var(--paper); border: 1px solid var(--line); border-radius: 12px;
-      padding: 14px 16px; font-family: var(--font-mono); font-size: 12.5px;
-    }
-    .mockup-label { font-family: var(--font-body); font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-soft); margin-bottom: 8px; }
-    .mockup-row { display: flex; justify-content: space-between; align-items: center; padding: 5px 0; color: var(--ink); }
-    .mockup-row + .mockup-row { border-top: 1px dashed var(--line); }
-    .mockup-row .tag { font-family: var(--font-body); font-size: 10px; font-weight: 700; color: var(--teal-deep); background: var(--teal-wash); padding: 2px 8px; border-radius: 999px; }
-    .mockup-row .tag.new { color: #0350BE; background: #DCE7F4; }
-    .mockup-chips { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
-    .chip { font-family: var(--font-body); font-size: 10.5px; font-weight: 600; color: var(--teal-deep); background: var(--teal-wash); padding: 3px 10px; border-radius: 999px; }
-
     /* ---------- Hero phone showcase (auto-scrolling receipt demo) ---------- */
     .phone-frame {
       width: 300px; margin: -6px auto 0; background: #2B2A27; border-radius: 40px;
@@ -203,7 +177,7 @@
        headline meant to hit like a big stat, not match the rest of the page's
        section headers. Weight contrast on the number, since h2 elsewhere has
        no explicit weight of its own to contrast against. */
-    .impact-title { font-size: clamp(32px, 5.5vw, 56px); font-weight: 500; }
+    h2.impact-title { font-size: clamp(38px, 7vw, 68px); line-height: 1.08; font-weight: 500; }
     .impact-title strong { font-weight: 800; }
     .impact-subhead { font-size: 17px; font-weight: 600; color: var(--ink); margin: 10px 0 0; }
     .impact-link {
@@ -260,8 +234,6 @@
       .problem-row { flex-direction: column; align-items: flex-start; gap: 12px; }
       .timeline { flex-direction: column; gap: 28px; }
       .timeline::before { display: none; }
-      .bento { grid-template-columns: 1fr; }
-      .bento-tile.large, .bento-tile.small { grid-column: auto; }
       .faq-grid { column-count: 1; }
       /* Cards stack to a single column on narrow screens, so this needs more
          height than the desktop ratio would suggest -- generous on purpose
@@ -369,52 +341,6 @@
           <h3>Customers tap. That's it.</h3>
           <p>After paying, they tap their phone on the puck and their receipt appears — no app to download, no account required to receive it.</p>
         </div>
-      </div>
-    </div>
-  </section>
-
-  <section class="section">
-    <div class="section-eyebrow">See it in action</div>
-    <h2>Real tools for a real sale.</h2>
-    <p class="section-lead">Most receipt tools serve one side. ReceipTap only works because both sides want it.</p>
-    <div class="bento">
-      <div class="bento-tile large">
-        <div class="mini-mockup">
-          <div class="mockup-label">Repeat Customers</div>
-          <div class="mockup-row"><span>Maria T.</span><span class="tag">6th visit</span></div>
-          <div class="mockup-row"><span>James K.</span><span class="tag new">New</span></div>
-          <div class="mockup-row"><span>Aisha R.</span><span class="tag">3rd visit</span></div>
-        </div>
-        <h3>Every regular, tracked automatically</h3>
-        <p>See who comes back, how often, and what your regulars actually spend — all from sales you were already making.</p>
-      </div>
-      <div class="bento-tile large">
-        <div class="mini-mockup">
-          <div class="mockup-chips">
-            <span class="chip">Food & Drink</span>
-            <span class="chip">Auto</span>
-            <span class="chip">Retail</span>
-          </div>
-          <div class="mockup-row"><span>Corner Hardware</span><span>$64.30</span></div>
-          <div class="mockup-row"><span>Green Leaf Café</span><span>$12.40</span></div>
-        </div>
-        <h3>Every receipt in one wallet</h3>
-        <p>Searchable by store and date, categorized automatically by AI — ready for a return, a warranty claim, or tax season. Nothing to install; a PDF is one tap away.</p>
-      </div>
-      <div class="bento-tile small">
-        <div class="bt-eyebrow">At checkout</div>
-        <h3>Email capture</h3>
-        <p>Build a real customer list from people who already bought — no extra step at the register.</p>
-      </div>
-      <div class="bento-tile small">
-        <div class="bt-eyebrow">Reviews</div>
-        <h3>Google review funnel</h3>
-        <p>The receipt screen asks happy customers to leave a review, right at the moment of purchase.</p>
-      </div>
-      <div class="bento-tile small">
-        <div class="bt-eyebrow">Branding</div>
-        <h3>Branded receipts</h3>
-        <p>Your logo, your colors, your review link — not a generic printout.</p>
       </div>
     </div>
   </section>

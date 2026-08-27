@@ -2,12 +2,13 @@
 // Everything a merchant gets told about, in one place -- the business-side
 // equivalent of services/notificationService.js (customer-facing), same
 // philosophy: the database row is the record of record, written first and
-// always. Email is a best-effort copy of it, except for billing problems,
-// which deliberately also go by email -- see sendBillingProblemEmailSafely
-// below for why that one's different.
+// always. Most types are in-app only; billing problems and tree-planted
+// thank-yous deliberately also go by email -- see sendBillingProblemEmailSafely
+// and sendTreePlantedEmailSafely below for why those two are different.
 
 const prisma = require('../lib/prisma');
-const { sendBillingProblemEmail } = require('./emailService');
+const { sendBillingProblemEmail, sendTreePlantedEmail } = require('./emailService');
+const { PUBLIC_IMPACT_URL } = require('./goodApiService');
 
 async function create({ merchantId, type, title, body, linkUrl }) {
   return prisma.merchantNotification.create({
@@ -98,6 +99,46 @@ async function notifyPayoutCompleted({ merchantId, amountCents }) {
   });
 }
 
+// Fired from services/stripeService.js's plantTreeForRenewal, only after
+// GoodAPI actually confirms the tree was planted -- never on a missing key,
+// a GoodAPI outage, or a non-2xx response, so a merchant is never told (in
+// app or by email) about a tree that wasn't actually planted. In-app AND
+// email, unlike loyalty/POS/payout -- a thank-you for real money that just
+// went out deserves to land in their inbox, not just the notification bell.
+async function notifyTreePlanted({ merchantId }) {
+  const treesPlanted = (await prisma.merchantNotification.count({
+    where: { merchantId, type: 'TREE_PLANTED' },
+  })) + 1;
+
+  const notification = await create({
+    merchantId,
+    type: 'TREE_PLANTED',
+    title: 'A tree was planted for your subscription',
+    body: `Your ReceipTap subscription renewed this month, so we planted a real tree on your behalf. `
+      + `That's ${treesPlanted} tree${treesPlanted === 1 ? '' : 's'} planted so far by staying subscribed.`,
+    linkUrl: null,
+  });
+
+  await sendTreePlantedEmailSafely(merchantId, treesPlanted);
+  return notification;
+}
+
+async function sendTreePlantedEmailSafely(merchantId, treesPlanted) {
+  try {
+    const merchant = await prisma.merchant.findUnique({ where: { id: merchantId } });
+    if (!merchant) return;
+    await sendTreePlantedEmail({
+      email: merchant.email,
+      name: merchant.ownerName,
+      businessName: merchant.businessName,
+      treesPlanted,
+      impactUrl: PUBLIC_IMPACT_URL,
+    });
+  } catch (err) {
+    console.error(`[merchantNotificationService] tree-planted email for merchant ${merchantId} failed:`, err.message);
+  }
+}
+
 async function listNotifications(merchantId) {
   return prisma.merchantNotification.findMany({
     where: { merchantId },
@@ -122,6 +163,7 @@ module.exports = {
   notifyBillingProblem,
   notifyPosConnectionFailed,
   notifyPayoutCompleted,
+  notifyTreePlanted,
   listNotifications,
   countUnread,
   markAllRead,

@@ -207,6 +207,42 @@ async function sendBillingProblemEmail({ email, name, businessName, status }) {
   });
 }
 
+// Sent when a merchant's monthly subscription charge actually plants a real
+// tree (see services/goodApiService.js's plantTreeForSubscriptionMonth).
+// Called only through merchantNotificationService.js's notifyTreePlanted,
+// which already only fires on a CONFIRMED plant -- never on a missing key or
+// a GoodAPI outage -- and swallows failures the same way
+// sendBillingProblemEmail's caller does, so an email hiccup here can never
+// break the webhook that triggered it.
+async function sendTreePlantedEmail({ email, name, businessName, treesPlanted, impactUrl }) {
+  const subject = 'Thank you — your subscription just planted a real tree';
+
+  if (!resend) {
+    console.log(`[emailService] RESEND_API_KEY not set -- tree-planted email for ${email}: ${subject}`);
+    return;
+  }
+
+  const treesLabel = `${treesPlanted} tree${treesPlanted === 1 ? '' : 's'}`;
+
+  await send({
+    from: FROM_ADDRESS,
+    to: email,
+    subject,
+    html: `
+      <p>Hi${name ? ' ' + name : ''},</p>
+      <p>Thank you for staying subscribed to ReceipTap. This month's payment for
+        <strong>${escapeHtml(businessName)}</strong> planted one real, GPS-tracked tree through our
+        partner GoodAPI.</p>
+      <p style="font-size:18px; margin:18px 0;"><strong>${treesLabel}</strong> planted so far, just from ${escapeHtml(businessName)} staying subscribed.</p>
+      <p>You can see exactly where it was planted on our live impact map.</p>
+      <p style="margin:24px 0;">
+        <a href="${impactUrl}" style="display:inline-block; background:#056BFE; color:#ffffff; text-decoration:none; font-weight:700; font-size:15px; padding:13px 26px; border-radius:999px;">See the live impact map</a>
+      </p>
+      <p>Thank you for making this possible.</p>
+    `,
+  });
+}
+
 // Merchant-controlled text (business name, reward label) goes into an HTML
 // email -- escape it rather than trusting it, the same way every other
 // merchant-supplied string is escaped before it reaches a page.
@@ -224,4 +260,5 @@ module.exports = {
   sendLoyaltyRewardReadyEmail,
   sendWarrantyExpiringEmail,
   sendBillingProblemEmail,
+  sendTreePlantedEmail,
 };

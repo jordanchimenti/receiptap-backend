@@ -101,6 +101,7 @@ app.use(
 const { ownerFlag } = require('./middleware/ownerFlag');
 const { countUnread: countUnreadNotifications } = require('./services/notificationService');
 const { countUnread: countUnreadMerchantNotifications } = require('./services/merchantNotificationService');
+const { PUBLIC_IMPACT_URL: goodApiPublicImpactUrl } = require('./services/goodApiService');
 const pushService = require('./services/pushService');
 
 app.use(ownerFlag);
@@ -272,7 +273,7 @@ app.use(require('./routes/demo'));                    // /demo/receipt -- landin
 // Root: marketing landing page for visitors, dashboard for logged-in merchants
 app.get('/', (req, res) => {
   if (req.session?.merchantId) return res.redirect('/dashboard/receipts-hub');
-  res.render('landing');
+  res.render('landing', { goodApiImpactUrl: goodApiPublicImpactUrl });
 });// 3D scroll experience — brand showcase page
 app.get('/experience', (req, res) => {
   res.render('experience');

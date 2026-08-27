@@ -1,7 +1,7 @@
 const Stripe = require('stripe');
 const prisma = require('../lib/prisma');
 const { MERCHANT_AFFILIATE_RATE, REGULAR_AFFILIATE_RATE } = require('./affiliateRates');
-const { notifyBillingProblem, notifyPayoutCompleted } = require('./merchantNotificationService');
+const { notifyBillingProblem, notifyPayoutCompleted, notifyTreePlanted } = require('./merchantNotificationService');
 const { plantTreeForSubscriptionMonth } = require('./goodApiService');
 
 const stripe = process.env.STRIPE_SECRET_KEY
@@ -411,7 +411,16 @@ async function plantTreeForRenewal(invoice) {
   if (!invoice.amount_paid || invoice.amount_paid <= 0) return;
   const merchant = await prisma.merchant.findFirst({ where: { stripeCustomerId: invoice.customer } });
   if (!merchant) return;
-  await plantTreeForSubscriptionMonth(merchant, invoice);
+  const result = await plantTreeForSubscriptionMonth(merchant, invoice);
+  // Only notify on a confirmed plant -- plantTreeForSubscriptionMonth
+  // returns null on a missing key, a GoodAPI outage, or a non-2xx response,
+  // and a merchant should never be told a tree was planted when it wasn't.
+  if (!result) return;
+  try {
+    await notifyTreePlanted({ merchantId: merchant.id });
+  } catch (err) {
+    console.error('[stripeService] tree-planted notification failed:', err.message);
+  }
 }
 
 /** Pays out every PENDING commission for an affiliate right now, outside the

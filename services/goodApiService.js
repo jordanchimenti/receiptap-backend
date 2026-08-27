@@ -8,6 +8,12 @@
 
 const GOODAPI_BASE_URL = 'https://app.thegoodapi.com';
 
+// The public "ReceipTap impact" report (sharing enabled 2026-08-27) -- shown
+// live on the landing page and linked from the tree-planted thank-you email.
+// One constant so both places can never drift apart if this link is ever
+// regenerated.
+const PUBLIC_IMPACT_URL = 'https://app.thegoodapi.com/fe/share/lbwaj4l27l';
+
 /**
  * Plants `count` trees. idempotencyKey should be deterministic per real-world
  * event (a transaction id, a Stripe invoice id) so a webhook redelivery can
@@ -55,4 +61,4 @@ function plantTreeForSubscriptionMonth(merchant, invoice) {
   });
 }
 
-module.exports = { plantTrees, plantTreeForSubscriptionMonth };
+module.exports = { plantTrees, plantTreeForSubscriptionMonth, PUBLIC_IMPACT_URL };

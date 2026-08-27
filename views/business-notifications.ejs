@@ -66,7 +66,7 @@
         <div class="empty-icon">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
         </div>
-        Nothing yet. We'll tell you here about full stamp cards, billing problems, POS connection issues, and Partner Program payouts.
+        Nothing yet. We'll tell you here about full stamp cards, billing problems, POS connection issues, Partner Program payouts, and trees planted for your subscription.
       </div>
     <% } else { %>
       <% notifications.forEach(function(note) { %>
@@ -74,6 +74,7 @@
           <%
             var iconTone = note.type === 'LOYALTY_CARD_FILLED' ? 'reward'
                          : note.type === 'PAYOUT_COMPLETED' ? 'reward'
+                         : note.type === 'TREE_PLANTED' ? 'reward'
                          : note.type === 'BILLING_PROBLEM' ? 'removed'
                          : note.type === 'POS_CONNECTION_FAILED' ? 'removed'
                          : '';
@@ -87,6 +88,8 @@
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/><path d="M6 15h4"/></svg>
             <% } else if (note.type === 'POS_CONNECTION_FAILED') { %>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 9V5a2 2 0 0 1 2-2h2M4 15v4a2 2 0 0 0 2 2h2M20 9V5a2 2 0 0 0-2-2h-2M20 15v4a2 2 0 0 1-2 2h-2"/><path d="M4 4l16 16"/></svg>
+            <% } else if (note.type === 'TREE_PLANTED') { %>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 22v-7"/><path d="M12 15c-4 0-7-3-7-7 1 0 3 .5 4.5 2C8.5 6 11 3 12 2c1 3.5 3.5 4 3.5 8 1.5-1.5 3.5-2 4.5-2 0 4-3 7-7 7Z"/></svg>
             <% } else { %>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 2h12v20l-3-2-3 2-3-2-3 2Z"/><path d="M9 8h6M9 12h6"/></svg>
             <% } %>

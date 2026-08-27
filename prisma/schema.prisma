@@ -611,7 +611,7 @@ model MerchantNotification {
   merchantId String
   merchant   Merchant @relation(fields: [merchantId], references: [id])
 
-  type  String // "LOYALTY_CARD_FILLED" | "BILLING_PROBLEM" | "POS_CONNECTION_FAILED" | "PAYOUT_COMPLETED"
+  type  String // "LOYALTY_CARD_FILLED" | "BILLING_PROBLEM" | "POS_CONNECTION_FAILED" | "PAYOUT_COMPLETED" | "TREE_PLANTED"
   title String
   body  String
 

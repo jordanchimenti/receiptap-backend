@@ -33,16 +33,31 @@ const RECEIPT_SCHEMA = {
     merchantAddress: { type: ['string', 'null'], description: 'Street address printed on the receipt, one line. Null if not shown.' },
     date: { type: ['string', 'null'], description: 'Purchase date as YYYY-MM-DD. Null if not legible.' },
     subtotal: { type: ['number', 'null'], description: 'Total before tax, plain number. Null if the receipt does not print one.' },
-    tax: { type: ['number', 'null'], description: 'Total tax charged, plain number. Null if not printed.' },
+    tax: {
+      type: ['number', 'null'],
+      description: 'Total tax charged, plain number. Null if genuinely not printed anywhere. ' +
+        'If the receipt breaks tax into more than one line (e.g. separate "GST" and "HST" ' +
+        'amounts, common on Canadian fuel receipts, sometimes printed as "GST included in ' +
+        'fuel $X" / "HST included in fuel $Y" AFTER the total rather than before it), add ' +
+        'them together into this one number -- do not report just one of them.',
+    },
     tip: { type: ['number', 'null'], description: 'Tip or gratuity, plain number. Null if not printed.' },
     total: { type: ['number', 'null'], description: 'The final amount paid, plain number. Null if not legible.' },
     currency: { type: ['string', 'null'], description: 'Three-letter code if the receipt makes it clear (CAD, USD). Null if it does not.' },
-    taxNumber: { type: ['string', 'null'], description: "The merchant's PRIMARY tax registration number exactly as printed, including its label (e.g. 'GST/HST 137466199 RT 0001'). Null if absent." },
+    taxNumber: { type: ['string', 'null'], description: "The merchant's PRIMARY tax registration number exactly as printed, including its label (e.g. 'GST/HST 137466199 RT 0001'). The caller displays this value as-is with no label of its own added -- leaving the label out would show a bare number with no context, and a wrong label (e.g. assuming GST/HST when the receipt actually printed a VAT or ABN number) would misdescribe it. Null if absent." },
     taxNumber2: { type: ['string', 'null'], description: "A SECOND tax registration number, if the receipt prints one, exactly as printed with its label (e.g. 'QST 1016551356 TQ 0001'). Canadian receipts often show GST/HST and QST or PST together. Null if there is only one." },
     buyerName: { type: ['string', 'null'], description: "The customer's or purchaser's name, if the receipt prints one (common on invoices, rare on retail till receipts). Not the merchant's name. Null if absent." },
     time: { type: ['string', 'null'], description: "Time of day exactly as printed, e.g. '18:42:29' or '6:42 PM'. Null if not shown." },
     paymentMethod: { type: ['string', 'null'], description: 'Exactly what the receipt prints for how it was paid, e.g. "Visa •••• 6123" or "Cash". Null if not shown.' },
-    receiptNumber: { type: ['string', 'null'], description: "The store's own receipt/transaction/reference number as printed. Null if absent." },
+    receiptNumber: { type: ['string', 'null'], description: "The store's own receipt/transaction/reference number, exactly as printed, including its own printed label (e.g. 'TRANS #: 716634'). The caller displays this value as-is with no label of its own added, so leaving the label out would show a bare number with no context. Null if absent." },
+    isPreauth: {
+      type: ['boolean', 'null'],
+      description: 'True only if the receipt is explicitly marked as a pre-authorization -- ' +
+        'text like "PREAUTH RECEIPT ONLY" or "PRE-AUTHORIZATION", common on gas-pump ' +
+        'receipts where the printed amount is a hold, not necessarily the final charge. ' +
+        'False or null for an ordinary, final receipt -- do not guess this from context, ' +
+        'only from an explicit preauth marking actually printed on the paper.',
+    },
     // The allowed values live in the description, not an `enum`: a strict
     // schema rejects an enum of strings on a ['string','null'] field. Anything
     // off-list is turned into null when the result is validated below.
@@ -66,7 +81,7 @@ const RECEIPT_SCHEMA = {
   },
   required: ['merchantName', 'merchantAddress', 'date', 'time', 'subtotal', 'tax', 'tip', 'total',
              'currency', 'taxNumber', 'taxNumber2', 'buyerName', 'paymentMethod', 'receiptNumber',
-             'category', 'lineItems'],
+             'isPreauth', 'category', 'lineItems'],
   additionalProperties: false,
 };
 
@@ -74,12 +89,15 @@ const INSTRUCTIONS = `This is a photo of a purchase receipt. Read it for a perso
 
 Rules that matter more than completeness:
 - Never guess. If a field is not printed, or is not legible in this photo, use null. A null is useful; a wrong number is not.
+- date is one of the two fields this app cannot function without (the other is total) -- look specifically for a printed date near the top or bottom of the receipt before concluding there isn't one. It is not optional just because it's easy to miss next to a time stamp.
 - Amounts are plain numbers with no currency symbol (42.17, not "$42.17").
-- subtotal, tax and tip are only what the receipt itself shows as separate lines. Do not calculate them from the total.
+- subtotal, tax and tip are only what the receipt itself shows as separate lines. Do not calculate them from the total. This does NOT mean report only the first tax line you see: if tax is split across more than one printed line (e.g. separate GST and HST amounts, or a line reading "tax included" printed after the total instead of before it -- common on gas-pump receipts), add every such line together into the single tax value. Reading and summing what's printed is not the same as calculating a number that isn't printed.
 - taxNumber is the merchant's registration number (GST/HST, VAT, ABN, QST, PST). It is not the receipt or transaction number. Keep the label with the number, so it is clear which tax it is.
 - If the receipt prints TWO registration numbers, put the federal/primary one in taxNumber and the provincial/second one in taxNumber2. Do not merge them into one field.
+- receiptNumber keeps its own printed label too (e.g. "TRANS #: 716634"), same reasoning as taxNumber.
 - buyerName is the person or company who BOUGHT, never the store. Most till receipts do not print one; leave it null rather than repeating the merchant.
 - time is copied as printed. Do not convert it, and do not infer a timezone.
+- isPreauth is true only for an explicit printed marking like "PREAUTH RECEIPT ONLY" -- never inferred from the merchant type or line items alone.
 - If this is not a receipt at all, set merchantName to null.`;
 
 // Money on receipts is decimal; everything in this project is stored in cents.
@@ -168,6 +186,10 @@ async function extractReceiptData(source, mimetype) {
       timeText: cleanString(parsed.time, 20),
       paymentMethod: cleanString(parsed.paymentMethod, 60),
       receiptNumber: cleanString(parsed.receiptNumber, 60),
+      // Shown as a one-time warning on the review screen, never persisted --
+      // its only job is making sure the customer notices the total might not
+      // be final before they save it, not tracking preauth status forever.
+      isPreauth: parsed.isPreauth === true,
       category: CATEGORIES.includes(parsed.category) ? parsed.category : null,
       lineItems: Array.isArray(parsed.lineItems) ? parsed.lineItems.slice(0, 50) : [],
     };

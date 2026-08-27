@@ -11,7 +11,10 @@
      paymentMethod, receiptNumber (both optional -- only ever what the
      receipt itself printed, never fabricated), categories (the fixed list
      for the dropdown), error (optional, only set if confirm was submitted
-     with a missing required field). -->
+     with a missing required field), isPreauth (true only when the receipt
+     was explicitly marked pre-authorization -- e.g. a gas pump hold -- so
+     the total shown may not be the final settled charge; shown once as a
+     warning here, never persisted). -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -52,6 +55,10 @@
       font-size: 30px; font-weight: 700; padding: 0;
     }
     .total-input:focus { outline: none; }
+    .total-date-label {
+      display: block; font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+      color: var(--w-ink-soft); margin-top: 8px; margin-bottom: 4px;
+    }
     .total-date-input {
       background: none; border: none; color: var(--w-ink-soft); font-size: 13px; font-family: inherit; padding: 0;
     }
@@ -62,6 +69,13 @@
     }
     .replica-merchant { text-align: center; font-size: 14.5px; font-weight: 700; color: var(--w-ink); margin-bottom: 4px; word-break: break-word; }
     .replica-sub { text-align: center; font-size: 11px; color: var(--w-ink-soft); margin-bottom: 2px; }
+    .replica-sub-input {
+      display: block; width: 100%; box-sizing: border-box; text-align: center; font-size: 11px;
+      color: var(--w-ink-soft); margin-bottom: 2px; background: none; border: none; border-bottom: 1px dashed transparent;
+      font-family: inherit; padding: 1px 2px;
+    }
+    .replica-sub-input:focus { outline: none; border-bottom-color: var(--w-line); }
+    .replica-sub-input::placeholder { color: var(--w-ink-soft); opacity: 0.6; }
     .replica-dash { border: none; border-top: 1px dashed var(--w-line); margin: 14px 0; }
     .replica-line { display: flex; justify-content: space-between; gap: 12px; font-size: 12.5px; color: var(--w-ink-soft); margin-bottom: 6px; }
     .replica-line span:last-child { color: var(--w-ink); flex-shrink: 0; }
@@ -141,6 +155,21 @@
       <div class="notice">Couldn't read that automatically — fill in the details below.</div>
     <% } %>
 
+    <%# Independent of the states above -- a preauth marking matters just as
+        much whether or not there's also a duplicate warning or a read
+        error. See isPreauth's comment in scanReceiptService.js: shown once
+        here, never persisted, so this is the only chance the customer gets
+        to notice the total might not be final. %>
+    <% if (typeof isPreauth !== 'undefined' && isPreauth) { %>
+      <div class="dupe-warning">
+        <div class="dupe-title">Marked "preauth" — this may not be the final amount</div>
+        <div class="dupe-body">
+          This receipt says <strong>PREAUTH RECEIPT ONLY</strong>. On a gas pump, that usually means the
+          amount shown is a hold, not necessarily what was actually charged. Check the total before saving.
+        </div>
+      </div>
+    <% } %>
+
     <%
       let parsedLineItems = [];
       try { parsedLineItems = JSON.parse(lineItems || '[]'); } catch { parsedLineItems = []; }
@@ -151,6 +180,7 @@
     <form method="POST" action="/account/receipts/scan/confirm">
       <input type="hidden" name="imageKey" value="<%= imageKey %>" />
       <input type="hidden" name="lineItems" value='<%- lineItems %>' />
+      <input type="hidden" name="isPreauth" value="<%= isPreauth ? '1' : '' %>" />
 
       <input
         class="merchant-input" type="text" name="merchantName" id="merchantName"
@@ -176,16 +206,33 @@
               filled in reads as "the app is broken". The hint below says so. %>
           <input class="total-input" id="total" type="number" step="0.01" min="0" name="total" value="<%= total %>" placeholder="0.00" required />
         </div>
-        <input class="total-date-input" type="date" name="date" value="<%= date %>" />
-        <% if (!total) { %>
+        <label class="total-date-label" for="date">Date</label>
+        <input class="total-date-input" id="date" type="date" name="date" value="<%= date %>" required />
+        <% if (!total && !date) { %>
+          <div class="total-hint">We couldn't read the total or the date — type them in to save this receipt.</div>
+        <% } else if (!total) { %>
           <div class="total-hint">We couldn't read the total — type it in to save this receipt.</div>
+        <% } else if (!date) { %>
+          <div class="total-hint">We couldn't read the date — CRA requires it on every receipt, even under $100.</div>
         <% } %>
       </div>
 
       <div class="receipt-replica">
         <div class="replica-merchant" id="replica-merchant"><%= merchantName || 'Merchant name' %></div>
-        <% if (merchantAddress) { %><div class="replica-sub"><%= merchantAddress %></div><% } %>
-        <% if (receiptNumber) { %><div class="replica-sub">RECEIPT #<%= receiptNumber %></div><% } %>
+        <%# The actual editable address field lives here, not duplicated below
+            in "More details" -- it used to appear twice: once as a read-only
+            line here and again as a real <input> further down, which looked
+            like the same fact printed twice on one receipt. This is the only
+            copy now; styled to sit quietly in the replica preview like the
+            merchant-name input above it, but it's a real field, not display
+            text -- click it to correct a misread address. %>
+        <input type="text" class="replica-sub-input" id="merchantAddress" name="merchantAddress"
+               value="<%= merchantAddress %>" placeholder="Address (if shown on receipt)" maxlength="200" />
+        <%# No hardcoded "RECEIPT #" prefix here -- receiptNumber already
+            carries its own printed label (e.g. "TRANS #: 716634"), see
+            scanReceiptService.js. A hardcoded prefix in front of that
+            produced "RECEIPT #TRANS #: 716634" -- double-labeled. %>
+        <% if (receiptNumber) { %><div class="replica-sub"><%= receiptNumber %></div><% } %>
 
         <hr class="replica-dash" />
 
@@ -215,7 +262,12 @@
         </div>
 
         <% if (taxNumber) { %>
-          <div class="replica-sub" style="margin-top:10px;">GST/HST <%= taxNumber %></div>
+          <%# No hardcoded "GST/HST" prefix -- taxNumber already carries
+              whatever label the receipt actually printed (GST/HST, VAT,
+              ABN...), see scanReceiptService.js. Assuming GST/HST here
+              would mislabel a non-Canadian tax number, on top of the same
+              double-labeling bug the receiptNumber line above had. %>
+          <div class="replica-sub" style="margin-top:10px;"><%= taxNumber %></div>
         <% } %>
 
         <div class="replica-field">
@@ -230,7 +282,7 @@
         <%# The rest of what was read off the paper. Editable for the same
             reason the total is: the customer is looking at the photo, so
             they're the one who can tell a misread tax line from a real one. %>
-        <details class="replica-more"<%= (subtotal || tax || tip || taxNumber || merchantAddress) ? ' open' : '' %>>
+        <details class="replica-more"<%= (subtotal || tax || tip || taxNumber) ? ' open' : '' %>>
           <summary>More details from this receipt</summary>
 
           <div class="replica-field-row">
@@ -240,17 +292,12 @@
             </div>
             <div class="replica-field">
               <label for="tax">Tax</label>
-              <input type="number" step="0.01" min="0" id="tax" name="tax" value="<%= tax %>" placeholder="Optional" />
+              <input type="number" step="0.01" min="0" id="tax" name="tax" value="<%= tax %>" placeholder="Not shown, or add it" />
             </div>
             <div class="replica-field">
               <label for="tip">Tip</label>
               <input type="number" step="0.01" min="0" id="tip" name="tip" value="<%= tip %>" placeholder="Optional" />
             </div>
-          </div>
-
-          <div class="replica-field">
-            <label for="merchantAddress">Address</label>
-            <input type="text" id="merchantAddress" name="merchantAddress" value="<%= merchantAddress %>" placeholder="Optional" maxlength="200" />
           </div>
 
           <div class="replica-field-row">

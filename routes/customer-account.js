@@ -1423,6 +1423,9 @@ router.post('/account/receipts/scan', requireCustomerAuth, handleReceiptScanUplo
     // Never extracted -- it isn't printed anywhere. Always starts blank for
     // the customer to fill in if they want to.
     businessPurpose: '',
+    // Shown as a one-time warning on this render only, never saved -- see
+    // the comment on isPreauth in scanReceiptService.js.
+    isPreauth: Boolean(extracted?.isPreauth),
     categories: CATEGORIES,
   });
 });
@@ -1477,6 +1480,9 @@ router.post('/account/receipts/scan/confirm', requireCustomerAuth, async (req, r
       paymentMethod: paymentMethod || '',
       receiptNumber: receiptNumber || '',
       ...Object.fromEntries(SCAN_DETAIL_FIELDS.map((f) => [f, req.body[f] || ''])),
+      // Carried through the hidden field below, not re-extracted -- this is
+      // a re-render of what was already reviewed once, not a fresh photo.
+      isPreauth: req.body.isPreauth === '1',
       categories: CATEGORIES,
       error,
     });

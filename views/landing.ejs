@@ -5,7 +5,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>ReceipTap — Tap-to-receive digital receipts for your store</title>
-  <meta name="description" content="Replace paper receipts with a tap. Customers get their receipt on their phone; you get their email, a Google review funnel, and repeat-customer analytics. Works with Square, with more POS integrations on the way." />
+  <meta name="description" content="Replace paper receipts with a tap. Customers get their receipt on their phone; you get their email, a Google review funnel, and repeat-customer analytics. Works with Square, Clover, Lightspeed, and Shopify POS." />
   <meta property="og:title" content="ReceipTap — Tap-to-receive digital receipts for your store" />
   <meta property="og:description" content="The receipt goes to their phone. The relationship goes to you. Email capture, a Google review funnel, and repeat-customer analytics from sales you're already making." />
   <meta property="og:type" content="website" />
@@ -82,15 +82,30 @@
     }
     @media (prefers-reduced-motion: reduce) {
       .puck::before { animation: none; opacity: 0; }
+      .pos-track { animation: none; }
     }
 
-    /* ---------- Trust strip ---------- */
-    .trust-strip { padding: 20px 6vw; border-bottom: 1px solid var(--line); }
-    .trust-inner {
-      max-width: 1000px; margin: 0 auto; display: flex; flex-wrap: wrap; justify-content: center;
-      gap: 10px 30px; font-size: 13px; font-weight: 500; color: var(--ink-soft);
+    /* ---------- Trust strip: sliding POS logo marquee ---------- */
+    .pos-strip { padding: 28px 0; border-bottom: 1px solid var(--line); }
+    .pos-strip-label {
+      text-align: center; font-size: 11px; font-weight: 700; letter-spacing: 0.08em;
+      text-transform: uppercase; color: var(--ink-soft); margin-bottom: 18px;
     }
-    .trust-inner span::before { content: '✓ '; color: var(--teal); font-weight: 700; }
+    /* Mask fades logos in/out at the edges instead of a hard clip, since the
+       track scrolls continuously behind it. */
+    .pos-track-wrap {
+      overflow: hidden;
+      -webkit-mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
+      mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
+    }
+    /* Two identical copies of the logo list back to back -- translateX(-50%)
+       lands exactly on the start of the second copy, so the loop is seamless. */
+    .pos-track { display: flex; align-items: center; gap: 64px; width: max-content; animation: pos-scroll 26s linear infinite; }
+    .pos-track img { height: 28px; width: auto; display: block; opacity: 0.8; }
+    @keyframes pos-scroll {
+      from { transform: translateX(0); }
+      to { transform: translateX(-50%); }
+    }
 
     .section { padding: 88px 6vw; max-width: 1100px; margin: 0 auto; }
     .section-eyebrow { font-size: 12px; font-weight: 700; color: var(--teal-deep); text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 8px; }
@@ -284,12 +299,21 @@
     </div>
   </header>
 
-  <div class="trust-strip">
-    <div class="trust-inner">
-      <span>No app for customers</span>
-      <span>Works with Square</span>
-      <span>Live in an afternoon</span>
-      <span>Cancel anytime during trial</span>
+  <div class="pos-strip">
+    <div class="pos-strip-label">Works with the POS you already use</div>
+    <div class="pos-track-wrap">
+      <div class="pos-track">
+        <img src="/images/pos-logos/square.svg" alt="Square" height="28" />
+        <img src="/images/pos-logos/clover.svg" alt="Clover" height="28" />
+        <img src="/images/pos-logos/lightspeed.svg" alt="Lightspeed" height="28" />
+        <img src="/images/pos-logos/shopify.svg" alt="Shopify" height="28" />
+        <!-- Duplicate set, hidden from assistive tech -- see the animation
+             comment on .pos-track above for why this makes the loop seamless. -->
+        <img src="/images/pos-logos/square.svg" alt="" height="28" aria-hidden="true" />
+        <img src="/images/pos-logos/clover.svg" alt="" height="28" aria-hidden="true" />
+        <img src="/images/pos-logos/lightspeed.svg" alt="" height="28" aria-hidden="true" />
+        <img src="/images/pos-logos/shopify.svg" alt="" height="28" aria-hidden="true" />
+      </div>
     </div>
   </div>
 
@@ -329,7 +353,7 @@
         <div class="tl-step">
           <div class="tl-num">1</div>
           <h3>Connect your POS</h3>
-          <p>Link your Square account in a couple of clicks. Sales start flowing into ReceipTap automatically — nothing changes about how you ring people up.</p>
+          <p>Link your Square, Clover, Lightspeed, or Shopify account in a couple of clicks. Sales start flowing into ReceipTap automatically — nothing changes about how you ring people up.</p>
         </div>
         <div class="tl-step">
           <div class="tl-num">2</div>
@@ -373,7 +397,7 @@
         <div class="pc-bottom">
           <ul>
             <li>Unlimited digital receipts</li>
-            <li>Square POS integration</li>
+            <li>Square, Clover, Lightspeed, or Shopify POS integration</li>
             <li>Email capture + Google review funnel</li>
             <li>Repeat-customer & revenue analytics</li>
             <li>AI receipt categorization for your customers</li>
@@ -418,7 +442,7 @@
       </details>
       <details class="faq-item">
         <summary>Which POS systems does it work with?</summary>
-        <p>Square today. Clover support is built and rolling out soon. If you use something else, tell us — it directly shapes what we build next.</p>
+        <p>Square, Clover, Lightspeed, and Shopify POS today. If you use something else, tell us — it directly shapes what we build next.</p>
       </details>
       <details class="faq-item">
         <summary>Does it change how I ring up sales?</summary>

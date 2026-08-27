@@ -199,6 +199,10 @@
       box-shadow: 0 20px 60px rgba(0,0,0,0.18); background: #0b1410;
     }
     .impact-frame iframe { width: 100%; height: 1420px; border: 0; display: block; }
+    /* Weight contrast on the number, since h2 elsewhere on this page has no
+       explicit weight of its own to contrast against. */
+    .impact-title { font-weight: 500; }
+    .impact-title strong { font-weight: 800; }
     .impact-subhead { font-size: 17px; font-weight: 600; color: var(--ink); margin: 10px 0 0; }
     .impact-link {
       display: inline-block; margin-top: 16px; font-size: 13.5px; font-weight: 600;
@@ -456,14 +460,16 @@
 
   <section class="section" style="text-align: center;">
     <div class="section-eyebrow">In partnership with GoodAPI</div>
-    <h2>Every subscription plants a real tree.</h2>
-    <p class="impact-subhead">Not a counter we made up — verified, GPS-tracked, and updated live.</p>
+    <h2 class="impact-title"><strong>300 billion</strong> paper receipts hit landfill every year.</h2>
+    <p class="impact-subhead">ReceipTap already stops that. And we don't stop there.</p>
     <p class="section-lead" style="margin: 0 auto;">
-      We've partnered with GoodAPI, an independently audited environmental impact platform,
-      to plant one real tree every month your ReceipTap subscription stays active. Each tree
-      is GPS-tracked from planting through its month-18 survival verification. The interactive
-      map below is pulled directly from GoodAPI's own live platform — drag the globe to see
-      exactly where.
+      An estimated 300 billion paper receipts are printed worldwide every year — most tossed
+      within a day, many straight into landfill. Every receipt ReceipTap sends goes to a
+      customer's phone instead: no printer, no paper, no bin. We also partnered with GoodAPI,
+      an independently audited environmental impact platform, to plant one real tree every
+      month your subscription stays active — GPS-tracked from planting through its month-18
+      survival verification. The interactive map below is pulled directly from GoodAPI's own
+      live platform — drag the globe to see exactly where.
     </p>
     <div class="impact-frame">
       <iframe

@@ -82,7 +82,7 @@
     }
     @media (prefers-reduced-motion: reduce) {
       .puck::before { animation: none; opacity: 0; }
-      .pos-track { animation: none; }
+      .pos-track.is-ready { animation: none; }
     }
 
     /* ---------- Trust strip: sliding POS logo marquee ---------- */
@@ -98,20 +98,20 @@
       -webkit-mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
       mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
     }
-    /* Two identical copies of the logo list back to back -- translateX(-50%)
-       lands exactly on the start of the second copy, so the loop is seamless.
-       This only works out to an EXACT 50% because spacing is a margin on
-       every image (all 8 get one), not a flex `gap` -- a `gap` only inserts
-       N-1 gaps for N items, so 8 items split into two 4-item copies land the
-       midpoint half a gap-width off from the real copy boundary, which is a
-       visible hitch on every loop reset. Margin makes each copy's own width
-       (4 images + their 4 trailing margins) exactly half the track's total
-       width, with no such off-by-one. */
-    .pos-track { display: flex; align-items: center; width: max-content; animation: pos-scroll 26s linear infinite; }
+    /* Cloned to however many copies actually fill the screen (see the script
+       below the track) -- a fixed 2 copies left blank space visible for most
+       of the loop on any screen wider than one copy (basically every
+       desktop), since the track ran out of content before the scroll
+       finished. --pos-shift is set by that same script to exactly one
+       copy's real measured width, so the shift is always precise regardless
+       of screen size or how many copies end up cloned. */
+    .pos-track { display: flex; align-items: center; width: max-content; }
+    .pos-track.is-ready { animation: pos-scroll 26s linear infinite; }
+    .pos-group { display: flex; align-items: center; flex-shrink: 0; }
     .pos-track img { height: 28px; width: auto; display: block; opacity: 0.8; margin-right: 64px; }
     @keyframes pos-scroll {
       from { transform: translateX(0); }
-      to { transform: translateX(-50%); }
+      to { transform: translateX(calc(-1 * var(--pos-shift, 0px))); }
     }
 
     .section { padding: 88px 6vw; max-width: 1100px; margin: 0 auto; }
@@ -306,20 +306,61 @@
   <div class="pos-strip">
     <div class="pos-strip-label">Works with the POS you already use</div>
     <div class="pos-track-wrap">
-      <div class="pos-track">
-        <img src="/images/pos-logos/square.svg" alt="Square" height="28" />
-        <img src="/images/pos-logos/clover.svg" alt="Clover" height="28" />
-        <img src="/images/pos-logos/lightspeed.svg" alt="Lightspeed" height="28" />
-        <img src="/images/pos-logos/shopify.svg" alt="Shopify" height="28" />
-        <!-- Duplicate set, hidden from assistive tech -- see the animation
-             comment on .pos-track above for why this makes the loop seamless. -->
-        <img src="/images/pos-logos/square.svg" alt="" height="28" aria-hidden="true" />
-        <img src="/images/pos-logos/clover.svg" alt="" height="28" aria-hidden="true" />
-        <img src="/images/pos-logos/lightspeed.svg" alt="" height="28" aria-hidden="true" />
-        <img src="/images/pos-logos/shopify.svg" alt="" height="28" aria-hidden="true" />
+      <div class="pos-track" id="pos-track">
+        <div class="pos-group">
+          <img src="/images/pos-logos/square.svg" alt="Square" height="28" />
+          <img src="/images/pos-logos/clover.svg" alt="Clover" height="28" />
+          <img src="/images/pos-logos/lightspeed.svg" alt="Lightspeed" height="28" />
+          <img src="/images/pos-logos/shopify.svg" alt="Shopify" height="28" />
+        </div>
       </div>
     </div>
   </div>
+  <script>
+    // Clones the one real logo group enough times to always more than cover
+    // the visible strip twice over, then points the CSS animation at exactly
+    // that group's own measured width -- see the CSS comment on .pos-track
+    // for why a fixed 2-copies-at-50% version left blank space on wide
+    // screens. Re-measures on resize since the group's rendered width (and
+    // how many copies are needed) depends on viewport width.
+    (function () {
+      var track = document.getElementById('pos-track');
+      var firstGroup = track && track.querySelector('.pos-group');
+      if (!track || !firstGroup) return;
+      if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+      function setup() {
+        track.classList.remove('is-ready');
+        track.innerHTML = '';
+        track.appendChild(firstGroup);
+        var wrapWidth = track.parentElement.getBoundingClientRect().width;
+        var groupWidth = firstGroup.getBoundingClientRect().width;
+        if (!groupWidth) return; // logos not measurable yet -- the load handler below retries
+        var copiesNeeded = Math.ceil((wrapWidth * 2) / groupWidth) + 1;
+        for (var i = 1; i < copiesNeeded; i++) {
+          track.appendChild(firstGroup.cloneNode(true));
+        }
+        track.style.setProperty('--pos-shift', groupWidth + 'px');
+        track.classList.add('is-ready');
+      }
+
+      // Logos are external image files -- measuring before they've actually
+      // loaded reads every width as 0.
+      var images = firstGroup.querySelectorAll('img');
+      Promise.all(Array.prototype.map.call(images, function (img) {
+        return img.complete ? Promise.resolve() : new Promise(function (res) {
+          img.onload = res;
+          img.onerror = res;
+        });
+      })).then(setup);
+
+      var resizeTimer;
+      window.addEventListener('resize', function () {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(setup, 200);
+      });
+    })();
+  </script>
 
   <section class="section">
     <div class="section-eyebrow">The problem with paper</div>

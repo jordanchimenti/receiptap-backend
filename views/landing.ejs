@@ -99,9 +99,16 @@
       mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
     }
     /* Two identical copies of the logo list back to back -- translateX(-50%)
-       lands exactly on the start of the second copy, so the loop is seamless. */
-    .pos-track { display: flex; align-items: center; gap: 64px; width: max-content; animation: pos-scroll 26s linear infinite; }
-    .pos-track img { height: 28px; width: auto; display: block; opacity: 0.8; }
+       lands exactly on the start of the second copy, so the loop is seamless.
+       This only works out to an EXACT 50% because spacing is a margin on
+       every image (all 8 get one), not a flex `gap` -- a `gap` only inserts
+       N-1 gaps for N items, so 8 items split into two 4-item copies land the
+       midpoint half a gap-width off from the real copy boundary, which is a
+       visible hitch on every loop reset. Margin makes each copy's own width
+       (4 images + their 4 trailing margins) exactly half the track's total
+       width, with no such off-by-one. */
+    .pos-track { display: flex; align-items: center; width: max-content; animation: pos-scroll 26s linear infinite; }
+    .pos-track img { height: 28px; width: auto; display: block; opacity: 0.8; margin-right: 64px; }
     @keyframes pos-scroll {
       from { transform: translateX(0); }
       to { transform: translateX(-50%); }
@@ -188,11 +195,8 @@
       box-shadow: 0 20px 60px rgba(0,0,0,0.18); background: #0b1410;
     }
     .impact-frame iframe { width: 100%; height: 1420px; border: 0; display: block; }
-    /* Bigger than .section h2's shared clamp() on purpose -- this is the one
-       headline meant to hit like a big stat, not match the rest of the page's
-       section headers. Weight contrast on the number, since h2 elsewhere has
-       no explicit weight of its own to contrast against. */
-    h2.impact-title { font-size: clamp(38px, 7vw, 68px); line-height: 1.08; font-weight: 500; }
+    /* Matches .section h2's shared size/weight -- consistent with every
+       other section header on the page. Weight contrast on the number only. */
     .impact-title strong { font-weight: 800; }
     .impact-subhead { font-size: 17px; font-weight: 600; color: var(--ink); margin: 10px 0 0; }
     .impact-link {

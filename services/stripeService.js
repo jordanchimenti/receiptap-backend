@@ -2,6 +2,7 @@ const Stripe = require('stripe');
 const prisma = require('../lib/prisma');
 const { MERCHANT_AFFILIATE_RATE, REGULAR_AFFILIATE_RATE } = require('./affiliateRates');
 const { notifyBillingProblem, notifyPayoutCompleted } = require('./merchantNotificationService');
+const { plantTreeForSubscriptionMonth } = require('./goodApiService');
 
 const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2024-06-20' })
@@ -398,6 +399,21 @@ async function recordAffiliateCommission(invoice) {
   });
 }
 
+/**
+ * Plants one tree for a merchant's successful monthly charge -- the trial
+ * start, every renewal, whichever this invoice is. Same "actually paid"
+ * guard as recordAffiliateCommission above (a $0 invoice, e.g. a fully
+ * discounted trial-start, plants nothing), and best-effort in the same way:
+ * plantTreeForSubscriptionMonth never throws, so a GoodAPI hiccup can't take
+ * down webhook processing.
+ */
+async function plantTreeForRenewal(invoice) {
+  if (!invoice.amount_paid || invoice.amount_paid <= 0) return;
+  const merchant = await prisma.merchant.findFirst({ where: { stripeCustomerId: invoice.customer } });
+  if (!merchant) return;
+  await plantTreeForSubscriptionMonth(merchant, invoice);
+}
+
 /** Pays out every PENDING commission for an affiliate right now, outside the
  * normal schedule -- called once they finish Stripe Connect onboarding, to
  * flush anything that accrued while they had no payout account to send it
@@ -522,6 +538,7 @@ async function handleWebhookEvent(event) {
     }
     case 'invoice.payment_succeeded': {
       await recordAffiliateCommission(event.data.object);
+      await plantTreeForRenewal(event.data.object);
       break;
     }
     default:

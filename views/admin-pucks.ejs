@@ -108,7 +108,12 @@
               <tr class="<%= i >= 5 ? 'puck-row-extra' : '' %>" style="<%= i >= 5 ? 'display:none;' : '' %>">
                 <td style="font-family:var(--font-mono); font-size:12.5px; word-break:break-all;"><%= p.url %></td>
                 <td style="font-family:var(--font-mono);"><%= p.id %></td>
-                <td style="font-family:var(--font-mono);"><%= p.claimCode %></td>
+                <td style="font-family:var(--font-mono);">
+                  <%= p.claimCode %>
+                  <button type="button" class="copy-claimcode-btn" data-code="<%= p.claimCode %>" title="Copy claim code" style="margin-left:6px; background:none; border:none; cursor:pointer; color:var(--ink-soft); padding:2px; vertical-align:middle;">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                  </button>
+                </td>
                 <td><span class="pill <%= p.status === 'CLAIMED' ? 'pill-green' : 'pill-grey' %>"><%= p.status === 'CLAIMED' ? 'Claimed' : 'Unclaimed' %></span></td>
                 <td class="when"><%= new Date(p.createdAt).toLocaleDateString('en-US', { dateStyle: 'medium' }) %></td>
                 <td style="text-align:right;">
@@ -149,6 +154,17 @@
         var original = btn.textContent;
         btn.textContent = 'Copied!';
         setTimeout(function () { btn.textContent = original; }, 1500);
+      });
+    });
+
+    var checkIcon = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
+    document.querySelectorAll('.copy-claimcode-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        navigator.clipboard.writeText(btn.getAttribute('data-code'));
+        var original = btn.innerHTML;
+        btn.innerHTML = checkIcon;
+        btn.style.color = 'var(--teal)';
+        setTimeout(function () { btn.innerHTML = original; btn.style.color = ''; }, 1500);
       });
     });
 

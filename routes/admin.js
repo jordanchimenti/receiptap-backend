@@ -8,7 +8,6 @@ const router = express.Router();
 const crypto = require('crypto');
 const prisma = require('../lib/prisma');
 const { requireAdmin } = require('../middleware/requireAdmin');
-const { SQUARE_BASE_URL, createTestSale } = require('../services/squareService');
 
 const PRICE_USD = 49.99; // what an active subscription bills per month
 
@@ -301,60 +300,6 @@ router.get('/admin/merchants/export', requireAdmin, async (req, res) => {
   res.setHeader('Content-Type', 'text/csv');
   res.setHeader('Content-Disposition', 'attachment; filename="receiptap-merchants.csv"');
   res.send(csv);
-});
-
-// GET /admin/test-pos — a virtual terminal: rings a real Square sandbox sale
-// so the whole webhook -> puck-binding path can be tested from a browser
-// (e.g. a second phone) instead of running scripts or hand-editing the DB.
-router.get('/admin/test-pos', requireAdmin, async (req, res) => {
-  const merchant = await prisma.merchant.findFirst({ where: { squareAccessToken: { not: null } } });
-
-  let locations = [];
-  if (merchant?.squareAccessToken) {
-    const locRes = await fetch(`${SQUARE_BASE_URL}/v2/locations`, {
-      headers: { Authorization: `Bearer ${merchant.squareAccessToken}` },
-    }).catch(() => null);
-    const data = await locRes?.json().catch(() => null);
-    locations = data?.locations || [];
-  }
-
-  res.render('admin-test-pos', {
-    admin: res.locals.adminUser,
-    activeTab: 'test-pos',
-    locations,
-    connected: Boolean(merchant?.squareAccessToken),
-    error: req.query.error || null,
-    result: req.query.orderId
-      ? { orderId: req.query.orderId, paymentId: req.query.paymentId, total: req.query.total }
-      : null,
-  });
-});
-
-// POST /admin/test-pos/charge — creates a real Order + Payment via the
-// elevated sandbox test token, then redirects back with the result.
-router.post('/admin/test-pos/charge', requireAdmin, async (req, res) => {
-  try {
-    const { locationId, itemName, itemPrice, itemQty } = req.body;
-
-    const lineItems = [];
-    for (let i = 0; i < itemName.length; i++) {
-      if (!itemName[i] || !itemPrice[i]) continue;
-      lineItems.push({
-        name: itemName[i],
-        unitPrice: Math.round(Number(itemPrice[i]) * 100),
-        quantity: parseInt(itemQty[i], 10) || 1,
-      });
-    }
-    if (lineItems.length === 0) throw new Error('Enter at least one line item.');
-
-    const { order, payment } = await createTestSale(locationId, lineItems);
-
-    res.redirect(
-      `/admin/test-pos?orderId=${encodeURIComponent(order.id)}&paymentId=${encodeURIComponent(payment.id)}&total=${encodeURIComponent((payment.total_money.amount / 100).toFixed(2))}`
-    );
-  } catch (err) {
-    res.redirect(`/admin/test-pos?error=${encodeURIComponent(err.message)}`);
-  }
 });
 
 module.exports = router;

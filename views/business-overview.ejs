@@ -50,9 +50,10 @@
       display: flex; align-items: center; justify-content: center;
     }
     .gs-step-icon svg { width: 19px; height: 19px; }
-    /* Green for done, matching the reward alerts -- blue-on-blue for both
-       states would have made "done" and "to do" look identical. */
-    .gs-step.done .gs-step-icon { background: rgba(48,209,88,0.16); color: #30d158; }
+    /* Brand blue for done too, but solid-filled rather than the "to do"
+       tiles' light wash -- a flat wash-on-wash blue would have made "done"
+       and "to do" hard to tell apart at a glance, even with different icons. */
+    .gs-step.done .gs-step-icon { background: var(--w-accent); color: #fff; }
     .gs-step-body { flex: 1; min-width: 0; padding-top: 2px; }
     .gs-step-title { font-size: 14px; font-weight: 700; color: var(--w-ink); }
     .gs-step.done .gs-step-title { color: var(--w-ink-soft); }
@@ -118,6 +119,25 @@
       <div>
         <div class="w-eyebrow">Business</div>
         <h1 class="w-title" style="font-size:20px;">Welcome back, <%= name %></h1>
+      </div>
+    </div>
+
+    <div class="w-card hero-card">
+      <div class="hero-eyebrow">Today</div>
+      <div class="hero-value">$<%= Number(stats.todayRevenue).toLocaleString('en-US', { minimumFractionDigits: 2 }) %></div>
+      <div class="hero-sub"><%= stats.todayReceipts %> receipt<%= stats.todayReceipts === 1 ? '' : 's' %> issued</div>
+      <div class="hero-divider"></div>
+      <div class="hero-substats">
+        <div class="hero-substat">
+          <div class="hero-substat-label">Devices</div>
+          <div class="hero-substat-value"><%= stats.pucksLinked %>/<%= stats.pucksActive %></div>
+          <div class="hero-substat-sub">linked</div>
+        </div>
+        <div class="hero-substat">
+          <div class="hero-substat-label">This month</div>
+          <div class="hero-substat-value">$<%= Number(stats.monthRevenue).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) %></div>
+          <div class="hero-substat-sub"><%= stats.monthLabel %></div>
+        </div>
       </div>
     </div>
 
@@ -242,25 +262,6 @@
           <div class="setup-row-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg></div>
         </a>
       <% } %>
-    </div>
-
-    <div class="w-card hero-card">
-      <div class="hero-eyebrow">Today</div>
-      <div class="hero-value">$<%= Number(stats.todayRevenue).toLocaleString('en-US', { minimumFractionDigits: 2 }) %></div>
-      <div class="hero-sub"><%= stats.todayReceipts %> receipt<%= stats.todayReceipts === 1 ? '' : 's' %> issued</div>
-      <div class="hero-divider"></div>
-      <div class="hero-substats">
-        <div class="hero-substat">
-          <div class="hero-substat-label">Devices</div>
-          <div class="hero-substat-value"><%= stats.pucksLinked %>/<%= stats.pucksActive %></div>
-          <div class="hero-substat-sub">linked</div>
-        </div>
-        <div class="hero-substat">
-          <div class="hero-substat-label">This month</div>
-          <div class="hero-substat-value">$<%= Number(stats.monthRevenue).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) %></div>
-          <div class="hero-substat-sub"><%= stats.monthLabel %></div>
-        </div>
-      </div>
     </div>
 
     <%# Get started: claim a ReceipTap, connect a POS, link the ReceipTap to a

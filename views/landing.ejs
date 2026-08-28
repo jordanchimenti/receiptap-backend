@@ -7,7 +7,7 @@
   <title>ReceipTap — Tap-to-receive digital receipts for your store</title>
   <meta name="description" content="Replace paper receipts with a tap. Customers get their receipt on their phone; you get their email, a Google review funnel, and repeat-customer analytics. Works with Square, Clover, Lightspeed, and Shopify POS." />
   <meta property="og:title" content="ReceipTap — Tap-to-receive digital receipts for your store" />
-  <meta property="og:description" content="Turn every checkout into a lasting connection. Email capture, a Google review funnel, and repeat-customer analytics from sales you're already making." />
+  <meta property="og:description" content="Turn every checkout into a long lasting connection. Email capture, a Google review funnel, and repeat-customer analytics from sales you're already making." />
   <meta property="og:type" content="website" />
   <meta property="og:image" content="/images/receiptap-logo.png" />
   <link rel="stylesheet" href="/css/receiptap.css" />
@@ -30,10 +30,10 @@
     .nav-links a { font-size: 14px; font-weight: 500; text-decoration: none; color: var(--ink-soft); }
     .nav-cta { background: var(--teal); color: #fff !important; padding: 9px 16px; border-radius: 8px; font-weight: 600; }
 
-    /* ---------- Hero: dark, full-bleed, floating product card ---------- */
+    /* ---------- Hero: light, full-bleed, floating product card ---------- */
     .hero-dark {
-      background: #14131F;
-      background-image: radial-gradient(circle, rgba(255,255,255,0.07) 1px, transparent 1.4px);
+      background: var(--paper);
+      background-image: radial-gradient(circle, rgba(0,0,0,0.06) 1px, transparent 1.4px);
       background-size: 24px 24px;
       position: relative; overflow: hidden;
     }
@@ -45,18 +45,18 @@
     .hero-visual { flex: 1; display: flex; justify-content: center; }
     .hero-dark h1 {
       font-size: clamp(32px, 4.6vw, 56px); line-height: 1.06; letter-spacing: -0.02em;
-      margin-bottom: 20px; color: var(--paper);
+      margin-bottom: 20px; color: var(--ink);
     }
     .hero-dark h1 em { font-style: normal; color: var(--teal); }
     .hero-dark .hero-sub {
-      font-size: 17px; color: rgba(250,248,243,0.72); line-height: 1.6; max-width: 460px; margin-bottom: 30px;
+      font-size: 17px; color: var(--ink-soft); line-height: 1.6; max-width: 460px; margin-bottom: 30px;
     }
     .cta-main {
       display: inline-block; background: var(--teal); color: #fff; font-size: 16px; font-weight: 700;
       padding: 15px 28px; border-radius: 10px; text-decoration: none; text-align: center;
     }
     .cta-main:hover { background: var(--teal-deep); }
-    .cta-fine-dark { font-size: 12.5px; color: rgba(250,248,243,0.5); margin-top: 12px; }
+    .cta-fine-dark { font-size: 12.5px; color: var(--ink-soft); margin-top: 12px; }
 
     /* Real hardware photo, floating on the hero -- background removed from
        the source photo (see public/images/receiptap-puck-hardware.png) so
@@ -280,9 +280,9 @@
   <header class="hero-dark">
     <div class="hero-inner">
       <div class="hero-copy">
-        <h1>Turn every checkout into<br /><em>a lasting connection.</em></h1>
+        <h1>Turn every checkout into<br /><em>a long lasting connection.</em></h1>
         <p class="hero-sub">
-          Go beyond the transaction with receipts built for engagement. Your customers get every
+          Go beyond the transaction with our digital receipts built for engagement. Your customers get every
           receipt on their phone — and you get their email, a Google review funnel, and
           repeat-customer analytics from sales you were already making.
         </p>

@@ -1,0 +1,109 @@
+<!-- views/partials/admin-dark-theme.ejs — shared dark theme for every /admin
+     page, matching the wallet dashboard's palette (same --w-* values as
+     partials/wallet-dark-theme.ejs) so the owner view no longer looks like a
+     leftover from the old light dashboard. Deliberately its OWN partial
+     rather than including wallet-dark-theme.ejs directly: that one also
+     ships PWA manifest tags and a pull-to-refresh script meant for the
+     mobile wallet shell, neither of which belongs on a wide, desktop-
+     oriented admin screen full of data tables.
+
+     Overrides the EXISTING class names admin-*.ejs pages already use
+     (.card, .dtable, .pill, .btn, .blank, etc. -- all defined in
+     public/css/receiptap.css's light theme) rather than renaming them to
+     the wallet's .w-* classes, so every admin page's HTML stays untouched
+     and only the colors actually change. -->
+<style>
+  :root {
+    --w-bg: #0a0a0a;
+    --w-card: #161616;
+    --w-card-raised: #1c1c1c;
+    --w-line: #2a2a2a;
+    --w-ink: #ffffff;
+    --w-ink-soft: #8d8d8d;
+    --w-accent: #056BFE;
+    --w-accent-deep: #0350BE;
+    --w-accent-wash: rgba(5, 107, 254, 0.16);
+    --w-danger: #ff453a;
+    --w-danger-wash: rgba(255, 69, 58, 0.12);
+    --w-ok: #30d158;
+    --w-ok-wash: rgba(48, 209, 88, 0.16);
+    --w-amber: #ffb020;
+    --w-amber-wash: rgba(255, 176, 32, 0.16);
+  }
+
+  body { background: var(--w-bg); color: var(--w-ink); }
+
+  .owner-shell { max-width: 1180px; margin: 0 auto; padding: 26px 28px 48px; }
+  .owner-header {
+    display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap;
+    margin-bottom: 4px;
+  }
+  .owner-eyebrow {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--w-ink-soft);
+  }
+  .owner-eyebrow .sw { width: 8px; height: 8px; border-radius: 50%; background: var(--w-accent); }
+  .owner-header a { color: var(--w-ink-soft); font-size: 12.5px; text-decoration: none; font-weight: 500; }
+  .owner-header a:hover { color: var(--w-ink); }
+  .owner-shell > h1 { font-family: var(--font-display); font-size: 26px; letter-spacing: -0.02em; margin: 4px 0 3px; color: var(--w-ink); }
+  .owner-shell > .sub { font-size: 13.5px; color: var(--w-ink-soft); margin: 0 0 22px; }
+
+  /* Top tab strip -- replaces the old light .admin-tabs/.admin-tab, same
+     dark surface as the rest of the page instead of the navy rail. */
+  .owner-tabs { display: flex; gap: 4px; padding: 0 0 14px; border-bottom: 1px solid var(--w-line); margin-bottom: 22px; }
+  .owner-tab {
+    padding: 8px 14px; border-radius: 8px; font-size: 13px; font-weight: 600;
+    color: var(--w-ink-soft); text-decoration: none;
+  }
+  .owner-tab:hover { color: var(--w-ink); background: var(--w-card-raised); }
+  .owner-tab.active { background: var(--w-accent-wash); color: var(--w-accent); }
+
+  .card, .w-card { background: var(--w-card); border: 1px solid var(--w-line); color: var(--w-ink); }
+  .card-head { border-bottom: 1px solid var(--w-line); }
+  .card-head h2 { color: var(--w-ink); }
+  .kv + .kv { border-top: 1px solid var(--w-line) !important; }
+  .kv .k { color: var(--w-ink-soft); }
+  .kv .v { color: var(--w-ink); }
+
+  .stat .tile { background: var(--w-card-raised); }
+  .stat .tile-green { color: var(--w-ok); }
+  .stat .tile-amber { color: var(--w-amber); }
+  .stat .tile-blue { color: var(--w-accent); }
+  .stat .tile-indigo { color: var(--w-accent); }
+  .stat .label { color: var(--w-ink-soft); }
+  .stat .value { color: var(--w-ink); }
+  .stat .foot { color: var(--w-ink-soft); }
+  .stat .foot.up { color: var(--w-ok); }
+
+  .dtable { color: var(--w-ink); }
+  .dtable thead th { color: var(--w-ink-soft); border-bottom: 1px solid var(--w-line); }
+  .dtable tbody tr { border-bottom: 1px solid var(--w-line); }
+  .dtable .when { color: var(--w-ink-soft); }
+
+  .pill { background: var(--w-card-raised); color: var(--w-ink-soft); }
+  .pill-green { background: var(--w-ok-wash); color: var(--w-ok); }
+  .pill-amber { background: var(--w-amber-wash); color: var(--w-amber); }
+  .pill-grey { background: var(--w-card-raised); color: var(--w-ink-soft); }
+
+  .blank { background: var(--w-card-raised); color: var(--w-ink-soft); }
+  .blank .bt { color: var(--w-ink); }
+
+  .btn-primary { background: var(--w-accent); color: #fff; border: none; }
+  .btn-primary:hover { background: var(--w-accent-deep); }
+  .btn-secondary { background: var(--w-card-raised); color: var(--w-ink); border: 1px solid var(--w-line); }
+  .btn-secondary:hover { background: var(--w-line); }
+
+  .error-box { background: var(--w-danger-wash); color: var(--w-danger); border: 1px solid rgba(255,69,58,0.35); }
+
+  .field label { color: var(--w-ink-soft); }
+  .field input, .field select, .item-row input {
+    background: var(--w-card-raised); border: 1px solid var(--w-line); color: var(--w-ink);
+  }
+
+  .copy-url-btn, .write-nfc-btn { color: var(--w-ink); }
+  .page-link { background: var(--w-card-raised); color: var(--w-ink); border: 1px solid var(--w-line); }
+  .page-link:hover { background: var(--w-line); }
+  .page-link.active { background: var(--w-accent); color: #fff; border-color: var(--w-accent); }
+  .page-link.disabled { color: #4a4a4a; }
+</style>

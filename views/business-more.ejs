@@ -267,6 +267,25 @@
       </a>
     </div>
 
+    <%# Owner-only -- res.locals.isOwner is set globally by middleware/ownerFlag.js
+        (ADMIN_EMAILS), so this row is invisible to every real merchant and only
+        ever shows up in your own account. Links out to the separate /admin
+        surface (dark-themed to match, see partials/admin-dark-theme.ejs) rather
+        than folding platform-wide data into this single-business page. %>
+    <% if (isOwner) { %>
+      <div class="section-label">Owner</div>
+      <div class="w-card">
+        <a class="menu-row" href="/admin">
+          <div class="menu-row-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2 3 6v6c0 5 3.8 8.6 9 10 5.2-1.4 9-5 9-10V6l-9-4Z"/></svg></div>
+          <div class="menu-row-body">
+            <div class="menu-row-label">Owner Admin</div>
+            <div class="menu-row-sub">Platform-wide view -- every merchant, every customer.</div>
+          </div>
+          <div class="menu-row-chevron"><%- chevronIcon %></div>
+        </a>
+      </div>
+    <% } %>
+
   </div>
 
   <%- include('partials/business-tab-bar', { active: 'more' }) %>

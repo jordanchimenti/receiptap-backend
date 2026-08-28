@@ -296,14 +296,15 @@
                icon: '<path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/>' }
            ]; %>
 
+        <%# By request: this card always shows every step in its plain,
+            not-done look -- no checkmark, no strikethrough -- even once
+            it's actually complete. The CTA button below still reflects
+            real progress (label/link), only the per-step icon/title
+            styling is frozen. %>
         <% gsSteps.forEach(function (step) { %>
-          <a class="gs-step <%= step.done ? 'done' : '' %>" href="<%= step.href %>">
+          <a class="gs-step" href="<%= step.href %>">
             <div class="gs-step-icon">
-              <% if (step.done) { %>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
-              <% } else { %>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><%- step.icon %></svg>
-              <% } %>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><%- step.icon %></svg>
             </div>
             <div class="gs-step-body">
               <div class="gs-step-title"><%= step.title %></div>

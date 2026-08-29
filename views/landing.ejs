@@ -109,13 +109,19 @@
        finished. --pos-shift is set by that same script to exactly one
        copy's real measured width, so the shift is always precise regardless
        of screen size or how many copies end up cloned. */
-    .pos-track { display: flex; align-items: center; width: max-content; }
-    .pos-track.is-ready { animation: pos-scroll 26s linear infinite; }
+    .pos-track {
+      display: flex; align-items: center; width: max-content;
+      will-change: transform; backface-visibility: hidden; -webkit-backface-visibility: hidden;
+    }
+    /* translate3d (not translateX) so mobile browsers promote this to its
+       own compositor layer instead of repainting each frame -- without it,
+       the mask on .pos-track-wrap was making the scroll choppy on mobile. */
+    .pos-track.is-ready { animation: pos-scroll 21s linear infinite; }
     .pos-group { display: flex; align-items: center; flex-shrink: 0; }
     .pos-track img { height: 28px; width: auto; display: block; opacity: 0.8; margin-right: 64px; }
     @keyframes pos-scroll {
-      from { transform: translateX(0); }
-      to { transform: translateX(calc(-1 * var(--pos-shift, 0px))); }
+      from { transform: translate3d(0, 0, 0); }
+      to { transform: translate3d(calc(-1 * var(--pos-shift, 0px)), 0, 0); }
     }
 
     .section { padding: 88px 6vw; max-width: 1100px; margin: 0 auto; }

@@ -271,6 +271,10 @@
       }
       .hero-text, .hero-cta { text-align: center; }
       .hero-sub { margin-left: auto; margin-right: auto; }
+      /* Subhead-to-photo spacing is .hero-sub's 30px margin-bottom plus the
+         grid gap; the photo-to-button gap only gets the grid gap, so match
+         it here with the same 30px. */
+      .hero-cta { margin-top: 30px; }
       .phone-frame { width: 260px; }
       .phone-screen { height: 480px; }
       .problem-row { flex-direction: column; align-items: flex-start; gap: 12px; }

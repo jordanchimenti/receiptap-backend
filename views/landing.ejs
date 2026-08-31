@@ -84,8 +84,44 @@
       padding: 72px 6vw; text-align: center;
     }
     .phone-showcase-inner { max-width: 640px; margin: 0 auto; }
-    .phone-showcase h2 { color: var(--paper); margin-bottom: 10px; }
-    .phone-showcase .section-lead { color: rgba(250,248,243,0.72); max-width: 480px; margin: 0 auto 36px; }
+
+    /* ---------- Scroll-scrubbed receipt tour: height is set from JS (one
+       viewport per step -- see the script near the bottom) so it always
+       matches the actual number of .scrolly-step elements. The 450vh here
+       is only a no-JS/pre-hydration fallback. .scrolly-sticky pins for the
+       whole scroll of .scrolly-wrap, then releases naturally once the wrap
+       ends -- this is a normal, passive-scroll page (no preventDefault/
+       scroll-jacking), it just reads scroll position to drive progress. */
+    .scrolly-wrap { position: relative; height: 450vh; }
+    .scrolly-sticky {
+      position: sticky; top: 0; height: 100vh;
+      display: flex; align-items: center; overflow: hidden;
+    }
+    .scrolly-inner {
+      width: 100%; max-width: 1100px; margin: 0 auto; padding: 0 6vw;
+      display: grid; grid-template-columns: 1fr 1fr; grid-template-areas: "steps visual";
+      align-items: center; gap: 6vw; text-align: left;
+    }
+    .scrolly-steps { grid-area: steps; }
+    .scrolly-step {
+      opacity: 0.3; transition: opacity 0.3s ease; padding: 14px 0 14px 20px;
+      border-left: 2px solid rgba(255,255,255,0.14); margin-bottom: 10px;
+    }
+    .scrolly-step.active { opacity: 1; border-left-color: var(--teal); }
+    .scrolly-step-num {
+      display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px;
+      border-radius: 50%; background: rgba(255,255,255,0.1); color: rgba(250,248,243,0.75);
+      font-size: 12px; font-weight: 700; margin-bottom: 10px;
+    }
+    .scrolly-step.active .scrolly-step-num { background: var(--teal); color: #fff; }
+    .scrolly-step h3 { color: var(--paper); font-size: 18px; margin: 0 0 6px; }
+    .scrolly-step p { color: rgba(250,248,243,0.62); font-size: 14px; line-height: 1.55; margin: 0; }
+    .receipt-demo { grid-area: visual; }
+    @media (prefers-reduced-motion: reduce) {
+      .scrolly-wrap { height: auto !important; }
+      .scrolly-sticky { position: static; height: auto; }
+      .scrolly-step { opacity: 1; }
+    }
 
     /* ---------- Trust strip: sliding POS logo marquee ---------- */
     .pos-strip { padding: 28px 0; border-bottom: 1px solid var(--line); }
@@ -260,8 +296,22 @@
       }
       .hero-text { text-align: center; }
       .hero-sub { margin-left: auto; margin-right: auto; }
-      .phone-frame { width: 260px; }
-      .phone-screen { height: 480px; }
+      /* Explanations move above the phone instead of beside it, and only the
+         active step renders (rather than the full dimmed list) so a single
+         pinned screen has room for both without clipping. */
+      .scrolly-inner {
+        grid-template-columns: 1fr; grid-template-areas: "steps" "visual";
+        gap: 12px; text-align: center;
+      }
+      .scrolly-step { display: none; border-left: none; padding: 0; margin-bottom: 0; }
+      .scrolly-step.active { display: block; opacity: 1; }
+      .scrolly-step-num { width: 20px; height: 20px; margin: 0 auto 6px; }
+      .scrolly-step h3 { font-size: 15px; margin-bottom: 4px; }
+      .scrolly-step p { font-size: 12.5px; max-width: 320px; margin: 0 auto; line-height: 1.4; }
+      .phone-frame { width: 200px; }
+      .phone-screen { height: 360px; }
+      .phone-cta { margin-top: 8px; }
+      .phone-cta-label { margin-bottom: 5px; }
       .problem-row { flex-direction: column; align-items: flex-start; gap: 12px; }
       .timeline { flex-direction: column; gap: 28px; }
       .timeline::before { display: none; }
@@ -363,19 +413,51 @@
   <div class="phone-showcase">
     <div class="phone-showcase-inner">
       <div class="section-eyebrow" style="color: var(--teal);">See it in action</div>
-      <h2>The receipt your customers actually see</h2>
-      <p class="section-lead">Not a mockup — this is the real receipt page, live.</p>
-      <div class="receipt-demo">
-        <div class="phone-frame">
-          <span class="phone-power-btn"></span>
-          <div class="phone-inner">
-            <div class="dynamic-island"></div>
-            <iframe id="demo-iframe" class="phone-screen" src="/demo/receipt" title="ReceipTap receipt demo" scrolling="no"></iframe>
+    </div>
+
+    <div class="scrolly-wrap" id="scrolly-wrap">
+      <div class="scrolly-sticky">
+        <div class="scrolly-inner">
+          <div class="scrolly-steps" id="scrolly-steps">
+            <div class="scrolly-step" data-target=".brand-row">
+              <div class="scrolly-step-num">1</div>
+              <h3>Your branding, instantly</h3>
+              <p>Their logo and business name appear the second a customer taps — no app required.</p>
+            </div>
+            <div class="scrolly-step" data-target="table">
+              <div class="scrolly-step-num">2</div>
+              <h3>Every item, itemized</h3>
+              <p>Item names, quantities, and prices — broken down automatically, no manual entry.</p>
+            </div>
+            <div class="scrolly-step" data-target=".actions">
+              <div class="scrolly-step-num">3</div>
+              <h3>Save it anywhere</h3>
+              <p>One tap saves the receipt to Photos, as a PDF, or straight into their ReceipTap wallet.</p>
+            </div>
+            <div class="scrolly-step" data-target=".google-review-card">
+              <div class="scrolly-step-num">4</div>
+              <h3>Google reviews, on autopilot</h3>
+              <p>Right when the experience is freshest, one tap sends them to leave a review.</p>
+            </div>
+            <div class="scrolly-step" data-target=".loyalty-card">
+              <div class="scrolly-step-num">5</div>
+              <h3>Loyalty that brings them back</h3>
+              <p>Stamps collect automatically with every visit — no punch card to lose.</p>
+            </div>
           </div>
-        </div>
-        <div class="phone-cta">
-          <div class="phone-cta-label">Want this for your own business?</div>
-          <a class="phone-cta-btn" href="/signup?next=/dashboard/settings/receipt">Customize your receipt &rarr;</a>
+          <div class="receipt-demo">
+            <div class="phone-frame">
+              <span class="phone-power-btn"></span>
+              <div class="phone-inner">
+                <div class="dynamic-island"></div>
+                <iframe id="demo-iframe" class="phone-screen" src="/demo/receipt" title="ReceipTap receipt demo" scrolling="no"></iframe>
+              </div>
+            </div>
+            <div class="phone-cta">
+              <div class="phone-cta-label">Want this for your own business?</div>
+              <a class="phone-cta-btn" href="/signup?next=/dashboard/settings/receipt">Customize your receipt &rarr;</a>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -547,61 +629,95 @@
   </script>
 
   <script>
-    // Slowly auto-scrolls the demo receipt iframe from top to bottom and
-    // back, so a visitor sees the partner banner, the receipt, the save
-    // buttons, the Google review card, the loyalty card, and social links
-    // in one pass without having to scroll it themselves.
+    // Drives the demo receipt's internal scroll position from the visitor's
+    // own page scroll -- normal passive scrolling (no preventDefault, no
+    // wheel/touch hijacking), just reading where .scrolly-wrap sits relative
+    // to the viewport each frame and mapping that 0-1 progress onto the
+    // iframe's scrollTop. Each .scrolly-step's data-target is a selector
+    // resolved INSIDE the iframe's own (same-origin) document, so the steps
+    // stay in sync with wherever that element actually renders rather than
+    // an assumed pixel offset.
     (function () {
+      const wrap = document.getElementById('scrolly-wrap');
+      const sticky = wrap && wrap.querySelector('.scrolly-sticky');
       const iframe = document.getElementById('demo-iframe');
-      if (!iframe || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+      const steps = Array.prototype.slice.call(document.querySelectorAll('.scrolly-step'));
+      if (!wrap || !sticky || !iframe || !steps.length) return;
+      if (matchMedia('(prefers-reduced-motion: reduce)').matches) return; // CSS fallback shows a static list + phone
 
-      // setInterval, not requestAnimationFrame -- rAF is tied to the paint
-      // cycle and browsers can suspend it much more aggressively (some
-      // background/inactive-tab situations stop it outright), where a timer
-      // keeps ticking. This is a decorative background animation, not
-      // something that needs to be frame-perfect.
-      let intervalId = null;
+      // One viewport of scroll per step -- set from JS so it always matches
+      // the real step count instead of a hand-maintained CSS number.
+      wrap.style.height = (steps.length * 100) + 'vh';
 
-      function startTour() {
-        if (intervalId) return;
-        const win = iframe.contentWindow;
+      // .nav is ALSO position:sticky/top:0 and sits earlier in the document,
+      // so it permanently occupies the top of the viewport once scrolled
+      // past -- without this offset, .scrolly-sticky's own top:0 pins its
+      // content underneath the nav instead of below it, pushing the phone
+      // and CTA off the bottom of the screen (most visible on mobile, where
+      // the nav wraps to two lines and is tallest).
+      function applyNavOffset() {
+        const nav = document.querySelector('.nav');
+        const navHeight = nav ? nav.getBoundingClientRect().height : 0;
+        sticky.style.top = navHeight + 'px';
+        sticky.style.height = 'calc(100vh - ' + navHeight + 'px)';
+      }
+      applyNavOffset();
+
+      let targets = null; // per-step scrollTop (px) inside the iframe doc
+      let maxScroll = 0;
+
+      function resolveTargets() {
         const doc = iframe.contentDocument;
-        if (!win || !doc || !doc.body) return;
-
-        const distance = doc.body.scrollHeight - iframe.clientHeight;
-        if (distance <= 0) return;
-
-        const startHoldMs = 1800; // pause at the top before scrolling begins
-        const scrollMs = 10000;
-        const endHoldMs = 2200;
-        const cycleMs = startHoldMs + scrollMs + endHoldMs;
-        let startTime = Date.now();
-
-        intervalId = setInterval(() => {
-          const elapsed = (Date.now() - startTime) % cycleMs;
-          if (elapsed <= startHoldMs) {
-            win.scrollTo(0, 0);
-          } else if (elapsed <= startHoldMs + scrollMs) {
-            win.scrollTo(0, distance * ((elapsed - startHoldMs) / scrollMs));
-          } else {
-            win.scrollTo(0, distance);
-          }
-          if (Date.now() - startTime >= cycleMs) startTime = Date.now();
-        }, 60);
+        if (!doc || !doc.body) return false;
+        maxScroll = Math.max(0, doc.body.scrollHeight - iframe.clientHeight);
+        targets = steps.map(function (step) {
+          const sel = step.getAttribute('data-target');
+          const el = sel && doc.querySelector(sel);
+          return el ? Math.min(maxScroll, Math.max(0, el.offsetTop - 24)) : 0;
+        });
+        return true;
       }
 
-      function stopTour() {
-        if (intervalId) clearInterval(intervalId);
-        intervalId = null;
+      let ticking = false;
+      function update() {
+        ticking = false;
+        if (!targets) return;
+        const rect = wrap.getBoundingClientRect();
+        const total = rect.height - sticky.getBoundingClientRect().height;
+        if (total <= 0) return;
+        const progress = Math.min(1, Math.max(0, -rect.top / total));
+        const rawIndex = progress * (steps.length - 1);
+        const activeIndex = Math.round(rawIndex);
+
+        steps.forEach(function (step, i) { step.classList.toggle('active', i === activeIndex); });
+
+        const lower = Math.floor(rawIndex);
+        const upper = Math.min(steps.length - 1, lower + 1);
+        const frac = rawIndex - lower;
+        const scrollTarget = targets[lower] + (targets[upper] - targets[lower]) * frac;
+        if (iframe.contentWindow) iframe.contentWindow.scrollTo(0, scrollTarget);
       }
 
-      iframe.addEventListener('load', () => setTimeout(startTour, 400));
-
-      if ('IntersectionObserver' in window) {
-        new IntersectionObserver((entries) => {
-          entries.forEach((entry) => (entry.isIntersecting ? startTour() : stopTour()));
-        }, { threshold: 0.3 }).observe(iframe);
+      function onScroll() {
+        if (!ticking) {
+          ticking = true;
+          requestAnimationFrame(update);
+        }
       }
+
+      iframe.addEventListener('load', function () {
+        setTimeout(function () {
+          if (!resolveTargets()) return;
+          steps[0].classList.add('active');
+          update();
+          window.addEventListener('scroll', onScroll, { passive: true });
+          window.addEventListener('resize', function () {
+            applyNavOffset();
+            resolveTargets();
+            update();
+          });
+        }, 300);
+      });
     })();
   </script>
 

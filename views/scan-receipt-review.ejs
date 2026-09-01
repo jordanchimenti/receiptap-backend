@@ -14,7 +14,10 @@
      with a missing required field), isPreauth (true only when the receipt
      was explicitly marked pre-authorization -- e.g. a gas pump hold -- so
      the total shown may not be the final settled charge; shown once as a
-     warning here, never persisted). -->
+     warning here, never persisted); merchantPhone, cashierName, itemCount,
+     taxLabel, paymentReferenceNumber (the rest of what a till receipt
+     routinely prints -- see the ScannedReceipt comment in
+     prisma/schema.prisma). -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -239,9 +242,16 @@
         <% if (parsedLineItems.length) { %>
           <% parsedLineItems.forEach(function(item) { %>
             <div class="replica-line">
-              <span><%= item.description %></span>
+              <span><%= item.quantity ? item.quantity + '  ' : '' %><%= item.description %></span>
               <span>$<%= (typeof item.amount === 'number' ? item.amount : 0).toFixed(2) %></span>
             </div>
+            <% if (Array.isArray(item.subItems) && item.subItems.length) { %>
+              <% item.subItems.forEach(function(sub) { %>
+                <div class="replica-line" style="padding-left: 14px; opacity: 0.75;">
+                  <span><%= sub %></span><span></span>
+                </div>
+              <% }); %>
+            <% } %>
           <% }); %>
         <% } else { %>
           <div class="replica-empty">No itemized breakdown available</div>
@@ -253,7 +263,7 @@
             the paper didn't show one, and inventing it by subtracting tax
             would be making up a number the customer can't check. %>
         <% if (subtotal) { %><div class="replica-line"><span>Subtotal</span><span>$<%= subtotal %></span></div><% } %>
-        <% if (tax) { %><div class="replica-line"><span>Tax</span><span>$<%= tax %></span></div><% } %>
+        <% if (tax) { %><div class="replica-line"><span><%= taxLabel || 'Tax' %></span><span>$<%= tax %></span></div><% } %>
         <% if (tip) { %><div class="replica-line"><span>Tip</span><span>$<%= tip %></span></div><% } %>
 
         <div class="replica-total-row">
@@ -282,7 +292,7 @@
         <%# The rest of what was read off the paper. Editable for the same
             reason the total is: the customer is looking at the photo, so
             they're the one who can tell a misread tax line from a real one. %>
-        <details class="replica-more"<%= (subtotal || tax || tip || taxNumber) ? ' open' : '' %>>
+        <details class="replica-more"<%= (subtotal || tax || tip || taxNumber || merchantPhone || cashierName || itemCount || paymentReferenceNumber) ? ' open' : '' %>>
           <summary>More details from this receipt</summary>
 
           <div class="replica-field-row">
@@ -297,6 +307,17 @@
             <div class="replica-field">
               <label for="tip">Tip</label>
               <input type="number" step="0.01" min="0" id="tip" name="tip" value="<%= tip %>" placeholder="Optional" />
+            </div>
+          </div>
+
+          <div class="replica-field-row">
+            <div class="replica-field">
+              <label for="taxLabel">Tax label / rate</label>
+              <input type="text" id="taxLabel" name="taxLabel" value="<%= taxLabel %>" placeholder="e.g. HST 13%" maxlength="60" />
+            </div>
+            <div class="replica-field" style="flex: 0 0 90px;">
+              <label for="itemCount">Item count</label>
+              <input type="number" step="1" min="0" id="itemCount" name="itemCount" value="<%= itemCount %>" placeholder="Optional" />
             </div>
           </div>
 
@@ -329,6 +350,22 @@
               <label for="buyerName">Billed to</label>
               <input type="text" id="buyerName" name="buyerName" value="<%= buyerName %>" placeholder="Your name, if printed" maxlength="200" />
             </div>
+          </div>
+
+          <div class="replica-field-row">
+            <div class="replica-field">
+              <label for="merchantPhone">Store phone</label>
+              <input type="text" id="merchantPhone" name="merchantPhone" value="<%= merchantPhone %>" placeholder="Optional" maxlength="40" />
+            </div>
+            <div class="replica-field">
+              <label for="cashierName">Cashier / server</label>
+              <input type="text" id="cashierName" name="cashierName" value="<%= cashierName %>" placeholder="Optional" maxlength="100" />
+            </div>
+          </div>
+
+          <div class="replica-field">
+            <label for="paymentReferenceNumber">Payment reference / auth number</label>
+            <input type="text" id="paymentReferenceNumber" name="paymentReferenceNumber" value="<%= paymentReferenceNumber %>" placeholder="Optional" maxlength="60" />
           </div>
 
           <div class="replica-hint">Keeping the tax number matters if you ever claim this back — a receipt without it can't support an input tax credit. Over $500, CRA also wants the buyer named on the receipt itself.</div>

@@ -1375,7 +1375,10 @@ const SCAN_DETAIL_FIELDS = ['merchantAddress', 'subtotal', 'tax', 'tip', 'curren
   // Added for tax substantiation -- a second registration number (QST/PST
   // alongside GST/HST), the buyer's name CRA wants above $500, the printed
   // time, and the customer's own note on what the spend was for.
-  'taxNumber2', 'buyerName', 'purchaseTimeText', 'businessPurpose'];
+  'taxNumber2', 'buyerName', 'purchaseTimeText', 'businessPurpose',
+  // The rest of what a till receipt routinely prints -- see the comment on
+  // these columns in prisma/schema.prisma.
+  'merchantPhone', 'cashierName', 'itemCount', 'taxLabel', 'paymentReferenceNumber'];
 
 function centsToInput(cents) {
   return cents != null ? (cents / 100).toFixed(2) : '';
@@ -1420,6 +1423,11 @@ router.post('/account/receipts/scan', requireCustomerAuth, handleReceiptScanUplo
     taxNumber2: extracted?.taxNumber2 || '',
     buyerName: extracted?.buyerName || '',
     purchaseTimeText: extracted?.timeText || '',
+    merchantPhone: extracted?.merchantPhone || '',
+    cashierName: extracted?.cashierName || '',
+    itemCount: extracted?.itemCount != null ? String(extracted.itemCount) : '',
+    taxLabel: extracted?.taxLabel || '',
+    paymentReferenceNumber: extracted?.paymentReferenceNumber || '',
     // Never extracted -- it isn't printed anywhere. Always starts blank for
     // the customer to fill in if they want to.
     businessPurpose: '',
@@ -1550,6 +1558,17 @@ router.post('/account/receipts/scan/confirm', requireCustomerAuth, async (req, r
         purchaseTimeText: req.body.purchaseTimeText ? req.body.purchaseTimeText.trim().slice(0, 20) : null,
         businessPurpose: req.body.businessPurpose ? req.body.businessPurpose.trim().slice(0, 300) : null,
         merchantAddress: req.body.merchantAddress ? req.body.merchantAddress.trim().slice(0, 200) : null,
+        merchantPhone: req.body.merchantPhone ? req.body.merchantPhone.trim().slice(0, 40) : null,
+        cashierName: req.body.cashierName ? req.body.cashierName.trim().slice(0, 100) : null,
+        // Same tolerant-of-junk-input reasoning as the money fields above --
+        // a blank or non-numeric edit must fall back to null, not crash the
+        // save or silently become 0.
+        itemCount: (() => {
+          const n = Number(req.body.itemCount);
+          return req.body.itemCount && Number.isInteger(n) && n >= 0 ? n : null;
+        })(),
+        taxLabel: req.body.taxLabel ? req.body.taxLabel.trim().slice(0, 60) : null,
+        paymentReferenceNumber: req.body.paymentReferenceNumber ? req.body.paymentReferenceNumber.trim().slice(0, 60) : null,
       },
     });
   } catch (err) {

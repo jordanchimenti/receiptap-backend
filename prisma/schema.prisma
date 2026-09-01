@@ -14,25 +14,25 @@ datasource db {
 // Merchant — a business using ReceipTap
 // ---------------------------------------------------------------------------
 model Merchant {
-  id              String    @id @default(cuid())
-  businessName    String
-  ownerName       String? // the person's own name, e.g. "Welcome back, Jordan" -- distinct from businessName
-  ownerPhone      String? // the person's own phone number, optional -- account/login contact info, not shown on a receipt (that's ReceiptTheme.phone, a separate field)
+  id                String    @id @default(cuid())
+  businessName      String
+  ownerName         String? // the person's own name, e.g. "Welcome back, Jordan" -- distinct from businessName
+  ownerPhone        String? // the person's own phone number, optional -- account/login contact info, not shown on a receipt (that's ReceiptTheme.phone, a separate field)
   // ISO 3166-1 alpha-2 of the country picked in the phone input's dropdown
   // (see lib/countryPhoneCodes.js) -- lets the dropdown remember what was
   // selected rather than resetting to the default on every page load.
   // Cosmetic pairing with ownerPhone only; never validated against it.
-  ownerPhoneCountry String? @default("CA")
-  profilePhotoUrl String? // the person's own avatar photo, shown top-right in the dashboard rail
-  email           String    @unique
-  passwordHash    String? // null for accounts created via "Sign in with Google" that never set a password
-  googleId        String?   @unique // set if they signed in with Google instead of email/password
-  appleId         String?   @unique // set if they signed in with Apple instead of email/password
-  microsoftId     String?   @unique // set if they signed in with Microsoft instead of email/password
-  createdAt       DateTime  @default(now())
-  isActive        Boolean   @default(true) // false once a merchant deactivates their own account
-  deactivatedAt   DateTime? // when isActive went false -- services/dataRetentionService.js needs this to compute the DEACTIVATED_MERCHANT_PURGE_DAYS window; there is no reactivation flow anywhere in the app, so this is never cleared once set
-  dataPurgedAt    DateTime? // set once purgeDeactivatedMerchants() has scrubbed this merchant -- prevents reprocessing an already-purged row on every future run
+  ownerPhoneCountry String?   @default("CA")
+  profilePhotoUrl   String? // the person's own avatar photo, shown top-right in the dashboard rail
+  email             String    @unique
+  passwordHash      String? // null for accounts created via "Sign in with Google" that never set a password
+  googleId          String?   @unique // set if they signed in with Google instead of email/password
+  appleId           String?   @unique // set if they signed in with Apple instead of email/password
+  microsoftId       String?   @unique // set if they signed in with Microsoft instead of email/password
+  createdAt         DateTime  @default(now())
+  isActive          Boolean   @default(true) // false once a merchant deactivates their own account
+  deactivatedAt     DateTime? // when isActive went false -- services/dataRetentionService.js needs this to compute the DEACTIVATED_MERCHANT_PURGE_DAYS window; there is no reactivation flow anywhere in the app, so this is never cleared once set
+  dataPurgedAt      DateTime? // set once purgeDeactivatedMerchants() has scrubbed this merchant -- prevents reprocessing an already-purged row on every future run
 
   // Business Settings ("Business Profile" / "Business Address") -- printed
   // on every receipt/PDF a customer receives (see views/receipt.ejs's
@@ -116,16 +116,16 @@ model Merchant {
   // business dashboard from their home screen.
   homeScreenAddedAt DateTime?
 
-  pucks              Puck[]
-  issuedReceipts     Transaction[]      @relation("IssuedReceipts")
-  collectedExpenses  Transaction[]      @relation("CollectedExpenses")
-  receiptTheme       ReceiptTheme?
-  loyaltyProgram     LoyaltyProgram?
-  loyaltyCards       LoyaltyCard[]
-  legalAcceptances   LegalAcceptance[]
-  purgeLogsInitiated PurgeLog[]
-  emailSuppressions  EmailSuppression[]
-  notifications      Notification[]
+  pucks                 Puck[]
+  issuedReceipts        Transaction[]          @relation("IssuedReceipts")
+  collectedExpenses     Transaction[]          @relation("CollectedExpenses")
+  receiptTheme          ReceiptTheme?
+  loyaltyProgram        LoyaltyProgram?
+  loyaltyCards          LoyaltyCard[]
+  legalAcceptances      LegalAcceptance[]
+  purgeLogsInitiated    PurgeLog[]
+  emailSuppressions     EmailSuppression[]
+  notifications         Notification[]
   merchantNotifications MerchantNotification[]
 
   // Affiliate program -- set if this merchant signed up via someone's
@@ -746,7 +746,7 @@ model Customer {
   // Merchant.ownerPhone's "about you" framing on the business side.
   phone        String?
   // See Merchant.ownerPhoneCountry's comment -- same pairing, same purpose.
-  phoneCountry String? @default("CA")
+  phoneCountry String?  @default("CA")
   createdAt    DateTime @default(now())
 
   // "Forgot password?" flow -- token is single-use (cleared on success) and
@@ -878,6 +878,20 @@ model ScannedReceipt {
   // timezone it means, and inventing one would turn a fact into a guess.
   // IRS section 274(d) substantiation for travel and meals asks for the time.
   purchaseTimeText String?
+
+  // The rest of what a till receipt routinely prints beyond the fields
+  // above -- added after a scan of a real Little Caesars receipt showed
+  // five printed fields with nowhere to go: a store phone number, the
+  // cashier's name, the item count line, the tax's printed rate/label
+  // (as opposed to taxNumber, which is the merchant's registration
+  // number, a different thing), and the card payment's reference/
+  // approval number. All read off the photo by the same extraction pass,
+  // all nullable and never guessed, same as everything else here.
+  merchantPhone          String?
+  cashierName            String?
+  itemCount              Int?
+  taxLabel               String? // e.g. "HST 13%", exactly as printed
+  paymentReferenceNumber String?
 
   // Why this was bought. NOT extracted -- it isn't on the paper. It's the
   // taxpayer's own note, and for US travel, meals, gifts and listed property

@@ -31,6 +31,9 @@ const RECEIPT_SCHEMA = {
   properties: {
     merchantName: { type: ['string', 'null'], description: 'The store or business name as printed.' },
     merchantAddress: { type: ['string', 'null'], description: 'Street address printed on the receipt, one line. Null if not shown.' },
+    merchantPhone: { type: ['string', 'null'], description: "The store's own phone number, exactly as printed (keep whatever formatting it uses). Null if not shown." },
+    cashierName: { type: ['string', 'null'], description: 'The cashier/server\'s name as printed (e.g. "Your cashier today is Bhavyakumar P.", "Served by: Maria"). Null if not shown.' },
+    itemCount: { type: ['integer', 'null'], description: 'The item count printed on the receipt itself (e.g. "Item Count: 5"), not a count you compute from lineItems. Null if the receipt does not print one.' },
     date: { type: ['string', 'null'], description: 'Purchase date as YYYY-MM-DD. Null if not legible.' },
     subtotal: { type: ['number', 'null'], description: 'Total before tax, plain number. Null if the receipt does not print one.' },
     tax: {
@@ -42,6 +45,7 @@ const RECEIPT_SCHEMA = {
         'them together into this one number -- do not report just one of them.',
     },
     tip: { type: ['number', 'null'], description: 'Tip or gratuity, plain number. Null if not printed.' },
+    taxLabel: { type: ['string', 'null'], description: 'The tax\'s own printed label and rate, e.g. "HST 13%", "GST 5%", "Sales Tax 8.25%". This is separate from taxNumber below -- taxLabel is what the tax is CALLED and its rate; taxNumber is the merchant\'s registration number. If more than one tax line was summed into the tax field above, join their labels, e.g. "GST 5% + PST 7%". Null if the receipt does not print a rate/label next to the tax amount.' },
     total: { type: ['number', 'null'], description: 'The final amount paid, plain number. Null if not legible.' },
     currency: { type: ['string', 'null'], description: 'Three-letter code if the receipt makes it clear (CAD, USD). Null if it does not.' },
     taxNumber: { type: ['string', 'null'], description: "The merchant's PRIMARY tax registration number exactly as printed, including its label (e.g. 'GST/HST 137466199 RT 0001'). The caller displays this value as-is with no label of its own added -- leaving the label out would show a bare number with no context, and a wrong label (e.g. assuming GST/HST when the receipt actually printed a VAT or ABN number) would misdescribe it. Null if absent." },
@@ -49,6 +53,7 @@ const RECEIPT_SCHEMA = {
     buyerName: { type: ['string', 'null'], description: "The customer's or purchaser's name, if the receipt prints one (common on invoices, rare on retail till receipts). Not the merchant's name. Null if absent." },
     time: { type: ['string', 'null'], description: "Time of day exactly as printed, e.g. '18:42:29' or '6:42 PM'. Null if not shown." },
     paymentMethod: { type: ['string', 'null'], description: 'Exactly what the receipt prints for how it was paid, e.g. "Visa •••• 6123" or "Cash". Null if not shown.' },
+    paymentReferenceNumber: { type: ['string', 'null'], description: 'The card payment\'s own reference/approval/authorization number, if printed separately from the card brand and last-4 digits (e.g. a line reading "Reference Number: 456" or "Auth Code: 041992"). Not the store\'s receipt/transaction number -- that goes in receiptNumber below. Null if not shown.' },
     receiptNumber: { type: ['string', 'null'], description: "The store's own receipt/transaction/reference number, exactly as printed, including its own printed label (e.g. 'TRANS #: 716634'). The caller displays this value as-is with no label of its own added, so leaving the label out would show a bare number with no context. Null if absent." },
     isPreauth: {
       type: ['boolean', 'null'],
@@ -73,14 +78,21 @@ const RECEIPT_SCHEMA = {
         properties: {
           description: { type: 'string' },
           amount: { type: 'number' },
+          quantity: { type: ['integer', 'null'], description: 'The printed quantity for this line, e.g. the "2" in "2  2 Dips Special". Null if the receipt shows no quantity or it is 1 and not printed.' },
+          subItems: {
+            type: ['array', 'null'],
+            description: 'Sub-lines printed under this item with no price of their own -- modifiers, ingredients, or included components (e.g. under "2 Dips Special": "Caesar Dip", "Creamy Garlic Caesar Dip"). Null or empty if the item has none.',
+            items: { type: 'string' },
+          },
         },
-        required: ['description', 'amount'],
+        required: ['description', 'amount', 'quantity', 'subItems'],
         additionalProperties: false,
       },
     },
   },
-  required: ['merchantName', 'merchantAddress', 'date', 'time', 'subtotal', 'tax', 'tip', 'total',
-             'currency', 'taxNumber', 'taxNumber2', 'buyerName', 'paymentMethod', 'receiptNumber',
+  required: ['merchantName', 'merchantAddress', 'merchantPhone', 'cashierName', 'itemCount', 'date',
+             'time', 'subtotal', 'tax', 'taxLabel', 'tip', 'total', 'currency', 'taxNumber',
+             'taxNumber2', 'buyerName', 'paymentMethod', 'paymentReferenceNumber', 'receiptNumber',
              'isPreauth', 'category', 'lineItems'],
   additionalProperties: false,
 };
@@ -98,6 +110,10 @@ Rules that matter more than completeness:
 - buyerName is the person or company who BOUGHT, never the store. Most till receipts do not print one; leave it null rather than repeating the merchant.
 - time is copied as printed. Do not convert it, and do not infer a timezone.
 - isPreauth is true only for an explicit printed marking like "PREAUTH RECEIPT ONLY" -- never inferred from the merchant type or line items alone.
+- taxLabel is what the tax is CALLED and its rate (e.g. "HST 13%"), read from right next to the tax amount. taxNumber is a completely different thing -- the merchant's own tax registration number, often printed elsewhere on the receipt. Do not confuse the two or copy one into the other.
+- itemCount is only the number the receipt itself prints as a count (e.g. "Item Count: 5") -- never computed by counting lineItems yourself.
+- paymentReferenceNumber is the payment's own reference/approval/authorization number, printed near the card brand and last-4 digits but as its own line. Do not reuse the card's last 4 digits or the receiptNumber for this.
+- For each line item, quantity is only set when the receipt prints one next to that item; leave it null rather than assuming 1. subItems are lines printed under an item with no price of their own (modifiers, included components) -- leave null or empty when there are none, and never invent one that isn't printed.
 - If this is not a receipt at all, set merchantName to null.`;
 
 // Money on receipts is decimal; everything in this project is stored in cents.
@@ -171,9 +187,15 @@ async function extractReceiptData(source, mimetype) {
     return {
       merchantName: cleanString(parsed.merchantName, 200),
       merchantAddress: cleanString(parsed.merchantAddress, 200),
+      merchantPhone: cleanString(parsed.merchantPhone, 40),
+      cashierName: cleanString(parsed.cashierName, 100),
+      itemCount: typeof parsed.itemCount === 'number' && Number.isInteger(parsed.itemCount) && parsed.itemCount >= 0
+        ? parsed.itemCount
+        : null,
       date: parsed.date && !Number.isNaN(Date.parse(parsed.date)) ? parsed.date : null,
       subtotalCents: toCents(parsed.subtotal),
       taxCents: toCents(parsed.tax),
+      taxLabel: cleanString(parsed.taxLabel, 60),
       tipCents: toCents(parsed.tip),
       totalCents: toCents(parsed.total),
       // Three letters, uppercased -- anything else is a misread.
@@ -185,13 +207,25 @@ async function extractReceiptData(source, mimetype) {
       // paper never says which timezone it means.
       timeText: cleanString(parsed.time, 20),
       paymentMethod: cleanString(parsed.paymentMethod, 60),
+      paymentReferenceNumber: cleanString(parsed.paymentReferenceNumber, 60),
       receiptNumber: cleanString(parsed.receiptNumber, 60),
       // Shown as a one-time warning on the review screen, never persisted --
       // its only job is making sure the customer notices the total might not
       // be final before they save it, not tracking preauth status forever.
       isPreauth: parsed.isPreauth === true,
       category: CATEGORIES.includes(parsed.category) ? parsed.category : null,
-      lineItems: Array.isArray(parsed.lineItems) ? parsed.lineItems.slice(0, 50) : [],
+      lineItems: Array.isArray(parsed.lineItems)
+        ? parsed.lineItems.slice(0, 50).map((item) => ({
+            description: cleanString(item.description, 200) || '',
+            amount: typeof item.amount === 'number' && Number.isFinite(item.amount) ? item.amount : 0,
+            quantity: typeof item.quantity === 'number' && Number.isInteger(item.quantity) && item.quantity > 0
+              ? item.quantity
+              : null,
+            subItems: Array.isArray(item.subItems)
+              ? item.subItems.map((s) => cleanString(s, 200)).filter(Boolean).slice(0, 20)
+              : [],
+          }))
+        : [],
     };
   } catch (err) {
     console.error('[scan-receipt] extraction failed:', err.message);

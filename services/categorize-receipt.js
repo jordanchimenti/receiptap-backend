@@ -29,6 +29,13 @@ const CATEGORIES = [
  * a typical manufacturer/store warranty is a fact about the product, not the
  * buyer's circumstances, so the model IS allowed to estimate it directly (see
  * lib/receiptWarranty.js for how a customer's own correction still wins).
+ *
+ * lineItems accepts either shape this app stores: a tapped Transaction's
+ * `{ name, quantity, unitPrice, total }` (from the POS) or a scanned
+ * ScannedReceipt's `{ description, amount, quantity, subItems }` (from the AI
+ * extraction pass, see services/scanReceiptService.js) -- the two were never
+ * unified into one shape, so this reads whichever label field the item
+ * actually has instead of assuming `name`.
  */
 async function categorizeTransaction({ merchantName, lineItems }) {
   if (!process.env.ANTHROPIC_API_KEY) {
@@ -36,7 +43,14 @@ async function categorizeTransaction({ merchantName, lineItems }) {
     return null;
   }
 
-  const itemsSummary = lineItems.map((i) => `${i.quantity}x ${i.name}`).join(', ');
+  const itemsSummary = lineItems
+    .map((i) => {
+      const label = i.name || i.description;
+      if (!label) return null;
+      return i.quantity ? `${i.quantity}x ${label}` : label;
+    })
+    .filter(Boolean)
+    .join(', ');
 
   try {
     const response = await anthropic.messages.create({

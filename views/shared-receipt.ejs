@@ -49,11 +49,13 @@
 
     <div class="row"><span class="k">Total</span><span class="v"><%= receipt.currency ? receipt.currency + ' ' : '$' %><%= money(receipt.total) %></span></div>
     <% if (receipt.subtotal != null) { %><div class="row"><span class="k">Subtotal</span><span class="v">$<%= money(receipt.subtotal) %></span></div><% } %>
-    <% if (receipt.tax != null) { %><div class="row"><span class="k">Tax</span><span class="v">$<%= money(receipt.tax) %></span></div><% } %>
+    <% if (receipt.tax != null) { %><div class="row"><span class="k"><%= receipt.taxLabel || 'Tax' %></span><span class="v">$<%= money(receipt.tax) %></span></div><% } %>
     <% if (receipt.taxNumber) { %><div class="row"><span class="k">Tax number</span><span class="v"><%= receipt.taxNumber %></span></div><% } %>
     <% if (receipt.taxNumber2) { %><div class="row"><span class="k">Second tax no.</span><span class="v"><%= receipt.taxNumber2 %></span></div><% } %>
+    <% if (receipt.buyerName) { %><div class="row"><span class="k">Billed to</span><span class="v"><%= receipt.buyerName %></span></div><% } %>
     <% if (receipt.receiptNumber) { %><div class="row"><span class="k">Receipt no.</span><span class="v"><%= receipt.receiptNumber %></span></div><% } %>
     <% if (receipt.paymentMethod) { %><div class="row"><span class="k">Paid with</span><span class="v"><%= receipt.paymentMethod %></span></div><% } %>
+    <% if (receipt.paymentReferenceNumber) { %><div class="row"><span class="k">Payment reference</span><span class="v"><%= receipt.paymentReferenceNumber %></span></div><% } %>
 
     <% if (receipt.businessPurpose) { %>
       <div class="purpose">“<%= receipt.businessPurpose %>”</div>

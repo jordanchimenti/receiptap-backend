@@ -1,0 +1,41 @@
+<!-- views/account-complete-profile.ejs -->
+<!-- One-time step for a new OAuth signup whose provider didn't supply a
+     name (routes/customer-account.js's flagIfNameMissing). Reached only via
+     the wallet-wide gate in server.js, which keeps bouncing every other
+     /account/* page back here while req.session.pendingNameCompletion is
+     true. Same auth-shell styling as account-login.ejs/account-signup.ejs. -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Add Your Name - ReceipTap</title>
+  <link rel="stylesheet" href="/css/receiptap.css" />
+  <%- include('partials/wallet-dark-theme') %>
+  <%- include('partials/auth-card-styles') %>
+</head>
+<body>
+  <div class="auth-shell">
+    <div class="auth-card">
+      <div class="logo-chip"><img src="/images/receiptap-logo.png" alt="ReceipTap" /></div>
+      <div class="w-eyebrow">One more thing</div>
+      <h1 class="auth-title">What's your name?</h1>
+      <p class="auth-sub">
+        Receipts over $500 need the buyer named on them to support a tax
+        claim (CRA's own rule) — this is what we'll put there. First name
+        is enough.
+      </p>
+
+      <% if (error) { %><div class="w-error" style="display:block;"><%= error %></div><% } %>
+
+      <form method="POST" action="/account/complete-profile">
+        <div class="auth-field">
+          <div class="auth-field-row"><label for="name">Your name</label></div>
+          <input type="text" id="name" name="name" placeholder="First name is fine" required maxlength="200" autofocus />
+        </div>
+        <button class="auth-pill-btn" type="submit">Continue</button>
+      </form>
+    </div>
+  </div>
+</body>
+</html>

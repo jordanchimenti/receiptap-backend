@@ -57,9 +57,12 @@ async function autoSaveReceiptForKnownShopper(transaction, { onLinked, posCustom
 
     if (!shopper) return null;
 
+    // Same suggested-buyer-name reasoning as services/claimReceipt.js --
+    // this is the OTHER path that first sets customerId on a Transaction,
+    // so it needs the same one-time fill.
     await prisma.transaction.update({
       where: { id: transaction.id },
-      data: { customerId: shopper.id, autoSavedViaRecognition: true },
+      data: { customerId: shopper.id, autoSavedViaRecognition: true, buyerName: shopper.name || null },
     });
 
     // Everything a manual save would have done, so an auto-saved receipt is a

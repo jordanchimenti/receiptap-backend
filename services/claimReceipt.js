@@ -36,11 +36,20 @@ async function claimReceiptForShopper(transactionId, shopperId) {
   if (transaction.customerId === shopperId) return 'already-yours';
   if (transaction.customerId) return 'owned-by-other';
 
+  // Suggests the buyer's own wallet name as the receipt's buyer name -- a
+  // tapped receipt has no other source for one (see the schema comment on
+  // Transaction.buyerName), and CRA wants it printed once a purchase
+  // reaches $500. Only a suggestion: this fires once, right when the
+  // receipt is first claimed, so it can never overwrite a correction the
+  // customer already typed in (POST /account/receipts/tapped/:id/buyer-name)
+  // -- buyerName is always null before this point.
+  const shopper = await prisma.customer.findUnique({ where: { id: shopperId }, select: { name: true } });
+
   // Only claims rows that are still unclaimed, so two requests racing on the
   // same receipt can't both win -- the second updates 0 rows.
   const result = await prisma.transaction.updateMany({
     where: { id: transaction.id, customerId: null },
-    data: { customerId: shopperId },
+    data: { customerId: shopperId, buyerName: shopper?.name || null },
   });
   if (result.count === 0) return 'owned-by-other';
 

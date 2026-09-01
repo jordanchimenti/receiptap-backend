@@ -86,31 +86,37 @@ locally.
 
 ---
 
-## Tapped receipts can't record the buyer's name (CRA's $500 rule)
+## Tapped receipts can't record the buyer's name (CRA's $500 rule) — RESOLVED
 
 **Where:** `Transaction` model (`prisma/schema.prisma`) vs `ScannedReceipt`;
 `lib/receiptMissingFields.js`'s `missingSubstantiationFields()`.
 
-**Issue:** CRA requires the buyer be named on the receipt itself once a
-purchase reaches $500 (raised from $150 by SOR/2021-63, effective April 20,
-2021), for an input tax credit claim. `ScannedReceipt` has a `buyerName`
-field (read off the photo by the AI extraction pass, or typed in by the
-customer) and the substantiation check flags a scanned receipt over $500
-with no buyer name on file. `Transaction` (a tapped/POS receipt) has no
-`buyerName` field at all -- there's nowhere on a POS webhook payload to put
-one, and nothing in the product lets a customer add one after the fact,
-unlike `businessPurpose` (see the commit that added
-`POST /account/receipts/tapped/:id/purpose`). So `missingSubstantiationFields('tapped', ...)`
-deliberately skips this check -- not because tapped receipts over $500 are
-exempt from the CRA rule, but because there's no way, structurally, for one
-to ever pass it.
+**Status: RESOLVED** (2026-09-01). Added `Transaction.buyerName`. Since a POS
+webhook has no way to ask for one, it's filled automatically with the
+shopper's own wallet profile name (`Customer.name`) the moment they claim
+the receipt -- both claim paths write it (`services/claimReceipt.js` for a
+tap/manual save, `services/receiptAutoSave.js` for card-recognition
+auto-save), each with a one-time fetch of the shopper's name right before
+the same update that sets `customerId`, so it can never overwrite a
+correction made after the fact. Editable afterward via
+`POST /account/receipts/tapped/:id/buyer-name`, same shape as
+`businessPurpose`, shown as a "Billed to" card on `views/receipt.ejs`
+gated on `isOwner`. Null if the shopper's profile had no name set at claim
+time (email/password signup collects no name at all) and they haven't
+typed one into Settings or the receipt page since.
+
+`missingSubstantiationFields('tapped', ...)` now runs the same $500
+buyer-name check `'scanned'` already had, instead of skipping it
+unconditionally. The tax export's `exportDetailFor()` was also silently
+hardcoding `buyerName: null` for every tapped row (`kind === 'scanned' ?
+row.buyerName : null`) -- fixed to read the real field for both kinds.
 
 **Found while:** enriching the customer tax export (CSV/PDF) with per-receipt
 substantiation gaps, which is what surfaced that the two receipt kinds'
-"missing" checklists aren't actually symmetric.
+"missing" checklists weren't actually symmetric.
 
-**Needed:** either a `buyerName` field on `Transaction` with a customer-editable
-UI (same shape as the `businessPurpose` addition), or an explicit acceptance
-that tapped receipts over $500 can never fully substantiate an ITC claim on
-their own and the export/receipt page should say so plainly rather than
-silently omitting the check. Not fixed here -- flagged only.
+**Still a real limit:** this only closes the gap for a shopper who has set
+a name somewhere (OAuth signup auto-fills it; email/password signup does
+not, and it's a manual field in Settings). A blank profile at claim time
+still means a blank buyer name until the shopper fills it in themselves —
+same manual-entry reality `businessPurpose` already has.

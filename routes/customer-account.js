@@ -280,7 +280,15 @@ router.get('/account/signup', (req, res) => {
 // --- Signup / login (email + password) --------------------------------------
 
 router.post('/account/signup', async (req, res) => {
-  const { email, password, confirmPassword } = req.body;
+  const { name, email, password, confirmPassword } = req.body;
+  // Required as of 2026-09-01 (founder decision) -- see flagIfNameMissing's
+  // comment below for why a wallet account needs one at all. This path
+  // collects it directly rather than falling back to the
+  // /account/complete-profile gate the OAuth paths use when their provider
+  // doesn't supply one.
+  const trimmedName = typeof name === 'string' ? name.trim().slice(0, 200) : '';
+  if (!trimmedName) return res.status(400).json({ error: 'Please enter your name.' });
+
   // Client-side match check (views/account-signup.ejs) is UX only -- this
   // is the real gate, same reasoning as the merchant signup form's
   // equivalent check in routes/auth.js.
@@ -290,7 +298,7 @@ router.post('/account/signup', async (req, res) => {
   if (existing) return res.status(400).json({ error: 'Account already exists, log in instead' });
 
   const passwordHash = await bcrypt.hash(password, 10);
-  const customer = await prisma.customer.create({ data: { email: email.toLowerCase(), passwordHash } });
+  const customer = await prisma.customer.create({ data: { email: email.toLowerCase(), passwordHash, name: trimmedName } });
   // The signup page's passive "By continuing, you agree..." link (see
   // account-signup.ejs) is the consent -- this is what makes that
   // agreement provable later, same as every other signup path below.
@@ -309,6 +317,25 @@ router.post('/account/login', async (req, res) => {
   req.session.customerId = customer.id;
   res.json({ success: true });
 });
+
+// A wallet account now requires a name (founder decision, 2026-09-01) --
+// a first name is enough to satisfy CRA's buyer-name rule on a $500+
+// receipt (see Transaction.buyerName's schema comment), it just has to
+// actually be there. Email/password signup collects it directly in its own
+// form and never reaches this function. Google/Apple/Microsoft usually
+// supply one, but not always -- Apple only ever sends name data on a
+// person's FIRST authorization with this app, never again, and Microsoft's
+// only comes through if the account has one set. When a NEW signup lands
+// here with no name, the wallet-wide gate in server.js catches the very
+// next request and routes them to /account/complete-profile before they
+// can do anything else, carrying `next` through the session so they land
+// where they were headed once they've entered one.
+function flagIfNameMissing(req, customer, next) {
+  if (!customer.name) {
+    req.session.pendingNameCompletion = true;
+    req.session.pendingNameCompletionNext = next || '/account/receipts';
+  }
+}
 
 // --- Sign in with Google (doubles as signup — one step for both) ------------
 // Used by both the login page and the signup page: if the Google account's
@@ -348,6 +375,7 @@ router.post('/account/google', async (req, res) => {
   } else {
     customer = await prisma.customer.create({ data: { email, googleId: payload.sub, name: payload.name || null } });
     await recordShopperLegalAcceptances(customer.id, req);
+    flagIfNameMissing(req, customer);
   }
 
   req.session.customerId = customer.id;
@@ -413,6 +441,7 @@ router.post('/account/apple/callback', async (req, res) => {
     } else {
       customer = await prisma.customer.create({ data: { email, appleId: identity.sub, name } });
       await recordShopperLegalAcceptances(customer.id, req);
+      flagIfNameMissing(req, customer, parsedState.redirect);
     }
 
     req.session.customerId = customer.id;
@@ -449,10 +478,14 @@ router.get('/account/microsoft/callback', async (req, res) => {
     // Google handler above.
     let customer = await prisma.customer.findUnique({ where: { email } });
     if (customer) {
-      customer = await prisma.customer.update({ where: { id: customer.id }, data: { microsoftId: identity.sub } });
+      customer = await prisma.customer.update({
+        where: { id: customer.id },
+        data: { microsoftId: identity.sub, name: identity.name || undefined },
+      });
     } else {
-      customer = await prisma.customer.create({ data: { email, microsoftId: identity.sub } });
+      customer = await prisma.customer.create({ data: { email, microsoftId: identity.sub, name: identity.name || null } });
       await recordShopperLegalAcceptances(customer.id, req);
+      flagIfNameMissing(req, customer, parsedState.redirect);
     }
 
     req.session.customerId = customer.id;
@@ -460,6 +493,31 @@ router.get('/account/microsoft/callback', async (req, res) => {
   } catch (err) {
     renderCustomerOAuthError(res, err);
   }
+});
+
+// One-time step for a new OAuth signup whose provider didn't supply a
+// name (see flagIfNameMissing above). The wallet-wide gate in server.js
+// is what actually routes someone here -- req.session.pendingNameCompletion
+// stays true, and every other /account/* page keeps bouncing back to this
+// one, until they submit a name below.
+router.get('/account/complete-profile', requireCustomerAuth, (req, res) => {
+  if (!req.session.pendingNameCompletion) return res.redirect('/account/receipts');
+  res.render('account-complete-profile', { error: null });
+});
+
+router.post('/account/complete-profile', requireCustomerAuth, async (req, res) => {
+  if (!req.session.pendingNameCompletion) return res.redirect('/account/receipts');
+
+  const name = typeof req.body.name === 'string' ? req.body.name.trim().slice(0, 200) : '';
+  if (!name) {
+    return res.render('account-complete-profile', { error: 'Please enter your name to continue.' });
+  }
+
+  await prisma.customer.update({ where: { id: req.session.customerId }, data: { name } });
+  const next = req.session.pendingNameCompletionNext || '/account/receipts';
+  delete req.session.pendingNameCompletion;
+  delete req.session.pendingNameCompletionNext;
+  res.redirect(next);
 });
 
 // --- "Forgot password?" flow -------------------------------------------------
@@ -1140,7 +1198,7 @@ function exportDetailFor(kind, row) {
     businessPurpose: row.businessPurpose || null,
     taxNumbers: formatTaxNumbers(kind, row),
     address: formatAddress(kind, row),
-    buyerName: kind === 'scanned' ? row.buyerName || null : null,
+    buyerName: row.buyerName || null,
     purchaseTimeText: kind === 'scanned' ? row.purchaseTimeText || null : null,
     receiptNumber: kind === 'scanned' ? row.receiptNumber || null : row.orderNumber || null,
     missing: missingSubstantiationFields(kind, row),
@@ -1781,6 +1839,24 @@ router.post('/account/receipts/tapped/:id/purpose', requireCustomerAuth, async (
   await prisma.transaction.update({
     where: { id: transaction.id },
     data: { businessPurpose: note || null },
+  });
+  res.redirect('/receipt/' + transaction.id);
+});
+
+// Lets the claimant correct or clear the buyer name services/claimReceipt.js
+// / services/receiptAutoSave.js suggested from their wallet profile at claim
+// time -- their profile might have been blank then, wrong, or they'd rather
+// print a different name (e.g. a business name) on this specific receipt.
+// Same ownership/gating reasoning as the /purpose route above.
+router.post('/account/receipts/tapped/:id/buyer-name', requireCustomerAuth, async (req, res) => {
+  const transaction = await prisma.transaction.findUnique({ where: { id: req.params.id } });
+  if (!transaction || transaction.customerId !== req.session.customerId) {
+    return res.redirect('/account/receipts');
+  }
+  const name = typeof req.body.buyerName === 'string' ? req.body.buyerName.trim().slice(0, 200) : '';
+  await prisma.transaction.update({
+    where: { id: transaction.id },
+    data: { buyerName: name || null },
   });
   res.redirect('/receipt/' + transaction.id);
 });

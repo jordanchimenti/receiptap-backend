@@ -215,6 +215,23 @@ app.use(require('./routes/pdf-export'));              // /dashboard/receipts/pdf
 app.use(require('./routes/theme-settings'));       // /dashboard/settings/receipt (Google review link, branding)
 app.use(require('./routes/account-settings'));    // /dashboard/settings/account (business info, password, POS disconnect, deactivate)
 app.use(require('./routes/email-capture'));         // email/Google capture gate before receipt save, merchant email list
+// A new wallet signup whose OAuth provider didn't supply a name (see
+// flagIfNameMissing in routes/customer-account.js) gets bounced to
+// /account/complete-profile until they enter one -- a session-only flag,
+// not a database column, so it only ever fires for the signup that just
+// set it and never retroactively gates an existing account that predates
+// this feature. Same exclusion list as the legal gate below, plus the
+// completion page itself.
+const COMPLETE_PROFILE_GATE_EXCLUDED_PREFIXES = [
+  '/business', '/login', '/signup', '/logout', '/forgot-password', '/reset-password',
+  '/google', '/apple', '/microsoft', '/complete-profile',
+];
+app.use('/account', (req, res, next) => {
+  if (COMPLETE_PROFILE_GATE_EXCLUDED_PREFIXES.some((p) => req.path.startsWith(p))) return next();
+  if (!req.session?.customerId || !req.session.pendingNameCompletion) return next();
+  return res.redirect('/account/complete-profile');
+});
+
 // Wallet mirror of the /dashboard legal re-acceptance gate above. Excludes
 // /account/business (that surface has its own copy of this same gate,
 // under the merchant document types), and the handful of paths a

@@ -345,6 +345,19 @@ model Transaction {
   // and the gated section on views/receipt.ejs) -- null until they do.
   businessPurpose String?
 
+  // The buyer's name. NOT on any POS payload -- a register has no way to
+  // ask -- so this is filled at the moment a shopper claims the receipt
+  // (services/claimReceipt.js, services/receiptAutoSave.js) with their own
+  // wallet profile name (Customer.name) as a suggestion, and editable
+  // afterward the same way businessPurpose is (see
+  // POST /account/receipts/tapped/:id/buyer-name). Null if the shopper's
+  // profile had no name set at claim time and they haven't typed one since.
+  // CRA requires the buyer be named once a purchase reaches $500 (see
+  // lib/receiptMissingFields.js) -- ScannedReceipt.buyerName had this from
+  // the start (read off the photo, or typed in); a tapped receipt never had
+  // anywhere to put one until now.
+  buyerName String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

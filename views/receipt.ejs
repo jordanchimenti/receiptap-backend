@@ -396,6 +396,30 @@
         something was bought; the register can't ask. Same field, same
         section as ScannedReceipt's, on views/scanned-receipt.ejs. %>
     <% if (typeof isOwner !== 'undefined' && isOwner) { %>
+      <%# Suggested from the shopper's wallet profile name at the moment they
+          claimed this receipt (services/claimReceipt.js,
+          services/receiptAutoSave.js) -- editable here the same way
+          businessPurpose is, since the profile might have been blank then,
+          wrong, or they'd rather print a different name on this receipt.
+          CRA wants the buyer named once a purchase reaches $500 (see
+          lib/receiptMissingFields.js); shown regardless of amount, same as
+          ScannedReceipt's equivalent field, so it's there before it's needed. %>
+      <div class="warranty-card purpose-card">
+        <div class="warranty-title">Billed to</div>
+        <% if (transaction.buyerName) { %>
+          <div class="purpose-note"><%= transaction.buyerName %></div>
+        <% } else { %>
+          <div class="purpose-empty">
+            No name on file. Over $500, CRA wants the buyer named on the receipt
+            itself for it to support an input tax credit claim.
+          </div>
+        <% } %>
+        <form method="POST" action="/account/receipts/tapped/<%= transaction.id %>/buyer-name">
+          <input type="text" name="buyerName" value="<%= transaction.buyerName || '' %>"
+                 placeholder="Your name" maxlength="200" />
+          <button type="submit" class="primary">Save name</button>
+        </form>
+      </div>
       <div class="warranty-card purpose-card">
         <div class="warranty-title">What it was for</div>
         <% if (transaction.businessPurpose) { %>

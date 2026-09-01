@@ -57,7 +57,10 @@ async function verifyIdToken(idToken) {
   }
   // preferred_username is the fallback for work/school accounts that
   // don't always populate `email` on the id_token.
-  return { sub: payload.sub, email: payload.email || payload.preferred_username };
+  // name comes from the `profile` scope already requested above -- it was
+  // sitting on the token unused until routes/customer-account.js needed a
+  // display name for new wallet signups.
+  return { sub: payload.sub, email: payload.email || payload.preferred_username, name: payload.name || null };
 }
 
 module.exports = { buildAuthorizeUrl, exchangeCodeForToken, verifyIdToken };

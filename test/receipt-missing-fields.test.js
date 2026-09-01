@@ -63,7 +63,19 @@ test('a tapped receipt checks its own tax-number and payment-method fields', () 
   );
 });
 
-test('a tapped receipt is never checked for a buyer name -- Transaction has no such field', () => {
-  const transaction = { sellerGstHstNumber: 'x', paymentMethod: 'x', total: 999999 };
+test('a tapped receipt over $500 with no buyer name is flagged, same as a scanned one', () => {
+  const transaction = { sellerGstHstNumber: 'x', paymentMethod: 'x', buyerName: null, total: 999999 };
+  assert.deepStrictEqual(missingSubstantiationFields('tapped', transaction), [
+    "the buyer's name (CRA asks for it over $500)",
+  ]);
+});
+
+test('a tapped receipt with a buyer name on file is not flagged, regardless of amount', () => {
+  const transaction = { sellerGstHstNumber: 'x', paymentMethod: 'x', buyerName: 'Jordan C.', total: 999999 };
+  assert.deepStrictEqual(missingSubstantiationFields('tapped', transaction), []);
+});
+
+test('a tapped receipt under $500 is not flagged for a missing buyer name', () => {
+  const transaction = { sellerGstHstNumber: 'x', paymentMethod: 'x', buyerName: null, total: 49999 };
   assert.deepStrictEqual(missingSubstantiationFields('tapped', transaction), []);
 });

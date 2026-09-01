@@ -7,30 +7,33 @@ actual code, not inferred.
 
 ---
 
-## `routes/pdf-export.js` silently truncates at 200 receipts
+## `routes/pdf-export.js` silently truncates at 200 receipts — RESOLVED
 
 **Where:** `GET /dashboard/receipts/pdf-export` (merchant's own bulk PDF
 export), `routes/pdf-export.js`.
 
-**Issue:** `MAX_PDF_EXPORT = 200` is applied as a plain Prisma `take: 200` on
-the transaction query, with `orderBy: { createdAt: 'desc' }`. If a merchant's
-date range matches more than 200 transactions, the export silently returns
-only the 200 most recent and says nothing about the rest -- no count shown,
-no warning in the response, no indication in the downloaded ZIP that
-anything was left out. A merchant pulling records for their own bookkeeping
-or an audit would have no way to know their export is incomplete.
+**Status: RESOLVED** (2026-09-01). The route now runs a separate
+`prisma.transaction.count({ where })` before the capped fetch and, if the
+real total exceeds `MAX_PDF_EXPORT` (200), rejects with `400` and the
+actual count: *"This date range matches 201 receipts, which is more than
+the 200-receipt export limit. Narrow the date range and try again."*
+Chosen over silently showing a truncated count, since bulk PDF generation
+is expensive (a real Playwright render per receipt via
+`generateReceiptPDFs`) -- better to ask for a narrower range up front than
+spend that cost on an incomplete result. Verified end-to-end against a
+real (temporary) merchant account: 201 matching receipts rejects with the
+exact count; 200 passes through to generation.
 
-**Found while:** building the shopper-side ZIP export
-(`/account/receipts/export/zip`), which intentionally does the opposite --
-rejects with a clear message and asks the shopper to narrow their date range
-rather than truncating silently, since silent gaps are a worse failure in a
-document meant to support a tax claim.
-
-**Needed:** either show the truncation (e.g. "showing the 200 most recent of
-312 matching receipts, narrow your date range for the rest") or reject with
-a clear message the same way the shopper-side export now does. Not fixed
-here -- flagged only, per the same reasoning as the retention-purge bugs in
-`services/dataRetentionService.js` (real, confirmed, deliberately deferred).
+**Correction to this entry's original text:** it referenced a
+"shopper-side ZIP export (`/account/receipts/export/zip`)" as the
+already-correct reference implementation this route should match. That
+route doesn't exist in the current codebase -- the actual shopper-side
+export (`GET /account/receipts/export/pdf`) produces one consolidated
+report PDF, not a ZIP of individual receipt PDFs, and has no row-count
+cap of its own. Either the referenced route was renamed/removed since
+this was written, or the description was inaccurate when written. Worth
+knowing if the shopper export is ever asked to handle very large exports:
+it currently has no equivalent guardrail at all, capped or otherwise.
 
 ---
 

@@ -35,15 +35,36 @@ router.get('/dashboard/receipts/pdf-export', requireAuth, async (req, res) => {
       : {}),
   };
 
+  // Counted separately from the fetch below (which is capped) so the
+  // rejection message can say the real number instead of just "over 200" --
+  // and so a range that matches exactly 200 isn't wrongly treated as an
+  // overflow. Previously this route fetched with `take: MAX_PDF_EXPORT` and
+  // said nothing else: a merchant pulling records for their own bookkeeping
+  // or an audit had no way to know their export was silently incomplete.
+  // Bulk PDF generation is expensive (a real Playwright render per receipt,
+  // see generateReceiptPDFs), so this rejects and asks for a narrower range
+  // rather than truncating -- same reasoning the MAX_PDF_EXPORT guardrail
+  // itself already states.
+  const matchingCount = await prisma.transaction.count({ where });
+
+  if (matchingCount === 0) {
+    return res.status(404).send('No receipts found in that date range.');
+  }
+
+  if (matchingCount > MAX_PDF_EXPORT) {
+    return res
+      .status(400)
+      .send(
+        `This date range matches ${matchingCount} receipts, which is more than the ${MAX_PDF_EXPORT}-receipt export limit. ` +
+          'Narrow the date range and try again.'
+      );
+  }
+
   const transactions = await prisma.transaction.findMany({
     where,
     orderBy: { createdAt: 'desc' },
     take: MAX_PDF_EXPORT,
   });
-
-  if (transactions.length === 0) {
-    return res.status(404).send('No receipts found in that date range.');
-  }
 
   let pdfs;
   try {

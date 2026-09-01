@@ -215,6 +215,25 @@ app.use(require('./routes/pdf-export'));              // /dashboard/receipts/pdf
 app.use(require('./routes/theme-settings'));       // /dashboard/settings/receipt (Google review link, branding)
 app.use(require('./routes/account-settings'));    // /dashboard/settings/account (business info, password, POS disconnect, deactivate)
 app.use(require('./routes/email-capture'));         // email/Google capture gate before receipt save, merchant email list
+// Wallet mirror of the /dashboard legal re-acceptance gate above. Excludes
+// /account/business (that surface has its own copy of this same gate,
+// under the merchant document types), and the handful of paths a
+// signed-out visitor or someone mid-auth-flow needs to reach regardless --
+// most importantly /logout, since a stale customer must always be able to
+// sign out even if they'd rather not review the new wording right now.
+// Without that exclusion, the reaccept page's own "Log out instead" button
+// would loop back into this same gate instead of actually logging out.
+const { requireCurrentShopperLegalAcceptance } = require('./middleware/shopperLegalReacceptance');
+const SHOPPER_LEGAL_GATE_EXCLUDED_PREFIXES = [
+  '/business', '/login', '/signup', '/logout', '/forgot-password', '/reset-password',
+  '/google', '/apple', '/microsoft',
+];
+app.use('/account', (req, res, next) => {
+  if (SHOPPER_LEGAL_GATE_EXCLUDED_PREFIXES.some((p) => req.path.startsWith(p))) return next();
+  if (!req.session?.customerId) return next();
+  return requireCurrentShopperLegalAcceptance(req, res, next);
+});
+
 // The wallet's bottom bar shows an unread count on the Alerts tab, and that
 // bar is on every wallet page -- so resolve it once here rather than making
 // each route remember to fetch it. Signed-out requests and non-wallet paths

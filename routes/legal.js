@@ -9,12 +9,31 @@ const express = require('express');
 const router = express.Router();
 const { LEGAL_DOCUMENTS } = require('../config/legal');
 const RETENTION = require('../config/retention');
-const { recordLegalAcceptances, getStaleDocumentTypes } = require('../services/legalAcceptanceService');
+const {
+  recordLegalAcceptances,
+  getStaleDocumentTypes,
+  recordShopperLegalAcceptances,
+  getStaleShopperDocumentTypes,
+} = require('../services/legalAcceptanceService');
 const { safeNextPath } = require('../lib/safeRedirect');
 
 function requireAuth(req, res, next) {
   if (!req.session?.merchantId) return res.redirect('/login');
   next();
+}
+
+function requireShopperAuth(req, res, next) {
+  if (!req.session?.customerId) return res.redirect('/account/login');
+  next();
+}
+
+// Wallet's own allowlist, mirroring lib/safeRedirect.js's shape for the
+// merchant flow -- only relative /account/* paths are honored, so a next=
+// query param can never be crafted to send a shopper off-site.
+function safeShopperNextPath(next, fallback = '/account/receipts') {
+  if (typeof next !== 'string' || !next.startsWith('/account/')) return fallback;
+  if (next.startsWith('//') || next.includes('://')) return fallback;
+  return next;
 }
 
 // "Terms of Service" / "Terms of Service and Data Processing Agreement" /
@@ -70,6 +89,43 @@ router.post('/legal/reaccept', requireAuth, async (req, res) => {
   // docstring in services/legalAcceptanceService.js for why this differs
   // from the signup call site, which always writes all three.
   await recordLegalAcceptances(req.session.merchantId, req, staleTypes);
+  res.redirect(safeNext);
+});
+
+// Wallet mirror of /legal/reaccept above -- same "must be registered before
+// GET /legal/:slug" reasoning ("wallet-reaccept" isn't a document slug
+// either).
+router.get('/legal/wallet-reaccept', requireShopperAuth, async (req, res) => {
+  const safeNext = safeShopperNextPath(req.query.next);
+  const staleTypes = await getStaleShopperDocumentTypes(req.session.customerId);
+
+  if (staleTypes.length === 0) return res.redirect(safeNext);
+
+  res.render('legal-reaccept-wallet', {
+    error: null,
+    next: safeNext,
+    documents: LEGAL_DOCUMENTS,
+    changedLabel: joinDocumentLabels(staleTypes),
+  });
+});
+
+router.post('/legal/wallet-reaccept', requireShopperAuth, async (req, res) => {
+  const { acceptAll, next } = req.body;
+  const safeNext = safeShopperNextPath(next);
+  const staleTypes = await getStaleShopperDocumentTypes(req.session.customerId);
+
+  if (staleTypes.length === 0) return res.redirect(safeNext);
+
+  if (!acceptAll) {
+    return res.render('legal-reaccept-wallet', {
+      error: 'You must agree to continue.',
+      next: safeNext,
+      documents: LEGAL_DOCUMENTS,
+      changedLabel: joinDocumentLabels(staleTypes),
+    });
+  }
+
+  await recordShopperLegalAcceptances(req.session.customerId, req, staleTypes);
   res.redirect(safeNext);
 });
 

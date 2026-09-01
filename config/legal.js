@@ -95,14 +95,23 @@ const LEGAL_DOCUMENTS = {
 
 // The LegalAcceptance table (see prisma/schema.prisma's LegalDocumentType
 // enum) only ever stores merchant-side acceptances -- TERMS/PRIVACY/DPA.
-// SHOPPER_TERMS/SHOPPER_PRIVACY above are never written there (wallet
-// signup uses passive "By continuing..." text, not a checkbox -- see
-// docs/LEGAL_REVIEW_NOTES.md item 26). services/legalAcceptanceService.js
-// must use this list, NOT Object.keys(LEGAL_DOCUMENTS), anywhere it
-// defaults to "every document a merchant accepts" -- looping over literally
-// every key in LEGAL_DOCUMENTS would try to write/query a documentType the
-// Prisma enum doesn't have, and crash.
+// services/legalAcceptanceService.js must use this list, NOT
+// Object.keys(LEGAL_DOCUMENTS), anywhere it defaults to "every document a
+// merchant accepts" -- looping over literally every key in LEGAL_DOCUMENTS
+// would try to write/query a documentType the Prisma enum doesn't have,
+// and crash.
 const MERCHANT_DOCUMENT_TYPES = ['TERMS', 'PRIVACY', 'DPA'];
+
+// The wallet-side mirror -- SHOPPER_TERMS/SHOPPER_PRIVACY, stored in the
+// separate ShopperLegalAcceptance table (its own enum, since a shopper's
+// acceptance is a different relationship with no DPA equivalent -- see
+// that model's schema comment). Signup still uses passive "By
+// continuing..." text, not a checkbox (docs/LEGAL_REVIEW_NOTES.md item
+// 26), but a row is now written at account creation regardless -- same
+// "the continue action IS the consent" reasoning the merchant side's
+// Google/Apple/Microsoft sign-in already relies on, just extended to
+// every wallet signup path.
+const SHOPPER_DOCUMENT_TYPES = ['SHOPPER_TERMS', 'SHOPPER_PRIVACY'];
 
 // The tap-screen shopper-consent wording -- versioned separately from the
 // documents above, since this can change on its own schedule and isn't
@@ -146,4 +155,4 @@ function isNewerVersion(a, b) {
   return Number(aSeq) > Number(bSeq);
 }
 
-module.exports = { LEGAL_DOCUMENTS, MERCHANT_DOCUMENT_TYPES, SHOPPER_CONSENT, isNewerVersion };
+module.exports = { LEGAL_DOCUMENTS, MERCHANT_DOCUMENT_TYPES, SHOPPER_DOCUMENT_TYPES, SHOPPER_CONSENT, isNewerVersion };

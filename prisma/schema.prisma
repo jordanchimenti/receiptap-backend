@@ -807,6 +807,7 @@ model Customer {
   notifications     Notification[]
   pushSubscriptions PushSubscription[]
   identifiers       ShopperIdentifier[]
+  legalAcceptances  ShopperLegalAcceptance[]
 
   @@index([referredByAffiliateId])
 }
@@ -981,6 +982,35 @@ enum LegalDocumentType {
   TERMS
   PRIVACY
   DPA
+}
+
+// ---------------------------------------------------------------------------
+// ShopperLegalAcceptance — the Customer-side mirror of LegalAcceptance above.
+// Kept as its own table with its own enum rather than reusing LegalAcceptance
+// -- that table's merchantId is required (see the model above), and a
+// shopper's acceptance is a different relationship (Wallet Terms/Wallet
+// Privacy, not TERMS/PRIVACY/DPA) with no DPA equivalent at all (an
+// individual isn't a data controller, see config/legal.js). Same APPEND-ONLY
+// rule: a re-acceptance writes a new row, never updates an old one.
+// ---------------------------------------------------------------------------
+model ShopperLegalAcceptance {
+  id         String   @id @default(cuid())
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id])
+
+  documentType ShopperLegalDocumentType
+  version      String // matches config/legal.js at the moment this row was written
+
+  acceptedAt DateTime @default(now())
+  ipAddress  String?
+  userAgent  String?
+
+  @@index([customerId, documentType])
+}
+
+enum ShopperLegalDocumentType {
+  SHOPPER_TERMS
+  SHOPPER_PRIVACY
 }
 
 // ---------------------------------------------------------------------------

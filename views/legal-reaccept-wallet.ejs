@@ -1,0 +1,58 @@
+<!-- views/legal-reaccept-wallet.ejs -->
+<!-- Wallet mirror of views/legal-reaccept.ejs -- shown when
+     middleware/shopperLegalReacceptance.js finds a stale acceptance of
+     SHOPPER_TERMS or SHOPPER_PRIVACY. Same single-checkbox pattern as
+     account-signup.ejs's passive "By continuing..." link, naming whichever
+     document(s) actually changed (changedLabel, built in routes/legal.js
+     from getStaleShopperDocumentTypes()). Reuses the shared wallet auth
+     shell (partials/wallet-dark-theme, partials/auth-card-styles) rather
+     than the merchant page's self-contained style block, since this is a
+     sibling of account-login.ejs/account-signup.ejs, not of the merchant
+     dashboard. Only the document(s) actually stale get a new
+     ShopperLegalAcceptance row on submit -- see routes/legal.js. -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Updated Terms - ReceipTap</title>
+  <link rel="stylesheet" href="/css/receiptap.css" />
+  <%- include('partials/wallet-dark-theme') %>
+  <%- include('partials/auth-card-styles') %>
+  <style>
+    .consent-row { display: flex; align-items: flex-start; gap: 8px; text-align: left; margin: 6px 0 18px; }
+    .consent-row input[type="checkbox"] { margin-top: 3px; flex-shrink: 0; accent-color: var(--w-accent); }
+    .consent-row label { font-size: 13px; color: var(--w-ink-soft); line-height: 1.45; font-weight: 400; }
+    .consent-row label a { color: var(--w-accent); font-weight: 600; text-decoration: none; }
+    .logout-btn { background: none; border: none; padding: 0; font-size: 13px; color: var(--w-accent); font-weight: 600; cursor: pointer; font-family: inherit; }
+  </style>
+</head>
+<body>
+  <div class="auth-shell">
+    <div class="auth-card">
+      <div class="logo-chip"><img src="/images/receiptap-logo.png" alt="ReceipTap" /></div>
+      <h1 class="auth-title">Our <%= changedLabel %> <%= changedLabel.includes(' and ') ? 'have' : 'has' %> been updated</h1>
+      <p class="auth-sub">Please review and agree below to keep using your wallet.</p>
+
+      <% if (error) { %><div class="w-error" style="display:block;"><%= error %></div><% } %>
+
+      <form method="POST" action="/legal/wallet-reaccept">
+        <input type="hidden" name="next" value="<%= next %>" />
+
+        <div class="consent-row">
+          <input type="checkbox" id="acceptAll" name="acceptAll" required />
+          <label for="acceptAll">
+            I agree to the <a href="/legal/wallet-terms" target="_blank" rel="noopener">Terms</a> (v<%= documents.SHOPPER_TERMS.version %>) and have read the <a href="/legal/wallet-privacy" target="_blank" rel="noopener">Privacy Policy</a> (v<%= documents.SHOPPER_PRIVACY.version %>).
+          </label>
+        </div>
+
+        <button type="submit" class="auth-pill-btn">Continue to my wallet</button>
+      </form>
+
+      <form method="POST" action="/account/logout" style="margin-top: 20px; text-align: center;">
+        <button type="submit" class="logout-btn">Log out instead</button>
+      </form>
+    </div>
+  </div>
+</body>
+</html>

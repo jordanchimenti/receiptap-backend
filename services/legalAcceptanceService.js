@@ -4,7 +4,7 @@
 // merchant to that interstitial) -- one place that reads/writes
 // LegalAcceptance rows, so all three call sites can't drift from each other.
 const prisma = require('../lib/prisma');
-const { LEGAL_DOCUMENTS, MERCHANT_DOCUMENT_TYPES, isNewerVersion } = require('../config/legal');
+const { LEGAL_DOCUMENTS, MERCHANT_DOCUMENT_TYPES, SHOPPER_DOCUMENT_TYPES, isNewerVersion } = require('../config/legal');
 
 // Which document types (TERMS/PRIVACY/DPA) this merchant's most recent
 // acceptance is behind on, or has never accepted at all. Shared by
@@ -72,4 +72,58 @@ async function recordLegalAcceptances(merchantId, req, documentTypes = MERCHANT_
   });
 }
 
-module.exports = { recordLegalAcceptances, getStaleDocumentTypes };
+// --- Wallet (shopper) side ---------------------------------------------
+// Mirrors getStaleDocumentTypes/recordLegalAcceptances above exactly, but
+// against ShopperLegalAcceptance/SHOPPER_DOCUMENT_TYPES instead of
+// LegalAcceptance/MERCHANT_DOCUMENT_TYPES -- kept as separate functions
+// rather than parameterizing the merchant ones over a table name, since
+// Prisma's generated client doesn't let a model be selected dynamically by
+// string. Shared by middleware/shopperLegalReacceptance.js (decides
+// whether to redirect) and routes/legal.js's /legal/wallet-reaccept
+// (decides what to show and which type(s) to write a fresh row for).
+
+async function getStaleShopperDocumentTypes(customerId) {
+  const documentTypes = SHOPPER_DOCUMENT_TYPES;
+  const latestByType = await Promise.all(
+    documentTypes.map((documentType) =>
+      prisma.shopperLegalAcceptance.findFirst({
+        where: { customerId, documentType },
+        orderBy: { acceptedAt: 'desc' },
+      })
+    )
+  );
+  return documentTypes.filter((documentType, i) => {
+    const latest = latestByType[i];
+    if (!latest) return true; // no acceptance on file at all -- treated as stale, same as the merchant side
+    return isNewerVersion(LEGAL_DOCUMENTS[documentType].version, latest.version);
+  });
+}
+
+// documentTypes defaults to BOTH wallet documents -- that's what every
+// signup path uses (see config/legal.js's comment on SHOPPER_DOCUMENT_TYPES
+// for why a passive "By continuing..." link still counts as accepting
+// both). The re-acceptance flow passes an explicit, narrower list --
+// only whatever getStaleShopperDocumentTypes() found stale -- same
+// reasoning as the merchant side: a shopper re-accepting because
+// SHOPPER_PRIVACY changed already has a current, untouched SHOPPER_TERMS
+// row on file, so no new row is written for that one.
+async function recordShopperLegalAcceptances(customerId, req, documentTypes = SHOPPER_DOCUMENT_TYPES) {
+  const ipAddress = req.ip || null;
+  const userAgent = req.headers['user-agent'] || null;
+  await prisma.shopperLegalAcceptance.createMany({
+    data: documentTypes.map((documentType) => ({
+      customerId,
+      documentType,
+      version: LEGAL_DOCUMENTS[documentType].version,
+      ipAddress,
+      userAgent,
+    })),
+  });
+}
+
+module.exports = {
+  recordLegalAcceptances,
+  getStaleDocumentTypes,
+  recordShopperLegalAcceptances,
+  getStaleShopperDocumentTypes,
+};

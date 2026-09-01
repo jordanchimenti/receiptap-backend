@@ -20,6 +20,7 @@ const fileStorage = require('../lib/fileStorage');
 // affiliate, not a merchant one -- REGULAR_AFFILIATE_RATE is their rate.
 const { REGULAR_AFFILIATE_RATE } = require('../services/affiliateRates');
 const { deleteShopperEverywhere } = require('../services/dataRetentionService');
+const { recordShopperLegalAcceptances } = require('../services/legalAcceptanceService');
 const prisma = require('../lib/prisma');
 const {
   isDeductible,
@@ -290,6 +291,10 @@ router.post('/account/signup', async (req, res) => {
 
   const passwordHash = await bcrypt.hash(password, 10);
   const customer = await prisma.customer.create({ data: { email: email.toLowerCase(), passwordHash } });
+  // The signup page's passive "By continuing, you agree..." link (see
+  // account-signup.ejs) is the consent -- this is what makes that
+  // agreement provable later, same as every other signup path below.
+  await recordShopperLegalAcceptances(customer.id, req);
 
   req.session.customerId = customer.id;
   res.json({ success: true });
@@ -325,12 +330,25 @@ router.post('/account/google', async (req, res) => {
   }
 
   if (!payload.email) return res.status(400).json({ error: 'Google account has no email' });
+  const email = payload.email.toLowerCase();
 
-  const customer = await prisma.customer.upsert({
-    where: { email: payload.email.toLowerCase() },
-    update: { googleId: payload.sub, name: payload.name || undefined },
-    create: { email: payload.email.toLowerCase(), googleId: payload.sub, name: payload.name || null },
-  });
+  // findUnique-then-branch instead of upsert() -- unlike the receipt-save
+  // modal's Google option (routes/email-capture.js), this path needs to
+  // know whether it just CREATED the account, so recordShopperLegalAcceptances
+  // below only fires once, at actual signup, not on every returning login.
+  // Update semantics on an existing account are unchanged from the upsert
+  // this replaced: googleId and name (when Google supplies one) are always
+  // refreshed on login, not just filled in when blank.
+  let customer = await prisma.customer.findUnique({ where: { email } });
+  if (customer) {
+    customer = await prisma.customer.update({
+      where: { id: customer.id },
+      data: { googleId: payload.sub, name: payload.name || undefined },
+    });
+  } else {
+    customer = await prisma.customer.create({ data: { email, googleId: payload.sub, name: payload.name || null } });
+    await recordShopperLegalAcceptances(customer.id, req);
+  }
 
   req.session.customerId = customer.id;
   res.json({ success: true });
@@ -383,11 +401,19 @@ router.post('/account/apple/callback', async (req, res) => {
     }
 
     const email = identity.email.toLowerCase();
-    const customer = await prisma.customer.upsert({
-      where: { email },
-      update: { appleId: identity.sub, name: name || undefined },
-      create: { email, appleId: identity.sub, name },
-    });
+    // findUnique-then-branch instead of upsert() -- same reasoning as the
+    // Google handler above: needs to know if this just created the account,
+    // so recordShopperLegalAcceptances only fires once, at actual signup.
+    let customer = await prisma.customer.findUnique({ where: { email } });
+    if (customer) {
+      customer = await prisma.customer.update({
+        where: { id: customer.id },
+        data: { appleId: identity.sub, name: name || undefined },
+      });
+    } else {
+      customer = await prisma.customer.create({ data: { email, appleId: identity.sub, name } });
+      await recordShopperLegalAcceptances(customer.id, req);
+    }
 
     req.session.customerId = customer.id;
     res.redirect(parsedState.redirect || '/account/receipts');
@@ -419,11 +445,15 @@ router.get('/account/microsoft/callback', async (req, res) => {
     if (!identity.email) throw Object.assign(new Error('Microsoft account has no email'), { status: 400 });
 
     const email = identity.email.toLowerCase();
-    const customer = await prisma.customer.upsert({
-      where: { email },
-      update: { microsoftId: identity.sub },
-      create: { email, microsoftId: identity.sub },
-    });
+    // findUnique-then-branch instead of upsert() -- same reasoning as the
+    // Google handler above.
+    let customer = await prisma.customer.findUnique({ where: { email } });
+    if (customer) {
+      customer = await prisma.customer.update({ where: { id: customer.id }, data: { microsoftId: identity.sub } });
+    } else {
+      customer = await prisma.customer.create({ data: { email, microsoftId: identity.sub } });
+      await recordShopperLegalAcceptances(customer.id, req);
+    }
 
     req.session.customerId = customer.id;
     res.redirect(parsedState.redirect || '/account/receipts');

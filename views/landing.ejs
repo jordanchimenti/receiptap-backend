@@ -424,7 +424,7 @@
               <h3>Your branding, instantly</h3>
               <p>Their logo and business name appear the second a customer taps — no app required.</p>
             </div>
-            <div class="scrolly-step" data-target="table">
+            <div class="scrolly-step" data-target="table, .item-row, .item-line">
               <div class="scrolly-step-num">2</div>
               <h3>Every item, itemized</h3>
               <p>Item names, quantities, and prices — broken down automatically, no manual entry.</p>
@@ -663,17 +663,58 @@
       }
       applyNavOffset();
 
+      // The phone was a fixed height, so on any viewport shorter than that
+      // it got vertically centered by the flex sticky box and had its top
+      // (dynamic island/rounded corner) clipped by overflow:hidden. Instead,
+      // size it from the sticky box's actual available height each time, so
+      // it always shrinks to fit rather than overflowing.
+      const phoneScreen = document.querySelector('.phone-screen');
+      const phoneCta = document.querySelector('.phone-cta');
+      function applyPhoneSize() {
+        if (!phoneScreen) return;
+        const available = sticky.getBoundingClientRect().height;
+        const ctaHeight = phoneCta ? phoneCta.getBoundingClientRect().height : 0;
+        const chrome = 16 /* phone-frame + phone-inner padding */ + 34 /* phone-cta margin-top + buffer */;
+        const maxScreenHeight = available - ctaHeight - chrome;
+        const minScreenHeight = 320;
+        phoneScreen.style.height = Math.max(minScreenHeight, Math.min(560, maxScreenHeight)) + 'px';
+      }
+      applyPhoneSize();
+
       let targets = null; // per-step scrollTop (px) inside the iframe doc
+      let targetEls = null; // per-step DOM element, dimmed when its step isn't active
       let maxScroll = 0;
 
       function resolveTargets() {
         const doc = iframe.contentDocument;
-        if (!doc || !doc.body) return false;
+        const win = iframe.contentWindow;
+        if (!doc || !doc.body || !win) return false;
         maxScroll = Math.max(0, doc.body.scrollHeight - iframe.clientHeight);
-        targets = steps.map(function (step) {
+        // Absolute position via getBoundingClientRect + scrollY, NOT
+        // .offsetTop -- .offsetTop is relative to the nearest positioned
+        // ancestor, and the pop-out effect below deliberately sets
+        // position:relative on each target (some of which, like
+        // .google-review-card and .loyalty-card, are nested INSIDE another
+        // target, .actions). That made .actions the offsetParent for its
+        // own children the instant this ran once, corrupting their
+        // .offsetTop into a tiny actions-relative number and sending the
+        // scroll target backwards. getBoundingClientRect ignores
+        // offsetParent entirely, so it stays correct regardless.
+        targetEls = steps.map(function (step) {
           const sel = step.getAttribute('data-target');
           const el = sel && doc.querySelector(sel);
-          return el ? Math.min(maxScroll, Math.max(0, el.offsetTop - 24)) : 0;
+          if (el) {
+            el.style.transition = 'opacity 0.35s ease, transform 0.35s ease, box-shadow 0.35s ease, filter 0.35s ease';
+            el.style.transformOrigin = 'center';
+            el.style.position = 'relative';
+            el.style.borderRadius = '10px';
+          }
+          return el || null;
+        });
+        targets = targetEls.map(function (el) {
+          if (!el) return 0;
+          const absoluteTop = el.getBoundingClientRect().top + win.scrollY;
+          return Math.min(maxScroll, Math.max(0, absoluteTop - 24));
         });
         return true;
       }
@@ -690,6 +731,41 @@
         const activeIndex = Math.round(rawIndex);
 
         steps.forEach(function (step, i) { step.classList.toggle('active', i === activeIndex); });
+        if (targetEls) {
+          // Continuous, not a binary on/off switch -- with a discrete
+          // switch, whichever card the phone is actually scrolled to mid-
+          // transition (driven by the smooth interpolated scrollTarget
+          // below) could still read as "inactive" until rawIndex crossed
+          // the exact halfway rounding point, so two adjacent cards (e.g.
+          // Google review and loyalty) could BOTH look dimmed at once.
+          // Blending by distance from rawIndex keeps whatever's actually
+          // on screen popped the whole time it's in view.
+          targetEls.forEach(function (el, i) {
+            if (!el) return;
+            const closeness = Math.max(0, 1 - Math.abs(rawIndex - i));
+            const opacity = 0.25 + 0.75 * closeness;
+            const scale = 1 + 0.06 * closeness;
+            const shadowAlpha = 0.35 * closeness;
+            // Opacity alone barely reads on cards that are already white/
+            // near-white (Google review, loyalty) -- fading a white card
+            // toward the page's own light-gray background is almost
+            // invisible, unlike fading the blue branding header or blue
+            // buttons, which clearly reveals the page behind them.
+            // Grayscale+dimmed brightness gives every card a strong, color-
+            // independent "inactive" look (their own colored icons/accents
+            // desaturate) so the active one still visibly pops regardless
+            // of its own palette.
+            const grayscale = 1 - closeness;
+            const brightness = 0.7 + 0.3 * closeness;
+            el.style.opacity = opacity.toFixed(3);
+            el.style.transform = 'scale(' + scale.toFixed(4) + ')';
+            el.style.filter = 'grayscale(' + grayscale.toFixed(3) + ') brightness(' + brightness.toFixed(3) + ')';
+            el.style.boxShadow = shadowAlpha > 0.02
+              ? '0 ' + (12 * closeness).toFixed(1) + 'px ' + (30 * closeness).toFixed(1) + 'px rgba(0,0,0,' + shadowAlpha.toFixed(3) + ')'
+              : 'none';
+            el.style.zIndex = closeness > 0.5 ? '5' : '1';
+          });
+        }
 
         const lower = Math.floor(rawIndex);
         const upper = Math.min(steps.length - 1, lower + 1);
@@ -713,6 +789,7 @@
           window.addEventListener('scroll', onScroll, { passive: true });
           window.addEventListener('resize', function () {
             applyNavOffset();
+            applyPhoneSize();
             resolveTargets();
             update();
           });

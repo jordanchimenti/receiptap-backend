@@ -198,8 +198,14 @@ Solo founder, first-time coder. Explain in plain language, one step at a time.
   `onboarding@resend.dev` sandbox sender, which Resend will only deliver to
   jordanchimenti98@gmail.com (403 for anyone else). Verify a domain at
   resend.com/domains and set `RESEND_FROM_EMAIL` before launch.
-- Not deployed yet — in version control and pushed to GitHub
-  (jordanchimenti/receiptap-backend) now, just not hosted anywhere real yet.
+- **Deployed and live** at www.receiptap.com, on Railway (project
+  `fulfilling-wisdom`, service `receiptap-backend`, **US West** region —
+  Supabase stays Montreal; only the application server itself is US-based).
+  Auto-deploys on every push to `main` on GitHub
+  (jordanchimenti/receiptap-backend) — there is no staging environment or
+  manual deploy step, so a push is live within minutes. Confirmed directly
+  in the Railway dashboard 2026-09-01; this line previously said "not
+  hosted anywhere real yet," which was stale as of that date.
 - `/legal/terms`, `/legal/privacy`, and `/legal/dpa` (for merchants), plus
   `/legal/wallet-terms` and `/legal/wallet-privacy` (a separate pair for an
   individual wallet-account holder — no wallet-side DPA, since an

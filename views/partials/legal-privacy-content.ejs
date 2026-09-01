@@ -121,8 +121,11 @@
       Revenue Agency expects business records to be kept for six years after
       the end of the tax year they belong to, and US limitation periods can
       run to seven. Deleting sooner would take your receipts away while you
-      might still need them.
-      <span class="review">[[REVIEW: automatic deletion on this schedule is built into our systems but has not been switched on in production as of the date above — confirm live status before publishing this page, or adjust this paragraph to describe how deletion requests are being handled manually in the meantime.]]</span>
+      might still need them. This is our policy and our commitment to you.
+      The automated system that enforces it is built and is being finalized
+      before we switch it on, so it isn't yet actively removing data on
+      this schedule today — if you'd like something deleted sooner, see
+      "Getting a copy, deleting your data, or unsubscribing" below.
     </p>
 
     <h3>Getting a copy, deleting your data, or unsubscribing</h3>
@@ -142,13 +145,17 @@
 
     <h3>Where your data is stored</h3>
     <p>
-      Your ReceipTap data is stored in Canada. A few features briefly send
-      part of it outside Canada: Google, to confirm your identity if you
-      sign in with Google; Anthropic, for the category suggestion described
-      above (using only the business name and item list, never your name,
-      email, prices, or total); and Resend, if you ever request a
-      password-reset email from us.
-      <span class="review">[[REVIEW: the region our own application server (Railway) runs in could not be confirmed from our codebase as of this policy's last-updated date — confirm and update this paragraph once known.]]</span>
+      Your database records are stored in Canada — Supabase, our database
+      provider, hosts them in Montreal. The application server that
+      actually runs ReceipTap and processes every request, however, is
+      hosted in the United States (Railway, US West region), so your data
+      is processed there as well as stored in Canada. A few features
+      additionally send part of it outside Canada: Google, to confirm your
+      identity if you sign in with Google; Anthropic, for the category
+      suggestion described above (using only the business name and item
+      list, never your name, email, prices, or total); and Resend, if you
+      ever request a password-reset email from us.
+      <span class="review">[[REVIEW: confirm whether an additional cross-border transfer safeguard (e.g. standard contractual clauses) is legally required given the application server's US location, beyond disclosing it here.]]</span>
     </p>
 
     <p class="back-top"><a href="#shopper">↑ Back to top</a></p>
@@ -204,6 +211,7 @@
     <p>We use the following subprocessors to run ReceipTap:</p>
     <ul>
       <li><strong>Supabase</strong> — our database, hosted in Canada</li>
+      <li><strong>Railway</strong> — hosts and runs the application server itself, in the United States</li>
       <li><strong>Stripe</strong> — payment processing, for your subscription and for affiliate payouts</li>
       <li><strong>Anthropic</strong> — the AI category-suggestion feature described above</li>
       <li><strong>Google</strong> — sign-in verification only (not the "Rate us on Google" link, which is just a URL you provide, not a data integration)</li>
@@ -216,8 +224,11 @@
       Our policy is to keep your business data for
       <strong><%= retention.DEACTIVATED_MERCHANT_PURGE_DAYS %> days</strong>
       after you close your account, in case you want to come back or need
-      help with something, and then remove or de-identify it.
-      <span class="review">[[REVIEW: same operational-status note as the shopper section — automatic deletion on this schedule is built but not yet switched on in production; confirm before publishing.]]</span>
+      help with something, and then remove or de-identify it. This is our
+      policy and our commitment; the automated system that enforces it is
+      built and is being finalized before we switch it on, so it isn't yet
+      actively removing data on this schedule today. If you'd like your
+      business data removed sooner, email <%= entity.contactEmail %>.
       Records proving you accepted our Terms, Privacy Policy, and Data
       Processing Agreement are the one exception — we keep those
       permanently, even after your account is closed, since they're our own

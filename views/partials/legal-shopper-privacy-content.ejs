@@ -150,8 +150,11 @@
       Revenue Agency expects business records to be kept for six years after
       the end of the tax year they belong to, and US limitation periods can
       run to seven. Deleting sooner would take your receipts away while you
-      might still need them.
-      <span class="review">[[REVIEW: automatic deletion on this schedule is built into our systems but has not been switched on in production as of the date above -- confirm live status before publishing this page, or adjust this paragraph to describe how deletion requests are being handled manually in the meantime.]]</span>
+      might still need them. This is our policy and our commitment to you.
+      The automated system that enforces it is built and is being finalized
+      before we switch it on, so it isn't yet actively removing data on
+      this schedule today — if you'd like something deleted sooner, contact
+      us at <%= entity.contactEmail %>.
     </p>
     <p>
       A receipt you scan or upload yourself doesn't age out on that same
@@ -191,12 +194,17 @@
   <section id="storage">
     <h2>Where your data is stored</h2>
     <p>
-      Your ReceipTap Wallet data is stored in Canada. A few features briefly
-      send part of it outside Canada: Google, Apple, or Microsoft, to
-      confirm your identity if you sign in with one of them; Anthropic, for
-      AI category suggestions and receipt scanning, as described above; and
-      Resend, if you ever request a password-reset email from us.
-      <span class="review">[[REVIEW: the region our own application server (Railway) runs in could not be confirmed from our codebase as of this policy's last-updated date -- confirm and update this paragraph once known, same open item as the general Privacy Policy.]]</span>
+      Your ReceipTap Wallet database records are stored in Canada —
+      Supabase, our database provider, hosts them in Montreal. The
+      application server that actually runs ReceipTap, however, is hosted
+      in the United States (Railway, US West region), so your data is
+      processed there as well as stored in Canada. A few features
+      additionally send part of it outside Canada: Google, Apple, or
+      Microsoft, to confirm your identity if you sign in with one of them;
+      Anthropic, for AI category suggestions and receipt scanning, as
+      described above; and Resend, if you ever request a password-reset
+      email from us.
+      <span class="review">[[REVIEW: confirm whether an additional cross-border transfer safeguard (e.g. standard contractual clauses) is legally required given the application server's US location, beyond disclosing it here.]]</span>
     </p>
     <p class="back-top"><a href="#storage">↑ Back to top</a></p>
   </section>

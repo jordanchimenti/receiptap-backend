@@ -86,10 +86,10 @@ const SLUG_TO_TYPE = {
 // metadata, not legal content, and there's exactly one legal entity for all
 // three documents to share. Single source of truth: any document that needs
 // the entity name/address/contact/governing law reads it from here rather
-// than re-entering it. [[REVIEW: registered address not provided as of this writing]]
+// than re-entering it.
 const ENTITY = {
   legalName: 'J.A.C. GLOBAL APPROACH LTD.',
-  registeredAddress: null, // renders as [[REVIEW: address pending]]
+  registeredAddress: '2150 Winston Park Drive, Unit 203, Oakville, Ontario, L6H 5V1, Canada',
   contactRole: 'Privacy Officer',
   contactEmail: 'privacy@receiptap.com',
   governingLaw: 'Ontario, Canada',

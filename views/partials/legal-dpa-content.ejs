@@ -185,6 +185,7 @@
     </p>
     <ul>
       <li><strong>Supabase</strong> — our database, hosted in Canada</li>
+      <li><strong>Railway</strong> — hosts and runs the application server itself, in the United States</li>
       <li><strong>Stripe</strong> — payment processing, for your subscription and for affiliate payouts</li>
       <li><strong>Anthropic</strong> — AI category suggestions, using only a business name and item list, never a customer's name, email, or purchase amounts</li>
       <li><strong>Google</strong> — sign-in verification only</li>
@@ -208,12 +209,16 @@
   <section id="transfers">
     <h2>Where the data goes</h2>
     <p>
-      Your customers' data is stored in Canada. A few subprocessors above
-      briefly touch part of it outside Canada in the course of providing
-      their service to us: Google, to confirm a sign-in; Anthropic, for
-      category suggestions (business name and item list only, as noted
-      above); and Resend, only if a password reset is requested.
-      <span class="review">[[REVIEW: same gap as the Privacy Policy's equivalent section — the region our own application server (Railway) runs in could not be confirmed from the codebase as of this writing. Confirm and update this paragraph once known, and confirm whether any additional cross-border transfer safeguard (e.g. standard contractual clauses) is legally required for the subprocessors named above.]]</span>
+      Your customers' database records are stored in Canada — Supabase
+      hosts them in Montreal. The application server that actually
+      processes every request, however, is hosted in the United States
+      (Railway, US West region), so this data is processed there as well
+      as stored in Canada. A few subprocessors above also briefly touch
+      part of it outside Canada in the course of providing their service to
+      us: Google, to confirm a sign-in; Anthropic, for category suggestions
+      (business name and item list only, as noted above); and Resend, only
+      if a password reset is requested.
+      <span class="review">[[REVIEW: confirm whether any additional cross-border transfer safeguard (e.g. standard contractual clauses) is legally required for Railway's US-based processing, or for the other subprocessors named above.]]</span>
     </p>
     <p class="back-top"><a href="#transfers">↑ Back to top</a></p>
   </section>
@@ -258,8 +263,11 @@
       <strong><%= retention.SHOPPER_RECEIPT_MONTHS %> months</strong> after
       they're created, and to remove or de-identify your own business data
       <strong><%= retention.DEACTIVATED_MERCHANT_PURGE_DAYS %> days</strong>
-      after you close your ReceipTap account.
-      <span class="review">[[REVIEW: same operational-status gap as the Privacy Policy and Terms of Service — automatic deletion on this schedule is built into our systems (services/dataRetentionService.js) but has not been switched on in production as of this writing (RETENTION_PURGE_ENABLED is unset). Confirm live status before publishing this page, or describe current manual/ad-hoc handling instead.]]</span>
+      after you close your ReceipTap account. This is our policy and our
+      commitment; the automated system that enforces it is built and is
+      being finalized before we switch it on, so it isn't yet actively
+      removing data on this schedule today. If you need data removed
+      sooner on a customer's behalf, email <%= entity.contactEmail %>.
     </p>
     <p class="back-top"><a href="#deletion">↑ Back to top</a></p>
   </section>

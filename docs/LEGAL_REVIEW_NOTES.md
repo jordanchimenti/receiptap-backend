@@ -109,41 +109,53 @@ What's still open:
 
 ---
 
-## 1. Registered address is missing
+## 1. Registered address — RESOLVED
 
 **Where:** intro paragraph and the contact box, both near the top/bottom of
 the Privacy Policy.
 
-**Issue:** the entity's registered address was never supplied. The page
-currently renders the literal placeholder `[[REVIEW: address pending]]` in
-both spots.
+**Status: RESOLVED**, as of `PRIVACY.version` `2026-09-01.1`. Founder
+supplied the registered address (2026-09-01): 2150 Winston Park Drive,
+Unit 203, Oakville, Ontario, L6H 5V1, Canada. Filled into
+`ENTITY.registeredAddress` in `routes/legal.js`, which every document
+below reads from — resolves items 1 and 10 in one place, plus the
+"Restated gaps" copy on the DPA. Every document that shows the address
+(Terms, Privacy, DPA, Wallet Terms, Wallet Privacy) had its version bumped
+in the same change, since a merchant/shopper who already accepted the old
+`[[REVIEW: address pending]]` wording agreed to different text than what's
+live now — this is what sends every existing merchant through
+`/legal/reaccept` on their next dashboard visit.
 
-**Needed:** the exact registered address for J.A.C. GLOBAL APPROACH LTD.,
-from the Articles of Incorporation. Fill it into `PRIVACY_ENTITY` in
-`routes/legal.js` (`registeredAddress: null` → the real string) once
-available; the page will pick it up automatically.
+**Still worth confirming:** this address matches what's on file in the
+Articles of Incorporation, since that's the authoritative source for a
+"registered address," not just wherever the business currently operates
+from.
 
 ---
 
-## 2. Retention windows are policy, not live enforcement
+## 2. Retention windows are policy, not live enforcement — RESOLVED (wording)
 
 **Where:** "How long we keep your data" (shopper section) and "If you
 close your account" (merchant section).
 
-**Issue:** the page states ReceipTap's policy is to delete shopper data
-after 24 months and closed-merchant data after 90 days (the real numbers
-from `config/retention.js`). But automated purging is currently gated
-behind `RETENTION_PURGE_ENABLED`, which is unset everywhere — all purge
-functions in `services/dataRetentionService.js` run in dry-run mode only.
-**Nothing is actually being auto-deleted on this schedule today.**
+**Status: RESOLVED**, as of `PRIVACY.version` `2026-09-01.3`. Founder
+decision (2026-09-01): option (b) — keep the retention windows (7 years
+for shopper data, matching `SHOPPER_RECEIPT_MONTHS`; 90 days for a closed
+merchant account, matching `DEACTIVATED_MERCHANT_PURGE_DAYS`) stated as
+policy and commitment, not as something already happening automatically.
+Each paragraph now says the automated system is built and being finalized
+before being switched on, and points to a real contact
+(`entity.contactEmail`) for anyone who wants something deleted sooner.
+Same fix applied to the matching paragraphs in the Terms of Service, the
+DPA, and the Wallet Privacy Policy (item 19 below, and the DPA's own
+restated-gaps line).
 
-**Needed:** a decision — either (a) turn on live purging before this page
-goes out, so the stated policy matches reality, or (b) keep the policy
-language as a forward-looking commitment and have a lawyer confirm that's
-an acceptable way to state it (vs. describing current manual/ad-hoc
-handling instead). This is the single biggest gap between what the page
-says and what the system does — do not resolve it by editing the page's
-wording alone.
+**Still open:** turning on live purging (option (a)) is a separate,
+future task — `RETENTION_PURGE_ENABLED` should stay unset until someone
+has watched `PurgeLog` output for a while in a safe environment first,
+per `CLAUDE.md`'s existing "Not done yet" note on this. This wording fix
+doesn't require that to happen first; it just stops the page overstating
+what's live today.
 
 ---
 
@@ -177,17 +189,37 @@ revisiting once/if ReceipTap starts sending any marketing email itself.
 
 ---
 
-## 5. Server hosting region unconfirmed
+## 5. Server hosting region — RESOLVED (region confirmed, one new gap found)
 
-**Where:** "Where your data is stored" (shopper section).
+**Where:** "Where your data is stored" (shopper section), and the mirror
+sections on the Wallet Privacy Policy and DPA.
 
-**Issue:** Supabase's region was confirmed from the codebase (AWS
-`ca-central-1`, Montreal) and is *not* flagged. Railway's region — where
-the application server itself runs — could not be confirmed from the
-codebase.
+**Status: RESOLVED**, as of `PRIVACY`/`DPA`/`SHOPPER_PRIVACY` version
+`2026-09-01.2`. Checked directly in the Railway dashboard (2026-09-01):
+the `receiptap-backend` service runs in **US West**, serving
+www.receiptap.com. All three documents now say so explicitly, distinct
+from Supabase (Montreal) — the previous wording said "stored in Canada"
+with three narrow named exceptions (Google/Anthropic/Resend), which
+understated things: the application server itself, not just those three
+features, processes every request outside Canada, continuously, not
+briefly.
 
-**Needed:** confirm the Railway deployment region and update this
-paragraph if the app server itself runs outside Canada.
+**New gap found in the process:** Railway wasn't in either subprocessor
+list (Privacy Policy or DPA) at all, despite being the provider that
+hosts and runs the entire application. Added to both.
+
+**Still open:** whether an additional cross-border transfer safeguard
+(e.g. standard contractual clauses) is legally required now that this is
+disclosed as continuous processing, not just an occasional third-party
+touch — left as a `[[REVIEW]]` marker on all three documents, a lawyer
+question, not a factual one.
+
+**Also worth knowing, found while checking this:** the Railway project is
+**live and actively deployed** at www.receiptap.com, auto-deploying on
+every push to `main` — `CLAUDE.md`'s "Not deployed yet... just not hosted
+anywhere real yet" is stale. Worth updating that file, and worth knowing
+that every legal-page edit made from here on is going live immediately on
+push, not sitting in a staging environment first.
 
 ---
 
@@ -263,18 +295,13 @@ date-stamp updates are acceptable.
 
 ## Terms of Service
 
-## 10. Registered address is missing (same gap as the Privacy Policy)
+## 10. Registered address — RESOLVED (same fix as item 1)
 
 **Where:** intro paragraph and the contact box on the Terms of Service.
 
-**Issue:** same missing registered address as item 1 above — both
-documents now read it from the same shared `ENTITY` constant in
-`routes/legal.js` (renamed from `PRIVACY_ENTITY`, since it's no longer
-Privacy-specific), so this resolves in both places the moment it's filled
-in.
-
-**Needed:** same as item 1 — fill in `ENTITY.registeredAddress` in
-`routes/legal.js` once the real address is available.
+**Status: RESOLVED**, as of `TERMS.version` `2026-09-01.1` — see item 1
+above. Both documents read the same shared `ENTITY` constant in
+`routes/legal.js`, so the one fill-in resolved both.
 
 ---
 
@@ -403,19 +430,14 @@ handled) rather than an oversight.
 
 ---
 
-## 19. Data-purge automation status (same tension as the Privacy Policy)
+## 19. Data-purge automation status — RESOLVED (same fix as item 2)
 
 **Where:** "Termination."
 
-**Issue:** identical tension to the Privacy Policy's retention sections —
-the Terms state the 90-day post-deactivation purge as policy, but
-automated purging is gated behind `RETENTION_PURGE_ENABLED`, which is
-unset in every environment. Nothing is actually being auto-deleted on this
-schedule today.
-
-**Needed:** same as the Privacy Policy's equivalent note — either turn on
-live purging so the stated policy matches reality, or have a lawyer
-confirm stating it as a forward-looking commitment is acceptable.
+**Status: RESOLVED**, as of `TERMS.version` `2026-09-01.2` — see item 2
+above. Same wording fix: the 90-day post-deactivation purge is now stated
+as policy/commitment, with a real contact for anyone who wants it done
+sooner, rather than implying it already runs automatically.
 
 ---
 
@@ -464,10 +486,11 @@ enforcing that today.
 on the DPA page — resolving the item above resolves this too, nothing
 separate to track):
 
-- Registered address — same as item 1/10.
+- Registered address — RESOLVED, same as item 1/10.
 - Retention windows enforced in code but not live in production
-  (`RETENTION_PURGE_ENABLED` unset) — same as item 2/19.
-- Application server (Railway) region unconfirmed — same as item 5.
+  (`RETENTION_PURGE_ENABLED` unset) — RESOLVED (wording), same as item
+  2/19.
+- Application server (Railway) region — RESOLVED, same as item 5.
 - Breach notification timeline unconfirmed under PIPEDA — same as item 8.
 
 ## 21. Security-measures language is deliberately conservative
@@ -625,15 +648,20 @@ accounts, which also have no `LegalAcceptance` rows written at all today
 mechanism should be built, or whether passive linking is acceptable for
 this product.
 
-**27. Scanned receipt photo storage — same interim-storage gap as elsewhere.**
+**27. Scanned receipt photo storage — RESOLVED, stale when written.**
 **Where:** Wallet Privacy Policy, "Scanning a receipt."
-**Issue:** `routes/customer-account.js`'s `handleReceiptScanUpload` writes
-uploaded receipt photos to the application server's local disk
-(`public/uploads/receipt-scans/`), the same interim pattern already noted
-elsewhere in this app (`routes/billing.js`, `routes/theme-settings.js`) —
-not real object storage, no dedicated access control.
-**Needed:** move to real object storage before this feature is relied on
-at scale; revisit this paragraph once it does.
+**Correction (2026-09-01):** this was inaccurate as of this writing --
+`routes/customer-account.js` calls `fileStorage.putPrivate()`
+(`lib/fileStorage.js`), which uploads to a real Supabase Storage private
+bucket whenever `SUPABASE_URL`/`SUPABASE_SERVICE_KEY`/
+`SUPABASE_PRIVATE_BUCKET` are set -- confirmed set in `.env`, and verified
+directly by pulling a real scanned receipt back out of that bucket. Local
+disk (`public/uploads/receipt-scans/`) is only ever a fallback for an
+environment with none of those configured. Access is gated too: photos are
+served only through `GET /account/receipts/scanned/:id/image`, which
+checks session ownership before streaming, never a public URL. No factual
+gap remains here -- same reasoning as the IP-address correction at the
+bottom of this file.
 
 **28. No scheduled purge for `ScannedReceipt` rows individually.**
 **Where:** Wallet Privacy Policy, "How long we keep your data."

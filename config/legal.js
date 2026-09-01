@@ -15,19 +15,35 @@
 // plus a same-day sequence number (starts at 1) for same-day revisions.
 
 const LEGAL_DOCUMENTS = {
+  // 2026-09-01 -- ENTITY.registeredAddress (routes/legal.js) filled in for
+  // the first time on all five documents below, replacing the literal
+  // "[[REVIEW: address pending]]" placeholder every one of them was
+  // rendering. That's a change to what the page actually shows, so every
+  // document gets the same version bump per the rule above, which is also
+  // what puts every merchant who already accepted the old (placeholder)
+  // wording through /legal/reaccept on their next dashboard visit.
+  // 2026-09-01.2/.3 (TERMS/PRIVACY/DPA/SHOPPER_PRIVACY) -- softened the
+  // retention-window paragraphs from stating deletion as something that
+  // already happens on schedule to stating it as policy/commitment, since
+  // RETENTION_PURGE_ENABLED has never been set and nothing has ever
+  // actually auto-deleted on this schedule. Each paragraph now points to
+  // a real, working manual-deletion contact instead of implying live
+  // enforcement. TERMS only picks up this one bump today (.1 -> .2); the
+  // other three already had a same-day bump from the Railway/subprocessor
+  // disclosure, so they go to .3.
   TERMS: {
-    version: '2026-08-23.1',
-    lastUpdated: '2026-08-23',
+    version: '2026-09-01.2',
+    lastUpdated: '2026-09-01',
     label: 'Terms of Service',
   },
   PRIVACY: {
-    version: '2026-08-22.1',
-    lastUpdated: '2026-08-22',
+    version: '2026-09-01.3',
+    lastUpdated: '2026-09-01',
     label: 'Privacy Policy',
   },
   DPA: {
-    version: '2026-08-18.1',
-    lastUpdated: '2026-08-18',
+    version: '2026-09-01.3',
+    lastUpdated: '2026-09-01',
     label: 'Data Processing Agreement',
   },
   // The two documents above are written for the business that creates a
@@ -40,13 +56,13 @@ const LEGAL_DOCUMENTS = {
   // controller/processor relationship, and an individual wallet holder
   // isn't a data controller the way a merchant is.
   SHOPPER_TERMS: {
-    version: '2026-08-23.1',
-    lastUpdated: '2026-08-23',
+    version: '2026-09-01.1',
+    lastUpdated: '2026-09-01',
     label: 'Wallet Terms of Service',
   },
   SHOPPER_PRIVACY: {
-    version: '2026-08-23.1',
-    lastUpdated: '2026-08-23',
+    version: '2026-09-01.3',
+    lastUpdated: '2026-09-01',
     label: 'Wallet Privacy Policy',
   },
 };

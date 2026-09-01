@@ -272,7 +272,7 @@ app.use(require('./routes/demo'));                    // /demo/receipt -- landin
 
 // Root: marketing landing page for visitors, dashboard for logged-in merchants
 app.get('/', (req, res) => {
-  if (req.session?.merchantId) return res.redirect('/dashboard/receipts-hub');
+  if (req.session?.merchantId) return res.redirect('/account/business');
   res.render('landing', { goodApiImpactUrl: goodApiPublicImpactUrl });
 });// 3D scroll experience — brand showcase page
 app.get('/experience', (req, res) => {

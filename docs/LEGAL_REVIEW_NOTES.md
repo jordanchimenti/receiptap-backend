@@ -360,27 +360,22 @@ than just visually patched.
 
 ---
 
-## 13. Price-increase notice has no delivery mechanism yet — PARTIALLY RESOLVED
+## 13. Price-increase notice has no delivery mechanism yet — RESOLVED
 
 **Where:** "Subscription and billing" → "Price changes."
 
-**Issue:** the Terms commit specifically to a 30-day **email** notice
-before any price increase takes effect: *"we'll email you at least 30
-days before the new price takes effect"* (`views/partials/legal-terms-content.ejs`).
+**Status: RESOLVED**, as of `TERMS.version` `2026-09-01.5`. Founder
+decision: option (a) from the choice below — reworded the promise to
+match the mechanism, rather than building email to match the old
+wording. The Terms now say *"we'll notify you in your dashboard's
+Notifications tab at least 30 days before the new price takes effect,"*
+delivered via `/admin/announce` (same mechanism as item 9), not email.
 
-**Status: a delivery mechanism now exists (2026-09-01, `/admin/announce`,
-same fix as item 9), but it's in-app notification, not email — it
-doesn't actually match what's literally promised.** A merchant who
-doesn't check their Notifications tab would miss a price-increase notice
-sent this way even though the Terms specifically say "email."
-
-**Still needed — a real decision, not yet made:** either (a) reword this
-sentence to promise in-app notification instead of email, matching the
-mechanism that actually exists, or (b) add a real email send to
-`notifyAllMerchantsOfAnnouncement` (or a dedicated caller of it) so the
-mechanism matches the literal promise already published. Don't treat
-this as resolved by the wording alone or by the mechanism alone — they
-have to agree with each other before a real price increase relies on it.
+**What this replaced, for the record:** the Terms used to promise
+specifically to *email* the notice, which `/admin/announce` (in-app
+only) never actually matched — a real gap between the literal wording
+and the mechanism, caught during a later audit pass and closed here
+rather than left as a live mismatch.
 
 ---
 

@@ -44,8 +44,13 @@ const LEGAL_DOCUMENTS = {
   // placeholder from .3 above was itself replaced with the real founder
   // decision (tax-inclusive pricing, no Stripe Tax) minutes later -- a
   // second content change past .3 that needed its own bump.
+  // 2026-09-01.5 (TERMS only) -- "Price changes" specifically promised to
+  // *email* a price-increase notice, but the mechanism built for it
+  // (/admin/announce) only ever delivers in-app -- reworded to promise
+  // what the mechanism actually does, rather than leaving the two
+  // disagreeing with each other.
   TERMS: {
-    version: '2026-09-01.4',
+    version: '2026-09-01.5',
     lastUpdated: '2026-09-01',
     label: 'Terms of Service',
   },

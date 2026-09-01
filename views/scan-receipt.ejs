@@ -313,8 +313,20 @@
       }
     });
 
-    cameraFallbackInput.addEventListener('change', () => { if (cameraFallbackInput.files[0]) useFile(cameraFallbackInput.files[0]); });
-    fileInput.addEventListener('change', () => { if (fileInput.files[0]) useFile(fileInput.files[0]); });
+    // Unlike the live camera below (which always captures at a bounded
+    // resolution), a file picked from the photo library or the native
+    // camera fallback comes straight off the device at whatever size the
+    // camera app saved it -- often several megabytes. That's extra upload
+    // time and extra time for the vision model to read the image for no
+    // legibility gain (see the comment on MAX_EDGE near capturePhoto: the
+    // model downsamples past ~1568px anyway), so it gets the same
+    // downscale/compress pass the live camera's own capture goes through.
+    cameraFallbackInput.addEventListener('change', async () => {
+      if (cameraFallbackInput.files[0]) useFile(await prepareFileForUpload(cameraFallbackInput.files[0]));
+    });
+    fileInput.addEventListener('change', async () => {
+      if (fileInput.files[0]) useFile(await prepareFileForUpload(fileInput.files[0]));
+    });
 
     // --- Live camera overlay ---
     const overlay = document.getElementById('camera-overlay');
@@ -628,6 +640,50 @@
     // resolution and focus -- which it now does.
     const MAX_EDGE = 1800;
     const MAX_UPLOAD_BYTES = 4 * 1024 * 1024; // one under the server's 5MB
+
+    // Same downscale-and-compress pass encodeWithinLimit() below does for a
+    // live capture, but for a file that arrived already-encoded (photo
+    // picker, native camera fallback) instead of a live <video> frame.
+    // Already-small files are returned untouched -- decoding and
+    // re-encoding a receipt that's already a few hundred KB only costs
+    // time for no benefit.
+    async function prepareFileForUpload(file) {
+      if (file.size <= MAX_UPLOAD_BYTES) {
+        try {
+          const bitmap = await createImageBitmap(file);
+          const withinEdge = Math.max(bitmap.width, bitmap.height) <= MAX_EDGE;
+          bitmap.close();
+          if (withinEdge) return file;
+        } catch (err) {
+          return file; // not decodable here -- let the server's own validation handle it
+        }
+      }
+
+      let bitmap;
+      try {
+        bitmap = await createImageBitmap(file);
+      } catch (err) {
+        return file;
+      }
+
+      const scale = Math.min(1, MAX_EDGE / Math.max(bitmap.width, bitmap.height));
+      const resizeCanvas = document.createElement('canvas');
+      resizeCanvas.width = Math.round(bitmap.width * scale);
+      resizeCanvas.height = Math.round(bitmap.height * scale);
+      resizeCanvas.getContext('2d').drawImage(bitmap, 0, 0, resizeCanvas.width, resizeCanvas.height);
+      bitmap.close();
+
+      let quality = 0.9;
+      while (quality > 0.55) {
+        const blob = await new Promise((resolve) => resizeCanvas.toBlob(resolve, 'image/jpeg', quality));
+        if (!blob) return file;
+        if (blob.size <= MAX_UPLOAD_BYTES) {
+          return new File([blob], 'receipt-' + Date.now() + '.jpg', { type: 'image/jpeg' });
+        }
+        quality -= 0.15;
+      }
+      return file; // couldn't get under the limit here -- the server's own size check explains it
+    }
 
     function capturePhoto(options) {
       // Guards against the auto-capture and a manual tap both firing, which

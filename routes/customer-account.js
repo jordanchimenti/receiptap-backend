@@ -1387,18 +1387,25 @@ function centsToInput(cents) {
 router.post('/account/receipts/scan', requireCustomerAuth, handleReceiptScanUpload, async (req, res) => {
   if (!req.file) return res.redirect('/account/receipts/scan?error=' + encodeURIComponent('Please choose a photo to upload.'));
 
-  // Stored first, so the review page's <img> has something to point at, and
-  // so a photo is never left only in memory. Extraction reads the same buffer
-  // rather than re-fetching what was just written. putPrivate() -- this photo
-  // must never be reachable except through the proxy/preview routes below.
-  let imageKey;
-  try {
-    imageKey = await fileStorage.putPrivate('receipt-scans', req.file, { prefix: req.session.customerId });
-  } catch (err) {
-    console.error('[scan] storing the photo failed:', err.message);
+  // Storing the photo and reading it with the AI don't depend on each other
+  // -- both start from the same in-memory buffer -- so they run
+  // concurrently instead of one after the other. The AI call (several
+  // seconds) dominates either way, but this still saves the storage
+  // upload's own time off the customer's wait, which used to be paid in
+  // addition to it. putPrivate() -- this photo must never be reachable
+  // except through the proxy/preview routes below.
+  const [storeResult, extracted] = await Promise.all([
+    fileStorage
+      .putPrivate('receipt-scans', req.file, { prefix: req.session.customerId })
+      .then((key) => ({ key, error: null }))
+      .catch((err) => ({ key: null, error: err })),
+    extractReceiptData(req.file.buffer, req.file.mimetype),
+  ]);
+  if (storeResult.error) {
+    console.error('[scan] storing the photo failed:', storeResult.error.message);
     return res.redirect('/account/receipts/scan?error=' + encodeURIComponent("We couldn't save that photo — please try again."));
   }
-  const extracted = await extractReceiptData(req.file.buffer, req.file.mimetype);
+  const imageKey = storeResult.key;
 
   res.render('scan-receipt-review', {
     imageKey,

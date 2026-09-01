@@ -48,10 +48,15 @@ const ALLOWED_PATH_PREFIXES = [
 
 async function requireDemoAccess(req, res, next) {
   try {
-    const merchant = await prisma.merchant.findUnique({
-      where: { id: req.session.merchantId },
-      select: { isDemoAccount: true },
-    });
+    // Mounted immediately before subscriptionGate on both /dashboard and
+    // /account/business (server.js), which used to run its OWN
+    // prisma.merchant.findUnique for the same merchant right after this one
+    // -- two full round trips to Postgres, back to back, for identical
+    // data, on every single dashboard/wallet page a merchant loads. Fetching
+    // the full row here (not just isDemoAccount) and stashing it on the
+    // request lets subscriptionGate reuse it instead of asking again.
+    const merchant = await prisma.merchant.findUnique({ where: { id: req.session.merchantId } });
+    req._merchant = merchant;
     if (!merchant?.isDemoAccount) return next(); // not a demo account -- nothing to do here
 
     const pathname = req.originalUrl.split('?')[0];

@@ -4,9 +4,18 @@
 require('dotenv').config();
 const express = require('express');
 const session = require('express-session');
+const compression = require('compression');
 const path = require('path');
 
 const app = express();
+
+// Gzips every HTML/CSS/JS/JSON response before it goes out. Nothing here
+// used to compress at all -- public/css/receiptap.css (the entire design
+// system, per CLAUDE.md) and every server-rendered EJS page went over the
+// wire uncompressed, which on a phone connection is the difference between
+// one round trip and several. compression() already skips content that's
+// already compressed (images, PDFs) via its default filter.
+app.use(compression());
 
 // Railway (like Heroku/Render) terminates HTTPS at its edge and forwards to
 // this container over a plain connection. Without telling Express to trust
@@ -30,6 +39,20 @@ process.on('uncaughtException', (err) => {
 
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
+// Express only turns this on by itself when NODE_ENV=production (here it's
+// "development" -- see .env). Off, every single page render re-reads every
+// .ejs file (the page itself plus every partial it includes, e.g.
+// partials/dashboard-header on every dashboard page) from disk and
+// re-compiles it from scratch, SYNCHRONOUSLY -- which blocks the entire
+// event loop, not just the request being rendered, so it slows down every
+// other in-flight request too, not just the one page. Forcing it on here
+// (independent of NODE_ENV, so this doesn't also flip cookie.secure and
+// other prod-only behavior below) fixes that without touching anything
+// else. Safe with the current workflow either way: `npm run dev` already
+// restarts the whole process on file change (node --watch), and the
+// long-running `node server.js` instance already needs a restart to pick up
+// any edit, cached views or not.
+app.set('view cache', true);
 
 // Stripe, Square, Lightspeed, and Shopify webhooks all need the raw,
 // unparsed body for signature verification — must be mounted BEFORE

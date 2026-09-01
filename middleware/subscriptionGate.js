@@ -67,7 +67,14 @@ function billingBasePath(req) {
  */
 async function requireActiveSubscription(req, res, next) {
   try {
-    let merchant = await prisma.merchant.findUnique({ where: { id: req.session.merchantId } });
+    // demoAccountGate (mounted immediately before this, on both /dashboard
+    // and /account/business -- server.js) already fetched this exact
+    // merchant row one middleware ago. Reusing it instead of asking Postgres
+    // again saves a full round trip on every dashboard/wallet page load.
+    // Checked with 'in' rather than a truthiness check, since a genuinely
+    // missing merchant caches as null, not undefined -- and that's still a
+    // real answer worth reusing, not a cache miss.
+    let merchant = '_merchant' in req ? req._merchant : await prisma.merchant.findUnique({ where: { id: req.session.merchantId } });
     if (!merchant) return res.redirect('/login');
 
     // Demo accounts never have a real subscription -- their subscriptionStatus

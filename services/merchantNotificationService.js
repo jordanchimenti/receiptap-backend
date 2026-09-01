@@ -139,6 +139,24 @@ async function sendTreePlantedEmailSafely(merchantId, treesPlanted) {
   }
 }
 
+// Fired by hand from /admin/announce (routes/admin.js) -- a policy/price
+// change, or anything else worth telling every merchant about at once.
+// There's no bulk/automated email sender in this app (see
+// docs/LEGAL_REVIEW_NOTES.md items 9 and 13), so the Notifications tab is
+// the actual delivery mechanism, not a supplement to one. createMany
+// rather than a loop of individual creates -- one round trip regardless of
+// merchant count. Deactivated merchants are skipped: they can't sign in to
+// read it anyway, and their data is on its own purge clock already.
+async function notifyAllMerchantsOfAnnouncement({ title, body, linkUrl }) {
+  const merchants = await prisma.merchant.findMany({ where: { isActive: true }, select: { id: true } });
+  if (merchants.length === 0) return { count: 0 };
+
+  const result = await prisma.merchantNotification.createMany({
+    data: merchants.map((m) => ({ merchantId: m.id, type: 'ANNOUNCEMENT', title, body, linkUrl: linkUrl || null })),
+  });
+  return { count: result.count };
+}
+
 async function listNotifications(merchantId) {
   return prisma.merchantNotification.findMany({
     where: { merchantId },
@@ -164,6 +182,7 @@ module.exports = {
   notifyPosConnectionFailed,
   notifyPayoutCompleted,
   notifyTreePlanted,
+  notifyAllMerchantsOfAnnouncement,
   listNotifications,
   countUnread,
   markAllRead,

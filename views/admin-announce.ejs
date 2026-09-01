@@ -1,0 +1,114 @@
+<!-- views/admin-announce.ejs — owner-only page to notify every merchant or
+     every wallet customer at once (routes/admin.js's GET/POST /admin/announce).
+     Exists because there's no bulk/automated email sender in this app (see
+     docs/LEGAL_REVIEW_NOTES.md items 9 and 13) -- a policy or price change
+     has nowhere else to be announced except each person's own Notifications
+     tab, which this writes to directly via notifyAllMerchantsOfAnnouncement /
+     notifyAllCustomersOfAnnouncement. Dark theme matching the wallet
+     dashboard, see partials/admin-dark-theme.ejs. -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Announce - Owner view - ReceipTap</title>
+  <link rel="stylesheet" href="/css/receiptap.css" />
+  <%- include('partials/admin-dark-theme') %>
+  <style>
+    .announce-field { margin-bottom: 16px; }
+    .announce-field label {
+      display: block; font-size: 12px; font-weight: 700; letter-spacing: 0.03em;
+      color: var(--w-ink-soft); margin-bottom: 6px;
+    }
+    .announce-field .hint { font-size: 12px; color: var(--w-ink-soft); margin-top: 5px; }
+    .announce-field input[type="text"],
+    .announce-field textarea {
+      width: 100%; box-sizing: border-box; background: var(--w-card-raised);
+      border: 1px solid var(--w-line); border-radius: 8px; color: var(--w-ink);
+      padding: 10px 12px; font-size: 14px; font-family: var(--font-body);
+    }
+    .announce-field input[type="text"]:focus,
+    .announce-field textarea:focus { outline: 2px solid var(--w-accent); outline-offset: 1px; border-color: var(--w-accent); }
+    .announce-field textarea { min-height: 96px; resize: vertical; }
+    .audience-row { display: flex; gap: 10px; margin-bottom: 20px; }
+    .audience-option {
+      flex: 1; display: flex; align-items: center; gap: 8px; padding: 12px 14px;
+      border: 1px solid var(--w-line); border-radius: 8px; cursor: pointer; background: var(--w-card-raised);
+    }
+    .audience-option:has(input:checked) { border-color: var(--w-accent); background: var(--w-accent-wash); }
+    .audience-option input { margin: 0; }
+    .audience-option .label { font-size: 13.5px; font-weight: 600; color: var(--w-ink); }
+    .audience-option .count { font-size: 12px; color: var(--w-ink-soft); }
+    .success-box {
+      background: var(--w-ok-wash); border: 1px solid rgba(48,209,88,0.35); color: var(--w-ok);
+      border-radius: 10px; padding: 12px 16px; font-size: 13.5px; margin-bottom: 18px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="owner-shell">
+    <div class="owner-header">
+      <span class="owner-eyebrow"><span class="sw"></span>Owner view — every merchant on ReceipTap</span>
+      <a href="/account/business">← Back to my own dashboard</a>
+    </div>
+
+    <%- include('partials/admin-tabs', { activeTab }) %>
+
+    <h1>Announce</h1>
+    <p class="sub">Tell every merchant or every wallet customer something at once — there's no bulk email sender, so this writes straight to their Notifications tab.</p>
+
+    <% if (error) { %><div class="error-box" style="margin-bottom:18px;"><%= error %></div><% } %>
+    <% if (sentCount !== null) { %>
+      <div class="success-box">Sent to <%= sentCount.toLocaleString('en-US') %> <%= sentCount === 1 ? 'recipient' : 'recipients' %>.</div>
+    <% } %>
+
+    <div class="card">
+      <div class="card-head"><h2>New announcement</h2></div>
+      <div style="padding: 20px;">
+        <form method="POST" action="/admin/announce"
+              onsubmit="return confirm('Send this to every recipient in the selected audience? This can\'t be undone.');">
+
+          <div class="audience-row">
+            <label class="audience-option">
+              <input type="radio" name="audience" value="merchants" checked />
+              <span>
+                <span class="label">Merchants</span><br />
+                <span class="count"><%= merchantCount.toLocaleString('en-US') %> active</span>
+              </span>
+            </label>
+            <label class="audience-option">
+              <input type="radio" name="audience" value="customers" />
+              <span>
+                <span class="label">Wallet customers</span><br />
+                <span class="count"><%= customerCount.toLocaleString('en-US') %> total</span>
+              </span>
+            </label>
+          </div>
+
+          <div class="announce-field">
+            <label for="title">Title</label>
+            <input type="text" id="title" name="title" maxlength="120" required
+                   placeholder="e.g. Our Terms of Service changed" />
+          </div>
+
+          <div class="announce-field">
+            <label for="body">Message</label>
+            <textarea id="body" name="body" maxlength="500" required
+                      placeholder="Plain language — this is what shows in their Notifications tab."></textarea>
+          </div>
+
+          <div class="announce-field">
+            <label for="linkUrl">Link (optional)</label>
+            <input type="text" id="linkUrl" name="linkUrl" maxlength="200"
+                   placeholder="/legal/privacy" />
+            <div class="hint">Where tapping the notification goes. Leave blank to just link to their own dashboard.</div>
+          </div>
+
+          <button type="submit" class="btn btn-primary" style="width:auto;">Send announcement</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

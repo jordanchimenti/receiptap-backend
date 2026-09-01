@@ -8,6 +8,8 @@ const router = express.Router();
 const crypto = require('crypto');
 const prisma = require('../lib/prisma');
 const { requireAdmin } = require('../middleware/requireAdmin');
+const { notifyAllMerchantsOfAnnouncement } = require('../services/merchantNotificationService');
+const { notifyAllCustomersOfAnnouncement } = require('../services/notificationService');
 
 const PRICE_USD = 49.99; // what an active subscription bills per month
 
@@ -300,6 +302,48 @@ router.get('/admin/merchants/export', requireAdmin, async (req, res) => {
   res.setHeader('Content-Type', 'text/csv');
   res.setHeader('Content-Disposition', 'attachment; filename="receiptap-merchants.csv"');
   res.send(csv);
+});
+
+// GET/POST /admin/announce — the actual fix for "there's no way to tell
+// everyone about a policy or price change": no bulk/automated email sender
+// exists in this app, so this writes straight to the Notifications tab
+// every merchant and wallet customer already has, via
+// notifyAllMerchantsOfAnnouncement / notifyAllCustomersOfAnnouncement. A
+// manual, owner-triggered action rather than automatic version-change
+// detection -- matches how a legal-document version bump or a price change
+// already happens here: a person deliberately changes something in code,
+// not a system inferring intent from a diff.
+router.get('/admin/announce', requireAdmin, async (req, res) => {
+  const [merchantCount, customerCount] = await Promise.all([
+    prisma.merchant.count({ where: { isActive: true } }),
+    prisma.customer.count(),
+  ]);
+  res.render('admin-announce', {
+    admin: res.locals.adminUser,
+    activeTab: 'announce',
+    merchantCount,
+    customerCount,
+    sentCount: req.query.sent ? Number(req.query.sent) : null,
+    error: req.query.error || null,
+  });
+});
+
+router.post('/admin/announce', requireAdmin, async (req, res) => {
+  const { audience, title, body, linkUrl } = req.body;
+  const trimmedTitle = (title || '').trim();
+  const trimmedBody = (body || '').trim();
+
+  if (!trimmedTitle || !trimmedBody) {
+    return res.redirect('/admin/announce?error=' + encodeURIComponent('Title and message are both required.'));
+  }
+
+  const cleanLinkUrl = linkUrl && linkUrl.trim() ? linkUrl.trim() : null;
+  const result =
+    audience === 'customers'
+      ? await notifyAllCustomersOfAnnouncement({ title: trimmedTitle, body: trimmedBody, linkUrl: cleanLinkUrl })
+      : await notifyAllMerchantsOfAnnouncement({ title: trimmedTitle, body: trimmedBody, linkUrl: cleanLinkUrl });
+
+  res.redirect('/admin/announce?sent=' + result.count);
 });
 
 module.exports = router;

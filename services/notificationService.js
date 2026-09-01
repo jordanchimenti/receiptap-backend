@@ -165,6 +165,22 @@ async function notifyReceiptDeleted({ customerId, merchantName, totalCents }) {
   });
 }
 
+// --- Platform-wide announcements --------------------------------------------
+// Fired by hand from /admin/announce (routes/admin.js) -- same reasoning as
+// notifyAllMerchantsOfAnnouncement in merchantNotificationService.js: no
+// bulk/automated email sender exists, so the Alerts tab is the real
+// delivery mechanism for a policy or price change, not a supplement to one.
+
+async function notifyAllCustomersOfAnnouncement({ title, body, linkUrl }) {
+  const customers = await prisma.customer.findMany({ select: { id: true } });
+  if (customers.length === 0) return { count: 0 };
+
+  const result = await prisma.notification.createMany({
+    data: customers.map((c) => ({ customerId: c.id, type: 'ANNOUNCEMENT', title, body, linkUrl: linkUrl || null })),
+  });
+  return { count: result.count };
+}
+
 async function listNotifications(customerId) {
   return prisma.notification.findMany({
     where: { customerId },
@@ -189,6 +205,7 @@ module.exports = {
   notifyWarrantyExpiring,
   notifyReceiptSaved,
   notifyReceiptDeleted,
+  notifyAllCustomersOfAnnouncement,
   listNotifications,
   countUnread,
   markAllRead,

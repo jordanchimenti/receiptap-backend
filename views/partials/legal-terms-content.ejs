@@ -182,7 +182,10 @@
 
     <h3>Taxes</h3>
     <p>
-      <span class="review">[[REVIEW: whether the price shown to you at signup includes or excludes applicable sales tax has not been decided, and our billing system doesn't currently calculate or add tax to a subscription charge. This needs a real answer — and, if tax needs to be added, real Stripe Tax configuration — before this section can say something accurate.]]</span>
+      The price shown to you at signup is the full amount you'll be
+      charged — it already accounts for any tax obligation we have, so
+      nothing is added on top of it at checkout.
+      <span class="review">[[FOUNDER DECISION 2026-09-01: price is tax-inclusive, no separate Stripe Tax line. Revisit if/when revenue crosses a threshold requiring tax to be charged separately in a given jurisdiction.]]</span>
     </p>
 
     <h3>Price changes</h3>

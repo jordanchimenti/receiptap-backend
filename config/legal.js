@@ -31,18 +31,36 @@ const LEGAL_DOCUMENTS = {
   // enforcement. TERMS only picks up this one bump today (.1 -> .2); the
   // other three already had a same-day bump from the Railway/subprocessor
   // disclosure, so they go to .3.
+  // 2026-09-01.3/.4 (TERMS/DPA/SHOPPER_TERMS) -- found while checking for
+  // more instances of the "Unsubscribe from marketing" bug (a [[REVIEW]]
+  // marker as the ONLY content of its element, which strip() then hides
+  // in production, leaving an empty heading or a broken sentence): Terms'
+  // "Taxes" section, DPA's "Demonstrating compliance" and "Liability"
+  // sections, and the Wallet Terms' liability sentence ("...capped at .")
+  // were all live and empty/broken this way. Patched with honest,
+  // non-committal real copy -- not the actual decisions, which still need
+  // the founder/a lawyer -- so nothing on the live site reads as broken.
+  // 2026-09-01.4 (TERMS only) -- the "Taxes" section's non-committal
+  // placeholder from .3 above was itself replaced with the real founder
+  // decision (tax-inclusive pricing, no Stripe Tax) minutes later -- a
+  // second content change past .3 that needed its own bump.
   TERMS: {
-    version: '2026-09-01.2',
+    version: '2026-09-01.4',
     lastUpdated: '2026-09-01',
     label: 'Terms of Service',
   },
+  // 2026-09-01.4 (PRIVACY only) -- the "Unsubscribe from marketing" bullet
+  // was entirely inside a [[REVIEW: ...]] marker, which the strip() helper
+  // in views/legal-document.ejs hides in production -- so real visitors
+  // saw the bullet's label with nothing after it. Replaced with the real
+  // customer-facing copy the marker already described.
   PRIVACY: {
-    version: '2026-09-01.3',
+    version: '2026-09-01.4',
     lastUpdated: '2026-09-01',
     label: 'Privacy Policy',
   },
   DPA: {
-    version: '2026-09-01.3',
+    version: '2026-09-01.4',
     lastUpdated: '2026-09-01',
     label: 'Data Processing Agreement',
   },
@@ -55,13 +73,21 @@ const LEGAL_DOCUMENTS = {
   // PRIVACY/DPA. There's no shopper-side DPA: a DPA governs a
   // controller/processor relationship, and an individual wallet holder
   // isn't a data controller the way a merchant is.
+  // 2026-09-01.3 (SHOPPER_TERMS only) -- same pattern as TERMS above: the
+  // broken-sentence fix at .2 was itself replaced with the real founder
+  // decision (no additional dollar cap, relying on the legal minimum)
+  // minutes later, which needed its own bump.
   SHOPPER_TERMS: {
-    version: '2026-09-01.1',
+    version: '2026-09-01.3',
     lastUpdated: '2026-09-01',
     label: 'Wallet Terms of Service',
   },
+  // 2026-09-01.4 (SHOPPER_PRIVACY only) -- founder decision: scanned
+  // receipts now age out on the same SHOPPER_RECEIPT_MONTHS schedule as
+  // tapped ones (purgeExpiredScannedReceipts in dataRetentionService.js),
+  // instead of being kept until account deletion. Wording updated to match.
   SHOPPER_PRIVACY: {
-    version: '2026-09-01.3',
+    version: '2026-09-01.4',
     lastUpdated: '2026-09-01',
     label: 'Wallet Privacy Policy',
   },

@@ -144,22 +144,22 @@
   <section id="retention">
     <h2>How long we keep your data</h2>
     <p>
-      Our policy is to keep your saved tap receipts, and your account
-      itself, for <strong><%= Math.round(retention.SHOPPER_RECEIPT_MONTHS / 12) %> years</strong>,
-      and then delete them. We keep them that long on purpose: the Canada
-      Revenue Agency expects business records to be kept for six years after
-      the end of the tax year they belong to, and US limitation periods can
-      run to seven. Deleting sooner would take your receipts away while you
-      might still need them. This is our policy and our commitment to you.
-      The automated system that enforces it is built and is being finalized
+      Our policy is to keep your saved receipts — whether tapped or
+      scanned — and your account itself, for
+      <strong><%= Math.round(retention.SHOPPER_RECEIPT_MONTHS / 12) %> years</strong>,
+      and then delete them. Both kinds of receipt follow the same
+      schedule, measured from the purchase date on the receipt itself
+      (or, for a scan with no legible date, from when you uploaded it).
+      We keep them that long on purpose: the Canada Revenue Agency expects
+      business records to be kept for six years after the end of the tax
+      year they belong to, and US limitation periods can run to seven.
+      Deleting sooner would take your receipts away while you might still
+      need them. This is our policy and our commitment to you. The
+      automated system that enforces it is built and is being finalized
       before we switch it on, so it isn't yet actively removing data on
-      this schedule today — if you'd like something deleted sooner, contact
-      us at <%= entity.contactEmail %>.
-    </p>
-    <p>
-      A receipt you scan or upload yourself doesn't age out on that same
-      automatic schedule — it's kept for as long as your account exists.
-      <span class="review">[[REVIEW: unlike Transaction rows (tap receipts), there is currently no scheduled purge job for ScannedReceipt rows individually -- a scanned receipt is only ever removed by deleting your whole account, or by hand on request. Decide whether scanned receipts should age out the same way tap receipts do, and if so, build that before this paragraph claims otherwise.]]</span>
+      this schedule today — if you'd like something deleted sooner,
+      contact us at <%= entity.contactEmail %>.
+      <span class="review">[[FOUNDER DECISION 2026-09-01: scanned receipts now follow the same SHOPPER_RECEIPT_MONTHS schedule as tapped ones, purchaseDate falling back to createdAt -- see purgeExpiredScannedReceipts() in services/dataRetentionService.js. Previously they were kept indefinitely until account deletion; this paragraph and that behavior were brought into agreement together.]]</span>
     </p>
     <p class="back-top"><a href="#retention">↑ Back to top</a></p>
   </section>

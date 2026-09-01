@@ -159,19 +159,23 @@ what's live today.
 
 ---
 
-## 3. Shopper-initiated global deletion is manual, not self-serve
+## 3. Shopper-initiated global deletion is manual, not self-serve — RESOLVED
 
 **Where:** "Getting a copy, deleting your data, or unsubscribing," delete
 bullet.
 
-**Issue:** today, a merchant can delete a shopper's data with that specific
-business via `/dashboard/customer-emails` (lookup + delete). A shopper
-asking ReceipTap directly to erase their data across every business they've
-used ReceipTap at is handled by hand, by us, on request — there's no
-self-serve "delete everywhere" page yet.
+**Status: RESOLVED**, founder decision (2026-09-01): keep this manual for
+now — email-us-and-we'll-handle-it is an acceptable, defensible answer at
+this stage of the business. `deleteShopperEverywhere()`
+(`services/dataRetentionService.js`) already exists and is tested for
+when this needs to be run by hand. The page's existing wording (asking a
+business directly, or emailing `entity.contactEmail`) already describes
+this accurately — no copy change was needed, this item was purely a
+decision to confirm.
 
-**Needed:** confirm this manual process is acceptable to describe as-is, or
-prioritize building a self-serve version before publishing.
+**Revisit when:** volume makes the manual process genuinely burdensome, or
+a specific request makes the turnaround time itself a problem worth
+solving with a real self-serve page.
 
 ---
 
@@ -180,9 +184,19 @@ prioritize building a self-serve version before publishing.
 **Where:** "Getting a copy, deleting your data, or unsubscribing,"
 unsubscribe bullet.
 
-**Issue:** ReceipTap doesn't send marketing or bulk email today, so there's
-no unsubscribe link to point to. The page currently just tells a shopper to
-email us and we'll record the request by hand.
+**Bug found and fixed separately (2026-09-01), as of `PRIVACY.version`
+`2026-09-01.4`:** this bullet's entire text used to live inside a
+`[[REVIEW: ...]]` marker, which `views/legal-document.ejs`'s `strip()`
+helper hides from real visitors in production — so the live page showed
+the bullet's bold label with nothing after it, for anyone who actually
+read this section. Replaced with the same content as real customer-facing
+copy. Worth a quick pass over the other four documents' review markers to
+check none of them are the *only* content of their bullet/paragraph the
+same way this one was.
+
+**Issue (still open):** ReceipTap doesn't send marketing or bulk email
+today, so there's no unsubscribe link to point to — the page now
+correctly says a shopper emails us and we record the request by hand.
 
 **Needed:** confirm that's acceptable for launch, or note this needs
 revisiting once/if ReceipTap starts sending any marketing email itself.
@@ -323,18 +337,23 @@ calculated), and confirm the code matches what this paragraph promises.
 
 ---
 
-## 12. Tax treatment on the subscription price is undetermined
+## 12. Tax treatment on the subscription price — RESOLVED (policy), no Stripe Tax built
 
 **Where:** "Subscription and billing" → "Taxes."
 
-**Issue:** no tax calculation exists anywhere in the billing code — no
-Stripe Tax configuration, no tax line on an invoice preview. Whether the
-price shown at signup is meant to include or exclude applicable sales tax
-has never been decided.
+**Status: RESOLVED**, founder decision (2026-09-01): the price shown at
+signup is tax-inclusive — nothing is added at checkout. No Stripe Tax
+configuration or billing-code change was needed for this. Revisit if/when
+revenue crosses a threshold that requires charging tax separately in a
+given jurisdiction; that would be a real, separate build (Stripe Tax
+config plus a tax line in the billing flow), not just a wording change.
 
-**Needed:** a decision, and if tax needs to be added, real Stripe Tax
-configuration to back it up before this section can state anything
-accurate.
+**Render bug found and fixed separately (2026-09-01):** this section's
+entire `[[REVIEW: ...]]` marker was its only content, which `strip()`
+hides in production — the live "Taxes" heading had nothing under it
+before either fix landed. Now carries the real decision above
+(`TERMS.version` `2026-09-01.3`), so this item is fully closed rather
+than just visually patched.
 
 ---
 
@@ -523,6 +542,13 @@ a dedicated compliance team.
 attestation on request, rather than an on-site audit right) and replace the
 placeholder paragraph with it.
 
+**Render bug found and fixed separately (2026-09-01):** same class of bug
+as item 12 — this section's `[[REVIEW: ...]]` marker was its only
+content, so the live "Demonstrating compliance" heading had nothing under
+it. Patched with honest, non-committal copy (`DPA.version` `2026-09-01.4`)
+pointing to a real contact; the actual audit-rights decision above is
+still open.
+
 ---
 
 ## 23. Whether the Terms' liability cap extends to DPA claims
@@ -538,6 +564,12 @@ generally, hasn't been decided.
 **Needed:** a legal decision on whether to carve out a different liability
 limit for DPA/data-protection claims, then replace the placeholder
 paragraph with the answer.
+
+**Render bug found and fixed separately (2026-09-01):** same class of bug
+as items 12 and 22 — the live "Liability" heading had nothing under it.
+Patched with honest, non-committal copy (`DPA.version` `2026-09-01.4`)
+restating the Terms' 12-month cap and noting the DPA-specific question is
+still open; the actual legal decision above still needs answering.
 
 ---
 
@@ -629,12 +661,20 @@ Policy above — a wallet account isn't a business and doesn't sign the DPA
 (there's no controller/processor relationship for an individual holder,
 so no wallet-side DPA exists). Open items:
 
-**25. No dollar figure for the liability cap.**
+**25. No dollar figure for the liability cap — RESOLVED.**
 **Where:** Wallet Terms, "Limitation of liability."
-**Issue:** the merchant Terms cap liability at 12 months of subscription
-fees paid — there's no equivalent number for a free wallet account.
-**Needed:** a lawyer-reviewed number or a different liability structure
-for this free product.
+**Status: RESOLVED**, founder decision (2026-09-01): no additional dollar
+cap for the free Wallet account — liability is limited to whatever
+applicable law itself provides, unlike the merchant Terms' 12-month cap.
+Live as of `SHOPPER_TERMS.version` `2026-09-01.2`. Still worth a lawyer's
+sanity check on the exact clause wording before treating it as final,
+same as any other liability clause — that's a wording-quality check now,
+not an open policy question.
+**Render bug found and fixed in the same pass (2026-09-01):** the old
+placeholder was a `[[REVIEW: ...]]` marker inline mid-sentence ("...is
+capped at [marker]."), so the live sentence read "...is capped at ." with
+a dangling period once `strip()` removed it in production — fixed as part
+of writing the real decision above, not as a separate step.
 
 **26. No re-acceptance interstitial for wallet accounts.**
 **Where:** Wallet Terms, "Changes to these Terms."
@@ -663,15 +703,22 @@ checks session ownership before streaming, never a public URL. No factual
 gap remains here -- same reasoning as the IP-address correction at the
 bottom of this file.
 
-**28. No scheduled purge for `ScannedReceipt` rows individually.**
+**28. No scheduled purge for `ScannedReceipt` rows individually — RESOLVED.**
 **Where:** Wallet Privacy Policy, "How long we keep your data."
-**Issue:** `Transaction` rows (tap receipts) age out automatically after
-`SHOPPER_RECEIPT_MONTHS` (once live purging is turned on — see item 2).
-`ScannedReceipt` rows have no equivalent scheduled purge; they're only
-ever removed by deleting the whole account (`deleteShopperEverywhere()`
-in `services/dataRetentionService.js`) or by hand.
-**Needed:** decide whether scanned receipts should age out the same way
-tap receipts do, and build that if so.
+**Status: RESOLVED**, founder decision (2026-09-01): scanned receipts now
+follow the same `SHOPPER_RECEIPT_MONTHS` schedule as tapped ones, kept
+consistent so a shopper never has to know the two are handled differently
+under the hood. Built `purgeExpiredScannedReceipts()` in
+`services/dataRetentionService.js`, mirroring `purgeExpiredReceipts()`'s
+shape (batched delete, dry-run default, one `PurgeLog` row per run), wired
+into the same daily scheduled job in `server.js` right alongside it. The
+cutoff is `purchaseDate` when the customer entered one, falling back to
+`createdAt` (the upload time) otherwise — same precedence
+`categorizeScannedInBackground` already uses for warranty dates, since a
+scan's upload time isn't necessarily its purchase date. Photo removal from
+storage is best-effort, same posture as every other file cleanup in this
+service. Still gated behind `RETENTION_PURGE_ENABLED` like everything
+else — see item 2 — so this doesn't turn on live deletion by itself.
 
 ---
 

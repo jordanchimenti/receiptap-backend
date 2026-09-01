@@ -238,6 +238,65 @@ async function purgeExpiredReceipts({ dryRun = true } = {}) {
 }
 
 /**
+ * Deletes ScannedReceipt rows (and their photo, from wherever fileStorage
+ * actually put it) older than SHOPPER_RECEIPT_MONTHS -- same window as
+ * purgeExpiredReceipts above, per founder decision (2026-09-01) to keep
+ * the two receipt kinds on one consistent schedule rather than scanned
+ * receipts outliving tapped ones indefinitely.
+ *
+ * The cutoff is purchaseDate when the customer entered one, falling back
+ * to createdAt (the upload time) otherwise -- same precedence
+ * categorizeScannedInBackground already uses for warranty dates, since a
+ * scanned photo's createdAt is when someone uploaded it, not necessarily
+ * when they bought it (a receipt found in a drawer months later still
+ * ages out from its real purchase date, not the day it was scanned).
+ *
+ * No RESTRICT-dependent child rows to delete first, unlike Transaction:
+ * ScannedReceiptShareLink.scannedReceiptId is ON DELETE CASCADE (see its
+ * own schema comment), so Postgres cleans those up on its own.
+ */
+async function purgeExpiredScannedReceipts({ dryRun = true } = {}) {
+  const startedAt = new Date();
+  const cutoff = monthsAgo(SHOPPER_RECEIPT_MONTHS);
+  const details = { ScannedReceipt: 0 };
+  let error = null;
+  const expiredWhere = {
+    OR: [{ purchaseDate: { lt: cutoff } }, { purchaseDate: null, createdAt: { lt: cutoff } }],
+  };
+
+  try {
+    if (dryRun) {
+      details.ScannedReceipt = await prisma.scannedReceipt.count({ where: expiredWhere });
+    } else {
+      details.ScannedReceipt = await deleteInBatches(
+        async (take) => {
+          const rows = await prisma.scannedReceipt.findMany({
+            where: expiredWhere,
+            select: { id: true, imageUrl: true },
+            take,
+          });
+          // Photo removal is best-effort and fire-and-forget, same posture
+          // as deleteUploadedFile above -- a storage hiccup must not stop
+          // the row itself from being purged on schedule.
+          rows.forEach((r) => fileStorage.removePrivate(r.imageUrl).catch(() => {}));
+          return rows.map((r) => r.id);
+        },
+        async (ids) => {
+          const result = await prisma.scannedReceipt.deleteMany({ where: { id: { in: ids } } });
+          return result.count;
+        }
+      );
+    }
+  } catch (err) {
+    error = err.message;
+    console.error('[dataRetentionService] purgeExpiredScannedReceipts failed:', err);
+  }
+
+  await writePurgeLog({ jobName: 'purgeExpiredScannedReceipts', dryRun, details, error, startedAt });
+  return { details, error };
+}
+
+/**
  * For every merchant deactivated (isActive: false) more than
  * DEACTIVATED_MERCHANT_PURGE_DAYS ago and not yet purged: deletes their
  * Transactions (+ dependent ShopperConsent rows), LoyaltyCard rows,
@@ -617,6 +676,7 @@ async function purgeShopifyShopData(shopDomain, { dryRun = true } = {}) {
 
 module.exports = {
   purgeExpiredReceipts,
+  purgeExpiredScannedReceipts,
   purgeDeactivatedMerchants,
   purgeAbandonedScanUploads,
   deleteShopperByEmail,

@@ -322,7 +322,7 @@ setInterval(() => {
 // than the literal string "true") keeps every run in dry-run mode
 // regardless of dataRetentionService's own default -- there is no way to
 // go live except by explicitly setting this in the environment.
-const { purgeExpiredReceipts, purgeDeactivatedMerchants, purgeAbandonedScanUploads } = require('./services/dataRetentionService');
+const { purgeExpiredReceipts, purgeExpiredScannedReceipts, purgeDeactivatedMerchants, purgeAbandonedScanUploads } = require('./services/dataRetentionService');
 const RETENTION_PURGE_ENABLED = process.env.RETENTION_PURGE_ENABLED === 'true';
 const RETENTION_PURGE_INTERVAL_MS = 24 * 60 * 60 * 1000; // daily
 const RETENTION_PURGE_BOOT_DELAY_MS = 60 * 1000; // let the app finish starting up first
@@ -343,8 +343,10 @@ async function runRetentionPurge() {
     const dryRun = !RETENTION_PURGE_ENABLED;
     console.log(`[retention] starting daily purge run (dryRun: ${dryRun})`);
     const receipts = await purgeExpiredReceipts({ dryRun });
+    const scannedReceipts = await purgeExpiredScannedReceipts({ dryRun });
     const merchants = await purgeDeactivatedMerchants({ dryRun });
     console.log('[retention] purgeExpiredReceipts:', JSON.stringify(receipts.details), receipts.error || '');
+    console.log('[retention] purgeExpiredScannedReceipts:', JSON.stringify(scannedReceipts.details), scannedReceipts.error || '');
     console.log('[retention] purgeDeactivatedMerchants:', JSON.stringify(merchants.details), merchants.error || '');
     const scans = await purgeAbandonedScanUploads({ dryRun });
     console.log('[retention] purgeAbandonedScanUploads:', JSON.stringify(scans.details), scans.error || '');

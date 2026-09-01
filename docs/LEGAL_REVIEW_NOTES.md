@@ -292,18 +292,21 @@ page should state them explicitly.
 
 ---
 
-## 9. No mechanism to announce policy changes
+## 9. No mechanism to announce policy changes — RESOLVED
 
 **Where:** "Changes to this policy."
 
-**Issue:** the page says the "last updated" date will change when the
-policy does, but ReceipTap has no bulk/marketing email sender today, so
-there's no way to proactively notify every shopper or merchant of a
-material change.
-
-**Needed:** decide on an announcement mechanism (e.g., a dashboard banner
-for merchants) before a material change happens, or confirm silent
-date-stamp updates are acceptable.
+**Status: RESOLVED** (2026-09-01). Founder decision, per the same
+constraint the issue describes (no bulk email sender exists): a new
+owner-only `/admin/announce` page picks an audience (merchants or wallet
+customers) and writes straight to the Notifications/Alerts tab everyone
+already has, via two new bulk functions
+(`notifyAllMerchantsOfAnnouncement`, `notifyAllCustomersOfAnnouncement`
+in the two notification services). No new infrastructure, no email
+sender needed — the existing in-app notification feed is the delivery
+mechanism. Same fix closes item 13 below (the Terms' 30-day price-increase
+notice) — it was the identical underlying gap stated twice, once per
+document.
 
 ---
 
@@ -357,18 +360,27 @@ than just visually patched.
 
 ---
 
-## 13. Price-increase notice has no delivery mechanism yet
+## 13. Price-increase notice has no delivery mechanism yet — PARTIALLY RESOLVED
 
 **Where:** "Subscription and billing" → "Price changes."
 
-**Issue:** the Terms commit to a 30-day email notice before any price
-increase takes effect on an existing subscriber. Same gap as the Privacy
-Policy's "Changes to this policy" section: this app has no bulk/automated
-email sender today (Resend is only ever used for password resets). A
-price-increase notice would have to be sent by hand today.
+**Issue:** the Terms commit specifically to a 30-day **email** notice
+before any price increase takes effect: *"we'll email you at least 30
+days before the new price takes effect"* (`views/partials/legal-terms-content.ejs`).
 
-**Needed:** build the actual notification mechanism before this commitment
-is relied on, or decide on and document an interim manual process.
+**Status: a delivery mechanism now exists (2026-09-01, `/admin/announce`,
+same fix as item 9), but it's in-app notification, not email — it
+doesn't actually match what's literally promised.** A merchant who
+doesn't check their Notifications tab would miss a price-increase notice
+sent this way even though the Terms specifically say "email."
+
+**Still needed — a real decision, not yet made:** either (a) reword this
+sentence to promise in-app notification instead of email, matching the
+mechanism that actually exists, or (b) add a real email send to
+`notifyAllMerchantsOfAnnouncement` (or a dedicated caller of it) so the
+mechanism matches the literal promise already published. Don't treat
+this as resolved by the wording alone or by the mechanism alone — they
+have to agree with each other before a real price increase relies on it.
 
 ---
 
@@ -676,17 +688,19 @@ capped at [marker]."), so the live sentence read "...is capped at ." with
 a dangling period once `strip()` removed it in production — fixed as part
 of writing the real decision above, not as a separate step.
 
-**26. No re-acceptance interstitial for wallet accounts.**
+**26. No re-acceptance interstitial for wallet accounts — RESOLVED.**
 **Where:** Wallet Terms, "Changes to these Terms."
-**Issue:** merchants are redirected to `/legal/reaccept` when a document
-they've accepted goes stale (`middleware/legalReacceptance.js`,
-`services/legalAcceptanceService.js`); no equivalent exists for wallet
-accounts, which also have no `LegalAcceptance` rows written at all today
-(signup uses passive "By continuing..." text, not a checkbox — see
-`views/account-signup.ejs`).
-**Needed:** decide whether a wallet-side acceptance/re-acceptance
-mechanism should be built, or whether passive linking is acceptable for
-this product.
+**Status: RESOLVED** (2026-09-01). Founder decision: build it, mirroring
+the merchant flow. Added `ShopperLegalAcceptance` (its own table/enum, no
+DPA equivalent — a shopper isn't a data controller), `middleware/shopperLegalReacceptance.js`
+mounted on `/account`, and `/legal/wallet-reaccept` with a wallet-themed
+interstitial. All four wallet signup paths (email/password, Google,
+Apple, Microsoft) now write acceptance rows at actual account creation —
+signup still uses the same passive "By continuing..." link
+(`views/account-signup.ejs`), which is what makes that link the actual
+consent event these rows record, not a new checkbox. Existing accounts
+from before this feature are treated as stale on their next visit, same
+grandfathering the merchant side already used when it first shipped.
 
 **27. Scanned receipt photo storage — RESOLVED, stale when written.**
 **Where:** Wallet Privacy Policy, "Scanning a receipt."

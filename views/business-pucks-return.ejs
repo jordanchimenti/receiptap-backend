@@ -1,0 +1,110 @@
+<!-- views/business-pucks-return.ejs -->
+<!-- Self-service return page (routes/account-business.js's GET
+     /account/business/pucks/return). The actual notice already went out by
+     email the moment the return window opened (syncPuckReturnWindows in
+     services/stripeService.js, via notifyReturnPucks) -- this is where a
+     merchant who's still logged in can find the same information again
+     without digging through their inbox. Locals: pendingPucks (array of
+     { id, returnDeadlineAt }), deadline (Date or null -- null means nothing
+     is currently owed), overdue (bool), labelUrl/trackingUrl/trackingCode
+     (from the Merchant row -- null if EasyPost couldn't produce a label),
+     returnAddress (config/entity.js's RETURN_ADDRESS, discrete fields). -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Return your hardware - ReceipTap Business</title>
+  <link rel="stylesheet" href="/css/receiptap.css" />
+  <%- include('partials/wallet-dark-theme') %>
+  <style>
+    .biz-header { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+    .return-card { padding: 20px; margin-bottom: 16px; }
+    .return-card h2 { font-size: 15px; margin: 0 0 10px; }
+    .puck-chip-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+    .puck-chip {
+      font-family: var(--font-mono); font-size: 12px; font-weight: 700; padding: 5px 11px;
+      border-radius: 999px; background: var(--w-card-raised); color: var(--w-ink-soft); border: 1px solid var(--w-line);
+    }
+    .deadline-row { font-size: 13.5px; color: var(--w-ink-soft); margin-bottom: 4px; }
+    .deadline-row strong { color: var(--w-ink); }
+    .deadline-row.overdue strong { color: var(--w-danger); }
+    .address-block {
+      margin: 14px 0; padding: 14px 16px; background: var(--w-card-raised); border-radius: 10px;
+      font-size: 13.5px; line-height: 1.65; color: var(--w-ink);
+    }
+    .fine-print { font-size: 12px; color: var(--w-ink-soft); line-height: 1.55; margin-top: 12px; }
+    .empty-state { padding: 32px 20px; text-align: center; color: var(--w-ink-soft); font-size: 14px; }
+  </style>
+</head>
+<body>
+  <div class="w-shell">
+    <div class="biz-header">
+      <a href="/account/business/pucks" class="w-btn-icon" aria-label="Back">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      </a>
+      <div>
+        <div class="w-eyebrow">Business</div>
+        <h1 class="w-title" style="font-size:20px;">Return your hardware</h1>
+      </div>
+    </div>
+
+    <% if (pendingPucks.length === 0) { %>
+      <div class="w-card empty-state">
+        Nothing currently owed back — you're all set.
+      </div>
+    <% } else { %>
+      <div class="w-card return-card">
+        <h2>What to send back</h2>
+        <div class="puck-chip-row">
+          <% pendingPucks.forEach(function (p) { %>
+            <span class="puck-chip"><%= p.id %></span>
+          <% }); %>
+        </div>
+        <div class="deadline-row <%= overdue ? 'overdue' : '' %>">
+          <%= pendingPucks.length === 1 ? '1 puck' : pendingPucks.length + ' pucks' %> due back by
+          <strong><%= deadline.toLocaleDateString('en-US', { dateStyle: 'long' }) %></strong>
+          <% if (overdue) { %> — <strong>overdue</strong><% } %>
+        </div>
+        <div class="fine-print">
+          A puck not returned by the deadline is billed as a $60 USD replacement, per the
+          <a href="/legal/terms#hardware" style="color: var(--w-accent);">Hardware section</a> of our Terms.
+        </div>
+      </div>
+
+      <div class="w-card return-card">
+        <% if (labelUrl) { %>
+          <h2>Prepaid shipping label</h2>
+          <p style="font-size:13.5px; color: var(--w-ink-soft); margin: 0 0 14px;">
+            Postage is already covered. Print the label, box up the puck(s), and drop the package off.
+          </p>
+          <a href="<%= labelUrl %>" class="w-btn" style="display:block; text-align:center; text-decoration:none; margin-bottom: 10px;">
+            Download prepaid label
+          </a>
+          <% if (trackingUrl) { %>
+            <a href="<%= trackingUrl %>" style="display:block; text-align:center; font-size:13px; color: var(--w-accent);">
+              Track this return<% if (trackingCode) { %> — <%= trackingCode %><% } %>
+            </a>
+          <% } %>
+        <% } else { %>
+          <h2>Where to send it</h2>
+          <p style="font-size:13.5px; color: var(--w-ink-soft); margin: 0 0 4px;">
+            Pack up the puck(s) and ship them, at your own cost, to:
+          </p>
+          <div class="address-block">
+            <%= returnAddress.name %><br>
+            <%= returnAddress.street1 %><br>
+            <% if (returnAddress.street2) { %><%= returnAddress.street2 %><br><% } %>
+            <%= returnAddress.city %>, <%= returnAddress.state %> <%= returnAddress.zip %><br>
+            Canada
+          </div>
+        <% } %>
+      </div>
+
+      <p class="fine-print" style="text-align:center;">
+        Already sent it back? No action needed — we'll mark it received once it arrives.
+      </p>
+    <% } %>
+  </div>
+</body>
+</html>

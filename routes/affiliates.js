@@ -29,12 +29,18 @@ const {
   getAffiliateConnectStatus,
   payPendingCommissionsForAffiliate,
   getSubscriptionPrice,
+  SHIPPING_FEE_CENTS,
 } = require('../services/stripeService');
 const { MERCHANT_AFFILIATE_RATE, REGULAR_AFFILIATE_RATE } = require('../services/affiliateRates');
 const { getBaseUrl } = require('../lib/baseUrl');
 const { affiliateReturnPath } = require('../lib/affiliateReturnPath');
 const { normalizeEmail } = require('../lib/normalizeEmail');
 const { generateAffiliateInvoicePDF } = require('../services/generate-affiliate-invoice-pdf');
+const {
+  createAffiliateOrder,
+  fulfillOrderFromSessionId,
+  getOrdersForAffiliate,
+} = require('../services/hardwareOrderService');
 
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no 0/O/1/I -- easy to read off/type
 function generateReferralCode() {
@@ -419,6 +425,69 @@ router.get('/affiliate/dashboard', requireAffiliateAuth, async (req, res) => {
     codeError: req.query.code_error || null,
     codeSuccess: req.query.code_success === '1',
   });
+});
+
+// Puck-ordering for a REGULAR affiliate reselling/distributing hardware to
+// businesses they sign up -- see services/hardwareOrderService.js's file
+// comment. requireAffiliateAuth (req.session.affiliateId) already scopes
+// this to REGULAR affiliates: a MERCHANT-type affiliate has no separate
+// affiliate session at all, so they'd just be redirected to
+// /affiliate/login here, which is correct -- they order through their own
+// merchant account instead. There's no separate Affiliate settings page, so
+// the address is entered/edited directly on this form and saved on submit.
+router.get('/affiliate/pucks/order', requireAffiliateAuth, async (req, res) => {
+  const affiliate = await prisma.affiliate.findUnique({ where: { id: req.session.affiliateId } });
+  res.render('affiliate-pucks-order', {
+    affiliate,
+    feeLabel: `$${(SHIPPING_FEE_CENTS / 100).toFixed(2)} USD`,
+    error: req.query.error || null,
+  });
+});
+
+router.post('/affiliate/pucks/order', requireAffiliateAuth, async (req, res) => {
+  const quantity = Math.min(10, Math.max(1, parseInt(req.body.quantity, 10) || 1));
+  try {
+    const affiliate = await prisma.affiliate.update({
+      where: { id: req.session.affiliateId },
+      data: {
+        addressLine1: (req.body.addressLine1 || '').trim(),
+        addressLine2: (req.body.addressLine2 || '').trim() || null,
+        addressCity: (req.body.addressCity || '').trim(),
+        addressRegion: (req.body.addressRegion || '').trim(),
+        addressPostalCode: (req.body.addressPostalCode || '').trim(),
+        addressCountry: (req.body.addressCountry || 'CA').trim(),
+        phone: (req.body.phone || '').trim() || null,
+      },
+    });
+
+    const baseUrl = getBaseUrl(req);
+    const url = await createAffiliateOrder(
+      affiliate,
+      quantity,
+      `${baseUrl}/affiliate/pucks/order/success?session_id={CHECKOUT_SESSION_ID}`,
+      `${baseUrl}/affiliate/pucks/order?error=${encodeURIComponent('Checkout was canceled -- nothing was charged.')}`
+    );
+    res.redirect(url);
+  } catch (err) {
+    res.redirect(`/affiliate/pucks/order?error=${encodeURIComponent(err.message)}`);
+  }
+});
+
+// Same reasoning as the merchant equivalent (routes/account-business.js):
+// no Stripe webhook secret is configured yet, so this redirect landing is
+// what actually fulfills the order.
+router.get('/affiliate/pucks/order/success', requireAffiliateAuth, async (req, res) => {
+  try {
+    await fulfillOrderFromSessionId(req.query.session_id);
+  } catch (err) {
+    console.error('[affiliates] order fulfillment from success redirect failed:', err.message);
+  }
+  res.redirect('/affiliate/pucks/orders?ordered=1');
+});
+
+router.get('/affiliate/pucks/orders', requireAffiliateAuth, async (req, res) => {
+  const orders = await getOrdersForAffiliate(req.session.affiliateId);
+  res.render('affiliate-pucks-orders', { orders, justOrdered: req.query.ordered === '1' });
 });
 
 // `redirectTo` only matters for a MERCHANT-type affiliate -- a regular

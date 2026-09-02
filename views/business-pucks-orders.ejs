@@ -1,0 +1,89 @@
+<!-- views/business-pucks-orders.ejs -->
+<!-- Order history + tracking for the standalone puck-shipping purchase flow
+     (routes/account-business.js's GET /account/business/orders). Status
+     moves PENDING_PAYMENT -> PAID -> LABEL_PURCHASED -> IN_TRANSIT ->
+     DELIVERED via services/hardwareOrderService.js's periodic tracking
+     refresh (prisma/schema.prisma's HardwareOrderStatus). Locals: orders
+     (array of HardwareOrder rows), justOrdered (bool -- true right after the
+     Stripe Checkout success redirect, shows a confirmation banner once). -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Order history - ReceipTap Business</title>
+  <link rel="stylesheet" href="/css/receiptap.css" />
+  <%- include('partials/wallet-dark-theme') %>
+  <style>
+    .biz-header { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+    .confirm-note {
+      font-size: 13px; padding: 12px 14px; margin-bottom: 16px; border-radius: 10px;
+      background: rgba(48,209,88,0.14); color: #30d158;
+    }
+    .order-row { padding: 16px; margin-bottom: 12px; }
+    .order-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+    .order-number { font-family: var(--font-mono); font-weight: 700; font-size: 14px; }
+    .status-pill { font-size: 10.5px; font-weight: 700; padding: 3px 9px; border-radius: 999px; }
+    .status-pill.pending { background: var(--w-card-raised); color: var(--w-ink-soft); border: 1px solid var(--w-line); }
+    .status-pill.paid, .status-pill.label { background: rgba(5,107,254,0.18); color: var(--w-accent); }
+    .status-pill.transit { background: rgba(255,159,10,0.16); color: #ff9f0a; }
+    .status-pill.delivered { background: rgba(48,209,88,0.16); color: #30d158; }
+    .order-meta { font-size: 12.5px; color: var(--w-ink-soft); line-height: 1.6; margin-bottom: 8px; }
+    .order-links { display: flex; gap: 16px; font-size: 12.5px; }
+    .order-links a { color: var(--w-accent); text-decoration: none; font-weight: 600; }
+    .empty-state {
+      background: var(--w-card); border: 1px dashed var(--w-line); border-radius: 18px; padding: 40px 24px;
+      margin-top: 8px; text-align: center; color: var(--w-ink-soft); font-size: 13.5px; line-height: 1.6;
+    }
+    .order-more { display: block; text-align: center; text-decoration: none; margin-top: 6px; }
+  </style>
+</head>
+<body>
+  <div class="w-shell">
+    <div class="biz-header">
+      <a href="/account/business/pucks" class="w-btn-icon" aria-label="Back">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      </a>
+      <div>
+        <div class="w-eyebrow">Business</div>
+        <h1 class="w-title" style="font-size:20px;">Order history</h1>
+      </div>
+    </div>
+
+    <% if (justOrdered) { %>
+      <div class="confirm-note">Order placed. We'll email you once it ships.</div>
+    <% } %>
+
+    <% if (orders.length === 0) { %>
+      <div class="empty-state">No orders yet.</div>
+    <% } else { %>
+      <% orders.forEach(function (o) { %>
+        <div class="w-card order-row">
+          <div class="order-top">
+            <span class="order-number"><%= o.orderNumber %></span>
+            <% if (o.status === 'PENDING_PAYMENT') { %><span class="status-pill pending">Awaiting payment</span>
+            <% } else if (o.status === 'PAID') { %><span class="status-pill paid">Paid</span>
+            <% } else if (o.status === 'LABEL_PURCHASED') { %><span class="status-pill label">Label ready</span>
+            <% } else if (o.status === 'IN_TRANSIT') { %><span class="status-pill transit">In transit</span>
+            <% } else if (o.status === 'DELIVERED') { %><span class="status-pill delivered">Delivered</span>
+            <% } else { %><span class="status-pill pending">Canceled</span><% } %>
+          </div>
+          <div class="order-meta">
+            <%= o.quantity === 1 ? '1 ReceipTap' : o.quantity + ' ReceipTaps' %> &middot;
+            $<%= (o.shippingFeeCents / 100).toFixed(2) %> USD shipping &middot;
+            <%= o.createdAt.toLocaleDateString('en-US', { dateStyle: 'medium' }) %>
+          </div>
+          <% if (o.labelUrl || o.trackingUrl) { %>
+            <div class="order-links">
+              <% if (o.labelUrl) { %><a href="<%= o.labelUrl %>">Shipping label</a><% } %>
+              <% if (o.trackingUrl) { %><a href="<%= o.trackingUrl %>">Track<% if (o.trackingCode) { %> &mdash; <%= o.trackingCode %><% } %></a><% } %>
+            </div>
+          <% } %>
+        </div>
+      <% }); %>
+    <% } %>
+
+    <a class="w-btn order-more" href="/account/business/pucks/order" style="display:block;">Order another ReceipTap</a>
+  </div>
+</body>
+</html>

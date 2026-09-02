@@ -1,0 +1,119 @@
+<!-- views/affiliate-pucks-order.ejs -->
+<!-- Puck-ordering for a REGULAR affiliate reselling/distributing hardware
+     (routes/affiliates.js's GET /affiliate/pucks/order) -- same styling
+     vocabulary as views/affiliate-dashboard.ejs's standalone portal (light
+     theme, .referral-card/.copy-btn), since a REGULAR affiliate has no
+     other page to see this design language on. There's no separate
+     Affiliate settings page, so the address is entered/edited right here
+     and saved when the form is submitted. Locals: affiliate, feeLabel
+     (e.g. "$25.00 USD"), error (string or null). -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Order ReceipTaps - Partner Program</title>
+  <link rel="stylesheet" href="/css/receiptap.css" />
+  <style>
+    h1 { font-size: 22px; margin-bottom: 4px; }
+    .standalone-shell { max-width: 640px; margin: 0 auto; padding: 24px 16px 48px; }
+    .standalone-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+    .standalone-logo { height: 18px; }
+    .back-link { font-size: 12.5px; color: #056BFE; text-decoration: none; font-weight: 600; }
+
+    .referral-card { background: #f9fafb; border-radius: 10px; padding: 20px; margin-top: 18px; }
+    .referral-card h2 { font-size: 15px; margin: 0 0 10px; color: #333; }
+    .copy-btn { padding: 10px 16px; border: none; border-radius: 6px; background: #056BFE; color: #fff; font-weight: 600; font-size: 13px; cursor: pointer; }
+
+    .error-note { font-size: 13px; padding: 12px 14px; margin-top: 16px; border-radius: 8px; background: #fef2f2; color: #dc2626; }
+
+    .field-row { margin-bottom: 12px; }
+    .field-row label { display: block; font-size: 12px; color: #888; margin-bottom: 5px; }
+    .field-row input, .field-row select {
+      width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 6px;
+      font-size: 13.5px; font-family: inherit; box-sizing: border-box;
+    }
+    .field-pair { display: flex; gap: 10px; }
+    .field-pair .field-row { flex: 1; }
+
+    .qty-row { display: flex; align-items: center; justify-content: space-between; margin: 18px 0 4px; }
+    .qty-row label { font-size: 13.5px; color: #555; }
+    .qty-row select { width: auto; padding: 8px 12px; }
+
+    .fee-row { display: flex; align-items: center; justify-content: space-between; margin: 14px 0; padding-top: 14px; border-top: 1px solid #eee; }
+    .fee-row span:first-child { font-size: 13.5px; color: #666; }
+    .fee-row span:last-child { font-family: ui-monospace, monospace; font-size: 16px; font-weight: 700; }
+    .fine-print { font-size: 12px; color: #888; line-height: 1.55; margin-top: 12px; }
+    .submit-btn { display: block; width: 100%; margin-top: 16px; padding: 12px; border: none; border-radius: 8px; background: #056BFE; color: #fff; font-weight: 700; font-size: 14px; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <div class="standalone-shell">
+    <div class="standalone-header">
+      <img class="standalone-logo" src="/images/receiptap-logo.png" alt="ReceipTap" />
+      <a href="/affiliate/dashboard" class="back-link">&larr; Dashboard</a>
+    </div>
+    <div class="eyebrow">Partner Program</div>
+    <h1>Order ReceipTaps</h1>
+    <p class="sub" style="font-size:13.5px; color:#666; margin-top:4px;">
+      Keep pucks on hand to hand-deliver when you sign up a business.
+    </p>
+
+    <% if (error) { %><div class="error-note"><%= error %></div><% } %>
+
+    <form class="referral-card" method="POST" action="/affiliate/pucks/order">
+      <h2>Ship to</h2>
+      <div class="field-row">
+        <label for="addressLine1">Street address</label>
+        <input type="text" id="addressLine1" name="addressLine1" value="<%= affiliate.addressLine1 || '' %>" required />
+      </div>
+      <div class="field-row">
+        <label for="addressLine2">Unit / suite (optional)</label>
+        <input type="text" id="addressLine2" name="addressLine2" value="<%= affiliate.addressLine2 || '' %>" />
+      </div>
+      <div class="field-pair">
+        <div class="field-row">
+          <label for="addressCity">City</label>
+          <input type="text" id="addressCity" name="addressCity" value="<%= affiliate.addressCity || '' %>" required />
+        </div>
+        <div class="field-row">
+          <label for="addressRegion">Province</label>
+          <input type="text" id="addressRegion" name="addressRegion" value="<%= affiliate.addressRegion || '' %>" placeholder="ON" required />
+        </div>
+      </div>
+      <div class="field-pair">
+        <div class="field-row">
+          <label for="addressPostalCode">Postal code</label>
+          <input type="text" id="addressPostalCode" name="addressPostalCode" value="<%= affiliate.addressPostalCode || '' %>" required />
+        </div>
+        <div class="field-row">
+          <label for="phone">Phone (optional)</label>
+          <input type="tel" id="phone" name="phone" value="<%= affiliate.phone || '' %>" />
+        </div>
+      </div>
+      <input type="hidden" name="addressCountry" value="CA" />
+
+      <div class="qty-row">
+        <label for="quantity">How many pucks</label>
+        <select name="quantity" id="quantity">
+          <% for (var q = 1; q <= 5; q++) { %>
+            <option value="<%= q %>"><%= q %></option>
+          <% } %>
+        </select>
+      </div>
+      <div class="fee-row">
+        <span>Shipping (flat, per shipment)</span>
+        <span><%= feeLabel %></span>
+      </div>
+      <p class="fine-print">
+        Pucks stay the property of ReceipTap, same as any other ReceipTap install — see the
+        <a href="/legal/terms#hardware" style="color:#056BFE;">Hardware section</a> of the Terms. We currently
+        ship within Canada only.
+      </p>
+      <button type="submit" class="submit-btn">Continue to payment</button>
+    </form>
+
+    <a href="/affiliate/pucks/orders" class="back-link" style="display:block; text-align:center; margin-top:16px;">View order history</a>
+  </div>
+</body>
+</html>

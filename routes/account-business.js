@@ -25,6 +25,7 @@ const claimLimit = require('../lib/claimAttemptLimit');
 const { relativeTime } = require('../lib/relativeTime');
 const { COUNTRIES_WITH_FLAGS } = require('../lib/countryPhoneCodes');
 const { MERCHANT_AFFILIATE_RATE } = require('../services/affiliateRates');
+const { RETURN_ADDRESS } = require('../config/entity');
 const {
   listNotifications: listMerchantNotifications,
   markAllRead: markAllMerchantNotificationsRead,
@@ -56,7 +57,13 @@ const {
   removePaymentMethod,
   resumeSubscription,
   listPaymentMethods,
+  SHIPPING_FEE_CENTS,
 } = require('../services/stripeService');
+const {
+  createMerchantOrder,
+  fulfillOrderFromSessionId,
+  getOrdersForMerchant,
+} = require('../services/hardwareOrderService');
 
 function requireAuth(req, res, next) {
   // Carry where they were headed through the login, so toggling Personal ->
@@ -225,6 +232,86 @@ router.post('/account/business/claim', requireAuth, async (req, res) => {
 
 router.get('/account/business/pucks', requireAuth, async (req, res) => {
   res.render('business-pucks', await computePucksData(req.session.merchantId, req.query));
+});
+
+// The self-service side of the return flow started by
+// syncPuckReturnWindows() (services/stripeService.js) the moment a
+// subscription cancels -- that function already emailed a prepaid label
+// (or return instructions, if EasyPost couldn't produce one) the instant
+// the window opened; this page is where a merchant who's still logged in
+// (i.e. used "Cancel Subscription," not "Deactivate account" -- see that
+// distinction in docs/LEGAL_REVIEW_NOTES.md item 24) can come back to find
+// the same information again without digging through their inbox.
+router.get('/account/business/pucks/return', requireAuth, async (req, res) => {
+  const [merchant, pendingPucks] = await Promise.all([
+    prisma.merchant.findUnique({ where: { id: req.session.merchantId } }),
+    prisma.puck.findMany({
+      where: { merchantId: req.session.merchantId, returnDeadlineAt: { not: null }, returnedAt: null },
+      orderBy: { returnDeadlineAt: 'asc' },
+      select: { id: true, returnDeadlineAt: true },
+    }),
+  ]);
+
+  res.render('business-pucks-return', {
+    pendingPucks,
+    deadline: pendingPucks[0]?.returnDeadlineAt || null,
+    overdue: Boolean(pendingPucks[0]?.returnDeadlineAt && pendingPucks[0].returnDeadlineAt < new Date()),
+    labelUrl: merchant.returnLabelUrl,
+    trackingUrl: merchant.returnTrackingUrl,
+    trackingCode: merchant.returnTrackingCode,
+    returnAddress: RETURN_ADDRESS,
+  });
+});
+
+// The standalone puck-shipping purchase flow -- see
+// services/hardwareOrderService.js's file comment for why this exists as
+// its own one-time Stripe Checkout rather than being folded into
+// subscription billing. GET shows the form (address pulled from Business
+// Settings, quantity picker, the flat fee); POST creates the order + Stripe
+// session and redirects to it.
+router.get('/account/business/pucks/order', requireAuth, async (req, res) => {
+  const merchant = await prisma.merchant.findUnique({ where: { id: req.session.merchantId } });
+  res.render('business-pucks-order', {
+    merchant,
+    feeLabel: `$${(SHIPPING_FEE_CENTS / 100).toFixed(2)} USD`,
+    error: req.query.error || null,
+  });
+});
+
+router.post('/account/business/pucks/order', requireAuth, async (req, res) => {
+  const quantity = Math.min(10, Math.max(1, parseInt(req.body.quantity, 10) || 1));
+  try {
+    const merchant = await prisma.merchant.findUnique({ where: { id: req.session.merchantId } });
+    const baseUrl = getBaseUrl(req);
+    const url = await createMerchantOrder(
+      merchant,
+      quantity,
+      `${baseUrl}/account/business/pucks/order/success?session_id={CHECKOUT_SESSION_ID}`,
+      `${baseUrl}/account/business/pucks/order?error=${encodeURIComponent('Checkout was canceled -- nothing was charged.')}`
+    );
+    res.redirect(url);
+  } catch (err) {
+    res.redirect(`/account/business/pucks/order?error=${encodeURIComponent(err.message)}`);
+  }
+});
+
+// No Stripe webhook secret is configured yet (see CLAUDE.md), so -- same as
+// the subscription checkout success sync in routes/billing.js -- this
+// redirect landing is what actually fulfills the order, not /webhooks/stripe.
+// fulfillOrderFromSessionId is idempotent, so this is safe even if the
+// webhook path is ever also wired up and fires first.
+router.get('/account/business/pucks/order/success', requireAuth, async (req, res) => {
+  try {
+    await fulfillOrderFromSessionId(req.query.session_id);
+  } catch (err) {
+    console.error('[account-business] order fulfillment from success redirect failed:', err.message);
+  }
+  res.redirect('/account/business/orders?ordered=1');
+});
+
+router.get('/account/business/orders', requireAuth, async (req, res) => {
+  const orders = await getOrdersForMerchant(req.session.merchantId);
+  res.render('business-pucks-orders', { orders, justOrdered: req.query.ordered === '1' });
 });
 
 // Same ownership check and effect as POST /dashboard/pucks/:id/unassign

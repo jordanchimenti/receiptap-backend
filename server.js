@@ -439,6 +439,43 @@ setTimeout(() => {
   }, WARRANTY_REMINDER_INTERVAL_MS);
 }, WARRANTY_REMINDER_BOOT_DELAY_MS);
 
+// Hardware-order tracking refresh: same interval-on-boot shape as the two
+// jobs above, its own independent timer. Not gated behind an ENABLED flag
+// like retention/warranty are -- this only reads carrier status and sends a
+// "your order shipped/arrived" notification on a genuine transition, no
+// destructive or compliance-sensitive action, so there's no reason to ship
+// it off by default. See services/hardwareOrderService.js's
+// refreshInFlightOrders() for why this is a poll rather than an EasyPost
+// webhook.
+const { refreshInFlightOrders } = require('./services/hardwareOrderService');
+const HARDWARE_ORDER_TRACKING_INTERVAL_MS = 4 * 60 * 60 * 1000; // every 4 hours
+const HARDWARE_ORDER_TRACKING_BOOT_DELAY_MS = 150 * 1000; // stagger past the warranty job's own boot delay
+
+let hardwareOrderTrackingRunning = false;
+
+async function runHardwareOrderTrackingRefresh() {
+  if (hardwareOrderTrackingRunning) {
+    console.warn('[hardware-orders] previous tracking refresh still in progress -- skipping this tick');
+    return;
+  }
+  hardwareOrderTrackingRunning = true;
+  try {
+    const result = await refreshInFlightOrders();
+    console.log(`[hardware-orders] tracking refresh: checked ${result.checked}, updated ${result.updated}`);
+  } catch (err) {
+    console.error('[hardware-orders] tracking refresh failed:', err);
+  } finally {
+    hardwareOrderTrackingRunning = false;
+  }
+}
+
+setTimeout(() => {
+  runHardwareOrderTrackingRefresh().catch((err) => console.error('[hardware-orders] unexpected error:', err));
+  setInterval(() => {
+    runHardwareOrderTrackingRefresh().catch((err) => console.error('[hardware-orders] unexpected error:', err));
+  }, HARDWARE_ORDER_TRACKING_INTERVAL_MS);
+}, HARDWARE_ORDER_TRACKING_BOOT_DELAY_MS);
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   require('./lib/fileStorage').assertProductionStorage();

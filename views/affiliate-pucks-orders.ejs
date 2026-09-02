@@ -1,0 +1,83 @@
+<!-- views/affiliate-pucks-orders.ejs -->
+<!-- Order history + tracking for a REGULAR affiliate (routes/affiliates.js's
+     GET /affiliate/pucks/orders) -- light-theme counterpart to
+     views/business-pucks-orders.ejs. Locals: orders (HardwareOrder rows),
+     justOrdered (bool -- true right after the Stripe Checkout success
+     redirect). -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Order history - Partner Program</title>
+  <link rel="stylesheet" href="/css/receiptap.css" />
+  <style>
+    h1 { font-size: 22px; margin-bottom: 4px; }
+    .standalone-shell { max-width: 640px; margin: 0 auto; padding: 24px 16px 48px; }
+    .standalone-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+    .standalone-logo { height: 18px; }
+    .back-link { font-size: 12.5px; color: #056BFE; text-decoration: none; font-weight: 600; }
+
+    .confirm-note { font-size: 13px; padding: 12px 14px; margin-top: 16px; border-radius: 8px; background: #DCE7F4; color: #0350BE; }
+
+    .order-row { background: #f9fafb; border-radius: 10px; padding: 16px; margin-top: 14px; }
+    .order-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+    .order-number { font-family: ui-monospace, monospace; font-weight: 700; font-size: 14px; }
+    .status-pill { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 600; }
+    .status-pill.pending { background: #f4f4f5; color: #666; }
+    .status-pill.paid, .status-pill.label { background: #DCE7F4; color: #0350BE; }
+    .status-pill.transit { background: #fff4e5; color: #b45309; }
+    .status-pill.delivered { background: #dcfce7; color: #16a34a; }
+    .order-meta { font-size: 12.5px; color: #888; line-height: 1.6; margin-bottom: 8px; }
+    .order-links { display: flex; gap: 16px; font-size: 12.5px; }
+    .order-links a { color: #056BFE; text-decoration: none; font-weight: 600; }
+    .empty-state { text-align: center; color: #888; margin-top: 24px; font-size: 13.5px; }
+    .order-more { display: block; text-align: center; text-decoration: none; margin-top: 18px; padding: 12px; border-radius: 8px; background: #056BFE; color: #fff; font-weight: 700; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <div class="standalone-shell">
+    <div class="standalone-header">
+      <img class="standalone-logo" src="/images/receiptap-logo.png" alt="ReceipTap" />
+      <a href="/affiliate/dashboard" class="back-link">&larr; Dashboard</a>
+    </div>
+    <div class="eyebrow">Partner Program</div>
+    <h1>Order history</h1>
+
+    <% if (justOrdered) { %>
+      <div class="confirm-note">Order placed. We'll email you once it ships.</div>
+    <% } %>
+
+    <% if (orders.length === 0) { %>
+      <div class="empty-state">No orders yet.</div>
+    <% } else { %>
+      <% orders.forEach(function (o) { %>
+        <div class="order-row">
+          <div class="order-top">
+            <span class="order-number"><%= o.orderNumber %></span>
+            <% if (o.status === 'PENDING_PAYMENT') { %><span class="status-pill pending">Awaiting payment</span>
+            <% } else if (o.status === 'PAID') { %><span class="status-pill paid">Paid</span>
+            <% } else if (o.status === 'LABEL_PURCHASED') { %><span class="status-pill label">Label ready</span>
+            <% } else if (o.status === 'IN_TRANSIT') { %><span class="status-pill transit">In transit</span>
+            <% } else if (o.status === 'DELIVERED') { %><span class="status-pill delivered">Delivered</span>
+            <% } else { %><span class="status-pill pending">Canceled</span><% } %>
+          </div>
+          <div class="order-meta">
+            <%= o.quantity === 1 ? '1 ReceipTap' : o.quantity + ' ReceipTaps' %> &middot;
+            $<%= (o.shippingFeeCents / 100).toFixed(2) %> USD shipping &middot;
+            <%= o.createdAt.toLocaleDateString('en-US', { dateStyle: 'medium' }) %>
+          </div>
+          <% if (o.labelUrl || o.trackingUrl) { %>
+            <div class="order-links">
+              <% if (o.labelUrl) { %><a href="<%= o.labelUrl %>">Shipping label</a><% } %>
+              <% if (o.trackingUrl) { %><a href="<%= o.trackingUrl %>">Track<% if (o.trackingCode) { %> &mdash; <%= o.trackingCode %><% } %></a><% } %>
+            </div>
+          <% } %>
+        </div>
+      <% }); %>
+    <% } %>
+
+    <a class="order-more" href="/affiliate/pucks/order">Order more ReceipTaps</a>
+  </div>
+</body>
+</html>

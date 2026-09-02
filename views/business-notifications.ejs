@@ -77,6 +77,10 @@
                          : note.type === 'TREE_PLANTED' ? 'reward'
                          : note.type === 'BILLING_PROBLEM' ? 'removed'
                          : note.type === 'POS_CONNECTION_FAILED' ? 'removed'
+                         : note.type === 'RETURN_PUCKS' ? 'removed'
+                         : note.type === 'HARDWARE_ORDER_PLACED' ? 'reward'
+                         : note.type === 'HARDWARE_ORDER_SHIPPED' ? 'reward'
+                         : note.type === 'HARDWARE_ORDER_DELIVERED' ? 'reward'
                          : '';
           %>
           <div class="note-icon <%= iconTone %>">
@@ -90,6 +94,8 @@
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 9V5a2 2 0 0 1 2-2h2M4 15v4a2 2 0 0 0 2 2h2M20 9V5a2 2 0 0 0-2-2h-2M20 15v4a2 2 0 0 1-2 2h-2"/><path d="M4 4l16 16"/></svg>
             <% } else if (note.type === 'TREE_PLANTED') { %>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 22v-7"/><path d="M12 15c-4 0-7-3-7-7 1 0 3 .5 4.5 2C8.5 6 11 3 12 2c1 3.5 3.5 4 3.5 8 1.5-1.5 3.5-2 4.5-2 0 4-3 7-7 7Z"/></svg>
+            <% } else if (note.type === 'RETURN_PUCKS' || note.type === 'HARDWARE_ORDER_PLACED' || note.type === 'HARDWARE_ORDER_SHIPPED' || note.type === 'HARDWARE_ORDER_DELIVERED') { %>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="M3.3 7 12 12l8.7-5"/><path d="M12 22V12"/></svg>
             <% } else { %>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 2h12v20l-3-2-3 2-3-2-3 2Z"/><path d="M9 8h6M9 12h6"/></svg>
             <% } %>

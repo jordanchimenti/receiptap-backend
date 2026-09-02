@@ -1,0 +1,98 @@
+<!-- views/business-pucks-order.ejs -->
+<!-- The standalone puck-shipping purchase flow (routes/account-business.js's
+     GET /account/business/pucks/order) -- the Terms' "Additional pucks may
+     be requested" line, made real. Ships to whatever address is on file in
+     Business Settings; a merchant with an incomplete address is told to fix
+     that first rather than shown a form that would fail at checkout.
+     Locals: merchant, feeLabel (e.g. "$25.00 USD"), error (string or null). -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Order a ReceipTap - ReceipTap Business</title>
+  <link rel="stylesheet" href="/css/receiptap.css" />
+  <%- include('partials/wallet-dark-theme') %>
+  <style>
+    .biz-header { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+    .order-card { padding: 20px; margin-bottom: 16px; }
+    .order-card h2 { font-size: 15px; margin: 0 0 10px; }
+    .error-note {
+      font-size: 13px; padding: 12px 14px; margin-bottom: 16px; border-radius: 10px;
+      background: rgba(255,69,58,0.12); color: var(--w-danger);
+    }
+    .address-block {
+      margin: 10px 0 4px; padding: 14px 16px; background: var(--w-card-raised); border-radius: 10px;
+      font-size: 13.5px; line-height: 1.65; color: var(--w-ink);
+    }
+    .address-missing { color: var(--w-ink-soft); font-style: italic; }
+    .edit-address-link { display: inline-block; margin-top: 8px; font-size: 12.5px; color: var(--w-accent); text-decoration: none; }
+    .qty-row { display: flex; align-items: center; justify-content: space-between; margin: 18px 0 4px; }
+    .qty-row label { font-size: 13.5px; color: var(--w-ink-soft); }
+    .qty-row select {
+      font-size: 14px; font-family: inherit; background: var(--w-card-raised); color: var(--w-ink);
+      border: 1px solid var(--w-line); border-radius: 8px; padding: 8px 12px;
+    }
+    .fee-row { display: flex; align-items: center; justify-content: space-between; margin: 14px 0; padding-top: 14px; border-top: 1px solid var(--w-line); }
+    .fee-row span:first-child { font-size: 13.5px; color: var(--w-ink-soft); }
+    .fee-row span:last-child { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 16px; font-weight: 700; }
+    .fine-print { font-size: 12px; color: var(--w-ink-soft); line-height: 1.55; margin-top: 12px; }
+  </style>
+</head>
+<body>
+  <div class="w-shell">
+    <div class="biz-header">
+      <a href="/account/business/pucks" class="w-btn-icon" aria-label="Back">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      </a>
+      <div>
+        <div class="w-eyebrow">Business</div>
+        <h1 class="w-title" style="font-size:20px;">Order a ReceipTap</h1>
+      </div>
+    </div>
+
+    <% if (error) { %><div class="error-note"><%= error %></div><% } %>
+
+    <div class="w-card order-card">
+      <h2>Ships to</h2>
+      <% var hasAddress = merchant.addressLine1 && merchant.addressCity && merchant.addressRegion && merchant.addressPostalCode && merchant.addressCountry; %>
+      <% if (hasAddress) { %>
+        <div class="address-block">
+          <%= merchant.businessName %><br>
+          <%= merchant.addressLine1 %><br>
+          <% if (merchant.addressLine2) { %><%= merchant.addressLine2 %><br><% } %>
+          <%= merchant.addressCity %>, <%= merchant.addressRegion %> <%= merchant.addressPostalCode %><br>
+          <%= merchant.addressCountry %>
+        </div>
+      <% } else { %>
+        <div class="address-block address-missing">No business address on file yet.</div>
+      <% } %>
+      <a class="edit-address-link" href="/account/business/settings">Edit address in Business Settings</a>
+    </div>
+
+    <% if (hasAddress) { %>
+      <form class="w-card order-card" method="POST" action="/account/business/pucks/order">
+        <h2>Order details</h2>
+        <div class="qty-row">
+          <label for="quantity">How many pucks</label>
+          <select name="quantity" id="quantity">
+            <% for (var q = 1; q <= 5; q++) { %>
+              <option value="<%= q %>"><%= q %></option>
+            <% } %>
+          </select>
+        </div>
+        <div class="fee-row">
+          <span>Shipping (flat, per shipment)</span>
+          <span><%= feeLabel %></span>
+        </div>
+        <p class="fine-print">
+          Pucks stay the property of ReceipTap and are provided for use with your subscription -- see the
+          <a href="/legal/terms#hardware" style="color: var(--w-accent);">Hardware section</a> of our Terms.
+          We currently ship within Canada only.
+        </p>
+        <button type="submit" class="w-btn" style="display:block; width:100%; margin-top:16px;">Continue to payment</button>
+      </form>
+    <% } %>
+  </div>
+</body>
+</html>

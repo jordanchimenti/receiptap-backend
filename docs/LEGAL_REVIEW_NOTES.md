@@ -57,29 +57,43 @@ What's still open:
    first-charge date and currency there could not be confirmed by reading
    this repo. Worth a manual check against the real Checkout session once
    convenient.
-5. **Shipping charge — RESOLVED for first-time signups.** The $25 USD
-   shipping fee is now a real one-time Stripe Checkout line item
-   (`services/stripeService.js` `createCheckoutSession`), added alongside
-   the recurring subscription price and charged immediately at checkout —
-   verified against the real Stripe API that it's uncoupled from the
-   trial (the recurring item shows $0 due today, the shipping item shows
-   the full $25.00 due today). Disclosed on the pre-payment screen in
-   `views/billing.ejs` next to the trial/price disclosure.
+5. **Shipping charge — RESOLVED, corrected 2026-09-02.** This item
+   previously said the $25 USD shipping fee was "a real one-time Stripe
+   Checkout line item... added alongside the recurring subscription price
+   and charged immediately at checkout." That was never actually true —
+   `services/stripeService.js` `createCheckoutSession` has only ever
+   created the subscription line item; its own code comment said so
+   ("Subscription only -- no shipping line item... The standalone
+   purchase flow is not built yet, so nothing currently charges this").
+   Caught as documentation drift while building the real thing.
 
-6. **Shipping charge on a "Restart subscription" — RESOLVED, no tracking
-   built.** The $25 fee is only charged when `merchant.subscriptionStatus
-   !== 'CANCELED'` — a merchant restarting after a prior cancellation is
-   *not* charged shipping again, since whether they still have their puck
-   depends on whether they returned it under the 30-day return window
-   (see the $60 replacement fee below), and nothing in this app tracks
-   that. **Decision (founder, 2026-08-07):** don't build return tracking
-   for this — it's a real feature (a `returnedAt`-style field plus a way
-   to mark a puck received back), and this scenario (cancel → return →
-   restart) has zero real-world volume so far, no customers yet. The
-   conservative default (never charge on restart) stays as the permanent
-   behavior; if the rare case of a restarting merchant who returned their
-   puck actually comes up, charge the $25 by hand in Stripe that one
-   time rather than maintaining tracking infrastructure for it.
+   **What's actually built now:** a genuinely standalone purchase flow,
+   `services/hardwareOrderService.js` — a merchant orders from
+   `/account/business/pucks/order` (address pulled from Business
+   Settings, quantity picker, the flat `SHIPPING_FEE_CENTS` fee shown
+   before payment), which creates its own one-time Stripe Checkout
+   session (`mode: 'payment'`, completely separate from the subscription
+   session) and a `HardwareOrder` row tracking it. On confirmed payment,
+   `services/easypostService.js`'s `createOutboundLabel()` buys a real
+   prepaid label the same way the return flow already does, and the
+   merchant is notified in-app and by email
+   (`services/merchantNotificationService.js`'s `notifyHardwareOrderPlaced`)
+   with the label/tracking if one was bought. `/account/business/orders`
+   shows order history and status. A periodic job
+   (`refreshInFlightOrders()` in `services/hardwareOrderService.js`,
+   wired up in `server.js` the same way retention/warranty are) polls
+   EasyPost for carrier status and notifies again (in-app + email) on a
+   genuine ship/deliver transition.
+
+6. **Shipping charge on a "Restart subscription" — RESOLVED, now moot.**
+   The concern this item raised (would restarting a canceled subscription
+   silently re-charge shipping for a puck the merchant might still have)
+   no longer applies: nothing charges shipping automatically at signup or
+   restart at all, ever. Shipping is only ever charged when a merchant
+   deliberately places an order via the flow described in item 5 above —
+   first puck or a fifth, there's no special-casing needed, since the
+   merchant is the one initiating and confirming the charge each time,
+   not the app inferring it from a subscription-status transition.
 
 7. **The $60 replacement fee — tracking built, charging still manual by
    design.** Founder decision (2026-08-07): build the 30-day-return-window
@@ -102,10 +116,33 @@ What's still open:
    obligation, flags ones past their deadline as "$60 fee applies," and
    has a "Mark as returned" action.
 
-   **Still not built, deliberately:** prepaid-return-label emailing (needs
-   a real shipping-carrier API integration, e.g. Shippo/EasyPost) and the
-   actual $60 charge itself — a human has to notice an overdue row on
-   `/admin/pucks` and charge it by hand in the Stripe Dashboard.
+   **Prepaid-return-label emailing — RESOLVED** (2026-09-02). The
+   carrier-API integration this needed is built: `services/easypostService.js`
+   (EasyPost, `@easypost/api`) buys a real prepaid label the moment
+   `syncPuckReturnWindows` starts a return window, and
+   `services/emailService.js`'s `sendReturnPucksEmail` sends it —
+   this is the actual mechanism behind the Terms' "we'll email a prepaid
+   return label" promise, which had nothing behind it before this. The
+   email fires even when a label couldn't be bought (address on file
+   incomplete, EasyPost down, or — as of this writing — `EASYPOST_API_KEY`
+   simply not set yet while the founder finishes account setup), falling
+   back to plain ship-to-this-address instructions so a merchant always
+   hears something regardless. A self-service page,
+   `/account/business/pucks/return`, shows the same information again for
+   anyone who used "Cancel Subscription" (still logged in) — deliberately
+   *not* relied on for anyone who used "Deactivate account" instead, since
+   that flow destroys the session immediately and they can never log back
+   in; email is the only channel proven to reach that case. Verified
+   end-to-end: a real cancellation correctly starts the deadline, creates
+   the in-app notification, and attempts the email (which itself sent
+   successfully in a separate real-address test) — and a restart correctly
+   clears the window and any label fields on the Merchant row.
+
+   **Still not built, deliberately:** the actual $60 charge itself — a
+   human still has to notice an overdue row on `/admin/pucks` and charge
+   it by hand in the Stripe Dashboard, same reasoning as item 7's opening
+   paragraph above (an automated off-session charge weeks after
+   cancellation is the wrong failure mode to risk).
 
 ---
 

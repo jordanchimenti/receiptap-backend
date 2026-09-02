@@ -1,7 +1,7 @@
 const Stripe = require('stripe');
 const prisma = require('../lib/prisma');
 const { MERCHANT_AFFILIATE_RATE, REGULAR_AFFILIATE_RATE } = require('./affiliateRates');
-const { notifyBillingProblem, notifyPayoutCompleted, notifyTreePlanted } = require('./merchantNotificationService');
+const { notifyBillingProblem, notifyPayoutCompleted, notifyTreePlanted, notifyReturnPucks } = require('./merchantNotificationService');
 const { plantTreeForSubscriptionMonth } = require('./goodApiService');
 
 const stripe = process.env.STRIPE_SECRET_KEY
@@ -478,22 +478,38 @@ const RETURN_WINDOW_DAYS = 30; // Terms' Hardware section: 30 days from cancella
  * Starts or clears a merchant's puck return windows depending on their new
  * subscription status. CANCELED starts a 30-day return clock (Terms'
  * Hardware section) on every puck they currently have and haven't already
- * returned. ACTIVE/TRIALING (a restart) clears any pending window, since
- * they're keeping their hardware. This only tracks the clock — the $60 USD
- * replacement fee itself is still charged by hand in Stripe if the deadline
- * passes with no return; see docs/LEGAL_REVIEW_NOTES.md item 7 for why
- * that isn't automated (yet).
+ * returned, then fires notifyReturnPucks -- which attempts a real prepaid
+ * label and always sends the return-instructions email regardless of
+ * whether one came back. ACTIVE/TRIALING (a restart) clears any pending
+ * window AND any label already bought for it, since they're keeping their
+ * hardware. The $60 USD replacement fee itself is still charged by hand in
+ * Stripe if the deadline passes with no return; see
+ * docs/LEGAL_REVIEW_NOTES.md item 7 for why that isn't automated (yet).
+ *
+ * The `returnDeadlineAt: null` filter on the CANCELED branch is also what
+ * keeps this idempotent -- a webhook retry or a second call for a merchant
+ * whose pucks already have a deadline updates zero rows, so
+ * notifyReturnPucks never fires twice (and never re-buys a label) for the
+ * same cancellation.
  */
 async function syncPuckReturnWindows(merchantId, newStatus) {
   if (newStatus === 'CANCELED') {
-    await prisma.puck.updateMany({
+    const deadline = new Date(Date.now() + RETURN_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+    const result = await prisma.puck.updateMany({
       where: { merchantId, returnDeadlineAt: null, returnedAt: null },
-      data: { returnDeadlineAt: new Date(Date.now() + RETURN_WINDOW_DAYS * 24 * 60 * 60 * 1000) },
+      data: { returnDeadlineAt: deadline },
     });
+    if (result.count > 0) {
+      await notifyReturnPucks({ merchantId, puckCount: result.count, deadline });
+    }
   } else if (newStatus === 'ACTIVE' || newStatus === 'TRIALING') {
     await prisma.puck.updateMany({
       where: { merchantId, returnDeadlineAt: { not: null }, returnedAt: null },
       data: { returnDeadlineAt: null },
+    });
+    await prisma.merchant.update({
+      where: { id: merchantId },
+      data: { returnLabelUrl: null, returnTrackingCode: null, returnTrackingUrl: null, returnLabelGeneratedAt: null },
     });
   }
 }

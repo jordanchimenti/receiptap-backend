@@ -116,7 +116,26 @@ model Merchant {
   // business dashboard from their home screen.
   homeScreenAddedAt DateTime?
 
+  // Hardware return shipping label -- set alongside Puck.returnDeadlineAt
+  // (see syncPuckReturnWindows() in services/stripeService.js) when
+  // services/easypostService.js successfully buys a real prepaid label for
+  // the merchant's currently-unreturned pucks. Merchant-level, not
+  // per-puck: this app only ever has one active return window/batch open
+  // at a time (every unreturned puck gets the same deadline together, and
+  // a restart clears them all together), so one label naturally covers
+  // whatever's outstanding rather than needing a label per puck. Cleared
+  // in the same restart branch that clears returnDeadlineAt. Null if
+  // EASYPOST_API_KEY isn't configured, the merchant's address on file
+  // can't be rated, or EasyPost is down -- the return-notice email still
+  // goes out either way, just without a label attached (see
+  // services/emailService.js's sendReturnPucksEmail).
+  returnLabelUrl         String?
+  returnTrackingCode     String?
+  returnTrackingUrl      String?
+  returnLabelGeneratedAt DateTime?
+
   pucks                 Puck[]
+  hardwareOrders        HardwareOrder[]
   issuedReceipts        Transaction[]          @relation("IssuedReceipts")
   collectedExpenses     Transaction[]          @relation("CollectedExpenses")
   receiptTheme          ReceiptTheme?
@@ -196,6 +215,88 @@ enum PuckStatus {
 enum PuckSource {
   BATCH
   ADMIN
+}
+
+// ---------------------------------------------------------------------------
+// HardwareOrder — a merchant paying the flat per-shipment shipping fee
+// (services/stripeService.js's SHIPPING_FEE_CENTS, $25 USD, disclosed in the
+// Terms' "Hardware (NFC pucks)" -> "Shipping" section) to have a puck sent
+// to them -- either their first one, or an additional one requested later
+// ("Additional pucks may be requested and are subject to availability," same
+// Terms section). This is the standalone purchase flow that section's own
+// code comment used to say wasn't built yet -- see
+// services/hardwareOrderService.js.
+//
+// This does NOT create or assign a Puck row. Which physical puck goes in the
+// box is still a manual pick from admin's unclaimed inventory (source BATCH
+// or ADMIN), same as always -- HardwareOrder only tracks the payment, the
+// outbound shipping label/tracking, and the notifications around them. Once
+// it physically arrives, the merchant links it to their account the same
+// way they always have: entering its claimCode.
+// ---------------------------------------------------------------------------
+model HardwareOrder {
+  id          String @id @default(cuid())
+  orderNumber String @unique // human-friendly, e.g. "RT-7F3K9Q" -- shown to the buyer, not the cuid
+
+  // Exactly one of these two is set, never both, never neither -- enforced
+  // in code (services/hardwareOrderService.js's create functions), not a DB
+  // constraint. A merchant orders pucks for their own registers; a REGULAR
+  // affiliate (see prisma's Affiliate model comment) orders pucks to keep on
+  // hand and hand-deliver to businesses they're signing up -- same order/
+  // payment/shipping/tracking machinery either way, just a different buyer.
+  merchantId String?
+  merchant   Merchant? @relation(fields: [merchantId], references: [id])
+  affiliateId String?
+  affiliate   Affiliate? @relation(fields: [affiliateId], references: [id])
+
+  quantity         Int // how many pucks this shipment is for
+  shippingFeeCents Int // snapshot of SHIPPING_FEE_CENTS at order time -- the flat per-shipment charge, not per-unit
+
+  // Shipping address snapshot -- copied from Merchant.address* or
+  // Affiliate.address* at order time (see routes/account-business.js and
+  // routes/affiliates.js), not a live reference. Whoever ordered it
+  // updating their address later shouldn't silently change where an
+  // already-placed order ships to.
+  shippingName       String
+  shippingStreet1    String
+  shippingStreet2    String?
+  shippingCity       String
+  shippingRegion     String
+  shippingPostalCode String
+  shippingCountry    String  @default("CA")
+  shippingPhone      String?
+
+  status HardwareOrderStatus @default(PENDING_PAYMENT)
+
+  stripeCheckoutSessionId String? @unique
+  stripePaymentIntentId   String?
+
+  // Set by services/hardwareOrderService.js the moment payment is confirmed
+  // (best-effort, same "never block, null on any failure" pattern as
+  // services/easypostService.js's createReturnLabel). easypostTrackerId is
+  // what services/hardwareOrderService.js's tracking-refresh job matches
+  // incoming status against.
+  labelUrl          String?
+  trackingCode      String?
+  trackingUrl       String?
+  easypostTrackerId String? @unique
+
+  paidAt      DateTime?
+  shippedAt   DateTime?
+  deliveredAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([merchantId, createdAt])
+  @@index([affiliateId, createdAt])
+}
+
+enum HardwareOrderStatus {
+  PENDING_PAYMENT // Stripe Checkout session created, not yet paid
+  PAID // payment confirmed, label not bought yet (or EasyPost failed/not configured)
+  LABEL_PURCHASED // prepaid label bought, not yet scanned by the carrier
+  IN_TRANSIT // EasyPost tracker reports movement
+  DELIVERED
+  CANCELED
 }
 
 // ---------------------------------------------------------------------------
@@ -701,10 +802,27 @@ model Affiliate {
   payoutFrequency String    @default("WEEKLY") // "WEEKLY" | "MONTHLY"
   lastPayoutAt    DateTime?
 
+  // Ship-to address for a REGULAR affiliate ordering pucks to keep on hand
+  // and hand-deliver to businesses they're signing up (see
+  // services/hardwareOrderService.js) -- same field shape as Merchant's
+  // address* fields, entered/edited directly on the order page since there's
+  // no separate Affiliate settings page. Never used for a MERCHANT-type
+  // affiliate -- they order through their own merchant account instead (see
+  // routes/affiliates.js's `requireAffiliateAuth`, which a MERCHANT-type
+  // affiliate never actually authenticates through).
+  addressLine1      String?
+  addressLine2      String?
+  addressCity       String?
+  addressRegion     String?
+  addressPostalCode String?
+  addressCountry    String?
+  phone             String?
+
   createdAt DateTime @default(now())
 
-  referredMerchants Merchant[]   @relation("ReferredMerchants")
+  referredMerchants Merchant[]      @relation("ReferredMerchants")
   commissions       Commission[]
+  hardwareOrders    HardwareOrder[]
 
   // Shoppers who first met ReceipTap through this affiliate's receipts.
   referredCustomers Customer[] @relation("CustomerReferrals")

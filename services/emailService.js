@@ -6,6 +6,7 @@
 
 const { Resend } = require('resend');
 const { getAppUrl } = require('../lib/baseUrl');
+const { RETURN_ADDRESS } = require('../config/entity');
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
@@ -243,6 +244,122 @@ async function sendTreePlantedEmail({ email, name, businessName, treesPlanted, i
   });
 }
 
+// The actual mechanism behind the Terms' "we'll email a prepaid return
+// label to the address on file" promise (Hardware section) -- called from
+// services/stripeService.js's syncPuckReturnWindows the moment a return
+// window starts, whether or not a real label ended up getting bought
+// (labelUrl/trackingUrl are null when it didn't -- see
+// services/easypostService.js's createReturnLabel for every reason that
+// can happen). This is the one channel that reaches a merchant who used
+// "Deactivate account": that flow destroys their session immediately and
+// they can never log back in, so an in-app notification alone could never
+// reach them -- email is the only thing that can.
+async function sendReturnPucksEmail({ email, name, businessName, puckCount, deadline, labelUrl, trackingUrl }) {
+  const subject = puckCount === 1 ? 'Return your ReceipTap puck' : `Return your ${puckCount} ReceipTap pucks`;
+
+  if (!resend) {
+    console.log(`[emailService] RESEND_API_KEY not set -- return-pucks email for ${email}: ${subject}`);
+    return;
+  }
+
+  const deadlineLabel = deadline.toLocaleDateString('en-US', { dateStyle: 'long' });
+  const puckLabel = puckCount === 1 ? '1 puck' : `${puckCount} pucks`;
+  const addressLines = [
+    RETURN_ADDRESS.name,
+    RETURN_ADDRESS.street1,
+    RETURN_ADDRESS.street2,
+    `${RETURN_ADDRESS.city}, ${RETURN_ADDRESS.state} ${RETURN_ADDRESS.zip}`,
+    'Canada',
+  ].filter(Boolean);
+
+  await send({
+    from: FROM_ADDRESS,
+    to: email,
+    subject,
+    html: `
+      <p>Hi${name ? ' ' + name : ''},</p>
+      <p><strong>${escapeHtml(businessName)}</strong> has ${puckLabel} to return to ReceipTap by
+        <strong>${deadlineLabel}</strong>. A puck not returned by then is billed as a $60 USD
+        replacement, per the Hardware section of our Terms.</p>
+      ${labelUrl
+        ? `<p>We've prepaid the postage — print the label below, box up the puck(s), and drop the package off.</p>
+           <p style="margin:24px 0;">
+             <a href="${labelUrl}" style="display:inline-block; background:#056BFE; color:#ffffff; text-decoration:none; font-weight:700; font-size:15px; padding:13px 26px; border-radius:999px;">Download prepaid shipping label</a>
+           </p>
+           ${trackingUrl ? `<p style="font-size:13px;">Track the return: <a href="${trackingUrl}" style="color:#056BFE;">${trackingUrl}</a></p>` : ''}`
+        : `<p>Pack up the puck(s) and ship them, at your own cost, to:</p>
+           <p style="margin:16px 0; padding:14px 16px; background:#f4f2ec; border-radius:10px; font-size:14px; line-height:1.6;">
+             ${addressLines.map(escapeHtml).join('<br>')}
+           </p>`}
+      <p style="font-size:13px; color:#666;">Already sent it back? No action needed — we'll mark it received once it arrives.</p>
+    `,
+  });
+}
+
+// Fired the moment services/hardwareOrderService.js confirms payment for a
+// HardwareOrder (mirrors sendReturnPucksEmail's shape, opposite direction:
+// this is a puck shipping TO the merchant, not back from them). labelUrl is
+// often already known by the time this sends, since the outbound label is
+// bought synchronously right after payment -- but not always (EasyPost down,
+// not configured yet), so this reads the same either way as
+// sendReturnPucksEmail's own null-labelUrl branch.
+async function sendHardwareOrderConfirmationEmail({ email, name, businessName, orderNumber, quantity, feeLabel, labelUrl, trackingUrl }) {
+  const subject = `Order confirmed — ${orderNumber}`;
+
+  if (!resend) {
+    console.log(`[emailService] RESEND_API_KEY not set -- order confirmation email for ${email}: ${subject}`);
+    return;
+  }
+
+  const puckLabel = quantity === 1 ? '1 ReceipTap' : `${quantity} ReceipTaps`;
+
+  await send({
+    from: FROM_ADDRESS,
+    to: email,
+    subject,
+    html: `
+      <p>Hi${name ? ' ' + name : ''},</p>
+      <p>Order <strong>${escapeHtml(orderNumber)}</strong> for <strong>${escapeHtml(businessName)}</strong> is
+        confirmed — ${puckLabel}, ${feeLabel} shipping paid.</p>
+      ${labelUrl
+        ? `<p>Your prepaid shipping label is ready — we'll drop it in the mail shortly.</p>
+           ${trackingUrl ? `<p style="font-size:13px;">Track it: <a href="${trackingUrl}" style="color:#056BFE;">${trackingUrl}</a></p>` : ''}`
+        : `<p>We'll email you again the moment it ships.</p>`}
+      ${actionButton('/account/business/orders', 'View order status')}
+    `,
+  });
+}
+
+// Fired by services/hardwareOrderService.js's periodic tracking refresh the
+// moment a HardwareOrder's carrier status genuinely changes (shipped or
+// delivered) -- not on every poll, only on a real transition. In-app
+// notification is the record of record (services/merchantNotificationService.js);
+// this is the best-effort email copy of it, same pattern as everywhere else
+// in this file.
+async function sendHardwareOrderStatusEmail({ email, name, businessName, orderNumber, status, trackingUrl }) {
+  const isDelivered = status === 'delivered';
+  const subject = isDelivered ? `Delivered — ${orderNumber}` : `On its way — ${orderNumber}`;
+
+  if (!resend) {
+    console.log(`[emailService] RESEND_API_KEY not set -- order status email for ${email}: ${subject}`);
+    return;
+  }
+
+  await send({
+    from: FROM_ADDRESS,
+    to: email,
+    subject,
+    html: `
+      <p>Hi${name ? ' ' + name : ''},</p>
+      <p>Order <strong>${escapeHtml(orderNumber)}</strong> for <strong>${escapeHtml(businessName)}</strong>
+        ${isDelivered ? 'has been delivered.' : 'is on its way.'}</p>
+      ${trackingUrl && !isDelivered ? `<p style="font-size:13px;">Track it: <a href="${trackingUrl}" style="color:#056BFE;">${trackingUrl}</a></p>` : ''}
+      ${isDelivered ? `<p>Once you've unboxed it, tap it and enter the claim code printed on the insert card to link it to your account.</p>` : ''}
+      ${actionButton('/account/business/orders', 'View order status')}
+    `,
+  });
+}
+
 // Merchant-controlled text (business name, reward label) goes into an HTML
 // email -- escape it rather than trusting it, the same way every other
 // merchant-supplied string is escaped before it reaches a page.
@@ -261,4 +378,7 @@ module.exports = {
   sendWarrantyExpiringEmail,
   sendBillingProblemEmail,
   sendTreePlantedEmail,
+  sendReturnPucksEmail,
+  sendHardwareOrderConfirmationEmail,
+  sendHardwareOrderStatusEmail,
 };

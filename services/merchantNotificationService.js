@@ -7,8 +7,12 @@
 // and sendTreePlantedEmailSafely below for why those two are different.
 
 const prisma = require('../lib/prisma');
-const { sendBillingProblemEmail, sendTreePlantedEmail } = require('./emailService');
+const {
+  sendBillingProblemEmail, sendTreePlantedEmail, sendReturnPucksEmail,
+  sendHardwareOrderConfirmationEmail, sendHardwareOrderStatusEmail,
+} = require('./emailService');
 const { PUBLIC_IMPACT_URL } = require('./goodApiService');
+const { createReturnLabel, createOutboundLabel } = require('./easypostService');
 
 async function create({ merchantId, type, title, body, linkUrl }) {
   return prisma.merchantNotification.create({
@@ -139,6 +143,157 @@ async function sendTreePlantedEmailSafely(merchantId, treesPlanted) {
   }
 }
 
+// Fired from services/stripeService.js's syncPuckReturnWindows, right after
+// it starts a return window on a merchant's currently-unreturned pucks --
+// the actual mechanism behind the Terms' "we'll notify you" return promise
+// (Hardware section), which had nothing behind it at all before this.
+// Attempts a real prepaid label via services/easypostService.js first
+// (best-effort -- see createReturnLabel's own doc comment for every reason
+// that can fail) and persists it on the Merchant row if it worked, but
+// sends the email regardless of whether a label came back. Email, not just
+// in-app: this is the one channel that reaches a merchant who used
+// "Deactivate account," since that flow destroys their session immediately
+// and they can never log back in to see an in-app notification.
+async function notifyReturnPucks({ merchantId, puckCount, deadline }) {
+  const merchant = await prisma.merchant.findUnique({ where: { id: merchantId } });
+  if (!merchant) return null;
+
+  const label = await createReturnLabel(merchant);
+  if (label) {
+    await prisma.merchant.update({
+      where: { id: merchantId },
+      data: {
+        returnLabelUrl: label.labelUrl,
+        returnTrackingCode: label.trackingCode,
+        returnTrackingUrl: label.trackingUrl,
+        returnLabelGeneratedAt: new Date(),
+      },
+    });
+  }
+
+  const notification = await create({
+    merchantId,
+    type: 'RETURN_PUCKS',
+    title: puckCount === 1 ? 'Return your ReceipTap puck' : `Return your ${puckCount} ReceipTap pucks`,
+    body: `Due back by ${deadline.toLocaleDateString('en-US', { dateStyle: 'long' })}`
+      + (label ? ' — your prepaid shipping label is ready.' : '.'),
+    linkUrl: '/account/business/pucks/return',
+  });
+
+  await sendReturnPucksEmailSafely({ merchant, puckCount, deadline, label });
+  return notification;
+}
+
+async function sendReturnPucksEmailSafely({ merchant, puckCount, deadline, label }) {
+  try {
+    await sendReturnPucksEmail({
+      email: merchant.email,
+      name: merchant.ownerName,
+      businessName: merchant.businessName,
+      puckCount,
+      deadline,
+      labelUrl: label?.labelUrl || null,
+      trackingUrl: label?.trackingUrl || null,
+    });
+  } catch (err) {
+    console.error(`[merchantNotificationService] return-pucks email for merchant ${merchant.id} failed:`, err.message);
+  }
+}
+
+// Fired from services/hardwareOrderService.js's fulfillOrder, right after a
+// HardwareOrder's payment is confirmed -- mirrors notifyReturnPucks above,
+// opposite direction: this ships a puck TO the merchant instead of tracking
+// one going back. Attempts a real prepaid label via
+// services/easypostService.js first (best-effort, same reasoning as
+// createReturnLabel) and persists it on the order if it worked, but notifies
+// and emails regardless of whether a label came back.
+async function notifyHardwareOrderPlaced(order) {
+  const merchant = await prisma.merchant.findUnique({ where: { id: order.merchantId } });
+  if (!merchant) return null;
+
+  const label = await createOutboundLabel(order);
+  if (label) {
+    order = await prisma.hardwareOrder.update({
+      where: { id: order.id },
+      data: {
+        status: 'LABEL_PURCHASED',
+        labelUrl: label.labelUrl,
+        trackingCode: label.trackingCode,
+        trackingUrl: label.trackingUrl,
+        easypostTrackerId: label.trackerId,
+      },
+    });
+  }
+
+  const feeLabel = `$${(order.shippingFeeCents / 100).toFixed(2)} USD`;
+  const notification = await create({
+    merchantId: order.merchantId,
+    type: 'HARDWARE_ORDER_PLACED',
+    title: `Order confirmed — ${order.orderNumber}`,
+    body: `${order.quantity === 1 ? '1 ReceipTap' : `${order.quantity} ReceipTaps`}, ${feeLabel} shipping paid`
+      + (label ? ' — your prepaid label is ready.' : '.'),
+    linkUrl: '/account/business/orders',
+  });
+
+  await sendHardwareOrderConfirmationEmailSafely({ merchant, order, feeLabel, label });
+  return { order, notification };
+}
+
+async function sendHardwareOrderConfirmationEmailSafely({ merchant, order, feeLabel, label }) {
+  try {
+    await sendHardwareOrderConfirmationEmail({
+      email: merchant.email,
+      name: merchant.ownerName,
+      businessName: merchant.businessName,
+      orderNumber: order.orderNumber,
+      quantity: order.quantity,
+      feeLabel,
+      labelUrl: label?.labelUrl || null,
+      trackingUrl: label?.trackingUrl || null,
+    });
+  } catch (err) {
+    console.error(`[merchantNotificationService] order confirmation email for merchant ${merchant.id} failed:`, err.message);
+  }
+}
+
+// Fired from services/hardwareOrderService.js's tracking-refresh job, only
+// on a genuine status TRANSITION (IN_TRANSIT or DELIVERED) -- never on every
+// poll, so a merchant isn't renotified each time the job runs and the
+// carrier status hasn't actually changed.
+async function notifyHardwareOrderStatusChange({ order, status }) {
+  const merchant = await prisma.merchant.findUnique({ where: { id: order.merchantId } });
+  if (!merchant) return null;
+
+  const isDelivered = status === 'DELIVERED';
+  const notification = await create({
+    merchantId: order.merchantId,
+    type: isDelivered ? 'HARDWARE_ORDER_DELIVERED' : 'HARDWARE_ORDER_SHIPPED',
+    title: isDelivered ? `Delivered — ${order.orderNumber}` : `On its way — ${order.orderNumber}`,
+    body: isDelivered
+      ? 'Tap it and enter the claim code on the insert card to link it to your account.'
+      : 'Your ReceipTap order is on its way.',
+    linkUrl: '/account/business/orders',
+  });
+
+  await sendHardwareOrderStatusEmailSafely({ merchant, order, status: isDelivered ? 'delivered' : 'in_transit' });
+  return notification;
+}
+
+async function sendHardwareOrderStatusEmailSafely({ merchant, order, status }) {
+  try {
+    await sendHardwareOrderStatusEmail({
+      email: merchant.email,
+      name: merchant.ownerName,
+      businessName: merchant.businessName,
+      orderNumber: order.orderNumber,
+      status,
+      trackingUrl: order.trackingUrl,
+    });
+  } catch (err) {
+    console.error(`[merchantNotificationService] order status email for merchant ${merchant.id} failed:`, err.message);
+  }
+}
+
 // Fired by hand from /admin/announce (routes/admin.js) -- a policy/price
 // change, or anything else worth telling every merchant about at once.
 // There's no bulk/automated email sender in this app (see
@@ -182,6 +337,9 @@ module.exports = {
   notifyPosConnectionFailed,
   notifyPayoutCompleted,
   notifyTreePlanted,
+  notifyReturnPucks,
+  notifyHardwareOrderPlaced,
+  notifyHardwareOrderStatusChange,
   notifyAllMerchantsOfAnnouncement,
   listNotifications,
   countUnread,

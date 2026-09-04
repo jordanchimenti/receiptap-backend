@@ -23,18 +23,44 @@ const { CATEGORIES } = require('./categorize-receipt');
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-// Strict tool use rather than "reply with only JSON": the response is
-// guaranteed to match this schema, which removes the previous failure mode of
-// parsing fenced text with a regex and throwing on anything unexpected.
+// This used to be strict tool use ("the response is guaranteed to match
+// this schema" -- see the tool definition below, `strict: false` now) --
+// removed 2026-09-04 after every scan started silently returning a blank
+// review form. The real cause was caught and swallowed by
+// extractReceiptData's own try/catch below; found by calling it directly
+// and reading the logged error, which turned out to be TWO separate limits
+// in Anthropic's strict-schema compiler, hit back to back:
+//   1. At most 16 properties may use a nullable/union type
+//      (type: [X, 'null']) before it refuses to compile ("too many
+//      parameters with union types... exponential compilation cost"). This
+//      schema had 23 -- the 5th newly-added text field (merchantPhone,
+//      cashierName, itemCount, taxLabel, paymentReferenceNumber) pushed it
+//      over. Worked around below by making every TEXT field plain
+//      `type: 'string'` with an empty string standing in for "not
+//      printed" instead of null -- cleanString() already treats a blank
+//      string as absent, so nothing downstream had to change. Only the
+//      genuinely numeric/boolean/array fields stay nullable.
+//   2. Even after fixing that, strict compilation still failed with a
+//      generic "Schema is too complex" -- this schema (23 properties, one
+//      nested array of objects, several long descriptions) is apparently
+//      still over whatever undocumented total-complexity ceiling that
+//      error represents. Verified by testing non-strict against the exact
+//      same schema and a real receipt photo: extraction quality was
+//      identical.
+// Net effect: this codebase's own defensive parsing (cleanString, toCents,
+// the typeof/CATEGORIES.includes checks in extractReceiptData below) is
+// what actually keeps a slightly-off response safe now, not a compiled
+// grammar -- and it already did most of that work before strict mode was
+// ever added, so nothing here is newly fragile.
 const RECEIPT_SCHEMA = {
   type: 'object',
   properties: {
-    merchantName: { type: ['string', 'null'], description: 'The store or business name as printed.' },
-    merchantAddress: { type: ['string', 'null'], description: 'Street address printed on the receipt, one line. Null if not shown.' },
-    merchantPhone: { type: ['string', 'null'], description: "The store's own phone number, exactly as printed (keep whatever formatting it uses). Null if not shown." },
-    cashierName: { type: ['string', 'null'], description: 'The cashier/server\'s name as printed (e.g. "Your cashier today is Bhavyakumar P.", "Served by: Maria"). Null if not shown.' },
+    merchantName: { type: 'string', description: 'The store or business name as printed. Empty string if this is not a receipt at all.' },
+    merchantAddress: { type: 'string', description: 'Street address printed on the receipt, one line. Empty string if not shown.' },
+    merchantPhone: { type: 'string', description: "The store's own phone number, exactly as printed (keep whatever formatting it uses). Empty string if not shown." },
+    cashierName: { type: 'string', description: 'The cashier/server\'s name as printed (e.g. "Your cashier today is Bhavyakumar P.", "Served by: Maria"). Empty string if not shown.' },
     itemCount: { type: ['integer', 'null'], description: 'The item count printed on the receipt itself (e.g. "Item Count: 5"), not a count you compute from lineItems. Null if the receipt does not print one.' },
-    date: { type: ['string', 'null'], description: 'Purchase date as YYYY-MM-DD. Null if not legible.' },
+    date: { type: 'string', description: 'Purchase date as YYYY-MM-DD. Empty string if not legible.' },
     subtotal: { type: ['number', 'null'], description: 'Total before tax, plain number. Null if the receipt does not print one.' },
     tax: {
       type: ['number', 'null'],
@@ -45,16 +71,16 @@ const RECEIPT_SCHEMA = {
         'them together into this one number -- do not report just one of them.',
     },
     tip: { type: ['number', 'null'], description: 'Tip or gratuity, plain number. Null if not printed.' },
-    taxLabel: { type: ['string', 'null'], description: 'The tax\'s own printed label and rate, e.g. "HST 13%", "GST 5%", "Sales Tax 8.25%". This is separate from taxNumber below -- taxLabel is what the tax is CALLED and its rate; taxNumber is the merchant\'s registration number. If more than one tax line was summed into the tax field above, join their labels, e.g. "GST 5% + PST 7%". Null if the receipt does not print a rate/label next to the tax amount.' },
+    taxLabel: { type: 'string', description: 'The tax\'s own printed label and rate, e.g. "HST 13%", "GST 5%", "Sales Tax 8.25%". This is separate from taxNumber below -- taxLabel is what the tax is CALLED and its rate; taxNumber is the merchant\'s registration number. If more than one tax line was summed into the tax field above, join their labels, e.g. "GST 5% + PST 7%". Empty string if the receipt does not print a rate/label next to the tax amount.' },
     total: { type: ['number', 'null'], description: 'The final amount paid, plain number. Null if not legible.' },
-    currency: { type: ['string', 'null'], description: 'Three-letter code if the receipt makes it clear (CAD, USD). Null if it does not.' },
-    taxNumber: { type: ['string', 'null'], description: "The merchant's PRIMARY tax registration number exactly as printed, including its label (e.g. 'GST/HST 137466199 RT 0001'). The caller displays this value as-is with no label of its own added -- leaving the label out would show a bare number with no context, and a wrong label (e.g. assuming GST/HST when the receipt actually printed a VAT or ABN number) would misdescribe it. Null if absent." },
-    taxNumber2: { type: ['string', 'null'], description: "A SECOND tax registration number, if the receipt prints one, exactly as printed with its label (e.g. 'QST 1016551356 TQ 0001'). Canadian receipts often show GST/HST and QST or PST together. Null if there is only one." },
-    buyerName: { type: ['string', 'null'], description: "The customer's or purchaser's name, if the receipt prints one (common on invoices, rare on retail till receipts). Not the merchant's name. Null if absent." },
-    time: { type: ['string', 'null'], description: "Time of day exactly as printed, e.g. '18:42:29' or '6:42 PM'. Null if not shown." },
-    paymentMethod: { type: ['string', 'null'], description: 'Exactly what the receipt prints for how it was paid, e.g. "Visa •••• 6123" or "Cash". Null if not shown.' },
-    paymentReferenceNumber: { type: ['string', 'null'], description: 'The card payment\'s own reference/approval/authorization number, if printed separately from the card brand and last-4 digits (e.g. a line reading "Reference Number: 456" or "Auth Code: 041992"). Not the store\'s receipt/transaction number -- that goes in receiptNumber below. Null if not shown.' },
-    receiptNumber: { type: ['string', 'null'], description: "The store's own receipt/transaction/reference number, exactly as printed, including its own printed label (e.g. 'TRANS #: 716634'). The caller displays this value as-is with no label of its own added, so leaving the label out would show a bare number with no context. Null if absent." },
+    currency: { type: 'string', description: 'Three-letter code if the receipt makes it clear (CAD, USD). Empty string if it does not.' },
+    taxNumber: { type: 'string', description: "The merchant's PRIMARY tax registration number exactly as printed, including its label (e.g. 'GST/HST 137466199 RT 0001'). The caller displays this value as-is with no label of its own added -- leaving the label out would show a bare number with no context, and a wrong label (e.g. assuming GST/HST when the receipt actually printed a VAT or ABN number) would misdescribe it. Empty string if absent." },
+    taxNumber2: { type: 'string', description: "A SECOND tax registration number, if the receipt prints one, exactly as printed with its label (e.g. 'QST 1016551356 TQ 0001'). Canadian receipts often show GST/HST and QST or PST together. Empty string if there is only one." },
+    buyerName: { type: 'string', description: "The customer's or purchaser's name, if the receipt prints one (common on invoices, rare on retail till receipts). Not the merchant's name. Empty string if absent." },
+    time: { type: 'string', description: "Time of day exactly as printed, e.g. '18:42:29' or '6:42 PM'. Empty string if not shown." },
+    paymentMethod: { type: 'string', description: 'Exactly what the receipt prints for how it was paid, e.g. "Visa •••• 6123" or "Cash". Empty string if not shown.' },
+    paymentReferenceNumber: { type: 'string', description: 'The card payment\'s own reference/approval/authorization number, if printed separately from the card brand and last-4 digits (e.g. a line reading "Reference Number: 456" or "Auth Code: 041992"). Not the store\'s receipt/transaction number -- that goes in receiptNumber below. Empty string if not shown.' },
+    receiptNumber: { type: 'string', description: "The store's own receipt/transaction/reference number, exactly as printed, including its own printed label (e.g. 'TRANS #: 716634'). The caller displays this value as-is with no label of its own added, so leaving the label out would show a bare number with no context. Empty string if absent." },
     isPreauth: {
       type: ['boolean', 'null'],
       description: 'True only if the receipt is explicitly marked as a pre-authorization -- ' +
@@ -64,11 +90,12 @@ const RECEIPT_SCHEMA = {
         'only from an explicit preauth marking actually printed on the paper.',
     },
     // The allowed values live in the description, not an `enum`: a strict
-    // schema rejects an enum of strings on a ['string','null'] field. Anything
-    // off-list is turned into null when the result is validated below.
+    // schema rejects an enum of strings on a nullable field. Anything
+    // off-list (including empty string) is turned into null when the
+    // result is validated below.
     category: {
-      type: ['string', 'null'],
-      description: `Best-fitting spending category. Must be exactly one of: ${CATEGORIES.join(', ')}. Null if none fit.`,
+      type: 'string',
+      description: `Best-fitting spending category. Must be exactly one of: ${CATEGORIES.join(', ')}. Empty string if none fit.`,
     },
     lineItems: {
       type: 'array',
@@ -100,7 +127,7 @@ const RECEIPT_SCHEMA = {
 const INSTRUCTIONS = `This is a photo of a purchase receipt. Read it for a personal expense wallet and record every field the receipt actually prints.
 
 Rules that matter more than completeness:
-- Never guess. If a field is not printed, or is not legible in this photo, use null. A null is useful; a wrong number is not.
+- Never guess. If a field is not printed, or is not legible in this photo, use null for a number/boolean field or an empty string for a text field. A missing value is useful; a wrong one is not.
 - date is one of the two fields this app cannot function without (the other is total) -- look specifically for a printed date near the top or bottom of the receipt before concluding there isn't one. It is not optional just because it's easy to miss next to a time stamp.
 - Amounts are plain numbers with no currency symbol (42.17, not "$42.17").
 - subtotal, tax and tip are only what the receipt itself shows as separate lines. Do not calculate them from the total. This does NOT mean report only the first tax line you see: if tax is split across more than one printed line (e.g. separate GST and HST amounts, or a line reading "tax included" printed after the total instead of before it -- common on gas-pump receipts), add every such line together into the single tax value. Reading and summing what's printed is not the same as calculating a number that isn't printed.
@@ -162,7 +189,12 @@ async function extractReceiptData(source, mimetype) {
         {
           name: 'record_receipt',
           description: 'Record every field printed on the photographed receipt.',
-          strict: true,
+          // See RECEIPT_SCHEMA's own comment above -- this schema is too
+          // large for Anthropic's strict-mode compiler regardless of how
+          // the individual fields are typed. Not a loosening of quality:
+          // the code below already validates every field's shape before
+          // trusting it.
+          strict: false,
           input_schema: RECEIPT_SCHEMA,
         },
       ],

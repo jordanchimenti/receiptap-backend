@@ -228,13 +228,16 @@ const POS_SETUP_GUIDES = {
   toast: {
     providerName: 'Toast',
     steps: [
-      { text: 'In your Toast Web account, go to your integrations settings and turn on Standard API access (requires a Toast RMS Essentials plan or higher, and the Manage Integrations permission).', image: null },
-      { text: 'Generate an API client — Toast will show you a Client ID and Client Secret. Copy both; the secret is only shown once.', image: null },
-      { text: 'Find your Restaurant GUID in Toast Web (under your restaurant\'s general settings) and copy it too.', image: null },
-      { text: 'On the POS connection page, paste all three into the Toast section and click <strong>Connect</strong>.', image: null },
+      { text: 'This needs a Toast RMS Essentials plan or higher, and the <strong>Manage Integrations</strong> permission on your Toast account.', image: null },
+      { text: 'In Toast Web, go to <strong>Integrations &rarr; Toast API access &rarr; Manage credentials</strong>.', image: null },
+      { text: 'Click <strong>Create new credentials</strong>, then use the dropdown arrow to choose <strong>Standard API</strong>.', image: null },
+      { text: 'Give it a name you\'ll recognize later (e.g. "ReceipTap"), and under Scopes select <strong>Orders</strong> (<code>orders:read</code>) — that\'s the only permission ReceipTap needs. Choose the location(s) to apply it to, click <strong>Apply</strong>, then <strong>Confirm</strong>.', image: null },
+      { text: 'Copy the <strong>Client ID</strong> and <strong>Client Secret</strong> shown — the secret is only ever shown this once, so save it somewhere before leaving the page.', image: null },
+      { text: 'Your <strong>Restaurant GUID</strong> isn\'t shown on that same page. The most reliable way to get it is to ask Toast Support directly — start a chat in Toast Web or the Toast Now app and ask for your restaurant\'s GUID.', image: null },
+      { text: 'On the POS connection page, paste the Client ID, Client Secret and Restaurant GUID into the Toast section and click <strong>Connect</strong>.', image: null },
       { text: 'Pick the puck at your register from the dropdown to link it.', image: null },
     ],
-    note: 'Toast doesn\'t offer a one-click "Connect" the way Square, Clover, Lightspeed and Shopify do — you generate these credentials yourself in your own Toast account and hand them to ReceipTap directly. New sales are checked for every few minutes rather than arriving instantly.',
+    note: 'Toast doesn\'t offer a one-click "Connect" the way Square, Clover, Lightspeed and Shopify do — you generate these credentials yourself in your own Toast account and hand them to ReceipTap directly. New sales are checked for every few minutes rather than arriving instantly, not the moment they happen.',
   },
 };
 

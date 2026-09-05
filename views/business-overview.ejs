@@ -157,6 +157,30 @@
         <div class="setup-row-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg></div>
       </a>
 
+      <%# Address + tax registration number -- the two things every receipt
+          this merchant issues needs for a customer's CRA/IRS claim to hold
+          up (see lib/receiptMissingFields.js). Without a tax number here,
+          every single receipt silently comes up short on that one field. %>
+      <% if (setup.businessProfileComplete) { %>
+        <a class="setup-row done" href="/account/business/settings">
+          <div class="setup-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div>
+          <div class="setup-row-body">
+            <div class="setup-row-title">Complete your business profile</div>
+            <div class="setup-row-sub">Address and tax number are on file.</div>
+          </div>
+          <div class="setup-row-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg></div>
+        </a>
+      <% } else { %>
+        <a class="setup-row" href="/account/business/settings">
+          <div class="setup-check"></div>
+          <div class="setup-row-body">
+            <div class="setup-row-title">Complete your business profile</div>
+            <div class="setup-row-sub">Add your business address and tax registration number so every receipt you issue holds up for your customers' taxes.</div>
+          </div>
+          <div class="setup-row-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg></div>
+        </a>
+      <% } %>
+
       <% if (setup.billingAdded) { %>
         <a class="setup-row done" href="/account/business/billing">
           <div class="setup-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div>

@@ -13,6 +13,7 @@ const { autoSaveReceiptForKnownShopper } = require('../services/receiptAutoSave'
 const { awardLoyaltyStamps } = require('./loyalty');
 const { categorizeInBackground } = require('../services/categorize-receipt');
 const { buildSellerSnapshot } = require('../lib/receiptSnapshot');
+const { currencyForCountry } = require('../lib/currencyForCountry');
 
 // The email a POS attached to a sale, if any. Only ever used as a lookup key
 // against an identifier the shopper recorded themselves -- never stored, and
@@ -111,9 +112,9 @@ router.post('/webhooks/pos/square', async (req, res) => {
         createdAt: new Date(payment.created_at),
         lineItems,
         // Square's Money type always carries its own currency alongside the
-        // amount -- reliable, unlike Clover/Lightspeed below (see
-        // lib/receiptSnapshot.js's header comment for why those two stay null).
-        currency: order.total_money?.currency || null,
+        // amount -- reliable, unlike Clover/Lightspeed below. The country
+        // fallback only ever matters if Square's own field is ever absent.
+        currency: order.total_money?.currency || currencyForCountry(merchant.addressCountry),
         ...buildSellerSnapshot(merchant),
         // Already net of any discount -- Square's total_money/total_tax_money
         // are computed post-discount, so discountTotal below is shown on the
@@ -352,9 +353,11 @@ async function handleCloverOrderEvent(cloverMerchantId, orderId) {
       changeDueCents,
       // Clover's Order object has no confirmed per-order currency field in
       // this codebase (it's a merchant-account-level Clover setting this app
-      // doesn't fetch) -- left null rather than guessed, same "verify before
-      // trusting" discipline as the other best-effort fields above.
-      currency: null,
+      // doesn't fetch) -- falls back to the merchant's own registered
+      // country (see lib/currencyForCountry.js) rather than guessing from
+      // the Clover payload itself, which stays the same "don't trust what
+      // isn't there" discipline as the other best-effort fields above.
+      currency: currencyForCountry(merchant.addressCountry),
       ...buildSellerSnapshot(merchant),
     },
   });
@@ -511,8 +514,8 @@ router.post('/webhooks/pos/lightspeed', async (req, res) => {
         // left unset for the same reason; the receipt simply omits them.
         paymentMethod: null,
         // No currency field confirmed anywhere on the Sale object this app
-        // fetches (same "don't guess" reasoning as Clover, above).
-        currency: null,
+        // fetches -- same country fallback as Clover, above.
+        currency: currencyForCountry(merchant.addressCountry),
         ...buildSellerSnapshot(merchant),
       },
     });
@@ -641,8 +644,9 @@ router.post('/webhooks/pos/shopify', async (req, res) => {
         cardBrand: order.payment_details?.credit_card_company || null,
         cardLast4: order.payment_details?.credit_card_last_four || null,
         // A standard top-level field on every Shopify order -- reliable,
-        // unlike Clover/Lightspeed above.
-        currency: order.currency || null,
+        // unlike Clover/Lightspeed above. The country fallback only ever
+        // matters if Shopify's own field is ever absent.
+        currency: order.currency || currencyForCountry(merchant.addressCountry),
         ...buildSellerSnapshot(merchant),
       },
     });

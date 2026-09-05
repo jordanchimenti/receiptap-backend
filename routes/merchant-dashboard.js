@@ -5,6 +5,7 @@ const express = require('express');
 const router = express.Router();
 const prisma = require('../lib/prisma');
 const { MERCHANT_AFFILIATE_RATE } = require('../services/affiliateRates');
+const { hasCompleteAddress } = require('../services/easypostService');
 
 function requireAuth(req, res, next) {
   if (!req.session?.merchantId) return res.redirect('/login');
@@ -245,6 +246,13 @@ async function computeOverviewData(merchantId) {
   // there's nothing to "connect" before tapping it.
   const setupSteps = {
     accountCreated: true,
+    // Done once a full mailing address is on file AND a tax registration
+    // number is entered -- the two things every receipt this merchant
+    // issues needs to actually support a customer's CRA input tax credit or
+    // IRS deduction claim (see lib/receiptMissingFields.js). Both live on
+    // the same Business Settings page, so one step covers both rather than
+    // splitting into two a merchant would fill in together anyway.
+    businessProfileComplete: hasCompleteAddress(merchant) && Boolean(receiptTheme && receiptTheme.gstHstNumber),
     billingAdded: merchant.subscriptionStatus !== 'INCOMPLETE',
     puckSetUp: pucks.length > 0,
     receiptCustomized: Boolean(receiptTheme),

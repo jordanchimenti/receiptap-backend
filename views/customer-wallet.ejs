@@ -157,6 +157,10 @@
     /* Green, same token as the marked-deductible toggle -- a receipt still
        under warranty is a similarly unambiguous "good news, covered" fact. */
     .badge-warranty { background: var(--w-ok-wash); color: var(--w-ok); }
+    /* Amber, not --w-danger red -- this is a nudge ("add this before tax
+       time"), not an error state. Same amber as the hardware-order "In
+       transit" status pill, for one warning colour across the wallet. */
+    .badge-missing { background: rgba(255,159,10,0.16); color: #ff9f0a; }
 
     .warranty-badge {
       font-family: inherit; font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 999px;

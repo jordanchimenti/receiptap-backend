@@ -867,6 +867,11 @@ async function renderWallet(req, res, { isFullWallet }) {
       paymentLabel: cardLabel(t.cardBrand, t.cardLast4, t.paymentMethod),
       autoSaved: t.autoSavedViaRecognition,
       link: `/receipt/${t.id}`,
+      // Same check the tax-export PDF already flags rows with (see
+      // lib/receiptMissingFields.js) -- surfaced here too so a gap shows up
+      // the moment a receipt lands in the wallet, not months later when it's
+      // exported for an accountant and there's no time left to fix it.
+      missing: missingSubstantiationFields('tapped', t),
     })),
     ...scannedReceipts.map((r) => ({
       id: r.id,
@@ -905,6 +910,7 @@ async function renderWallet(req, res, { isFullWallet }) {
       paymentLabel: r.paymentMethod || null,
       autoSaved: false, // a scanned receipt was uploaded by hand, never matched
       link: r.imageUrl,
+      missing: missingSubstantiationFields('scanned', r),
     })),
   ].sort((a, b) => b.sortDate - a.sortDate);
 

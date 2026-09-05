@@ -48,7 +48,7 @@
                   only a calendar date has no time to show unless the paper
                   printed one. %>
               <div class="receipt-date"><%= r.date %><% if (r.time) { %> · <%= r.time %><% } %></div>
-              <% if (r.aiCategory || r.kind === 'scanned' || r.paymentLabel) { %>
+              <% if (r.aiCategory || r.kind === 'scanned' || r.paymentLabel || (r.missing && r.missing.length)) { %>
                 <div class="badges">
                   <% if (r.aiCategory) { %><span class="badge badge-category"><%= r.aiCategory %></span><% } %>
                   <%# Only the "still active" case, and only as a passive fact
@@ -63,6 +63,15 @@
                       was recognised, not because they tapped. %>
                   <% if (r.autoSaved) { %><span class="badge badge-auto" title="Saved automatically — your card was recognised at this business. You can turn this off in Settings.">Saved automatically</span><% } %>
                   <% if (r.kind === 'scanned') { %><span class="badge badge-scanned">Scanned</span><% } %>
+                  <%# Same check the tax-export PDF flags rows with (see
+                      lib/receiptMissingFields.js) -- shown here too so a gap
+                      is visible the moment the receipt lands, not only
+                      discovered months later at export time. Tapping it goes
+                      straight to the receipt, where the buyer-name/purpose
+                      fields it's usually about are editable. %>
+                  <% if (r.missing && r.missing.length) { %>
+                    <span class="badge badge-missing" title="Missing for CRA/IRS: <%= r.missing.join(', ') %>">Needs info for taxes</span>
+                  <% } %>
                 </div>
               <% } %>
             </div>

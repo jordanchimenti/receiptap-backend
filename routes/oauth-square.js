@@ -110,9 +110,15 @@ async function computePosSetupData(merchantId) {
   const lightspeedDomainPrefix = merchant.lightspeedDomainPrefix;
   const shopifyConnected = Boolean(merchant.shopifyAccessToken);
   const shopifyShopDomain = merchant.shopifyShopDomain;
+  // Toast has no access-token-implies-connected shortcut the way the others
+  // do -- credentials (clientId/clientSecret/restaurantGuid) are what mean
+  // "connected" here, not the cached access token, which only exists once
+  // those credentials have actually been used successfully.
+  const toastConnected = Boolean(merchant.toastRestaurantGuid);
+  const toastRestaurantGuid = merchant.toastRestaurantGuid;
 
   if (!merchant.squareAccessToken) {
-    return { connected: false, locations: [], pucks, cloverConnected, cloverMerchantId, lightspeedConnected, lightspeedDomainPrefix, shopifyConnected, shopifyShopDomain };
+    return { connected: false, locations: [], pucks, cloverConnected, cloverMerchantId, lightspeedConnected, lightspeedDomainPrefix, shopifyConnected, shopifyShopDomain, toastConnected, toastRestaurantGuid };
   }
 
   // Never reads merchant.squareAccessToken directly -- see that field's
@@ -124,7 +130,7 @@ async function computePosSetupData(merchantId) {
   try {
     accessToken = await getValidAccessToken(merchant);
   } catch (err) {
-    return { connected: false, locations: [], pucks, cloverConnected, cloverMerchantId, lightspeedConnected, lightspeedDomainPrefix, shopifyConnected, shopifyShopDomain };
+    return { connected: false, locations: [], pucks, cloverConnected, cloverMerchantId, lightspeedConnected, lightspeedDomainPrefix, shopifyConnected, shopifyShopDomain, toastConnected, toastRestaurantGuid };
   }
 
   const locResponse = await fetch(`${SQUARE_BASE_URL}/v2/locations`, {
@@ -132,7 +138,7 @@ async function computePosSetupData(merchantId) {
   });
   const { locations } = await locResponse.json();
 
-  return { connected: true, locations: locations || [], pucks, cloverConnected, cloverMerchantId, lightspeedConnected, lightspeedDomainPrefix, shopifyConnected, shopifyShopDomain };
+  return { connected: true, locations: locations || [], pucks, cloverConnected, cloverMerchantId, lightspeedConnected, lightspeedDomainPrefix, shopifyConnected, shopifyShopDomain, toastConnected, toastRestaurantGuid };
 }
 
 router.get('/dashboard/pos-setup', requireAuth, async (req, res) => {
@@ -218,6 +224,17 @@ const POS_SETUP_GUIDES = {
       { text: 'Pick the puck at your register from the dropdown to link it.', image: '/images/pos-guides/shopify/02-assign-puck.png' },
     ],
     note: 'Only in-person sales rung through Shopify POS generate a ReceipTap receipt — online store orders are skipped automatically.',
+  },
+  toast: {
+    providerName: 'Toast',
+    steps: [
+      { text: 'In your Toast Web account, go to your integrations settings and turn on Standard API access (requires a Toast RMS Essentials plan or higher, and the Manage Integrations permission).', image: null },
+      { text: 'Generate an API client — Toast will show you a Client ID and Client Secret. Copy both; the secret is only shown once.', image: null },
+      { text: 'Find your Restaurant GUID in Toast Web (under your restaurant\'s general settings) and copy it too.', image: null },
+      { text: 'On the POS connection page, paste all three into the Toast section and click <strong>Connect</strong>.', image: null },
+      { text: 'Pick the puck at your register from the dropdown to link it.', image: null },
+    ],
+    note: 'Toast doesn\'t offer a one-click "Connect" the way Square, Clover, Lightspeed and Shopify do — you generate these credentials yourself in your own Toast account and hand them to ReceipTap directly. New sales are checked for every few minutes rather than arriving instantly.',
   },
 };
 

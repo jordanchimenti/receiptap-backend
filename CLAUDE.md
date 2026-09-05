@@ -204,6 +204,26 @@ Solo founder, first-time coder. Explain in plain language, one step at a time.
 
 ## Not done yet
 
+- **Toast POS integration is built but UNVERIFIED against real data.**
+  Unlike Square/Clover/Lightspeed/Shopify, Toast has no redirect-based OAuth
+  for third-party apps at the self-serve tier — a restaurant on Toast RMS
+  Essentials+ generates a static clientId/clientSecret themselves in their
+  own Toast Web account and pastes them into ReceipTap directly
+  (`routes/toast.js`; see the schema comment on `Merchant.toastClientId` for
+  why). A real "any merchant clicks Connect" flow requires Toast's Partner
+  Integration Program, a separate business approval (application, signed
+  agreement, compliance review) this app doesn't have. Polling
+  (`services/toastPoller.js`, every 5 minutes) is the ONLY way this app
+  learns about a sale here — not a backstop the way it is for Lightspeed,
+  since Toast's Standard API tier has no documented webhook mechanism at
+  all. Every field mapping in `services/toastSaleSync.js` is derived from
+  Toast's own published API docs, confirmed only as far as the
+  authentication endpoint itself (a real 401 from a bad credential pair,
+  proving the URL/request shape are right) — there is no free, self-serve
+  way to get real test credentials the way Lightspeed's trial provided
+  (Toast requires an actual paying restaurant, or Toast-granted sandbox
+  access on request). Treat line-item/payment/customer field names as
+  unverified until a real restaurant connects.
 - No Stripe webhook secret configured; the subscription gate polls Stripe
   instead (max once per 10 min per merchant) to compensate.
 - The eight older dashboard pages still have prototype styling inside the new

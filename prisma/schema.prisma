@@ -116,6 +116,35 @@ model Merchant {
   // poll after connecting.
   lightspeedLastSaleVersion BigInt?
 
+  // Toast POS. Unlike Square/Clover/Lightspeed, there is no redirect-based
+  // OAuth here -- Toast's self-serve "Standard API access" has the MERCHANT
+  // generate a static clientId/clientSecret themselves in their own Toast
+  // Web account (requires their own Toast RMS Essentials+ subscription) and
+  // hand them to this app directly. A real OAuth-style "any merchant clicks
+  // Connect" flow requires Toast's own Partner Integration Program, a
+  // separate, gatekept business approval this app doesn't have (see
+  // routes/toast.js). toastAccessToken/ExpiresAt are this app's own cache of
+  // the token that clientId/clientSecret produce -- re-requested only when
+  // expired, never more than roughly once a day, because Toast's
+  // authentication endpoint enforces a hard cap of 2 requests per hour per
+  // IP and can terminate API access over-requesting it.
+  toastRestaurantGuid       String?   @unique
+  toastClientId             String?
+  toastClientSecret         String?
+  toastAccessToken          String?
+  toastAccessTokenExpiresAt DateTime?
+  // Cursor for services/toastPoller.js. Toast's Orders API has no webhook
+  // available at the Standard API tier (webhook registration appears to be
+  // Partner-program-only, and there's no way to confirm otherwise without
+  // one) -- polling is the only mechanism this app can rely on, so it's the
+  // primary path here, not a backstop the way it is for Lightspeed. Stores
+  // the end of the last successfully-polled time window (not a version
+  // number -- Toast's API has no such cursor); the next poll resumes from
+  // here, in at-most-1-hour chunks (Toast's startDate/endDate query only
+  // accepts up to a 1-hour range). Null until the first poll after
+  // connecting.
+  toastLastPollAt DateTime?
+
   // Billing — ReceipTap's own subscription (merchant pays ReceipTap monthly).
   // Trial lives in Stripe: card collected at checkout, 30-day trial, then
   // auto-charge. INCOMPLETE = signed up but hasn't completed checkout yet.

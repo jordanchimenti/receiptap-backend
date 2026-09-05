@@ -32,12 +32,18 @@ const DOWNLOAD_ENDPOINTS = /^\/dashboard\/[a-z-]+\/(pdf-)?export\b/;
 //                        '/account/business/account', which is itself in
 //                        WALLET_SETTINGS_PATHS
 //   deactivate        -- destroys the session and redirects to /login
+//   connect-toast     -- reads redirectTo, allowlisted against
+//                        '/account/business/pos' via posReturnPath
+//                        (routes/toast.js), same round-trip disconnect-pos
+//                        uses -- Toast has no OAuth redirect to round-trip
+//                        through instead
 const ROUND_TRIPS_SURFACE = new Set([
   '/dashboard/settings/account/disconnect-pos',
   '/dashboard/settings/account/business-all',
   '/dashboard/settings/account/password',
   '/dashboard/settings/account/profile',
   '/dashboard/settings/account/deactivate',
+  '/dashboard/pos-setup/connect-toast',
 ]);
 
 function walletViews() {

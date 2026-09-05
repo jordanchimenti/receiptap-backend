@@ -53,6 +53,13 @@
       flex: 1; min-width: 0; background: var(--w-card-raised); border: 1px solid var(--w-line); color: var(--w-ink);
       border-radius: 10px; padding: 11px 13px; font-size: 13.5px; font-family: inherit;
     }
+
+    .toast-form { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
+    .toast-form input {
+      background: var(--w-card-raised); border: 1px solid var(--w-line); color: var(--w-ink);
+      border-radius: 10px; padding: 11px 13px; font-size: 13.5px; font-family: inherit;
+    }
+    .toast-form .connect-btn { margin-top: 2px; }
   </style>
 </head>
 <body>
@@ -192,6 +199,45 @@
         </div>
       <% } %>
     </div>
+
+    <!-- Toast -->
+    <div class="w-card panel">
+      <h2>Toast</h2>
+      <% if (!toastConnected) { %>
+        <p class="panel-sub">
+          Toast doesn't offer a one-click connect the way the others do — you generate a Client ID,
+          Client Secret and Restaurant GUID yourself in your own Toast Web account (requires a Toast
+          RMS Essentials plan or higher), then paste them in here.
+        </p>
+        <form method="POST" action="/dashboard/pos-setup/connect-toast" class="toast-form">
+          <input type="hidden" name="redirectTo" value="/account/business/pos" />
+          <input type="text" name="clientId" placeholder="Client ID" required />
+          <input type="password" name="clientSecret" placeholder="Client Secret" required />
+          <input type="text" name="restaurantGuid" placeholder="Restaurant GUID" required />
+          <button type="submit" class="connect-btn">Connect</button>
+        </form>
+        <a class="guide-link" href="/account/business/pos/guide/toast">How to connect &amp; assign a puck &rarr;</a>
+      <% } else { %>
+        <div class="connected-row">
+          <div class="connected-badge">✓ Toast connected</div>
+          <form method="POST" action="/dashboard/settings/account/disconnect-pos" onsubmit="return confirm('Disconnect this POS? Its sales will stop generating receipts until you reconnect.');">
+            <input type="hidden" name="provider" value="toast" />
+            <input type="hidden" name="redirectTo" value="/account/business/pos" />
+            <button type="submit" class="disconnect-btn">Disconnect</button>
+          </form>
+        </div>
+        <div class="assign-hint">A Toast connection is one restaurant, so just assign a puck to it. New sales are checked for every few minutes rather than arriving instantly.</div>
+        <div class="location-row">
+          <div class="location-name">Register</div>
+          <select onchange="assignToastPuck(this.value)">
+            <option value="">Select a puck…</option>
+            <% pucks.forEach(function(p) { %>
+              <option value="<%= p.id %>" <%= p.posLocationId === toastRestaurantGuid ? 'selected' : '' %>><%= p.id %></option>
+            <% }); %>
+          </select>
+        </div>
+      <% } %>
+    </div>
   </div>
 
   <script>
@@ -239,6 +285,16 @@
         body: JSON.stringify({ puckId }),
       });
       alert('Puck assigned to your Shopify store.');
+    }
+
+    async function assignToastPuck(puckId) {
+      if (!puckId) return;
+      await fetch('/dashboard/pos-setup/assign-toast', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ puckId }),
+      });
+      alert('Puck assigned to your Toast restaurant.');
     }
   </script>
 </body>

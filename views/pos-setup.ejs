@@ -121,6 +121,39 @@
     </div>
   <% } %>
 
+  <h2>Toast</h2>
+  <% if (!toastConnected) { %>
+    <p>
+      Toast doesn't offer a one-click connect the way the others do — you generate a Client ID,
+      Client Secret and Restaurant GUID yourself in your own Toast Web account (requires a Toast
+      RMS Essentials plan or higher), then paste them in here.
+    </p>
+    <form method="POST" action="/dashboard/pos-setup/connect-toast" style="display:flex; flex-direction:column; gap:8px; margin-top:12px; max-width:320px;">
+      <input type="hidden" name="redirectTo" value="/dashboard/pos-setup" />
+      <input type="text" name="clientId" placeholder="Client ID" required style="padding:8px 12px; border-radius:6px; border:1px solid #ddd;" />
+      <input type="password" name="clientSecret" placeholder="Client Secret" required style="padding:8px 12px; border-radius:6px; border:1px solid #ddd;" />
+      <input type="text" name="restaurantGuid" placeholder="Restaurant GUID" required style="padding:8px 12px; border-radius:6px; border:1px solid #ddd;" />
+      <button type="submit" class="connect-btn" style="margin-top:0;">Connect</button>
+    </form>
+    <p><a href="/dashboard/pos-setup/guide/toast">How to connect &amp; assign a puck &rarr;</a></p>
+  <% } else { %>
+    <div class="connected-row">
+      <div class="connected-badge">✅ Toast Connected</div>
+      <%- include('partials/disconnect-pos-form', { provider: 'toast' }) %>
+    </div>
+    <p>A Toast connection is one restaurant, so just assign a puck to it. New sales are checked for every few minutes rather than arriving instantly.</p>
+
+    <div class="location-row">
+      <div><strong>Register</strong></div>
+      <select onchange="assignToastPuck(this.value)">
+        <option value="">Select a puck...</option>
+        <% pucks.forEach(function(p) { %>
+          <option value="<%= p.id %>" <%= p.posLocationId === toastRestaurantGuid ? 'selected' : '' %>><%= p.id %></option>
+        <% }); %>
+      </select>
+    </div>
+  <% } %>
+
   </div>
 
   <script>
@@ -138,6 +171,16 @@
         body: JSON.stringify({ puckId }),
       });
       alert('Puck assigned to your Shopify store.');
+    }
+
+    async function assignToastPuck(puckId) {
+      if (!puckId) return;
+      await fetch('/dashboard/pos-setup/assign-toast', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ puckId }),
+      });
+      alert('Puck assigned to your Toast restaurant.');
     }
 
     async function assignPuck(locationId, puckId) {

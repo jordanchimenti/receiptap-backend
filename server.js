@@ -207,6 +207,7 @@ app.use(require('./routes/oauth-square'));   // /oauth/square/connect + callback
 app.use(require('./routes/oauth-clover'));   // /oauth/clover/connect + callback, /dashboard/pos-setup/assign-clover
 app.use(require('./routes/oauth-lightspeed')); // /oauth/lightspeed/connect + callback, /dashboard/pos-setup/assign-lightspeed
 app.use(require('./routes/oauth-shopify'));    // /oauth/shopify/connect + callback, /dashboard/pos-setup/assign-shopify
+app.use(require('./routes/toast'));            // /dashboard/pos-setup/connect-toast, /dashboard/pos-setup/assign-toast -- no OAuth redirect, see routes/toast.js
 app.use(require('./routes/merchant-dashboard'));  // /dashboard/receipts, /dashboard/receipts-hub
 app.use(require('./routes/merchant-expenses'));   // /dashboard/expenses, save-expense
 app.use(require('./routes/repeat-customers'));      // /dashboard/repeat-customers, AI-recognized repeat customer analytics + CSV export
@@ -511,6 +512,39 @@ setTimeout(() => {
     runLightspeedPoll().catch((err) => console.error('[lightspeed poller] unexpected error:', err));
   }, LIGHTSPEED_POLL_INTERVAL_MS);
 }, LIGHTSPEED_POLL_BOOT_DELAY_MS);
+
+// Toast sale polling: same interval-on-boot shape as the jobs above, its
+// own independent timer. This is the ONLY way this app learns about a
+// Toast sale, not a backstop the way the Lightspeed poller is -- Toast's
+// Standard API access tier has no documented webhook mechanism this app
+// can use (see services/toastPoller.js).
+const { pollAllToastMerchants } = require('./services/toastPoller');
+const TOAST_POLL_INTERVAL_MS = 5 * 60 * 1000; // every 5 minutes
+const TOAST_POLL_BOOT_DELAY_MS = 210 * 1000; // stagger past the Lightspeed poller's own boot delay
+
+let toastPollRunning = false;
+
+async function runToastPoll() {
+  if (toastPollRunning) {
+    console.warn('[toast poller] previous poll still in progress -- skipping this tick');
+    return;
+  }
+  toastPollRunning = true;
+  try {
+    await pollAllToastMerchants();
+  } catch (err) {
+    console.error('[toast poller] poll run failed:', err);
+  } finally {
+    toastPollRunning = false;
+  }
+}
+
+setTimeout(() => {
+  runToastPoll().catch((err) => console.error('[toast poller] unexpected error:', err));
+  setInterval(() => {
+    runToastPoll().catch((err) => console.error('[toast poller] unexpected error:', err));
+  }, TOAST_POLL_INTERVAL_MS);
+}, TOAST_POLL_BOOT_DELAY_MS);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {

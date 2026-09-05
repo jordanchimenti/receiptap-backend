@@ -301,7 +301,11 @@ async function computeOverviewData(merchantId) {
     merchant.squareAccessToken ||
     merchant.cloverAccessToken ||
     merchant.lightspeedAccessToken ||
-    merchant.shopifyAccessToken
+    merchant.shopifyAccessToken ||
+    // Toast's "connected" signal is the restaurant GUID, not an access
+    // token -- see the comment on toastConnected in
+    // oauth-square.js's computePosSetupData.
+    merchant.toastRestaurantGuid
   );
   const getStarted = {
     claimed: pucks.length > 0,

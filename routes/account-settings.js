@@ -363,6 +363,17 @@ const POS_DISCONNECT_FIELDS = {
   // store's sales.
   lightspeed: { lightspeedDomainPrefix: null, lightspeedAccessToken: null, lightspeedRefreshToken: null, lightspeedAccessTokenExpiresAt: null, lightspeedLastSaleVersion: null },
   shopify: { shopifyShopDomain: null, shopifyAccessToken: null },
+  // toastLastPollAt has to go too, same reasoning as Lightspeed's cursor
+  // above -- it's meaningless (and could cause a real gap) against a
+  // different restaurant's order history after a reconnect.
+  toast: {
+    toastRestaurantGuid: null,
+    toastClientId: null,
+    toastClientSecret: null,
+    toastAccessToken: null,
+    toastAccessTokenExpiresAt: null,
+    toastLastPollAt: null,
+  },
 };
 
 router.post('/dashboard/settings/account/disconnect-pos', requireAuth, async (req, res) => {

@@ -374,6 +374,8 @@ async function purgeDeactivatedMerchants({ dryRun = true } = {}) {
               resetTokenExpiresAt: null,
               squareMerchantId: null,
               squareAccessToken: null,
+              squareRefreshToken: null,
+              squareAccessTokenExpiresAt: null,
               shopifyShopDomain: null,
               shopifyAccessToken: null,
               cloverMerchantId: null,

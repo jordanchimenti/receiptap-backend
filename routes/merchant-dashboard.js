@@ -6,6 +6,7 @@ const router = express.Router();
 const prisma = require('../lib/prisma');
 const { MERCHANT_AFFILIATE_RATE } = require('../services/affiliateRates');
 const { hasCompleteAddress } = require('../services/easypostService');
+const { getValidAccessToken } = require('../services/squareService');
 
 function requireAuth(req, res, next) {
   if (!req.session?.merchantId) return res.redirect('/login');
@@ -366,14 +367,18 @@ async function resolveLocationNames(merchant, locationIds) {
   const names = {};
   if (!merchant.squareAccessToken || locationIds.length === 0) return names;
   try {
+    // Never reads merchant.squareAccessToken directly -- see that field's
+    // schema comment. A dead connection throws here the same way an
+    // unreachable Square would, caught by the same catch below.
+    const accessToken = await getValidAccessToken(merchant);
     const resp = await fetch('https://connect.squareup.com/v2/locations', {
-      headers: { Authorization: `Bearer ${merchant.squareAccessToken}` },
+      headers: { Authorization: `Bearer ${accessToken}` },
     });
     if (!resp.ok) return names;
     const { locations } = await resp.json();
     for (const loc of locations || []) names[loc.id] = loc.name;
   } catch (_err) {
-    // Square unreachable -- degrade to raw IDs, never 500
+    // Square unreachable, or the connection is dead -- degrade to raw IDs, never 500
   }
   return names;
 }

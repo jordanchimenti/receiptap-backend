@@ -354,7 +354,7 @@ router.post('/dashboard/settings/account/business-address', requireAuth, async (
 // Existing Puck rows keep their posLocationId/posDeviceId untouched -- they
 // just go stale until reconnected, same as before.
 const POS_DISCONNECT_FIELDS = {
-  square: { squareMerchantId: null, squareAccessToken: null },
+  square: { squareMerchantId: null, squareAccessToken: null, squareRefreshToken: null, squareAccessTokenExpiresAt: null },
   clover: { cloverMerchantId: null, cloverAccessToken: null, cloverRefreshToken: null, cloverAccessTokenExpiresAt: null },
   lightspeed: { lightspeedDomainPrefix: null, lightspeedAccessToken: null, lightspeedRefreshToken: null, lightspeedAccessTokenExpiresAt: null },
   shopify: { shopifyShopDomain: null, shopifyAccessToken: null },

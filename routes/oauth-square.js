@@ -8,6 +8,7 @@ const { getBaseUrl } = require('../lib/baseUrl');
 const router = express.Router();
 const prisma = require('../lib/prisma');
 const { posReturnPath } = require('../lib/posReturnPath');
+const { getValidAccessToken } = require('../services/squareService');
 
 function requireAuth(req, res, next) {
   if (!req.session?.merchantId) return res.redirect('/login');
@@ -74,11 +75,21 @@ router.get('/oauth/square/callback', requireAuth, async (req, res) => {
     return res.status(400).send('Failed to connect Square account');
   }
 
-  const { access_token, merchant_id: squareMerchantId } = await tokenResponse.json();
+  // expires_at is an ISO timestamp -- see services/squareService.js's
+  // getValidAccessToken, the only thing that should ever read these three
+  // fields back out. refresh_token is what makes that possible; it used to
+  // be discarded here entirely, which is why the access token alone was
+  // wrongly assumed not to expire.
+  const { access_token, refresh_token, expires_at, merchant_id: squareMerchantId } = await tokenResponse.json();
 
   await prisma.merchant.update({
     where: { id: req.session.merchantId },
-    data: { squareMerchantId, squareAccessToken: access_token },
+    data: {
+      squareMerchantId,
+      squareAccessToken: access_token,
+      squareRefreshToken: refresh_token,
+      squareAccessTokenExpiresAt: new Date(expires_at),
+    },
   });
 
   res.redirect(posReturnPath(state));
@@ -104,8 +115,20 @@ async function computePosSetupData(merchantId) {
     return { connected: false, locations: [], pucks, cloverConnected, cloverMerchantId, lightspeedConnected, lightspeedDomainPrefix, shopifyConnected, shopifyShopDomain };
   }
 
+  // Never reads merchant.squareAccessToken directly -- see that field's
+  // schema comment. A dead connection (revoked, or connected before this
+  // fix and missing a refresh token) degrades to "not connected" here
+  // rather than throwing, same as the missing-token branch above; the
+  // reconnect notification already fired inside getValidAccessToken.
+  let accessToken;
+  try {
+    accessToken = await getValidAccessToken(merchant);
+  } catch (err) {
+    return { connected: false, locations: [], pucks, cloverConnected, cloverMerchantId, lightspeedConnected, lightspeedDomainPrefix, shopifyConnected, shopifyShopDomain };
+  }
+
   const locResponse = await fetch(`${SQUARE_BASE_URL}/v2/locations`, {
-    headers: { Authorization: `Bearer ${merchant.squareAccessToken}` },
+    headers: { Authorization: `Bearer ${accessToken}` },
   });
   const { locations } = await locResponse.json();
 

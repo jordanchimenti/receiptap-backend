@@ -45,7 +45,7 @@ function toCents(value) {
   const n = Number(value);
   return Number.isFinite(n) ? Math.round(n) : null;
 }
-const { fetchOrder } = require('../services/squareService');
+const { fetchOrder, getValidAccessToken: getValidSquareAccessToken } = require('../services/squareService');
 const { fetchOrder: fetchCloverOrder, getValidAccessToken: getValidCloverAccessToken } = require('../services/cloverService');
 const {
   fetchSale: fetchLightspeedSale,
@@ -87,7 +87,10 @@ router.post('/webhooks/pos/square', async (req, res) => {
     if (existing) return res.sendStatus(200);
 
     // Payments carry no line items or tax breakdown -- fetch the real order.
-    const order = await fetchOrder(merchant.squareAccessToken, payment.order_id);
+    // Never merchant.squareAccessToken directly -- see that field's schema
+    // comment for why (it expires; this refreshes it first if needed).
+    const squareAccessToken = await getValidSquareAccessToken(merchant);
+    const order = await fetchOrder(squareAccessToken, payment.order_id);
     const lineItems = (order.line_items || []).map((li) => ({
       name: li.name,
       quantity: parseInt(li.quantity, 10),

@@ -65,15 +65,25 @@ model Merchant {
   emailVerificationToken          String?   @unique
   emailVerificationTokenExpiresAt DateTime?
 
-  // Square OAuth
-  squareMerchantId  String? @unique
-  squareAccessToken String?
+  // Square OAuth. The access token DOES expire -- 30 days -- contrary to
+  // what a comment here used to claim; that was wrong, and this codebase
+  // ran on an already-dead token in production for weeks before the gap
+  // was caught (2026-09-05). squareAccessTokenExpiresAt (an ISO timestamp,
+  // Square's own format -- unlike Clover's unix-seconds field below) lets
+  // services/squareService.js's getValidAccessToken know when to use
+  // squareRefreshToken to get a new one before making an API call. Every
+  // Square API call in this app must go through that function now, never
+  // read merchant.squareAccessToken directly.
+  squareMerchantId           String?   @unique
+  squareAccessToken          String?
+  squareRefreshToken         String?
+  squareAccessTokenExpiresAt DateTime?
 
   // Shopify OAuth (POS / storefront)
   shopifyShopDomain  String? @unique
   shopifyAccessToken String?
 
-  // Clover OAuth. Unlike Square/Shopify, Clover's access token expires
+  // Clover OAuth. Access token expires
   // (v2/OAuth flow, 30 min) -- cloverAccessTokenExpiresAt lets
   // services/cloverService.js know when to use cloverRefreshToken to get
   // a new one before making an API call.

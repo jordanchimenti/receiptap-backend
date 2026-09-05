@@ -95,13 +95,56 @@ async function getValidAccessToken(merchant) {
 // -- customers is what makes recognition possible on Clover at all, since
 // Clover exposes no card identifier (see services/receiptAutoSave.js).
 // on the payment webhook payload itself.
+//
+// Each expand field needs its OWN permission on the Clover app, separate
+// from base order access -- this app's Requested Permissions only ever
+// covered Merchant/Orders/Payments, never Customers, so the full
+// lineItems+payments+customers expand has been throwing "Invalid
+// permissions for expandable fields" on EVERY order since day one
+// (discovered 2026-09-05). Confirmed directly against a real sandbox
+// order: dropping just `customers` from the expand list succeeds and
+// still returns full lineItems and payments -- so this tries three tiers,
+// each strictly worse than the last, rather than jumping straight from
+// "everything" to "nothing":
+//   1. Full expand -- works once Customers read is added in the
+//      Developer Dashboard (App Settings -> Requested Permissions) and
+//      every connected merchant reconnects afterward.
+//   2. lineItems+payments only -- works right now, with today's
+//      permissions. A receipt built from this has real items and card
+//      details, just no card-based recognition (see
+//      services/receiptAutoSave.js) since that needs the customer object
+//      this tier omits.
+//   3. No expand at all -- last resort if even that fails for some other
+//      reason. Confirmed to still return 200 with just id/total/currency/
+//      paymentState/createdTime.
+// The caller already treats a missing lineItems/payments/customers as
+// "none reported" (`?.elements || []`), so every tier below produces a
+// real receipt, just with progressively less on it, instead of losing the
+// sale entirely to a permissions gap outside this app's control.
 async function fetchOrder(accessToken, cloverMerchantId, orderId) {
-  const res = await fetch(
-    `${CLOVER_API_BASE_URL}/v3/merchants/${cloverMerchantId}/orders/${orderId}?expand=lineItems,payments,customers`,
-    { headers: { Authorization: `Bearer ${accessToken}` } }
-  );
-  if (!res.ok) throw new Error(`Failed to fetch Clover order ${orderId}: ${res.status}`);
-  return res.json();
+  const tiers = [
+    { expand: 'lineItems,payments,customers', warn: null },
+    {
+      expand: 'lineItems,payments',
+      warn: 'Customers permission is missing on the Clover app (Developer Dashboard -> ' +
+        'App Settings -> Requested Permissions) -- receipt has items and payment details but no card-based recognition.',
+    },
+    { expand: null, warn: 'lineItems/payments permissions are missing too -- receipt has no items or payment details at all.' },
+  ];
+
+  let lastStatus;
+  for (const tier of tiers) {
+    const url = tier.expand
+      ? `${CLOVER_API_BASE_URL}/v3/merchants/${cloverMerchantId}/orders/${orderId}?expand=${tier.expand}`
+      : `${CLOVER_API_BASE_URL}/v3/merchants/${cloverMerchantId}/orders/${orderId}`;
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+    if (res.ok) {
+      if (tier.warn) console.error(`[cloverService] order ${orderId}: ${tier.warn}`);
+      return res.json();
+    }
+    lastStatus = res.status;
+  }
+  throw new Error(`Failed to fetch Clover order ${orderId}: ${lastStatus}`);
 }
 
 module.exports = {

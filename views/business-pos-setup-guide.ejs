@@ -1,14 +1,18 @@
 <!-- views/business-pos-setup-guide.ejs -->
 <!-- Dark reskin of views/pos-setup-guide.ejs. Same locals (providerName,
      steps: array of { text, image } -- image optional, note: optional
-     string), from computeGuideData() in routes/oauth-square.js -- see
-     GET /account/business/pos/guide/:provider in routes/account-business.js.
+     string, screenshotNote: optional string), from computeGuideData() in
+     routes/oauth-square.js -- see GET /account/business/pos/guide/:provider
+     in routes/account-business.js.
 
-     The screenshots baked into each step (POS_SETUP_GUIDES' image paths,
-     routes/oauth-square.js) are captures of the real navy-rail dashboard's
-     UI, not this dark theme -- a small note below flags that so it doesn't
-     read as a mismatch/bug. Retaking them against the dark theme is real
-     follow-up work, not done here. -->
+     screenshotNote is per-provider, not a fixed banner: for the four OAuth
+     providers it flags that the screenshots baked into each step
+     (POS_SETUP_GUIDES' image paths) are captures of the real navy-rail
+     dashboard's UI, not this dark theme (retaking them against the dark
+     theme is real follow-up work, not done here). Toast's screenshots are a
+     different mix entirely (Toast's own public docs, plus two of
+     ReceipTap's own pages), so it gets its own wording instead of that same
+     claim. -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -49,7 +53,7 @@
       </div>
     </div>
 
-    <div class="guide-note">Screenshots below are from the classic dashboard — the steps themselves are still accurate for this view.</div>
+    <% if (screenshotNote) { %><div class="guide-note"><%- screenshotNote %></div><% } %>
 
     <div class="w-card guide-steps">
       <% steps.forEach(function(step, i) { %>

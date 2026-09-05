@@ -193,6 +193,7 @@ const POS_SETUP_GUIDES = {
       { text: 'Pick the puck at your register from the dropdown to link it.', image: '/images/pos-guides/square/04-assign-puck.jpg' },
     ],
     note: 'Have more than one register? ReceipTap can tell them apart once real sales start coming in — check the register list on the POS connection page after your first few sales.',
+    screenshotNote: 'Screenshots below are from the classic dashboard — the steps themselves are still accurate for this view.',
   },
   clover: {
     providerName: 'Clover',
@@ -203,6 +204,7 @@ const POS_SETUP_GUIDES = {
       { text: "You'll land back on ReceipTap — a Clover connection covers one store, so there's no location list to pick from.", image: null },
       { text: 'Pick the puck at your register from the dropdown to link it.', image: '/images/pos-guides/clover/01-assign-puck.png' },
     ],
+    screenshotNote: 'Screenshots below are from the classic dashboard — the steps themselves are still accurate for this view.',
   },
   lightspeed: {
     providerName: 'Lightspeed',
@@ -213,6 +215,7 @@ const POS_SETUP_GUIDES = {
       { text: "You'll land back on ReceipTap — a Lightspeed connection covers one store, so there's no location list to pick from.", image: null },
       { text: 'Pick the puck at your register from the dropdown to link it.', image: '/images/pos-guides/lightspeed/01-assign-puck.png' },
     ],
+    screenshotNote: 'Screenshots below are from the classic dashboard — the steps themselves are still accurate for this view.',
   },
   shopify: {
     providerName: 'Shopify',
@@ -224,20 +227,22 @@ const POS_SETUP_GUIDES = {
       { text: 'Pick the puck at your register from the dropdown to link it.', image: '/images/pos-guides/shopify/02-assign-puck.png' },
     ],
     note: 'Only in-person sales rung through Shopify POS generate a ReceipTap receipt — online store orders are skipped automatically.',
+    screenshotNote: 'Screenshots below are from the classic dashboard — the steps themselves are still accurate for this view.',
   },
   toast: {
     providerName: 'Toast',
     steps: [
       { text: 'This needs a Toast RMS Essentials plan or higher, and the <strong>Manage Integrations</strong> permission on your Toast account.', image: null },
-      { text: 'In Toast Web, go to <strong>Integrations &rarr; Toast API access &rarr; Manage credentials</strong>.', image: null },
-      { text: 'Click <strong>Create new credentials</strong>, then use the dropdown arrow to choose <strong>Standard API</strong>.', image: null },
-      { text: 'Give it a name you\'ll recognize later (e.g. "ReceipTap"), and under Scopes select <strong>Orders</strong> (<code>orders:read</code>) — that\'s the only permission ReceipTap needs. Choose the location(s) to apply it to, click <strong>Apply</strong>, then <strong>Confirm</strong>.', image: null },
-      { text: 'Copy the <strong>Client ID</strong> and <strong>Client Secret</strong> shown — the secret is only ever shown this once, so save it somewhere before leaving the page.', image: null },
-      { text: 'Your <strong>Restaurant GUID</strong> isn\'t shown on that same page. The most reliable way to get it is to ask Toast Support directly — start a chat in Toast Web or the Toast Now app and ask for your restaurant\'s GUID.', image: null },
-      { text: 'On the POS connection page, paste the Client ID, Client Secret and Restaurant GUID into the Toast section and click <strong>Connect</strong>.', image: null },
-      { text: 'Pick the puck at your register from the dropdown to link it.', image: null },
+      { text: 'In Toast Web, go to <strong>Integrations &rarr; Toast API access &rarr; Manage credentials</strong>.', image: '/images/pos-guides/toast/01-manage-credentials.png' },
+      { text: 'Click <strong>Create new credentials</strong>, then use the dropdown arrow to choose <strong>Standard API</strong>. This opens the New Credentials page.', image: '/images/pos-guides/toast/02-new-credentials-form.png' },
+      { text: 'Give it a name you\'ll recognize later (e.g. "ReceipTap"), and under Scopes select <strong>Orders</strong> (<code>orders:read</code>) — that\'s the only permission ReceipTap needs. Choose the location(s) to apply it to, click <strong>Apply</strong>, then <strong>Confirm</strong>.', image: '/images/pos-guides/toast/03-locations-confirm.png' },
+      { text: 'Copy the <strong>Client ID</strong> and <strong>Client Secret</strong> shown — the secret is only ever shown this once, so save it somewhere before leaving the page.', image: '/images/pos-guides/toast/04-client-id-secret.png' },
+      { text: 'Your <strong>Restaurant GUID</strong> isn\'t shown on that same page — check your email instead. Toast sends a confirmation right after you create credentials, naming the location(s) you enabled and their GUIDs. Can\'t find that email? Start a chat with Toast Support in Toast Web or the Toast Now app and ask for your restaurant\'s GUID.', image: null },
+      { text: 'On the POS connection page, paste the Client ID, Client Secret and Restaurant GUID into the Toast section and click <strong>Connect</strong>.', image: '/images/pos-guides/toast/05-receiptap-connect-form.png' },
+      { text: 'Pick the puck at your register from the dropdown to link it.', image: '/images/pos-guides/toast/06-assign-puck.png' },
     ],
     note: 'Toast doesn\'t offer a one-click "Connect" the way Square, Clover, Lightspeed and Shopify do — you generate these credentials yourself in your own Toast account and hand them to ReceipTap directly. New sales are checked for every few minutes rather than arriving instantly, not the moment they happen.',
+    screenshotNote: "The Toast Web screenshots below are from Toast's own documentation, not a real restaurant's account — your screen may look slightly different, but the steps are accurate. The last two screenshots are ReceipTap's own pages.",
   },
 };
 

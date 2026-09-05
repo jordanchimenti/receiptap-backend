@@ -11,6 +11,12 @@
   <title><%= isFullWallet ? 'My Wallet' : 'Dashboard' %> - ReceipTap</title>
   <link rel="stylesheet" href="/css/receiptap.css" />
   <%- include('partials/wallet-dark-theme') %>
+  <%# Only the dashboard's "Track your spending" section below uses this --
+      the full wallet page never renders a chart, so it isn't worth loading
+      there. %>
+  <% if (!isFullWallet) { %>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+  <% } %>
   <style>
     .wallet-header { display: flex; align-items: flex-start; justify-content: space-between; }
 
@@ -181,8 +187,12 @@
     .warranty-edit button[type="submit"] { border-color: var(--w-accent); color: var(--w-accent); }
     .warranty-edit-hint { font-size: 10.5px; color: var(--w-ink-soft); }
 
-    .search-rules-row { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 16px; }
-    .search-rules-row .search-card, .search-rules-row .rules-card { flex: 1; min-width: 0; margin-bottom: 0; }
+    /* Stacked, not side by side -- .w-shell caps at 480px even on desktop
+       (see wallet-dark-theme.ejs), so there's never room for two full panels
+       in a row. Side by side squeezed both into half that width the moment
+       either opened, clipping the Save button and wrapping every label. */
+    .search-rules-row { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
+    .search-rules-row .search-card, .search-rules-row .rules-card { margin-bottom: 0; }
     .search-card { padding: 16px; margin-bottom: 16px; }
     .search-row { display: flex; gap: 10px; }
     .search-row .w-field { flex: 1; margin-bottom: 0; }
@@ -230,6 +240,25 @@
     .setup-row-sub { font-size: 12px; color: var(--w-ink-soft); margin-top: 2px; line-height: 1.4; }
     .setup-row-chevron { color: var(--w-ink-soft); flex-shrink: 0; margin-top: 3px; }
     .badge-auto { background: rgba(5,107,254,0.14); color: var(--w-accent); }
+
+    /* ---- Track your spending (mirrors views/account-spending.ejs) ------ */
+    .spending-section-label { margin: 22px 0 12px; }
+    .panel { padding: 20px; margin-bottom: 16px; }
+    .panel-eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--w-ink-soft); }
+    .panel-title { font-family: var(--font-display); font-size: 17px; font-weight: 700; margin: 2px 0 16px; }
+    .chart-pad { height: 170px; }
+    .empty-panel {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      padding: 30px 10px; color: var(--w-ink-soft); text-align: center;
+    }
+    .empty-panel svg { margin-bottom: 10px; opacity: 0.5; }
+    .empty-panel .sub { font-size: 12.5px; margin-top: 2px; }
+    .category-row { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+    .category-row:last-child { margin-bottom: 0; }
+    .category-name { font-size: 13.5px; font-weight: 600; width: 120px; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .category-bar-track { flex: 1; height: 8px; border-radius: 999px; background: var(--w-card-raised); overflow: hidden; }
+    .category-bar-fill { height: 100%; background: var(--w-accent); border-radius: 999px; }
+    .category-amount { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 13px; font-weight: 700; width: 64px; text-align: right; flex-shrink: 0; }
     /* --- Account menu (the "J" circle) --- */
     .acct-wrap { position: relative; }
     .acct-menu {
@@ -595,6 +624,41 @@
           <div class="setup-row-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg></div>
         </a>
       </div>
+
+      <div class="section-label spending-section-label">Track your spending</div>
+
+      <div class="w-card panel">
+        <div class="panel-eyebrow">Monthly spending</div>
+        <div class="panel-title">Last 6 months</div>
+        <% if (hasMonthlyData) { %>
+          <div class="chart-pad"><canvas id="monthly-spending-chart"></canvas></div>
+        <% } else { %>
+          <div class="empty-panel">
+            <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 20V10M12 20V4M20 20v-7"/></svg>
+            <div>No spending data yet</div>
+            <div class="sub">Add receipts to see your trends</div>
+          </div>
+        <% } %>
+      </div>
+
+      <div class="w-card panel">
+        <div class="panel-eyebrow">By category</div>
+        <div class="panel-title">Where it's going</div>
+        <% if (byCategory.length > 0) { %>
+          <% byCategory.forEach(function(c) { %>
+            <div class="category-row">
+              <div class="category-name"><%= c.name %></div>
+              <div class="category-bar-track"><div class="category-bar-fill" style="width: <%= c.pct %>%;"></div></div>
+              <div class="category-amount">$<%= c.total %></div>
+            </div>
+          <% }); %>
+        <% } else { %>
+          <div class="empty-panel">
+            <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/></svg>
+            <div>No category data yet</div>
+          </div>
+        <% } %>
+      </div>
       <% } %>
   </div>
 
@@ -815,5 +879,27 @@
       await refreshPushSwitch();
     }
   </script>
+
+  <% if (!isFullWallet && hasMonthlyData) { %>
+    <script>
+      const monthlySpending = <%- JSON.stringify(monthlySpending) %>;
+      new Chart(document.getElementById('monthly-spending-chart'), {
+        type: 'bar',
+        data: {
+          labels: monthlySpending.map((m) => m.label),
+          datasets: [{ label: 'Spending', data: monthlySpending.map((m) => parseFloat(m.total)), backgroundColor: '#056BFE', borderRadius: 4 }],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx) => '$' + ctx.parsed.y.toFixed(2) } } },
+          scales: {
+            y: { beginAtZero: true, ticks: { color: '#8d8d8d', callback: (v) => '$' + v }, grid: { color: '#2a2a2a' } },
+            x: { ticks: { color: '#8d8d8d' }, grid: { display: false } },
+          },
+        },
+      });
+    </script>
+  <% } %>
 </body>
 </html>

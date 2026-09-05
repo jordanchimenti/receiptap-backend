@@ -710,6 +710,59 @@ function buildScannedReceiptWhere(customerId, { search, from, to, category, dedu
   };
 }
 
+// Shared by GET /account/spending and the dashboard's embedded "Track your
+// spending" section (renderWallet below) -- a 6-month trend bucketed by
+// month, and a category breakdown over that same window. Takes plain
+// Transaction/ScannedReceipt rows rather than querying itself, so the
+// dashboard can reuse the customer's already-fetched full history with no
+// extra round trip, while /account/spending can still pass its own
+// narrower 6-month-only query. Windows to the last 6 months itself either
+// way, so a wider input array (the dashboard's full history) is filtered
+// down to the same range a narrower one already was.
+function computeSpendingAnalytics(transactions, scannedReceipts) {
+  const now = new Date();
+  const sixMonthStart = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+
+  const monthBuckets = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    monthBuckets.push({ year: d.getFullYear(), month: d.getMonth(), label: d.toLocaleDateString('en-US', { month: 'short' }), cents: 0 });
+  }
+  function bucketFor(date) {
+    return monthBuckets.find((b) => b.year === date.getFullYear() && b.month === date.getMonth());
+  }
+
+  // Only receipts an AI pass actually categorized count toward the category
+  // breakdown -- uncategorized ones are left out rather than lumped into a
+  // fake "Other" bucket.
+  const categoryTotals = {};
+  transactions.forEach((t) => {
+    if (t.createdAt < sixMonthStart) return;
+    const b = bucketFor(t.createdAt);
+    if (b) b.cents += t.total;
+    if (t.aiCategory) categoryTotals[t.aiCategory] = (categoryTotals[t.aiCategory] || 0) + t.total;
+  });
+  scannedReceipts.forEach((r) => {
+    const d = r.purchaseDate || r.createdAt;
+    if (d < sixMonthStart) return;
+    const b = bucketFor(d);
+    if (b) b.cents += r.total;
+    if (r.aiCategory) categoryTotals[r.aiCategory] = (categoryTotals[r.aiCategory] || 0) + r.total;
+  });
+
+  const hasMonthlyData = monthBuckets.some((b) => b.cents > 0);
+  const categorySum = Object.values(categoryTotals).reduce((a, b) => a + b, 0);
+  const byCategory = Object.entries(categoryTotals)
+    .map(([name, cents]) => ({ name, total: (cents / 100).toFixed(2), pct: categorySum ? Math.round((cents / categorySum) * 100) : 0 }))
+    .sort((a, b) => parseFloat(b.total) - parseFloat(a.total));
+
+  return {
+    monthlySpending: monthBuckets.map((b) => ({ label: b.label, total: (b.cents / 100).toFixed(2) })),
+    hasMonthlyData,
+    byCategory,
+  };
+}
+
 // GET /account/receipts — every receipt this customer has saved, across ALL
 // merchants AND every receipt they've scanned/uploaded themselves, merged
 // into one date-sorted list.
@@ -948,6 +1001,10 @@ async function renderWallet(req, res, { isFullWallet }) {
     percent: Math.round((setupDone / Object.keys(setupSteps).length) * 100),
   };
 
+  // Only the dashboard shows this (below Setup progress) -- computed from
+  // the full history already fetched above, so it costs no extra query.
+  const spending = computeSpendingAnalytics(transactions, scannedReceipts);
+
   res.render('customer-wallet', {
     isFullWallet,
     // The home shows a handful FROM THIS MONTH; the wallet shows everything.
@@ -980,6 +1037,9 @@ async function renderWallet(req, res, { isFullWallet }) {
     allCategories: CATEGORIES,
     rulesSaved: req.query.rulesSaved === '1',
     quickFilters,
+    monthlySpending: spending.monthlySpending,
+    hasMonthlyData: spending.hasMonthlyData,
+    byCategory: spending.byCategory,
   });
 }
 
@@ -2061,50 +2121,16 @@ router.get('/account/spending', requireCustomerAuth, async (req, res) => {
   ]);
 
   const monthTotal = monthTxns.reduce((sum, t) => sum + t.total, 0) + monthScanned.reduce((sum, r) => sum + r.total, 0);
-
-  // 6 fixed month buckets (oldest to newest, including the current month),
-  // rather than only the months that happen to have data -- so a customer
-  // with 2 months of history still sees a real 6-month axis, just mostly
-  // flat.
-  const monthBuckets = [];
-  for (let i = 5; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    monthBuckets.push({ year: d.getFullYear(), month: d.getMonth(), label: d.toLocaleDateString('en-US', { month: 'short' }), cents: 0 });
-  }
-  function bucketFor(date) {
-    return monthBuckets.find((b) => b.year === date.getFullYear() && b.month === date.getMonth());
-  }
-  rangeTxns.forEach((t) => {
-    const b = bucketFor(t.createdAt);
-    if (b) b.cents += t.total;
-  });
-  rangeScanned.forEach((r) => {
-    const b = bucketFor(r.purchaseDate || r.createdAt);
-    if (b) b.cents += r.total;
-  });
-  const hasMonthlyData = monthBuckets.some((b) => b.cents > 0);
-
-  // Category breakdown over the same 6-month window -- only receipts an AI
-  // pass actually categorized count toward this; uncategorized ones are
-  // left out rather than lumped into a fake "Other" bucket.
-  const categoryTotals = {};
-  [...rangeTxns, ...rangeScanned].forEach((r) => {
-    if (!r.aiCategory) return;
-    categoryTotals[r.aiCategory] = (categoryTotals[r.aiCategory] || 0) + r.total;
-  });
-  const categorySum = Object.values(categoryTotals).reduce((a, b) => a + b, 0);
-  const byCategory = Object.entries(categoryTotals)
-    .map(([name, cents]) => ({ name, total: (cents / 100).toFixed(2), pct: categorySum ? Math.round((cents / categorySum) * 100) : 0 }))
-    .sort((a, b) => parseFloat(b.total) - parseFloat(a.total));
+  const spending = computeSpendingAnalytics(rangeTxns, rangeScanned);
 
   res.render('account-spending', {
     summary: {
       monthTotal: (monthTotal / 100).toFixed(2),
       receiptCount: monthTxns.length + monthScanned.length,
     },
-    monthlySpending: monthBuckets.map((b) => ({ label: b.label, total: (b.cents / 100).toFixed(2) })),
-    hasMonthlyData,
-    byCategory,
+    monthlySpending: spending.monthlySpending,
+    hasMonthlyData: spending.hasMonthlyData,
+    byCategory: spending.byCategory,
   });
 });
 

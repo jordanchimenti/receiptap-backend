@@ -80,7 +80,11 @@ router.get('/oauth/lightspeed/callback', requireAuth, async (req, res) => {
   // itself (the merchant is already connected and can retry), but it does
   // mean receipts won't generate until this succeeds.
   try {
-    const webhookUrl = `${req.protocol}://${req.get('host')}/webhooks/pos/lightspeed`;
+    // Pinned via getBaseUrl, same as redirectUri above -- this is a URL
+    // Lightspeed's own servers call indefinitely from the outside, not a
+    // link the merchant opens themselves, so it has to be the real public
+    // domain regardless of what host this request happened to arrive on.
+    const webhookUrl = `${getBaseUrl(req)}/webhooks/pos/lightspeed`;
     await createWebhookSubscription(domainPrefix, tokens.access_token, webhookUrl);
   } catch (err) {
     console.error('Lightspeed webhook subscription failed:', err.message);

@@ -85,9 +85,12 @@ test('referral attribution expires at the stated window', () => {
 });
 
 // --- POS customer extraction, per provider ------------------------------
-// Recognition on Clover/Lightspeed/Shopify depends entirely on reading the
-// customer a till attached to a sale. The shapes differ per provider and a
-// missing customer is the NORMAL case, so this must never throw.
+// Recognition on Clover/Shopify depends entirely on reading the customer a
+// till attached to a sale. The shapes differ per provider and a missing
+// customer is the NORMAL case, so this must never throw. Lightspeed has no
+// case here at all -- its sale payload only ever carries a customer_id, no
+// email, so resolving it needs a real API call this synchronous function
+// can't make (see the Lightspeed webhook handler's own inline resolution).
 const path = require('node:path');
 const fs = require('node:fs');
 const webhookSrc = fs.readFileSync(path.join(__dirname, '..', 'routes', 'webhooks.js'), 'utf8');
@@ -101,7 +104,11 @@ test('POS customer email is read per provider, and absence is normal', () => {
   );
   assert.equal(posCustomerEmailFrom('shopify', { customer: { email: 'b@x.com' } }), 'b@x.com');
   assert.equal(posCustomerEmailFrom('shopify', { email: 'c@x.com' }), 'c@x.com');
-  assert.equal(posCustomerEmailFrom('lightspeed', { customer: { email: 'd@x.com' } }), 'd@x.com');
+  // Real Lightspeed sale shape has no email anywhere on it (only
+  // customer_id) -- this always returns null for it, on any input,
+  // deliberately.
+  assert.equal(posCustomerEmailFrom('lightspeed', { customer: { email: 'd@x.com' } }), null);
+  assert.equal(posCustomerEmailFrom('lightspeed', { customer_id: 'abc-123' }), null);
 });
 
 test('a sale with no customer attached yields null rather than throwing', () => {

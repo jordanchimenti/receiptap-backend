@@ -19,6 +19,12 @@ const { currencyForCountry } = require('../lib/currencyForCountry');
 // against an identifier the shopper recorded themselves -- never stored, and
 // an unrecognised address links nothing. Shapes differ per provider, so each
 // is read defensively and absence is the normal case.
+//
+// No 'lightspeed' case here: a Lightspeed sale only ever carries
+// customer_id, a bare UUID with no email attached -- resolving it needs an
+// actual API call (fetchLightspeedCustomer), which the synchronous
+// payload-only shape this function has doesn't support. See the Lightspeed
+// handler below, which resolves it inline instead.
 function posCustomerEmailFrom(provider, payload) {
   try {
     if (provider === 'clover') {
@@ -27,9 +33,6 @@ function posCustomerEmailFrom(provider, payload) {
     }
     if (provider === 'shopify') {
       return payload?.customer?.email || payload?.email || null;
-    }
-    if (provider === 'lightspeed') {
-      return payload?.customer?.email || payload?.customer_email || null;
     }
   } catch {
     return null;
@@ -49,6 +52,8 @@ const { fetchOrder, getValidAccessToken: getValidSquareAccessToken } = require('
 const { fetchOrder: fetchCloverOrder, getValidAccessToken: getValidCloverAccessToken } = require('../services/cloverService');
 const {
   fetchSale: fetchLightspeedSale,
+  fetchProduct: fetchLightspeedProduct,
+  fetchCustomer: fetchLightspeedCustomer,
   getValidAccessToken: getValidLightspeedAccessToken,
   verifyLightspeedSignature,
 } = require('../services/lightspeedService');
@@ -438,10 +443,14 @@ function verifyCloverAuth(req) {
 // 'CLOSED'`, but the real field is `sale.state === 'closed'` (different
 // name, different casing) -- a completely different field, not a typo fix.
 // Line items also don't carry a product name inline -- only `product.id` --
-// so this OAuth connection would need `products:read` scope (added to
-// LIGHTSPEED_SCOPES going forward, but existing connections need to
-// reconnect to actually be granted it) before names can resolve; falls back
-// to a generic label rather than an extra API call per line item for now.
+// so real names are resolved below with one GET /products/{id} per unique
+// product on the sale (Lightspeed's /products has no batch-by-ID lookup,
+// confirmed against their own API docs). Requires the products:read scope
+// (added to LIGHTSPEED_SCOPES); a merchant connected before that scope
+// existed needs to reconnect before names actually resolve -- until then
+// (or if a lookup fails for any other reason) this falls back to a generic
+// label per line item, same best-effort-never-block pattern as the rest of
+// this file.
 // ---------------------------------------------------------------------------
 router.post('/webhooks/pos/lightspeed', async (req, res) => {
   if (!verifyLightspeedSignature(req)) return res.sendStatus(401);
@@ -474,11 +483,27 @@ router.post('/webhooks/pos/lightspeed', async (req, res) => {
 
     if (sale.state !== 'closed') return res.sendStatus(200);
 
+    // One lookup per unique product on the sale, not one per line item -- a
+    // sale with the same product in two line items (e.g. two different
+    // sizes rung up separately) only needs its name resolved once. Each
+    // lookup is independently best-effort: a missing scope (pre-reconnect
+    // merchant) or a deleted/inaccessible product shouldn't take down the
+    // whole receipt, just that one item's name.
+    const productIds = [...new Set((sale.line_items || []).map((li) => li.product?.id).filter(Boolean))];
+    const productNames = {};
+    await Promise.all(productIds.map(async (id) => {
+      try {
+        const product = await fetchLightspeedProduct(domainPrefix, accessToken, id);
+        if (product?.name) productNames[id] = product.name;
+      } catch (err) {
+        console.error(`[lightspeed webhook] Failed to resolve product ${id}:`, err.message);
+      }
+    }));
+
     // Real shape confirmed live: sale.line_items[], each with quantity,
-    // product.id (no inline name -- see header comment), and
-    // pricing.price/pricing.total in dollars.
+    // product.id, and pricing.price/pricing.total in dollars.
     const lineItems = (sale.line_items || []).map((li) => ({
-      name: 'Item', // product.id only -- see header comment on products:read
+      name: productNames[li.product?.id] || 'Item',
       quantity: Number(li.quantity) || 1,
       unitPrice: Math.round(Number(li.pricing?.price || 0) * 100),
       total: Math.round(Number(li.pricing?.total || 0) * 100),
@@ -511,11 +536,17 @@ router.post('/webhooks/pos/lightspeed', async (req, res) => {
         tax,
         discountTotal: 0,
         total,
-        // sale.payments was an empty array on a real confirmed Cash sale --
-        // genuinely no payment-method data available from this endpoint as
-        // observed, not a mapping guess. The card/auth/tender columns are
-        // left unset for the same reason; the receipt simply omits them.
-        paymentMethod: null,
+        // sale.payments[].type.name is the payment type as the merchant
+        // named it in their own Lightspeed account ("Cash", "Credit Card",
+        // whatever they've configured) -- confirmed against Lightspeed's
+        // schema docs. Joined for a split-tender sale (more than one
+        // payment on one sale); null if the array is genuinely empty (an
+        // unpaid layby/account sale, or a sale this app's earlier version
+        // observed with no payments recorded at all). Unlike Square/Clover,
+        // X-Series' Payment object carries no card brand/last-4 -- only
+        // this type name -- so cardBrand/cardLast4 stay unset for real,
+        // not from a mapping gap.
+        paymentMethod: (sale.payments || []).map((p) => p.type?.name).filter(Boolean).join(' + ') || null,
         // No currency field confirmed anywhere on the Sale object this app
         // fetches -- same country fallback as Clover, above.
         currency: currencyForCountry(merchant.addressCountry),
@@ -525,10 +556,22 @@ router.post('/webhooks/pos/lightspeed', async (req, res) => {
 
     // Recognition for a POS with no card identifier: if the till had a
     // customer attached, that address is matched against an EMAIL identifier
-    // the shopper recorded from their own wallet. No customer, no match, no
-    // change -- exactly as before.
+    // the shopper recorded from their own wallet. Lightspeed only ever gives
+    // customer_id on the sale itself (no email inline -- see the schema
+    // note on posCustomerEmailFrom above), so it's resolved with one extra
+    // call here, best-effort like the product-name lookups above: a missing
+    // scope or an inaccessible customer just means no match, not a failure.
+    let lightspeedCustomerEmail = null;
+    if (sale.customer_id) {
+      try {
+        const customer = await fetchLightspeedCustomer(domainPrefix, accessToken, sale.customer_id);
+        lightspeedCustomerEmail = customer?.email || null;
+      } catch (err) {
+        console.error(`[lightspeed webhook] Failed to resolve customer ${sale.customer_id}:`, err.message);
+      }
+    }
     await autoSaveReceiptForKnownShopper(transaction, {
-      posCustomerEmail: posCustomerEmailFrom('lightspeed', sale),
+      posCustomerEmail: lightspeedCustomerEmail,
       onLinked: async ({ transaction: txn, shopper }) => {
         await awardLoyaltyStamps(txn, shopper.id);
         if (!txn.aiCategorizedAt) categorizeInBackground(txn, merchant.businessName);

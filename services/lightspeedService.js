@@ -45,11 +45,13 @@ const REFRESH_SAFETY_MARGIN_MS = 60 * 1000;
 // to create the per-retailer webhook subscription below. products:read
 // added 2026-08-09 -- a sale's line items only carry product.id, not a
 // name, so this is needed to show real item names on a receipt rather than
-// the generic "Item" fallback in routes/webhooks.js. Any merchant who
-// connected before this scope was added needs to reconnect to actually be
-// granted it -- adding it here doesn't retroactively upgrade existing
-// tokens.
-const LIGHTSPEED_SCOPES = 'sales:read outlets:read registers:read taxes:read products:read webhooks';
+// the generic "Item" fallback in routes/webhooks.js. customers:read added
+// 2026-09-05 -- a sale only carries customer_id, not an email, so
+// resolving it for card-recognition auto-save (routes/webhooks.js) needs
+// this too. Any merchant who connected before a given scope was added
+// needs to reconnect to actually be granted it -- adding one here doesn't
+// retroactively upgrade existing tokens.
+const LIGHTSPEED_SCOPES = 'sales:read outlets:read registers:read taxes:read products:read customers:read webhooks';
 
 // Step 2 of OAuth: exchange the temporary authorization code for a token
 // pair. domainPrefix comes back from Lightspeed alongside the code on the
@@ -156,6 +158,40 @@ async function fetchSale(domainPrefix, accessToken, saleId) {
   return body.data || body;
 }
 
+// A sale's line items only carry product.id (confirmed against Lightspeed's
+// own schema docs -- no batch-by-ID lookup exists on /products either), so
+// showing a real item name on a receipt costs one call per unique product.
+// Requires the products:read scope added to LIGHTSPEED_SCOPES above; a
+// merchant who connected before that scope existed will get a 401/403 here
+// until they reconnect -- callers should treat a failure as best-effort,
+// same as everywhere else in this file.
+async function fetchProduct(domainPrefix, accessToken, productId) {
+  const res = await fetch(
+    `${lightspeedApiBaseUrl(domainPrefix)}/api/${LIGHTSPEED_API_VERSION}/products/${productId}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+  if (!res.ok) throw new Error(`Failed to fetch Lightspeed product ${productId}: ${res.status}`);
+  const body = await res.json();
+  return body.data || body;
+}
+
+// A sale only carries customer_id (a UUID), never an email inline --
+// confirmed against Lightspeed's own schema docs, the same way product
+// names needed a separate lookup above. Requires the customers:read scope.
+// Used for card-recognition auto-save (routes/webhooks.js's
+// autoSaveReceiptForKnownShopper): the shopper's own wallet-recorded email
+// is the thing actually matched against, this just resolves what X-Series
+// calls that same shopper.
+async function fetchCustomer(domainPrefix, accessToken, customerId) {
+  const res = await fetch(
+    `${lightspeedApiBaseUrl(domainPrefix)}/api/${LIGHTSPEED_API_VERSION}/customers/${customerId}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+  if (!res.ok) throw new Error(`Failed to fetch Lightspeed customer ${customerId}: ${res.status}`);
+  const body = await res.json();
+  return body.data || body;
+}
+
 // X-Series signs webhook deliveries with HMAC-SHA256 over the raw request
 // body, keyed with the app's client_secret -- NOT the notification-URL-
 // prefixed scheme Square uses. Header format:
@@ -189,5 +225,7 @@ module.exports = {
   getValidAccessToken,
   createWebhookSubscription,
   fetchSale,
+  fetchProduct,
+  fetchCustomer,
   verifyLightspeedSignature,
 };

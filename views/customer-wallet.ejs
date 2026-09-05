@@ -211,15 +211,6 @@
     }
     .empty-title { font-size: 18px; font-weight: 700; margin-bottom: 6px; color: var(--w-ink); }
     .empty-sub { font-size: 13.5px; color: var(--w-ink-soft); line-height: 1.5; max-width: 300px; margin: 0 auto 22px; }
-
-    .fab {
-      /* Clears the tab bar, which is now taller by the home-indicator inset. */
-      /* Sits just above the 75px tab bar. */
-      position: fixed; right: 20px; bottom: 95px;
-      width: 52px; height: 52px; border-radius: 50%;
-      background: var(--w-accent); color: #fff; display: flex; align-items: center; justify-content: center;
-      text-decoration: none; box-shadow: 0 6px 20px rgba(5,107,254,0.4); font-size: 24px; font-weight: 300;
-    }
     /* ---- Setup progress (mirrors views/business-overview.ejs) ---------- */
     .setup-card { padding: 18px; margin-bottom: 18px; }
     .setup-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
@@ -380,6 +371,59 @@
       <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M3 7a2 2 0 0 1 2-2h13a1 1 0 0 1 1 1v2"/><path d="M3 7v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-3"/><path d="M21 11h-5a2 2 0 0 0 0 4h5v-4Z"/></svg>
       My Wallet
     </a>
+
+    <div class="w-card setup-card">
+      <div class="setup-head">
+        <div class="setup-eyebrow">Setup progress</div>
+        <div class="setup-pct"><%= setup.percent %>%</div>
+      </div>
+      <div class="setup-bar"><div class="setup-bar-fill" style="width: <%= setup.percent %>%;"></div></div>
+
+      <a class="setup-row <%= setup.walletCreated ? 'done' : '' %>" href="/account/settings">
+        <% if (setup.walletCreated) { %><div class="setup-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div><% } else { %><div class="setup-check"></div><% } %>
+        <div class="setup-row-body">
+          <div class="setup-row-title">Create your wallet</div>
+          <div class="setup-row-sub"><%= setup.walletCreated ? "View your account details." : "View your account details." %></div>
+        </div>
+        <div class="setup-row-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg></div>
+      </a>
+      <a class="setup-row <%= setup.canSignInAnywhere ? 'done' : '' %>" href="/account/settings">
+        <% if (setup.canSignInAnywhere) { %><div class="setup-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div><% } else { %><div class="setup-check"></div><% } %>
+        <div class="setup-row-body">
+          <div class="setup-row-title">Set a password</div>
+          <div class="setup-row-sub"><%= setup.canSignInAnywhere ? "You can sign in from any device." : "So you can sign in on any device, not just this one." %></div>
+        </div>
+        <div class="setup-row-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg></div>
+      </a>
+      <%# One step, not two: tapping a ReceipTap and scanning a paper receipt
+          are different routes to the same milestone -- a receipt in the wallet.
+          Links at the scan page when it's still to do, since that screen offers
+          both the camera and a file upload. %>
+      <a class="setup-row <%= setup.firstReceipt ? 'done' : '' %>" href="<%= setup.firstReceipt ? '/account/receipts' : '/account/receipts/scan' %>">
+        <% if (setup.firstReceipt) { %><div class="setup-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div><% } else { %><div class="setup-check"></div><% } %>
+        <div class="setup-row-body">
+          <div class="setup-row-title">Scan, save or upload your first receipt</div>
+          <div class="setup-row-sub"><%= setup.firstReceipt ? "Your receipts are all in one place." : "Tap a ReceipTap at checkout, or snap a paper receipt yourself." %></div>
+        </div>
+        <div class="setup-row-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg></div>
+      </a>
+      <a class="setup-row <%= setup.homeScreenAdded ? 'done' : '' %>" href="/account/install">
+        <% if (setup.homeScreenAdded) { %><div class="setup-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div><% } else { %><div class="setup-check"></div><% } %>
+        <div class="setup-row-body">
+          <div class="setup-row-title">Add ReceipTap to your home screen</div>
+          <div class="setup-row-sub"><%= setup.homeScreenAdded ? "One tap to your receipts, and alerts on your phone." : "Open it like an app, and get alerts on your phone." %></div>
+        </div>
+        <div class="setup-row-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg></div>
+      </a>
+      <a class="setup-row <%= setup.partnerProgram ? 'done' : '' %>" href="/partner-program">
+        <% if (setup.partnerProgram) { %><div class="setup-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div><% } else { %><div class="setup-check"></div><% } %>
+        <div class="setup-row-body">
+          <div class="setup-row-title">Join our Partner Program</div>
+          <div class="setup-row-sub"><%= setup.partnerProgram ? "You're a ReceipTap partner — earn " + affiliateRate + "% for as long as they stay." : "Earn " + affiliateRate + "% recurring commission on every business you refer. Free to join." %></div>
+        </div>
+        <div class="setup-row-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg></div>
+      </a>
+    </div>
 
     <% } %>
 
@@ -567,64 +611,12 @@
       <% } %>
     <% } %>
 
-      <%# Setup progress sits BELOW the receipts, not above them. A checklist
-          at 100% was the first thing between a customer and the receipts they
-          opened the app for. Still on the home page only -- the wallet is the
-          full history and nothing else. %>
+      <%# Track your spending sits BELOW the receipts, not above them --
+          Setup progress moved up under the My Wallet button, but this stays
+          here so the receipt list a customer opened the app for isn't
+          pushed further down the page. Still on the home page only -- the
+          wallet is the full history and nothing else. %>
       <% if (!isFullWallet) { %>
-      <div class="w-card setup-card">
-        <div class="setup-head">
-          <div class="setup-eyebrow">Setup progress</div>
-          <div class="setup-pct"><%= setup.percent %>%</div>
-        </div>
-        <div class="setup-bar"><div class="setup-bar-fill" style="width: <%= setup.percent %>%;"></div></div>
-
-        <a class="setup-row <%= setup.walletCreated ? 'done' : '' %>" href="/account/settings">
-          <% if (setup.walletCreated) { %><div class="setup-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div><% } else { %><div class="setup-check"></div><% } %>
-          <div class="setup-row-body">
-            <div class="setup-row-title">Create your wallet</div>
-            <div class="setup-row-sub"><%= setup.walletCreated ? "View your account details." : "View your account details." %></div>
-          </div>
-          <div class="setup-row-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg></div>
-        </a>
-        <a class="setup-row <%= setup.canSignInAnywhere ? 'done' : '' %>" href="/account/settings">
-          <% if (setup.canSignInAnywhere) { %><div class="setup-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div><% } else { %><div class="setup-check"></div><% } %>
-          <div class="setup-row-body">
-            <div class="setup-row-title">Set a password</div>
-            <div class="setup-row-sub"><%= setup.canSignInAnywhere ? "You can sign in from any device." : "So you can sign in on any device, not just this one." %></div>
-          </div>
-          <div class="setup-row-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg></div>
-        </a>
-        <%# One step, not two: tapping a ReceipTap and scanning a paper receipt
-            are different routes to the same milestone -- a receipt in the wallet.
-            Links at the scan page when it's still to do, since that screen offers
-            both the camera and a file upload. %>
-        <a class="setup-row <%= setup.firstReceipt ? 'done' : '' %>" href="<%= setup.firstReceipt ? '/account/receipts' : '/account/receipts/scan' %>">
-          <% if (setup.firstReceipt) { %><div class="setup-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div><% } else { %><div class="setup-check"></div><% } %>
-          <div class="setup-row-body">
-            <div class="setup-row-title">Scan, save or upload your first receipt</div>
-            <div class="setup-row-sub"><%= setup.firstReceipt ? "Your receipts are all in one place." : "Tap a ReceipTap at checkout, or snap a paper receipt yourself." %></div>
-          </div>
-          <div class="setup-row-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg></div>
-        </a>
-        <a class="setup-row <%= setup.homeScreenAdded ? 'done' : '' %>" href="/account/install">
-          <% if (setup.homeScreenAdded) { %><div class="setup-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div><% } else { %><div class="setup-check"></div><% } %>
-          <div class="setup-row-body">
-            <div class="setup-row-title">Add ReceipTap to your home screen</div>
-            <div class="setup-row-sub"><%= setup.homeScreenAdded ? "One tap to your receipts, and alerts on your phone." : "Open it like an app, and get alerts on your phone." %></div>
-          </div>
-          <div class="setup-row-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg></div>
-        </a>
-        <a class="setup-row <%= setup.partnerProgram ? 'done' : '' %>" href="/partner-program">
-          <% if (setup.partnerProgram) { %><div class="setup-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div><% } else { %><div class="setup-check"></div><% } %>
-          <div class="setup-row-body">
-            <div class="setup-row-title">Join our Partner Program</div>
-            <div class="setup-row-sub"><%= setup.partnerProgram ? "You're a ReceipTap partner — earn " + affiliateRate + "% for as long as they stay." : "Earn " + affiliateRate + "% recurring commission on every business you refer. Free to join." %></div>
-          </div>
-          <div class="setup-row-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg></div>
-        </a>
-      </div>
-
       <div class="section-label spending-section-label">Track your spending</div>
 
       <div class="w-card panel">
@@ -661,8 +653,6 @@
       </div>
       <% } %>
   </div>
-
-  <a href="/account/receipts/scan" class="fab" aria-label="Scan a receipt">+</a>
 
   <%- include('partials/wallet-tab-bar', { activeTab: 'receipts' }) %>
   <%- include('partials/image-viewer') %>

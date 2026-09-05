@@ -129,6 +129,25 @@
       <% } %>
     </div>
 
+    <div class="stats-grid">
+      <div class="w-card stat-box">
+        <div class="stat-num"><%= referredMerchants.length %></div>
+        <div class="stat-label">Referred merchants</div>
+      </div>
+      <div class="w-card stat-box">
+        <div class="stat-num">$<%= pendingTotal %></div>
+        <div class="stat-label">Pending</div>
+      </div>
+      <div class="w-card stat-box">
+        <div class="stat-num">$<%= paidTotal %></div>
+        <div class="stat-label">Paid out</div>
+      </div>
+      <div class="w-card stat-box">
+        <div class="stat-num"><%= churnRate !== null ? churnRate + '%' : '—' %></div>
+        <div class="stat-label">Churn rate</div>
+      </div>
+    </div>
+
     <div class="w-card panel">
       <h2>Your referral link</h2>
       <p class="panel-sub">Refer other businesses to ReceipTap and earn <%= rate %>% recurring commission on every payment they make — the same flat rate every ReceipTap partner earns, merchant or not.</p>
@@ -185,25 +204,6 @@
           <option value="MONTHLY" <%= payoutFrequency === 'MONTHLY' ? 'selected' : '' %>>Monthly</option>
         </select>
       </form>
-    </div>
-
-    <div class="stats-grid">
-      <div class="w-card stat-box">
-        <div class="stat-num"><%= referredMerchants.length %></div>
-        <div class="stat-label">Referred merchants</div>
-      </div>
-      <div class="w-card stat-box">
-        <div class="stat-num">$<%= pendingTotal %></div>
-        <div class="stat-label">Pending</div>
-      </div>
-      <div class="w-card stat-box">
-        <div class="stat-num">$<%= paidTotal %></div>
-        <div class="stat-label">Paid out</div>
-      </div>
-      <div class="w-card stat-box">
-        <div class="stat-num"><%= churnRate !== null ? churnRate + '%' : '—' %></div>
-        <div class="stat-label">Churn rate</div>
-      </div>
     </div>
 
     <div class="w-card panel">

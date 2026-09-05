@@ -52,11 +52,10 @@ const { fetchOrder, getValidAccessToken: getValidSquareAccessToken } = require('
 const { fetchOrder: fetchCloverOrder, getValidAccessToken: getValidCloverAccessToken } = require('../services/cloverService');
 const {
   fetchSale: fetchLightspeedSale,
-  fetchProduct: fetchLightspeedProduct,
-  fetchCustomer: fetchLightspeedCustomer,
   getValidAccessToken: getValidLightspeedAccessToken,
   verifyLightspeedSignature,
 } = require('../services/lightspeedService');
+const { processLightspeedSale } = require('../services/lightspeedSaleSync');
 const { verifyShopifyWebhook } = require('../services/shopifyService');
 const { deleteShopperByEmail, purgeShopifyShopData } = require('../services/dataRetentionService');
 
@@ -442,15 +441,16 @@ function verifyCloverAuth(req) {
 // version silently dropped every sale because it checked `sale.status !==
 // 'CLOSED'`, but the real field is `sale.state === 'closed'` (different
 // name, different casing) -- a completely different field, not a typo fix.
-// Line items also don't carry a product name inline -- only `product.id` --
-// so real names are resolved below with one GET /products/{id} per unique
-// product on the sale (Lightspeed's /products has no batch-by-ID lookup,
-// confirmed against their own API docs). Requires the products:read scope
-// (added to LIGHTSPEED_SCOPES); a merchant connected before that scope
-// existed needs to reconnect before names actually resolve -- until then
-// (or if a lookup fails for any other reason) this falls back to a generic
-// label per line item, same best-effort-never-block pattern as the rest of
-// this file.
+//
+// This route is intentionally thin -- everything from "what does a closed
+// sale turn into" onward lives in services/lightspeedSaleSync.js's
+// processLightspeedSale(), shared with services/lightspeedPoller.js. That
+// split exists because Lightspeed's own API docs say webhook delivery
+// "cannot be guaranteed" and recommend polling as the real way to stay in
+// sync -- confirmed directly: a real test sale on a real trial store never
+// arrived here at all despite a correctly registered, active webhook
+// subscription. The poller is the backstop; this route is just the fast
+// path for whenever delivery does work.
 // ---------------------------------------------------------------------------
 router.post('/webhooks/pos/lightspeed', async (req, res) => {
   if (!verifyLightspeedSignature(req)) return res.sendStatus(401);
@@ -472,136 +472,10 @@ router.post('/webhooks/pos/lightspeed', async (req, res) => {
     });
     if (!merchant) return res.sendStatus(404); // event from a Lightspeed retailer we don't recognize
 
-    // Lightspeed retries webhook delivery, and sale.update can fire more
-    // than once for one sale (layby/account sales) -- if this sale is
-    // already saved, just acknowledge and stop.
-    const existing = await prisma.transaction.findUnique({ where: { id: saleId } });
-    if (existing) return res.sendStatus(200);
-
     const accessToken = await getValidLightspeedAccessToken(merchant);
     const sale = await fetchLightspeedSale(domainPrefix, accessToken, saleId);
 
-    if (sale.state !== 'closed') return res.sendStatus(200);
-
-    // One lookup per unique product on the sale, not one per line item -- a
-    // sale with the same product in two line items (e.g. two different
-    // sizes rung up separately) only needs its name resolved once. Each
-    // lookup is independently best-effort: a missing scope (pre-reconnect
-    // merchant) or a deleted/inaccessible product shouldn't take down the
-    // whole receipt, just that one item's name.
-    const productIds = [...new Set((sale.line_items || []).map((li) => li.product?.id).filter(Boolean))];
-    const productNames = {};
-    await Promise.all(productIds.map(async (id) => {
-      try {
-        const product = await fetchLightspeedProduct(domainPrefix, accessToken, id);
-        if (product?.name) productNames[id] = product.name;
-      } catch (err) {
-        console.error(`[lightspeed webhook] Failed to resolve product ${id}:`, err.message);
-      }
-    }));
-
-    // Real shape confirmed live: sale.line_items[], each with quantity,
-    // product.id, and pricing.price/pricing.total in dollars.
-    const lineItems = (sale.line_items || []).map((li) => ({
-      name: productNames[li.product?.id] || 'Item',
-      quantity: Number(li.quantity) || 1,
-      unitPrice: Math.round(Number(li.pricing?.price || 0) * 100),
-      total: Math.round(Number(li.pricing?.total || 0) * 100),
-    }));
-
-    // Real shape confirmed live: sale.totals.price (pre-tax),
-    // sale.totals.tax, sale.totals.price_incl_tax (post-tax total) -- all
-    // in dollars.
-    const subtotal = Math.round(Number(sale.totals?.price || 0) * 100);
-    const tax = Math.round(Number(sale.totals?.tax || 0) * 100);
-    const total = Math.round(Number(sale.totals?.price_incl_tax || 0) * 100);
-
-    const transaction = await prisma.transaction.create({
-      data: {
-        id: saleId,
-        merchantId: merchant.id,
-        posProvider: 'lightspeed',
-        // The retailer goes in the LOCATION field and the register in the
-        // DEVICE field, mirroring Square. These were the other way round: the
-        // register id was written as the location, while the puck lookup below
-        // only ever searched for domainPrefix -- so a register id could never
-        // match anything, and a puck paired against such a sale would store an
-        // id nothing looks for and silently receive no receipts.
-        posLocationId: domainPrefix,
-        posDeviceId: sale.source?.register_id || sale.source?.outlet_id || null,
-        orderNumber: sale.invoice_number || sale.receipt_number || null,
-        createdAt: sale.date ? new Date(sale.date) : new Date(),
-        lineItems,
-        subtotal,
-        tax,
-        discountTotal: 0,
-        total,
-        // sale.payments[].type.name is the payment type as the merchant
-        // named it in their own Lightspeed account ("Cash", "Credit Card",
-        // whatever they've configured) -- confirmed against Lightspeed's
-        // schema docs. Joined for a split-tender sale (more than one
-        // payment on one sale); null if the array is genuinely empty (an
-        // unpaid layby/account sale, or a sale this app's earlier version
-        // observed with no payments recorded at all). Unlike Square/Clover,
-        // X-Series' Payment object carries no card brand/last-4 -- only
-        // this type name -- so cardBrand/cardLast4 stay unset for real,
-        // not from a mapping gap.
-        paymentMethod: (sale.payments || []).map((p) => p.type?.name).filter(Boolean).join(' + ') || null,
-        // No currency field confirmed anywhere on the Sale object this app
-        // fetches -- same country fallback as Clover, above.
-        currency: currencyForCountry(merchant.addressCountry),
-        ...buildSellerSnapshot(merchant),
-      },
-    });
-
-    // Recognition for a POS with no card identifier: if the till had a
-    // customer attached, that address is matched against an EMAIL identifier
-    // the shopper recorded from their own wallet. Lightspeed only ever gives
-    // customer_id on the sale itself (no email inline -- see the schema
-    // note on posCustomerEmailFrom above), so it's resolved with one extra
-    // call here, best-effort like the product-name lookups above: a missing
-    // scope or an inaccessible customer just means no match, not a failure.
-    let lightspeedCustomerEmail = null;
-    if (sale.customer_id) {
-      try {
-        const customer = await fetchLightspeedCustomer(domainPrefix, accessToken, sale.customer_id);
-        lightspeedCustomerEmail = customer?.email || null;
-      } catch (err) {
-        console.error(`[lightspeed webhook] Failed to resolve customer ${sale.customer_id}:`, err.message);
-      }
-    }
-    await autoSaveReceiptForKnownShopper(transaction, {
-      posCustomerEmail: lightspeedCustomerEmail,
-      onLinked: async ({ transaction: txn, shopper }) => {
-        await awardLoyaltyStamps(txn, shopper.id);
-        if (!txn.aiCategorizedAt) categorizeInBackground(txn, merchant.businessName);
-      },
-    });
-
-    // Register first, then the retailer as a whole -- same two-step Square
-    // uses. A puck assigned through the older dropdown holds domainPrefix with
-    // no device, so it still matches on the second pass.
-    let puck = null;
-    if (transaction.posDeviceId) {
-      puck = await prisma.puck.findFirst({
-        where: { merchantId: merchant.id, posDeviceId: transaction.posDeviceId },
-      });
-    }
-    if (!puck) {
-      puck = await prisma.puck.findFirst({
-        where: { merchantId: merchant.id, posLocationId: domainPrefix, posDeviceId: null },
-      });
-    }
-    if (!puck) puck = await claimAwaitingPuck(prisma, merchant.id, transaction);
-    if (puck) {
-      await prisma.puck.update({
-        where: { id: puck.id },
-        data: {
-          currentTransactionId: transaction.id,
-          transactionExpiresAt: new Date(Date.now() + CLAIM_WINDOW_MS),
-        },
-      });
-    }
+    await processLightspeedSale(merchant, domainPrefix, accessToken, sale);
 
     res.sendStatus(200);
   } catch (err) {

@@ -476,6 +476,42 @@ setTimeout(() => {
   }, HARDWARE_ORDER_TRACKING_INTERVAL_MS);
 }, HARDWARE_ORDER_TRACKING_BOOT_DELAY_MS);
 
+// Lightspeed sale-polling backstop: same interval-on-boot shape as the jobs
+// above, its own independent timer. Not gated behind an ENABLED flag, same
+// reasoning as the hardware-order tracking refresh -- this only catches
+// sales the webhook already should have delivered and saves them exactly
+// the way the webhook would have, no destructive or compliance-sensitive
+// action, so there's no reason to ship it off by default. See
+// services/lightspeedPoller.js for why this exists: confirmed directly that
+// Lightspeed's webhook delivery can silently just not happen.
+const { pollAllLightspeedMerchants } = require('./services/lightspeedPoller');
+const LIGHTSPEED_POLL_INTERVAL_MS = 5 * 60 * 1000; // every 5 minutes
+const LIGHTSPEED_POLL_BOOT_DELAY_MS = 180 * 1000; // stagger past the hardware-order job's own boot delay
+
+let lightspeedPollRunning = false;
+
+async function runLightspeedPoll() {
+  if (lightspeedPollRunning) {
+    console.warn('[lightspeed poller] previous poll still in progress -- skipping this tick');
+    return;
+  }
+  lightspeedPollRunning = true;
+  try {
+    await pollAllLightspeedMerchants();
+  } catch (err) {
+    console.error('[lightspeed poller] poll run failed:', err);
+  } finally {
+    lightspeedPollRunning = false;
+  }
+}
+
+setTimeout(() => {
+  runLightspeedPoll().catch((err) => console.error('[lightspeed poller] unexpected error:', err));
+  setInterval(() => {
+    runLightspeedPoll().catch((err) => console.error('[lightspeed poller] unexpected error:', err));
+  }, LIGHTSPEED_POLL_INTERVAL_MS);
+}, LIGHTSPEED_POLL_BOOT_DELAY_MS);
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   require('./lib/fileStorage').assertProductionStorage();

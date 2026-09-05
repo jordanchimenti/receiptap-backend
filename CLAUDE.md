@@ -93,6 +93,22 @@ Solo founder, first-time coder. Explain in plain language, one step at a time.
   Clover both), not just sandbox — `verifySquareSignature()` in
   `routes/webhooks.js` does real HMAC-SHA256 verification against
   `SQUARE_WEBHOOK_SIGNATURE_KEY`, not a placeholder.
+- Lightspeed Retail (X-Series): OAuth, webhook-driven capture, real item
+  names and payment method, and customer recognition — all confirmed live
+  against a real completed sale on a real trial store 2026-09-05. Lightspeed's
+  own API docs say webhook delivery "cannot be guaranteed", confirmed
+  directly (a real sale, correctly-registered active webhook subscription,
+  never arrived) — `services/lightspeedPoller.js` is the backstop this
+  needed, polling for sales the webhook missed on a 5-minute interval (see
+  Gotchas). Both the webhook (`routes/webhooks.js`) and the poller call the
+  same `processLightspeedSale()` in `services/lightspeedSaleSync.js`, so
+  they can't drift onto two different ideas of how a sale becomes a
+  receipt. One real, unresolved gap found in the same pass: a plain Cash
+  sale returns `payments: []` from Lightspeed's API even on the individual
+  sale endpoint — a real limitation on Lightspeed's side, not a mapping bug
+  here, so `paymentMethod` stays null for at least that case. Unconfirmed
+  whether a processor-backed payment (e.g. Lightspeed Payments) populates
+  it instead.
 - NFC puck lifecycle: batch IDs, claim codes, tap-to-activate (NFC only — no
   QR code; a merchant taps the puck, then types the printed claim code)
 - "Assign to next sale" pairing — merchant arms a puck, rings one test sale,
@@ -230,7 +246,11 @@ Solo founder, first-time coder. Explain in plain language, one step at a time.
   service is configured for this app). Fine for a single Railway process;
   would silently stop being sufficient if this is ever scaled to multiple
   instances, since each instance would run its own independent purge with
-  no shared lock between them.
+  no shared lock between them. Same tradeoff applies to
+  `services/lightspeedPoller.js`'s 5-minute sale-catch-up poll — harmless
+  duplication across instances (each merchant's cursor update is a single
+  atomic write, and `processLightspeedSale` already dedupes on the
+  transaction's id), just wasted API calls, not a correctness risk.
 - **No unsubscribe mechanism exists yet.** `EmailSuppression` rows are only
   ever written today when a merchant deletes a shopper via the dashboard.
   There's still no marketing-email sender in this app — Resend now sends

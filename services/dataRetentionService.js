@@ -386,6 +386,7 @@ async function purgeDeactivatedMerchants({ dryRun = true } = {}) {
               lightspeedAccessToken: null,
               lightspeedRefreshToken: null,
               lightspeedAccessTokenExpiresAt: null,
+              lightspeedLastSaleVersion: null,
               stripeCustomerId: null,
               stripeSubscriptionId: null,
               dataPurgedAt: new Date(),

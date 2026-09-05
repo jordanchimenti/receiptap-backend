@@ -105,6 +105,16 @@ model Merchant {
   lightspeedAccessToken          String?
   lightspeedRefreshToken         String?
   lightspeedAccessTokenExpiresAt DateTime?
+  // Cursor for services/lightspeedPoller.js -- Lightspeed's own API docs say
+  // webhook delivery "cannot be guaranteed" and recommend polling instead, so
+  // this is the backstop: the highest sale version number (Sale._metadata
+  // .version) already seen, so the next poll only asks for sales newer than
+  // this. BigInt, not Int -- confirmed live that real version numbers (55+
+  // billion on a brand new trial store) already exceed a 32-bit integer;
+  // this is some kind of global/sharded counter, not a small per-retailer
+  // one despite Lightspeed's own docs calling it that. Null until the first
+  // poll after connecting.
+  lightspeedLastSaleVersion BigInt?
 
   // Billing — ReceipTap's own subscription (merchant pays ReceipTap monthly).
   // Trial lives in Stripe: card collected at checkout, 30-day trial, then

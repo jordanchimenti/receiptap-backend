@@ -356,7 +356,12 @@ router.post('/dashboard/settings/account/business-address', requireAuth, async (
 const POS_DISCONNECT_FIELDS = {
   square: { squareMerchantId: null, squareAccessToken: null, squareRefreshToken: null, squareAccessTokenExpiresAt: null },
   clover: { cloverMerchantId: null, cloverAccessToken: null, cloverRefreshToken: null, cloverAccessTokenExpiresAt: null },
-  lightspeed: { lightspeedDomainPrefix: null, lightspeedAccessToken: null, lightspeedRefreshToken: null, lightspeedAccessTokenExpiresAt: null },
+  // lightspeedLastSaleVersion has to go too -- it's a per-retailer sale
+  // sequence number (see services/lightspeedPoller.js), and reconnecting
+  // to a DIFFERENT store later would resume from a version number that
+  // belongs to the old one, potentially skipping every one of the new
+  // store's sales.
+  lightspeed: { lightspeedDomainPrefix: null, lightspeedAccessToken: null, lightspeedRefreshToken: null, lightspeedAccessTokenExpiresAt: null, lightspeedLastSaleVersion: null },
   shopify: { shopifyShopDomain: null, shopifyAccessToken: null },
 };
 

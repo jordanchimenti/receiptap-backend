@@ -451,22 +451,24 @@ model Transaction {
   // travel, meals, gifts and listed property it's a hard requirement under
   // section 274(d) regardless of whether the receipt was tapped or
   // photographed: a receipt proves what was spent, never what it was for.
-  // Settable only by the customer who claimed this transaction (see
-  // POST /account/receipts/tapped/:id/purpose in routes/customer-account.js
-  // and the gated section on views/receipt.ejs) -- null until they do.
+  // No UI writes this as of 2026-09-05 (founder decision -- removed the
+  // editable "What it was for" section on views/receipt.ejs/scanned-receipt.ejs
+  // rather than ask a customer to type it in) -- stays null for every
+  // receipt now. Column and the missingSubstantiationFields flag for it
+  // both kept rather than dropped, since the field is still real and a
+  // future UI could write it again.
   businessPurpose String?
 
   // The buyer's name. NOT on any POS payload -- a register has no way to
   // ask -- so this is filled at the moment a shopper claims the receipt
   // (services/claimReceipt.js, services/receiptAutoSave.js) with their own
-  // wallet profile name (Customer.name) as a suggestion, and editable
-  // afterward the same way businessPurpose is (see
-  // POST /account/receipts/tapped/:id/buyer-name). Null if the shopper's
-  // profile had no name set at claim time and they haven't typed one since.
-  // CRA requires the buyer be named once a purchase reaches $500 (see
-  // lib/receiptMissingFields.js) -- ScannedReceipt.buyerName had this from
-  // the start (read off the photo, or typed in); a tapped receipt never had
-  // anywhere to put one until now.
+  // wallet profile name (Customer.name), which is required at signup
+  // specifically so this is never blank for an account that has one (see
+  // routes/customer-account.js's flagIfNameMissing). No longer editable
+  // per-receipt as of 2026-09-05 -- the "Billed to" correction card on
+  // views/receipt.ejs was removed; this is meant to be fully automatic now,
+  // sourced only from the account's own name. CRA requires the buyer be
+  // named once a purchase reaches $500 (see lib/receiptMissingFields.js).
   buyerName String?
 
   createdAt DateTime @default(now())
@@ -1038,7 +1040,9 @@ model ScannedReceipt {
   // Why this was bought. NOT extracted -- it isn't on the paper. It's the
   // taxpayer's own note, and for US travel, meals, gifts and listed property
   // it is a hard requirement under section 274(d): a receipt proves what was
-  // spent, never what it was for. Nothing else in the wallet captures it.
+  // spent, never what it was for. No UI writes this as of 2026-09-05 -- same
+  // founder decision as Transaction.businessPurpose's comment -- kept rather
+  // than dropped since the field is still real.
   businessPurpose String?
 
   // ISO code as printed ("CAD", "USD"). Null when the receipt doesn't say --

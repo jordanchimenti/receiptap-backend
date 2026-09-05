@@ -97,7 +97,6 @@
         <div class="r-sec-title">For your records</div>
         <% if (receipt.taxNumber) { %><div class="r-row"><span class="k">Tax number</span><span class="v"><%= receipt.taxNumber %></span></div><% } %>
         <% if (receipt.taxNumber2) { %><div class="r-row"><span class="k">Second tax no.</span><span class="v"><%= receipt.taxNumber2 %></span></div><% } %>
-        <% if (receipt.buyerName) { %><div class="r-row"><span class="k">Billed to</span><span class="v"><%= receipt.buyerName %></span></div><% } %>
         <% if (receipt.receiptNumber) { %><div class="r-row"><span class="k">Receipt no.</span><span class="v"><%= receipt.receiptNumber %></span></div><% } %>
         <% if (receipt.paymentMethod) { %><div class="r-row"><span class="k">Paid with</span><span class="v"><%= receipt.paymentMethod %></span></div><% } %>
         <% if (receipt.paymentReferenceNumber) { %><div class="r-row"><span class="k">Payment reference</span><span class="v"><%= receipt.paymentReferenceNumber %></span></div><% } %>
@@ -111,26 +110,6 @@
             Not printed on this receipt: <%= missing.join(', ') %>.
           </div>
         <% } %>
-      </div>
-
-      <div class="r-sec">
-        <div class="r-sec-title">What it was for</div>
-        <% if (receipt.businessPurpose) { %>
-          <div class="r-note"><%= receipt.businessPurpose %></div>
-        <% } else { %>
-          <div class="r-missing">
-            No note yet. If you might claim this, a line saying why you bought it
-            is worth adding — the receipt can prove what you spent, but never what
-            it was for, and that reason is exactly what a deduction turns on.
-          </div>
-        <% } %>
-        <form method="POST" action="/account/receipts/scanned/<%= receipt.id %>/purpose" style="margin-top:12px;">
-          <div class="w-field" style="margin-bottom:10px;">
-            <input type="text" name="businessPurpose" value="<%= receipt.businessPurpose || '' %>"
-                   placeholder="e.g. Client lunch — Acme contract review" maxlength="300" />
-          </div>
-          <button type="submit" class="w-btn" style="width:100%;">Save note</button>
-        </form>
       </div>
 
       <div class="r-sec">

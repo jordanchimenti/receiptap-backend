@@ -1813,60 +1813,6 @@ router.post('/account/receipts/scanned/:id/share', requireCustomerAuth, async (r
   res.redirect('/account/receipts/scanned/' + receipt.id);
 });
 
-// The customer's own note on why they bought it -- the one thing on this page
-// that never came off the paper. Editable after the fact because the reason
-// is often clearer a week later than it was at the till.
-router.post('/account/receipts/scanned/:id/purpose', requireCustomerAuth, async (req, res) => {
-  const receipt = await prisma.scannedReceipt.findUnique({ where: { id: req.params.id } });
-  if (!receipt || receipt.customerId !== req.session.customerId) {
-    return res.redirect('/account/receipts');
-  }
-  const note = typeof req.body.businessPurpose === 'string' ? req.body.businessPurpose.trim().slice(0, 300) : '';
-  await prisma.scannedReceipt.update({
-    where: { id: receipt.id },
-    data: { businessPurpose: note || null },
-  });
-  res.redirect('/account/receipts/scanned/' + receipt.id);
-});
-
-// Same note, same reasoning, for a TAPPED receipt -- the register can't ask
-// why something was bought, so this is the only way that field ever gets
-// filled in for a POS sale. Lives here (not routes/receipt.js) because it's
-// a wallet-owner-only action gated by requireCustomerAuth, same as every
-// other customer-account write in this file; the form itself renders on the
-// public /receipt/:id page, gated there on being that receipt's own claimant
-// -- see the isOwner local in routes/receipt.js.
-router.post('/account/receipts/tapped/:id/purpose', requireCustomerAuth, async (req, res) => {
-  const transaction = await prisma.transaction.findUnique({ where: { id: req.params.id } });
-  if (!transaction || transaction.customerId !== req.session.customerId) {
-    return res.redirect('/account/receipts');
-  }
-  const note = typeof req.body.businessPurpose === 'string' ? req.body.businessPurpose.trim().slice(0, 300) : '';
-  await prisma.transaction.update({
-    where: { id: transaction.id },
-    data: { businessPurpose: note || null },
-  });
-  res.redirect('/receipt/' + transaction.id);
-});
-
-// Lets the claimant correct or clear the buyer name services/claimReceipt.js
-// / services/receiptAutoSave.js suggested from their wallet profile at claim
-// time -- their profile might have been blank then, wrong, or they'd rather
-// print a different name (e.g. a business name) on this specific receipt.
-// Same ownership/gating reasoning as the /purpose route above.
-router.post('/account/receipts/tapped/:id/buyer-name', requireCustomerAuth, async (req, res) => {
-  const transaction = await prisma.transaction.findUnique({ where: { id: req.params.id } });
-  if (!transaction || transaction.customerId !== req.session.customerId) {
-    return res.redirect('/account/receipts');
-  }
-  const name = typeof req.body.buyerName === 'string' ? req.body.buyerName.trim().slice(0, 200) : '';
-  await prisma.transaction.update({
-    where: { id: transaction.id },
-    data: { buyerName: name || null },
-  });
-  res.redirect('/receipt/' + transaction.id);
-});
-
 router.post('/account/receipts/scanned/:id/delete', requireCustomerAuth, async (req, res) => {
   const receipt = await prisma.scannedReceipt.findUnique({ where: { id: req.params.id } });
 

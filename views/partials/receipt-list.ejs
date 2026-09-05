@@ -66,9 +66,12 @@
                   <%# Same check the tax-export PDF flags rows with (see
                       lib/receiptMissingFields.js) -- shown here too so a gap
                       is visible the moment the receipt lands, not only
-                      discovered months later at export time. Tapping it goes
-                      straight to the receipt, where the buyer-name/purpose
-                      fields it's usually about are editable. %>
+                      discovered months later at export time. What it's
+                      usually about is the buyer's name on a $500+ purchase,
+                      which fills in automatically from the account's own
+                      signup name -- there's no manual field for it on the
+                      receipt itself (see prisma's Transaction.buyerName
+                      comment for why). %>
                   <% if (r.missing && r.missing.length) { %>
                     <span class="badge badge-missing" title="Missing for CRA/IRS: <%= r.missing.join(', ') %>">Needs info for taxes</span>
                   <% } %>

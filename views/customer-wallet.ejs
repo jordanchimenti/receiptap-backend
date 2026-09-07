@@ -654,7 +654,7 @@
       <% } %>
   </div>
 
-  <%- include('partials/wallet-tab-bar', { activeTab: 'receipts' }) %>
+  <%- include('partials/wallet-tab-bar', { activeTab: isFullWallet ? 'wallet' : 'receipts' }) %>
   <%- include('partials/image-viewer') %>
   <%- include('partials/push-controls') %>
   <script>

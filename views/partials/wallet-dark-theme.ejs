@@ -323,14 +323,33 @@
   }
   .w-tabbar {
     position: fixed; left: 0; right: 0; bottom: 0; background: rgba(10,10,10,0.92); backdrop-filter: blur(12px);
-    border-top: 1px solid var(--w-line); display: flex; justify-content: space-around;
-    padding: 10px 0 22px;
+    border-top: 1px solid var(--w-line); display: flex; align-items: flex-start; justify-content: space-between;
+    padding: 10px 0 22px; z-index: 30;
   }
+  /* The two halves either side of the raised scan button -- plain flex rows,
+     not individually centered, so Dashboard alone on the left and
+     Alerts/More together on the right still read as one continuous bar
+     rather than three disconnected groups. */
+  .w-tab-side { display: flex; flex: 1; justify-content: space-around; }
   .w-tab {
     display: flex; flex-direction: column; align-items: center; gap: 3px; text-decoration: none;
     color: var(--w-ink-soft); font-size: 11px; font-weight: 600; background: none; border: none; cursor: pointer;
     font-family: inherit;
   }
+  /* Raised out of the bar rather than sitting in its row -- position:
+     relative on an inline flex item so it can carry a negative top offset
+     without taking .w-tabbar out of normal flow the way position:absolute
+     would. The glow is the brand blue at low opacity, blurred wide; the
+     button face is a two-stop blue gradient rather than a flat fill so it
+     still reads as "special" next to the plain-icon tabs beside it. */
+  .w-tab-fab {
+    position: relative; top: -22px; flex: none; width: 58px; height: 58px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center; color: #fff;
+    background: linear-gradient(135deg, var(--w-accent), var(--w-accent-deep));
+    box-shadow: 0 6px 18px rgba(5,107,254,0.45), 0 0 0 6px rgba(5,107,254,0.14);
+    text-decoration: none;
+  }
+  .w-tab-fab svg { width: 26px; height: 26px; }
   /* Every tap that navigates costs a server round trip, so without this the
      app looks frozen between the tap and the new page. These give the press
      an immediate visual answer -- the work still takes as long, but it stops

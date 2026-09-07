@@ -10,26 +10,36 @@
   var unread = typeof unreadCount !== 'undefined' ? unreadCount : 0;
 %>
 <div class="w-tabbar">
-  <a class="w-tab <%= activeTab === 'receipts' ? 'active' : '' %>" href="/account/receipts">
-    <%# The same icon and label the Business section's first tab uses
-        (partials/business-tab-bar.ejs), so the personal and business sides
-        name their home the same way. %>
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg>
-    Dashboard
+  <div class="w-tab-side">
+    <a class="w-tab <%= activeTab === 'receipts' ? 'active' : '' %>" href="/account/receipts">
+      <%# The same icon and label the Business section's first tab uses
+          (partials/business-tab-bar.ejs), so the personal and business sides
+          name their home the same way. %>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg>
+      Dashboard
+    </a>
+  </div>
+
+  <%# The scan/upload action, raised out of the bar into its own glowing
+      circle rather than a plain tab -- it's the primary "add a receipt"
+      action, not just another destination, and deserves to read that way.
+      No .active state: unlike the plain tabs, it stays the same vivid color
+      whether or not the scan page is the one currently open. %>
+  <a class="w-tab-fab" href="/account/receipts/scan" aria-label="Scan a receipt">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
   </a>
-  <a class="w-tab <%= activeTab === 'scan' ? 'active' : '' %>" href="/account/receipts/scan">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 8V6a2 2 0 0 1 2-2h2M4 16v2a2 2 0 0 0 2 2h2M20 8V6a2 2 0 0 0-2-2h-2M20 16v2a2 2 0 0 1-2 2h-2"/><circle cx="12" cy="12" r="3.5"/></svg>
-    Scan
-  </a>
-  <a class="w-tab <%= activeTab === 'notifications' ? 'active' : '' %>" href="/account/notifications">
-    <span class="w-tab-icon-wrap">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
-      <% if (unread > 0) { %><span class="w-tab-badge"><%= unread > 9 ? '9+' : unread %></span><% } %>
-    </span>
-    Alerts
-  </a>
-  <a class="w-tab <%= activeTab === 'more' ? 'active' : '' %>" href="/account/more">
-    <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
-    More
-  </a>
+
+  <div class="w-tab-side">
+    <a class="w-tab <%= activeTab === 'notifications' ? 'active' : '' %>" href="/account/notifications">
+      <span class="w-tab-icon-wrap">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+        <% if (unread > 0) { %><span class="w-tab-badge"><%= unread > 9 ? '9+' : unread %></span><% } %>
+      </span>
+      Alerts
+    </a>
+    <a class="w-tab <%= activeTab === 'more' ? 'active' : '' %>" href="/account/more">
+      <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
+      More
+    </a>
+  </div>
 </div>

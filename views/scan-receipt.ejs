@@ -136,6 +136,62 @@
       width: 44px; height: 44px; border-radius: 50%; background: rgba(255,255,255,0.15); border: none;
       color: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer;
     }
+
+    /* --- Processing overlay ---
+       Shown for the one real request/response cycle that stores the photo
+       and reads it with AI (concurrently server-side, not sequential
+       phases -- see routes/customer-account.js). The steps below are kept
+       to what's actually knowable from here: the photo existing locally is
+       real, the upload percentage is real (XHR progress events), and
+       "Reading your receipt" is an honest indeterminate spinner for the AI
+       call, not a fabricated countdown of fake sub-steps. */
+    .processing-overlay {
+      display: none; position: fixed; inset: 0; z-index: 1100; background: var(--w-bg);
+      flex-direction: column; align-items: center; justify-content: center; gap: 36px;
+      padding: 24px;
+    }
+    .processing-overlay.open { display: flex; }
+    /* The logo file is a wide wordmark (900x235), not a square icon -- sized
+       by width with height auto so it isn't forced into a square crop. */
+    .processing-logo {
+      width: 168px; height: auto; display: block;
+      filter: drop-shadow(0 4px 22px rgba(5,107,254,0.35));
+      animation: processing-breathe 2.4s ease-in-out infinite;
+    }
+    @keyframes processing-breathe {
+      0%, 100% { filter: drop-shadow(0 4px 18px rgba(5,107,254,0.25)); }
+      50% { filter: drop-shadow(0 4px 26px rgba(5,107,254,0.55)); }
+    }
+    .processing-heading { display: flex; flex-direction: column; gap: 6px; }
+    .processing-title { font-size: 18px; font-weight: 700; color: var(--w-ink); text-align: center; }
+    .processing-sub { font-size: 13px; color: var(--w-ink-soft); text-align: center; max-width: 280px; }
+    .processing-steps { width: 100%; max-width: 300px; display: flex; flex-direction: column; gap: 4px; }
+    .processing-step {
+      display: flex; align-items: center; gap: 12px; padding: 11px 4px;
+      font-size: 14px; color: var(--w-ink-soft); transition: color 0.2s;
+    }
+    .processing-step.done, .processing-step.active { color: var(--w-ink); }
+    .step-icon {
+      flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      border: 1.5px solid var(--w-line); box-sizing: border-box; position: relative;
+    }
+    .step-icon svg { width: 12px; height: 12px; display: none; }
+    .processing-step.done .step-icon {
+      border-color: var(--w-accent); background: var(--w-accent);
+    }
+    .processing-step.done .step-icon svg { display: block; }
+    .processing-step.active .step-icon { border-color: var(--w-accent); border-top-color: transparent; animation: step-spin 0.7s linear infinite; }
+    @keyframes step-spin { to { transform: rotate(360deg); } }
+    .step-label { flex: 1; }
+    .step-detail { font-size: 12px; color: var(--w-accent); font-variant-numeric: tabular-nums; }
+    .processing-error {
+      display: none; text-align: center; color: var(--w-ink); font-size: 14px; max-width: 280px;
+    }
+    .processing-error.show { display: block; }
+    .processing-retry {
+      margin-top: 14px; max-width: 300px;
+    }
   </style>
 </head>
 <!-- A reload would tear down the camera stream mid-scan, so no pull-to-refresh here. -->
@@ -207,6 +263,32 @@
     </div>
   </div>
 
+  <!-- Processing overlay -->
+  <div class="processing-overlay" id="processing-overlay">
+    <img src="/images/receiptap-logo.png" class="processing-logo" alt="ReceipTap" />
+    <div class="processing-heading">
+      <div class="processing-title" id="processing-title">Processing receipt</div>
+      <div class="processing-sub" id="processing-sub">Hang tight, this only takes a moment.</div>
+    </div>
+    <div class="processing-steps" id="processing-steps">
+      <div class="processing-step" id="step-photo">
+        <span class="step-icon"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l6 6L20 6"/></svg></span>
+        <span class="step-label">Photo ready</span>
+      </div>
+      <div class="processing-step" id="step-upload">
+        <span class="step-icon"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l6 6L20 6"/></svg></span>
+        <span class="step-label">Uploading</span>
+        <span class="step-detail" id="step-upload-detail"></span>
+      </div>
+      <div class="processing-step" id="step-read">
+        <span class="step-icon"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l6 6L20 6"/></svg></span>
+        <span class="step-label">Reading your receipt</span>
+      </div>
+    </div>
+    <div class="processing-error" id="processing-error"></div>
+    <button type="button" class="w-btn processing-retry" id="processing-retry-btn" style="display:none;">Try again</button>
+  </div>
+
   <!-- Live camera overlay -->
   <div class="camera-overlay" id="camera-overlay">
     <video class="camera-video" id="camera-video" autoplay playsinline muted></video>
@@ -273,44 +355,94 @@
       submitBtn.style.display = 'inline-flex';
     }
 
-    // Only steps in when the file did NOT attach to the form input.
-    //
-    // The normal browser form submit was working, and replacing it wholesale
-    // was the wrong instinct: the fetch path has to swap the returned page in
-    // with document.write, which is fragile on Safari in particular. So the
-    // native submit stays the default and this is purely a rescue for the case
-    // that actually breaks -- DataTransfer being unavailable, leaving the
-    // input empty and the photo otherwise unsendable.
-    document.getElementById('scan-form').addEventListener('submit', async (e) => {
+    // Always goes through JS now, not just as a Safari/DataTransfer rescue --
+    // that's what lets the processing overlay show real upload progress via
+    // XHR for every submission, not only the ones where DataTransfer failed.
+    const processingOverlay = document.getElementById('processing-overlay');
+    const stepPhoto = document.getElementById('step-photo');
+    const stepUpload = document.getElementById('step-upload');
+    const stepUploadDetail = document.getElementById('step-upload-detail');
+    const stepRead = document.getElementById('step-read');
+    const processingSteps = document.getElementById('processing-steps');
+    const processingError = document.getElementById('processing-error');
+    const processingRetryBtn = document.getElementById('processing-retry-btn');
+    const processingTitle = document.getElementById('processing-title');
+    const processingSub = document.getElementById('processing-sub');
+
+    function resetOverlay() {
+      [stepPhoto, stepUpload, stepRead].forEach((el) => el.classList.remove('done', 'active'));
+      stepUploadDetail.textContent = '';
+      processingSteps.style.display = '';
+      processingError.classList.remove('show');
+      processingError.textContent = '';
+      processingRetryBtn.style.display = 'none';
+      processingTitle.textContent = 'Processing receipt';
+      processingSub.textContent = 'Hang tight, this only takes a moment.';
+    }
+
+    function showProcessingError(message) {
+      processingSteps.style.display = 'none';
+      processingSub.textContent = '';
+      processingTitle.textContent = 'Something went wrong';
+      processingError.textContent = message;
+      processingError.classList.add('show');
+      processingRetryBtn.style.display = 'inline-flex';
+    }
+
+    processingRetryBtn.addEventListener('click', () => {
+      processingOverlay.classList.remove('open');
+    });
+
+    document.getElementById('scan-form').addEventListener('submit', (e) => {
+      e.preventDefault();
       if (!pendingFile) {
-        e.preventDefault();
         fileName.textContent = 'Take or choose a photo first.';
         return;
       }
 
-      // The file is on the input -- let the browser do what it has always done.
-      if (hiddenInput.files && hiddenInput.files.length > 0) return;
+      resetOverlay();
+      processingOverlay.classList.add('open');
+      stepPhoto.classList.add('done'); // real: we already have the file in hand
+      stepUpload.classList.add('active');
 
-      e.preventDefault();
-      submitBtn.disabled = true;
-      submitBtn.textContent = 'Reading your receipt…';
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', '/account/receipts/scan');
 
-      try {
-        const body = new FormData();
-        body.append('receiptPhoto', pendingFile);
-        const res = await fetch('/account/receipts/scan', { method: 'POST', body, credentials: 'same-origin' });
-        if (!res.ok) throw new Error('the server rejected the photo (' + res.status + ')');
+      // Genuine upload progress off the wire, not a simulated timer.
+      xhr.upload.addEventListener('progress', (ev) => {
+        if (!ev.lengthComputable) return;
+        stepUploadDetail.textContent = Math.round((ev.loaded / ev.total) * 100) + '%';
+      });
+      xhr.upload.addEventListener('load', () => {
+        stepUpload.classList.remove('active');
+        stepUpload.classList.add('done');
+        stepUploadDetail.textContent = '';
+        // The server stores the photo and reads it with AI concurrently in
+        // this same request -- there's no further real sub-step to report,
+        // so this is an honest indeterminate wait, not a fake checklist.
+        stepRead.classList.add('active');
+      });
 
-        const html = await res.text();
-        history.replaceState({}, '', res.url);
+      xhr.addEventListener('load', () => {
+        if (xhr.status < 200 || xhr.status >= 300) {
+          showProcessingError("We couldn't read that receipt — please try again.");
+          return;
+        }
+        stepRead.classList.remove('active');
+        stepRead.classList.add('done');
+        history.replaceState({}, '', xhr.responseURL || location.href);
         document.open();
-        document.write(html);
+        document.write(xhr.responseText);
         document.close();
-      } catch (err) {
-        submitBtn.disabled = false;
-        submitBtn.textContent = 'Continue';
-        fileName.textContent = "Couldn't upload that photo — " + err.message;
-      }
+      });
+
+      xhr.addEventListener('error', () => {
+        showProcessingError('Lost connection while uploading — check your signal and try again.');
+      });
+
+      const body = new FormData();
+      body.append('receiptPhoto', pendingFile);
+      xhr.send(body);
     });
 
     // Unlike the live camera below (which always captures at a bounded

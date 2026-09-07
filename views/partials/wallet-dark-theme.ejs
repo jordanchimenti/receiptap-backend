@@ -321,10 +321,23 @@
     padding: 12px 0 max(12px, env(safe-area-inset-bottom));
     background: linear-gradient(to top, var(--w-bg) 62%, transparent);
   }
+  /* The background/blur/top-line live on ::before, not the bar itself, so the
+     mask cutout below (a circular hole punched where the scan button sits)
+     only clips that backing layer -- masking .w-tabbar directly would clip
+     its children too, cutting the button and tab links off along with it. */
   .w-tabbar {
-    position: fixed; left: 0; right: 0; bottom: 0; background: rgba(10,10,10,0.92); backdrop-filter: blur(12px);
-    border-top: 1px solid var(--w-line); display: flex; align-items: flex-start; justify-content: space-between;
-    padding: 10px 0 22px; z-index: 30;
+    position: fixed; left: 0; right: 0; bottom: 0; display: flex; align-items: flex-start;
+    justify-content: space-between; padding: 10px 0 22px; z-index: 30;
+  }
+  .w-tabbar::before {
+    content: ''; position: absolute; inset: 0; z-index: -1;
+    background: rgba(10,10,10,0.92); backdrop-filter: blur(12px); border-top: 1px solid var(--w-line);
+    /* Circle center (50% 18px) and radius (46px) are tuned against the scan
+       button's own geometry just below -- 58px wide, raised -22px out of a
+       bar with 10px top padding, so its centre sits 18px under the bar's top
+       edge. Move the button and this drifts out of alignment with it. */
+    -webkit-mask-image: radial-gradient(circle 46px at 50% 18px, transparent 46px, black 47px);
+    mask-image: radial-gradient(circle 46px at 50% 18px, transparent 46px, black 47px);
   }
   /* The two halves either side of the raised scan button -- plain flex rows,
      not individually centered, so Dashboard alone on the left and
@@ -339,15 +352,19 @@
   /* Raised out of the bar rather than sitting in its row -- position:
      relative on an inline flex item so it can carry a negative top offset
      without taking .w-tabbar out of normal flow the way position:absolute
-     would. The glow is the brand blue at low opacity, blurred wide; the
-     button face is a two-stop blue gradient rather than a flat fill so it
-     still reads as "special" next to the plain-icon tabs beside it. */
+     would. A radial (not linear) gradient reads as a glossy sphere rather
+     than a flat disc, and the ::before halo is a much wider, softer glow
+     than a box-shadow can produce -- it has its own box to blur within
+     rather than being confined to the button's own edge. */
   .w-tab-fab {
     position: relative; top: -22px; flex: none; width: 58px; height: 58px; border-radius: 50%;
     display: flex; align-items: center; justify-content: center; color: #fff;
-    background: linear-gradient(135deg, var(--w-accent), var(--w-accent-deep));
-    box-shadow: 0 6px 18px rgba(5,107,254,0.45), 0 0 0 6px rgba(5,107,254,0.14);
+    background: radial-gradient(circle at 32% 28%, #4d9dff 0%, var(--w-accent) 55%, var(--w-accent-deep) 100%);
     text-decoration: none;
+  }
+  .w-tab-fab::before {
+    content: ''; position: absolute; inset: -26px; border-radius: 50%; z-index: -1;
+    background: radial-gradient(circle, rgba(5,107,254,0.55) 0%, rgba(5,107,254,0.28) 45%, transparent 75%);
   }
   .w-tab-fab svg { width: 26px; height: 26px; }
   /* Every tap that navigates costs a server round trip, so without this the

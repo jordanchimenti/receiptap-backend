@@ -106,6 +106,48 @@
       </div>
     </div>
 
+    <%# Shown on the public, no-login guest page a Split the Bill "Share
+        link" opens (routes/splitGroupShare.js) -- how a guest pays this
+        shopper back. Both optional and independent: leaving one blank just
+        hides that payment option on the guest page. ReceipTap never touches
+        this money either way. %>
+    <div class="w-card settings-card">
+      <h2>Split the Bill payouts</h2>
+      <p class="sub">Shown to guests on your Split the Bill link, so they know how to pay you back. Leave either blank to hide that option.</p>
+      <div class="w-field">
+        <label>PayPal.me handle (optional)</label>
+        <input type="text" name="paypalMeHandle" value="<%= customer.paypalMeHandle || '' %>" placeholder="yourname" maxlength="60" />
+      </div>
+      <div class="w-field">
+        <label>Interac e-Transfer email or phone (optional)</label>
+        <input type="text" name="interacContact" value="<%= customer.interacContact || '' %>" placeholder="you@example.com" maxlength="120" />
+      </div>
+    </div>
+
+    <%# Card payments (Apple Pay, Google Pay, credit/debit) for Split the
+        Bill guests -- a real Stripe Connect Express account, same pattern
+        as the affiliate payout dashboard's Connect card. Sits in the
+        preferences form's markup for visual grouping with the card above
+        it, but is just a link, not a form control -- connecting Stripe is
+        its own page navigation (routes/customer-account.js's
+        /account/connect-stripe/start), never part of this form's save. %>
+    <div class="w-card settings-card">
+      <h2>Card payments</h2>
+      <% if (connectError) { %>
+        <div class="w-error">Couldn't start Stripe onboarding — please try again in a moment.</div>
+      <% } %>
+      <% if (connectPending) { %>
+        <div class="success-note" style="margin-bottom:14px;">Stripe has your details — payouts turn on once they finish reviewing your account.</div>
+      <% } %>
+      <% if (customer.stripeConnectOnboarded) { %>
+        <p class="sub">✅ Connected. Guests can pay you by card, Apple Pay, or Google Pay on your Split the Bill link — Stripe sends it straight to your bank account.</p>
+        <a href="/account/connect-stripe/start" class="w-btn w-btn-secondary" style="width:100%; box-sizing:border-box; text-align:center; display:block; text-decoration:none;">Update details</a>
+      <% } else { %>
+        <p class="sub">Let guests pay you by card, Apple Pay, or Google Pay right on your Split the Bill link, instead of just PayPal or Interac. Stripe collects your bank details directly — this app never sees them.</p>
+        <a href="/account/connect-stripe/start" class="w-btn" style="width:100%; box-sizing:border-box; text-align:center; display:block; text-decoration:none;">Set up card payments</a>
+      <% } %>
+    </div>
+
     <%# Saving receipts. Sits above Card recognition because it applies to
         every shopper on every POS, while recognition is Square-only and only
         appears once a link exists. %>

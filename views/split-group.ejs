@@ -189,7 +189,7 @@
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
             </div>
             <div class="g-activity-text">
-              <div><%= payer ? payer.name : 'Cash collected' %> &mdash; <%= receipt.currency || 'CA' %>$<%= money(p.amountCents) %></div>
+              <div><%= payer ? payer.name : (p.method === 'card' ? 'Card payment' : 'Cash collected') %> &mdash; <%= receipt.currency || 'CA' %>$<%= money(p.amountCents) %></div>
               <div class="g-activity-when"><%= p.createdAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) %></div>
             </div>
           </div>
@@ -237,14 +237,15 @@
 
     const shareBtn = document.getElementById('share-btn');
     const shareLabel = document.getElementById('share-btn-label');
+    const shareUrl = <%- JSON.stringify(shareUrl) %>;
+    const shareText = <%- JSON.stringify(`Join "${group.name || receipt.merchantName}" on ReceipTap! Tap to join:`) %>;
     shareBtn.addEventListener('click', async () => {
-      const text = <%- JSON.stringify(`${group.name || receipt.merchantName} — ${receipt.currency || 'CA'}$${(receipt.total/100).toFixed(2)} total. Left to collect: ${receipt.currency || 'CA'}$` ) %> + document.querySelector('.g-collect-value').textContent.replace(/^\D+\$?/, '') + ' — via ReceipTap';
       if (navigator.share) {
-        try { await navigator.share({ text }); } catch (err) { /* cancelled */ }
+        try { await navigator.share({ text: shareText, url: shareUrl }); } catch (err) { /* cancelled */ }
         return;
       }
       try {
-        await navigator.clipboard.writeText(text);
+        await navigator.clipboard.writeText(shareText + ' ' + shareUrl);
         shareLabel.textContent = 'Copied!';
         setTimeout(() => { shareLabel.textContent = shareBtn.dataset.defaultLabel; }, 1600);
       } catch (err) { /* clipboard unavailable */ }

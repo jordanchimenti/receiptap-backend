@@ -931,6 +931,26 @@ model Customer {
   phoneCountry String?  @default("CA")
   createdAt    DateTime @default(now())
 
+  // How a Split the Bill guest pays this shopper back -- shown only on the
+  // public, unauthenticated guest page (routes/splitGroupShare.js), never
+  // anywhere else. ReceipTap never touches this money: paypalMeHandle builds
+  // a real paypal.me link the guest's PayPal app opens with the amount
+  // pre-filled; interacContact is just an email/phone shown with a copy
+  // button, since no third party can trigger an Interac e-Transfer directly
+  // (there's no equivalent deep link) -- the guest still sends it themselves
+  // from their own banking app.
+  paypalMeHandle String?
+  interacContact String?
+
+  // Card payments for Split the Bill -- a guest's card charge is a Stripe
+  // destination charge (services/stripeService.js's createSplitPaymentIntent)
+  // that routes straight to this Express account, same Connect pattern as
+  // Affiliate.stripeConnectAccountId/stripeConnectOnboarded above it. Unlike
+  // the affiliate payout flow, ReceipTap's own Stripe balance never holds
+  // this money even momentarily -- the transfer is part of the same charge.
+  stripeConnectAccountId String? @unique
+  stripeConnectOnboarded Boolean @default(false)
+
   // "Forgot password?" flow -- token is single-use (cleared on success) and
   // expires 1 hour after being issued, whichever comes first.
   resetToken          String?   @unique
@@ -1162,8 +1182,9 @@ model SplitGroup {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  guests   SplitGuest[]
-  payments SplitPayment[]
+  guests     SplitGuest[]
+  payments   SplitPayment[]
+  shareLinks SplitGroupShareLink[]
 }
 
 model SplitGuest {
@@ -1197,8 +1218,33 @@ model SplitPayment {
 
   amountCents      Int
   itemDescriptions Json
-  method           String   @default("cash")
-  createdAt        DateTime @default(now())
+  method           String   @default("cash") // 'cash' | 'card'
+  // Set only for method='card' -- the PaymentIntent this payment came from.
+  // Unique so the payment_intent.succeeded webhook handler
+  // (services/stripeService.js) can never record the same card payment
+  // twice if Stripe retries delivery.
+  stripePaymentIntentId String?  @unique
+  createdAt             DateTime @default(now())
+
+  @@index([groupId])
+}
+
+// A time-limited, unauthenticated link to one Split the Bill group -- the
+// real "Share link" a host texts to guests, opening the public, no-login
+// item-selection + pay page (routes/splitGroupShare.js). Same token/expiry
+// design as ScannedReceiptShareLink -- see lib/receiptShareLink.js, whose
+// helpers are generic and reused here unchanged. onDelete: Cascade for the
+// same reason as that model: a share link is an active convenience, not a
+// record that has to outlive what it points at.
+model SplitGroupShareLink {
+  id      String     @id @default(cuid())
+  groupId String
+  group   SplitGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  token     String    @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
 
   @@index([groupId])
 }

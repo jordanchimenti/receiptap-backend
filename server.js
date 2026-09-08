@@ -133,6 +133,7 @@ app.use(require('./routes/legal'));          // /legal/terms, /legal/privacy, /l
 app.use(require('./routes/pucks'));          // /r/:puckId tap routing, /claim/:puckId
 app.use(require('./routes/receipt'));        // /receipt/:transactionId
 app.use(require('./routes/receiptShare'));   // /share/receipt/:token -- scanned-receipt share links
+app.use(require('./routes/splitGroupShare')); // /split/:token -- Split the Bill guest page, no login
 app.use(require('./routes/webhooks'));       // /webhooks/pos/square, /webhooks/pos/clover, /webhooks/pos/lightspeed, /webhooks/pos/shopify
 
 // Demo-account gate: a free, no-card merchant (Merchant.isDemoAccount) can

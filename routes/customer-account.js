@@ -48,6 +48,7 @@ const { REFERRAL_WINDOW_DAYS } = require('../lib/referralAttribution');
 const { listIdentifiersForShopper, revokeIdentifierByHash } = require('../services/shopperIdentity');
 const { claimReceiptForShopper } = require('../services/claimReceipt');
 const { getBaseUrl } = require('../lib/baseUrl');
+const { createShopperConnectAccount, createShopperOnboardingLink, getShopperConnectStatus } = require('../services/stripeService');
 const { buildState, parseState } = require('../lib/oauthState');
 const appleAuthService = require('../services/appleAuthService');
 const microsoftAuthService = require('../services/microsoftAuthService');
@@ -2070,15 +2071,35 @@ async function loadOwnedGroup(req) {
   return { receipt, group: receipt.splitGroup };
 }
 
+// Same reuse-if-still-active pattern as getOrCreateActiveShareLink above --
+// the Share link button is a lightweight "give me the link" action, not a
+// regenerate, so it must never invalidate a link already sent to a guest
+// just because the host tapped Share again.
+async function getOrCreateActiveGroupShareLink(groupId) {
+  const now = new Date();
+  const existing = await prisma.splitGroupShareLink.findFirst({
+    where: { groupId, revokedAt: null },
+    orderBy: { createdAt: 'desc' },
+  });
+  if (isShareLinkActive(existing, now)) return existing;
+
+  return prisma.splitGroupShareLink.create({
+    data: { groupId, token: generateShareToken(), expiresAt: computeExpiresAt(now) },
+  });
+}
+
 router.get('/account/receipts/scanned/:id/group', requireCustomerAuth, async (req, res) => {
   const loaded = await loadOwnedGroup(req);
   if (!loaded) return res.redirect('/account/receipts');
   const { receipt, group } = loaded;
 
+  const shareLink = await getOrCreateActiveGroupShareLink(group.id);
+
   res.render('split-group', {
     receipt,
     group,
     ...computeGroupFinancials(receipt, group),
+    shareUrl: `${getBaseUrl(req)}/split/${shareLink.token}`,
     money: (cents) => (cents / 100).toFixed(2),
   });
 });
@@ -2345,6 +2366,8 @@ router.get('/account/settings', requireCustomerAuth, async (req, res) => {
     passwordError: req.query.passwordError || null,
     passwordSuccess: req.query.passwordSuccess === '1',
     recognitionRevoked: req.query.recognitionRevoked === '1',
+    connectError: req.query.connect_error === '1',
+    connectPending: req.query.connect_pending === '1',
   });
 });
 
@@ -2373,6 +2396,15 @@ router.post('/account/settings/preferences', requireCustomerAuth, async (req, re
   });
   if (clash) return fail('That email is already in use by another account.');
 
+  // Tolerant of a pasted paypal.me URL or a leading "@" -- stored as just the
+  // handle itself, since that's the only part the guest-page paypal.me link
+  // (routes/splitGroupShare.js) actually needs.
+  const paypalMeHandle = (req.body.paypalMeHandle || '')
+    .trim()
+    .replace(/^(https?:\/\/)?(www\.)?paypal\.me\//i, '')
+    .replace(/^@/, '')
+    .slice(0, 60) || null;
+
   await prisma.customer.update({
     where: { id: req.session.customerId },
     data: {
@@ -2382,9 +2414,56 @@ router.post('/account/settings/preferences', requireCustomerAuth, async (req, re
       phoneCountry: (req.body.phoneCountry || '').trim() || null,
       autoSaveOnTap: req.body.autoSaveOnTap === 'on',
       loyaltyEmails: req.body.loyaltyEmails === 'on',
+      paypalMeHandle,
+      interacContact: (req.body.interacContact || '').trim().slice(0, 120) || null,
     },
   });
   res.redirect('/account/settings?saved=1');
+});
+
+// Card payments for Split the Bill (Stripe Connect) -- same start/return
+// hosted-onboarding pattern as the affiliate payout flow in
+// routes/affiliates.js, but simpler: a shopper only ever has one login, so
+// there's no "which login screen" branching to carry through the round trip.
+router.get('/account/connect-stripe/start', requireCustomerAuth, async (req, res) => {
+  const customer = await prisma.customer.findUnique({ where: { id: req.session.customerId } });
+
+  try {
+    let accountId = customer.stripeConnectAccountId;
+    if (!accountId) {
+      const account = await createShopperConnectAccount(customer);
+      accountId = account.id;
+      await prisma.customer.update({ where: { id: customer.id }, data: { stripeConnectAccountId: accountId } });
+    }
+
+    const baseUrl = getBaseUrl(req);
+    const url = await createShopperOnboardingLink(
+      accountId,
+      `${baseUrl}/account/connect-stripe/start`, // Stripe sends them back here if the link expires mid-flow
+      `${baseUrl}/account/connect-stripe/return`
+    );
+    res.redirect(url);
+  } catch (err) {
+    console.error('Stripe Connect onboarding failed to start:', err.message);
+    res.redirect('/account/settings?connect_error=1');
+  }
+});
+
+router.get('/account/connect-stripe/return', requireCustomerAuth, async (req, res) => {
+  const customer = await prisma.customer.findUnique({ where: { id: req.session.customerId } });
+  if (!customer.stripeConnectAccountId) return res.redirect('/account/settings');
+
+  try {
+    const status = await getShopperConnectStatus(customer.stripeConnectAccountId);
+    await prisma.customer.update({
+      where: { id: customer.id },
+      data: { stripeConnectOnboarded: status.payoutsEnabled },
+    });
+    res.redirect(status.payoutsEnabled ? '/account/settings' : '/account/settings?connect_pending=1');
+  } catch (err) {
+    console.error('Stripe Connect status check failed:', err.message);
+    res.redirect('/account/settings?connect_error=1');
+  }
 });
 
 // POST /account/settings/recognition/revoke — the shopper turning off

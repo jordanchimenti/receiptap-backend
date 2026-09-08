@@ -1,0 +1,458 @@
+<!-- views/split-group-shared.ejs -->
+<!-- The public, no-login page a Split the Bill "Share link" opens
+     (routes/splitGroupShare.js). Whoever has this link can see the group's
+     still-unclaimed items and pick which ones they're covering -- which
+     items are checked is client-side scratch state, never sent back to the
+     server on its own. For PayPal/Interac/Cash, paying happens entirely
+     outside ReceipTap and the host is the one who confirms it arrived
+     (Record a cash payment). Card/Apple Pay/Google Pay is the one real
+     exception -- POST /split/:token/pay-intent creates a real Stripe
+     PaymentIntent (a destination charge routed to the host's own connected
+     account), and once it succeeds the payment_intent.succeeded webhook
+     (services/stripeService.js) records it automatically -- no host action
+     needed, unlike every other method on this page. -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title><%= receipt.merchantName %> - ReceipTap</title>
+  <link rel="stylesheet" href="/css/receiptap.css" />
+  <%- include('partials/wallet-dark-theme') %>
+  <style>
+    .s-header { display: flex; align-items: flex-start; gap: 14px; margin-bottom: 20px; }
+    .s-header-text { flex: 1; min-width: 0; }
+    .s-merchant { font-size: 22px; font-weight: 700; }
+    .s-date-row { display: flex; align-items: center; gap: 7px; color: var(--w-ink-soft); font-size: 13px; margin-top: 4px; }
+    .s-photo-btn {
+      flex-shrink: 0; width: 52px; height: 52px; border-radius: 12px; overflow: hidden; position: relative;
+      border: none; padding: 0; cursor: pointer;
+    }
+    .s-photo-btn img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .s-photo-btn-label { position: absolute; inset: auto 0 0 0; background: rgba(0,0,0,0.6); color: #fff; font-size: 9px; font-weight: 700; text-align: center; padding: 2px 0; }
+
+    .s-items-card { background: var(--w-card); border: 1px solid var(--w-line); border-radius: 16px; padding: 4px 16px; margin-bottom: 22px; }
+    .s-item-row { display: flex; align-items: center; gap: 14px; padding: 14px 0; border-left: 3px solid transparent; margin-left: -16px; padding-left: 16px; transition: border-color 0.15s; }
+    .s-item-row.checked { border-left-color: var(--w-accent); }
+    .s-item-row + .s-item-row { border-top: 1px solid var(--w-line); }
+    .s-item-checkbox {
+      width: 22px; height: 22px; border-radius: 7px; border: 1.5px solid var(--w-line); flex-shrink: 0;
+      background: var(--w-card-raised); cursor: pointer; display: flex; align-items: center; justify-content: center; color: transparent;
+    }
+    .s-item-checkbox.checked { background: var(--w-accent); border-color: var(--w-accent); color: #fff; }
+    .s-item-text { flex: 1; }
+    .s-item-name { font-size: 15px; font-weight: 700; }
+    .s-item-price { font-size: 12.5px; color: var(--w-ink-soft); margin-top: 2px; }
+    .s-item-covering { font-size: 12px; font-weight: 700; color: #35d0ff; margin-top: 2px; display: none; }
+    .s-item-row.checked .s-item-covering { display: block; }
+
+    .s-note {
+      display: none; background: var(--w-accent-wash); border-left: 3px solid var(--w-accent); border-radius: 10px;
+      padding: 12px 14px; font-size: 12.5px; color: var(--w-ink); line-height: 1.5; margin-bottom: 20px;
+    }
+    .s-note.open { display: block; }
+
+    .s-totals { display: none; margin-bottom: 26px; }
+    .s-totals.open { display: block; }
+    .s-total-row { display: flex; align-items: center; justify-content: space-between; padding: 6px 2px; font-size: 14px; color: var(--w-ink-soft); }
+    .s-total-row.grand { border-top: 1px solid var(--w-line); margin-top: 6px; padding-top: 12px; font-size: 18px; font-weight: 700; color: var(--w-ink); }
+    .s-total-row.grand span:last-child { color: var(--w-ok); font-variant-numeric: tabular-nums; }
+
+    .s-pay-section { display: none; }
+    .s-pay-section.open { display: block; }
+    .s-pay-title { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
+    .s-pay-sub { font-size: 12.5px; color: var(--w-ink-soft); line-height: 1.5; margin-bottom: 16px; }
+    .s-method-list { display: flex; flex-direction: column; gap: 10px; }
+    .s-method-row {
+      display: flex; align-items: center; justify-content: space-between; background: var(--w-card); border: 1px solid var(--w-line);
+      border-radius: 14px; padding: 15px 16px; cursor: pointer; font-family: inherit; text-align: left; width: 100%; box-sizing: border-box;
+    }
+    .s-method-name { font-size: 14.5px; font-weight: 700; }
+    .s-method-hint { font-size: 12px; color: var(--w-ink-soft); margin-top: 2px; }
+    .s-method-radio { width: 20px; height: 20px; border-radius: 50%; border: 1.5px solid var(--w-line); flex-shrink: 0; }
+
+    .s-detail-panel { display: none; }
+    .s-detail-panel.open { display: block; }
+    .s-detail-amount { font-size: 34px; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .s-detail-sub { font-size: 13px; color: var(--w-ink-soft); margin: 2px 0 20px; }
+    .s-open-app-btn {
+      display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; text-decoration: none;
+      background: linear-gradient(115deg, #0070ba, #009cde); color: #fff; font-weight: 700; font-size: 15.5px;
+      padding: 16px; border-radius: 14px; box-sizing: border-box; margin-bottom: 14px; box-shadow: 0 8px 22px rgba(0,112,186,0.32);
+    }
+    .s-detail-card { background: var(--w-card-raised); border: 1px solid var(--w-line); border-radius: 12px; padding: 12px 14px; margin-bottom: 14px; }
+    .s-detail-card-label { font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--w-ink-soft); margin-bottom: 4px; }
+    .s-detail-card-value { font-size: 14.5px; font-weight: 700; word-break: break-all; }
+    .s-copy-btn {
+      width: 100%; border: none; border-radius: 12px; padding: 14px; font-size: 15px; font-weight: 700;
+      color: #fff; background: var(--w-accent); cursor: pointer; font-family: inherit; margin-bottom: 14px;
+    }
+    .s-cash-note { font-size: 13.5px; color: var(--w-ink); line-height: 1.6; background: var(--w-card-raised); border: 1px solid var(--w-line); border-radius: 12px; padding: 16px; margin-bottom: 14px; }
+    .s-change-method { display: block; text-align: center; background: none; border: none; color: var(--w-ink-soft); font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; width: 100%; padding: 8px; }
+
+    .s-card-loading { text-align: center; padding: 30px 0; color: var(--w-ink-soft); font-size: 13.5px; }
+    .s-pay-btn {
+      display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; border: none;
+      background: var(--w-accent); color: #fff; font-weight: 700; font-size: 15.5px;
+      padding: 16px; border-radius: 14px; box-sizing: border-box; margin-top: 16px; cursor: pointer; font-family: inherit;
+      box-shadow: 0 8px 22px rgba(5,107,254,0.32);
+    }
+    .s-pay-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+    .s-card-error { color: var(--w-danger); font-size: 13px; margin-top: 10px; display: none; }
+    .s-card-success { display: none; text-align: center; padding: 22px 0; }
+    .s-card-success-icon {
+      width: 52px; height: 52px; border-radius: 50%; margin: 0 auto 14px; background: var(--w-ok-wash); color: var(--w-ok);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .s-card-success-title { font-size: 15.5px; font-weight: 700; }
+    .s-card-success-sub { font-size: 13px; color: var(--w-ink-soft); margin-top: 4px; }
+
+    .s-footer { text-align: center; font-size: 11px; color: var(--w-ink-soft); margin-top: 30px; }
+  </style>
+</head>
+<body data-no-pull-refresh>
+  <div class="w-shell">
+    <div class="s-header">
+      <button type="button" class="w-btn-icon" aria-label="Back" onclick="history.back()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <div class="s-header-text">
+        <div class="s-merchant"><%= receipt.merchantName %></div>
+        <div class="s-date-row">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>
+          <%= receipt.purchaseDate ? receipt.purchaseDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }) : 'Date not recorded' %>
+        </div>
+      </div>
+      <button type="button" class="s-photo-btn" aria-label="View receipt photo"
+              onclick="openImageViewer('/split/<%= token %>/image', '<%= receipt.merchantName.replace(/'/g, "\\'") %>')">
+        <img src="/split/<%= token %>/image" alt="Receipt photo" />
+        <span class="s-photo-btn-label">View</span>
+      </button>
+    </div>
+
+    <% if (!unclaimedItems.length) { %>
+      <div class="s-items-card" style="padding: 20px 16px; text-align:center; color: var(--w-ink-soft); font-size: 13.5px;">
+        Everything on this receipt has already been claimed.
+      </div>
+    <% } else { %>
+      <div class="s-items-card" id="items-card">
+        <% unclaimedItems.forEach(function (it, i) { %>
+          <div class="s-item-row" data-index="<%= i %>" data-description="<%= it.description.replace(/"/g, '&quot;') %>" data-amount="<%= it.amount %>">
+            <button type="button" class="s-item-checkbox" data-action="toggle">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 13l4 4L19 7"/></svg>
+            </button>
+            <div class="s-item-text">
+              <div class="s-item-name"><%= it.description %></div>
+              <div class="s-item-price"><%= receipt.currency || 'CA' %>$<%= (Math.round((it.amount + Number.EPSILON) * 100) / 100).toFixed(2) %></div>
+              <div class="s-item-covering">Covering: <%= receipt.currency || 'CA' %>$<%= (Math.round((it.amount + Number.EPSILON) * 100) / 100).toFixed(2) %></div>
+            </div>
+          </div>
+        <% }); %>
+      </div>
+
+      <div class="s-note" id="proportional-note">
+        Your total includes a proportional share of tax based on your selected items.
+      </div>
+
+      <div class="s-totals" id="totals-block">
+        <div class="s-total-row"><span>Subtotal</span><span id="sel-subtotal"><%= receipt.currency || 'CA' %>$0.00</span></div>
+        <div class="s-total-row"><span>Tax</span><span id="sel-tax"><%= receipt.currency || 'CA' %>$0.00</span></div>
+        <div class="s-total-row grand"><span>Total</span><span id="sel-total"><%= receipt.currency || 'CA' %>$0.00</span></div>
+      </div>
+
+      <div class="s-pay-section" id="pay-section">
+        <div id="method-list-panel">
+          <div class="s-pay-title">Pay Your Way</div>
+          <div class="s-pay-sub">Choose how you want to pay <%= hostName %>. ReceipTap will show the exact amount and where to send it.</div>
+          <div class="s-method-list">
+            <% if (cardPaymentsEnabled) { %>
+              <button type="button" class="s-method-row" data-method="card">
+                <div><div class="s-method-name">Card, Apple Pay, or Google Pay</div><div class="s-method-hint">Pay right now</div></div>
+                <span class="s-method-radio"></span>
+              </button>
+            <% } %>
+            <% if (paypalMeHandle) { %>
+              <button type="button" class="s-method-row" data-method="paypal">
+                <div><div class="s-method-name">PayPal</div><div class="s-method-hint">Choose this method</div></div>
+                <span class="s-method-radio"></span>
+              </button>
+            <% } %>
+            <% if (interacContact) { %>
+              <button type="button" class="s-method-row" data-method="interac">
+                <div><div class="s-method-name">Interac e-Transfer</div><div class="s-method-hint">Choose this method</div></div>
+                <span class="s-method-radio"></span>
+              </button>
+            <% } %>
+            <button type="button" class="s-method-row" data-method="cash">
+              <div><div class="s-method-name">Cash or other</div><div class="s-method-hint">Choose this method</div></div>
+              <span class="s-method-radio"></span>
+            </button>
+          </div>
+        </div>
+
+        <% if (cardPaymentsEnabled) { %>
+          <div class="s-detail-panel" id="detail-card">
+            <div class="s-detail-amount" id="card-amount"><%= receipt.currency || 'CA' %>$0.00</div>
+            <div class="s-detail-sub">Send to <%= hostName %></div>
+            <div id="card-loading" class="s-card-loading">Loading payment form&hellip;</div>
+            <div id="card-form-wrap" style="display:none;">
+              <div id="payment-element"></div>
+              <div class="s-card-error" id="card-error"></div>
+              <button type="button" class="s-pay-btn" id="card-pay-btn">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="3"/></svg>
+                <span id="card-pay-btn-label">Pay now</span>
+              </button>
+            </div>
+            <div class="s-card-success" id="card-success">
+              <div class="s-card-success-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 13l4 4L19 7"/></svg>
+              </div>
+              <div class="s-card-success-title">Payment sent</div>
+              <div class="s-card-success-sub"><%= hostName %> will see it shortly.</div>
+            </div>
+            <button type="button" class="s-change-method" id="card-change-method">Change method</button>
+          </div>
+        <% } %>
+
+        <% if (paypalMeHandle) { %>
+          <div class="s-detail-panel" id="detail-paypal">
+            <div class="s-detail-amount" id="paypal-amount"><%= receipt.currency || 'CA' %>$0.00</div>
+            <div class="s-detail-sub">Send to <%= hostName %></div>
+            <a href="#" target="_blank" rel="noopener" class="s-open-app-btn" id="paypal-open-btn">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M7.5 21H4.8a.6.6 0 0 1-.6-.7L6.8 3.7A1 1 0 0 1 7.8 3h6.3c2.6 0 4.4 1.5 4 4-.5 3.4-2.7 5-6 5H9.8l-1 4.7c-.1.4-.4.7-.8.7l-.5 3.6Z"/></svg>
+              Open PayPal to Pay
+            </a>
+            <div class="s-detail-card">
+              <div class="s-detail-card-label">PayPal.me</div>
+              <div class="s-detail-card-value">paypal.me/<%= paypalMeHandle %></div>
+            </div>
+            <button type="button" class="s-copy-btn" data-copy="paypal.me/<%= paypalMeHandle %>">Copy PayPal details</button>
+            <button type="button" class="s-change-method">Change method</button>
+          </div>
+        <% } %>
+
+        <% if (interacContact) { %>
+          <div class="s-detail-panel" id="detail-interac">
+            <div class="s-detail-amount" id="interac-amount"><%= receipt.currency || 'CA' %>$0.00</div>
+            <div class="s-detail-sub">Send to <%= hostName %></div>
+            <div class="s-detail-card">
+              <div class="s-detail-card-label">Interac e-Transfer details</div>
+              <div class="s-detail-card-value"><%= interacContact %></div>
+            </div>
+            <button type="button" class="s-copy-btn" data-copy="<%= interacContact %>">Copy Interac e-Transfer details</button>
+            <div class="s-cash-note">Open your own banking app to send an Interac e-Transfer &mdash; ReceipTap can't open it for you.</div>
+            <button type="button" class="s-change-method">Change method</button>
+          </div>
+        <% } %>
+
+        <div class="s-detail-panel" id="detail-cash">
+          <div class="s-detail-amount" id="cash-amount"><%= receipt.currency || 'CA' %>$0.00</div>
+          <div class="s-detail-sub">Send to <%= hostName %></div>
+          <div class="s-cash-note">Let <%= hostName %> know you'll settle up in cash or another way. They'll mark it received once they've got it.</div>
+          <button type="button" class="s-change-method">Change method</button>
+        </div>
+      </div>
+    <% } %>
+
+    <div class="s-footer">Shared via ReceipTap &middot; no account needed</div>
+  </div>
+
+  <%- include('partials/image-viewer') %>
+
+  <% if (cardPaymentsEnabled) { %>
+    <script src="https://js.stripe.com/v3/"></script>
+  <% } %>
+
+  <script>
+    const currencyPrefix = <%- JSON.stringify(receipt.currency || 'CA') %> + '$';
+    const unclaimedSubtotalDollars = <%- JSON.stringify(unclaimedSubtotalDollars) %>;
+    const unclaimedTaxDollars = <%- JSON.stringify(unclaimedTaxDollars) %>;
+
+    function money(n) { return currencyPrefix + (Math.round((n + Number.EPSILON) * 100) / 100).toFixed(2); }
+
+    const itemRows = Array.from(document.querySelectorAll('.s-item-row'));
+    const itemsCard = document.getElementById('items-card');
+
+    function recompute() {
+      const checked = itemRows.filter((row) => row.querySelector('.s-item-checkbox').classList.contains('checked'));
+      const selectedSubtotal = checked.reduce((sum, row) => sum + Number(row.dataset.amount), 0);
+      const share = unclaimedSubtotalDollars > 0 ? selectedSubtotal / unclaimedSubtotalDollars : 0;
+      const selectedTax = unclaimedTaxDollars * share;
+      const total = selectedSubtotal + selectedTax;
+
+      const anySelected = checked.length > 0;
+      document.getElementById('proportional-note').classList.toggle('open', anySelected);
+      document.getElementById('totals-block').classList.toggle('open', anySelected);
+      document.getElementById('pay-section').classList.toggle('open', anySelected);
+
+      document.getElementById('sel-subtotal').textContent = money(selectedSubtotal);
+      document.getElementById('sel-tax').textContent = money(selectedTax);
+      document.getElementById('sel-total').textContent = money(total);
+
+      const cardAmountEl = document.getElementById('card-amount');
+      if (cardAmountEl) cardAmountEl.textContent = money(total);
+      const paypalAmountEl = document.getElementById('paypal-amount');
+      if (paypalAmountEl) paypalAmountEl.textContent = money(total);
+      const interacAmountEl = document.getElementById('interac-amount');
+      if (interacAmountEl) interacAmountEl.textContent = money(total);
+      const cashAmountEl = document.getElementById('cash-amount');
+      if (cashAmountEl) cashAmountEl.textContent = money(total);
+
+      const paypalOpenBtn = document.getElementById('paypal-open-btn');
+      if (paypalOpenBtn) {
+        const handle = <%- JSON.stringify(paypalMeHandle || '') %>;
+        const currency = <%- JSON.stringify(receipt.currency || 'CAD') %>;
+        paypalOpenBtn.href = 'https://paypal.me/' + handle + '/' + total.toFixed(2) + currency;
+      }
+    }
+
+    if (itemsCard) {
+      itemsCard.addEventListener('click', (e) => {
+        const row = e.target.closest('.s-item-row');
+        if (!row) return;
+        row.querySelector('.s-item-checkbox').classList.toggle('checked');
+        row.classList.toggle('checked');
+        recompute();
+      });
+    }
+
+    const methodListPanel = document.getElementById('method-list-panel');
+    const detailPanels = document.querySelectorAll('.s-detail-panel');
+
+    document.querySelectorAll('.s-method-row').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        methodListPanel.style.display = 'none';
+        detailPanels.forEach((p) => p.classList.remove('open'));
+        const panel = document.getElementById('detail-' + btn.dataset.method);
+        if (panel) panel.classList.add('open');
+        if (btn.dataset.method === 'card') initCardPayment();
+      });
+    });
+
+    // --- Card / Apple Pay / Google Pay, via Stripe ---------------------
+    // Real money, so this is the one payment method whose result the
+    // server records automatically: a successful confirmPayment() here
+    // just tells the guest it worked, but the payment_intent.succeeded
+    // webhook (services/stripeService.js) is what actually creates the
+    // SplitPayment row and marks these items paid on the host's side.
+    const cardPaymentsEnabled = <%- JSON.stringify(Boolean(cardPaymentsEnabled)) %>;
+    let stripe = null;
+    let cardElement = null;
+    let cardIntentReady = false;
+
+    async function initCardPayment() {
+      const loadingEl = document.getElementById('card-loading');
+      const formWrap = document.getElementById('card-form-wrap');
+      const errorEl = document.getElementById('card-error');
+      const payBtn = document.getElementById('card-pay-btn');
+
+      formWrap.style.display = 'none';
+      document.getElementById('card-success').style.display = 'none';
+      loadingEl.style.display = '';
+      errorEl.style.display = 'none';
+      payBtn.style.display = '';
+      payBtn.disabled = false;
+      document.getElementById('card-pay-btn-label').textContent = 'Pay now';
+      cardIntentReady = false;
+
+      const checked = itemRows.filter((row) => row.querySelector('.s-item-checkbox').classList.contains('checked'));
+      const itemDescriptions = checked.map((row) => row.dataset.description);
+
+      try {
+        const res = await fetch(<%- JSON.stringify(`/split/${token}/pay-intent`) %>, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ itemDescriptions }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Could not start payment.');
+
+        if (!stripe) stripe = Stripe(<%- JSON.stringify(stripePublishableKey) %>);
+        const elements = stripe.elements({ clientSecret: data.clientSecret, appearance: { theme: 'night' } });
+        cardElement = elements;
+
+        const paymentElementContainer = document.getElementById('payment-element');
+        paymentElementContainer.innerHTML = '';
+        const paymentElement = elements.create('payment');
+        paymentElement.mount('#payment-element');
+
+        payBtn.onclick = async () => {
+          payBtn.disabled = true;
+          document.getElementById('card-pay-btn-label').textContent = 'Paying…';
+          errorEl.style.display = 'none';
+
+          const { error } = await stripe.confirmPayment({
+            elements,
+            confirmParams: { return_url: window.location.href },
+            redirect: 'if_required',
+          });
+
+          if (error) {
+            errorEl.textContent = error.message || 'Payment failed. Please try again.';
+            errorEl.style.display = 'block';
+            payBtn.disabled = false;
+            document.getElementById('card-pay-btn-label').textContent = 'Pay now';
+            return;
+          }
+
+          formWrap.style.display = 'none';
+          document.getElementById('card-success').style.display = 'block';
+        };
+
+        loadingEl.style.display = 'none';
+        formWrap.style.display = '';
+        cardIntentReady = true;
+      } catch (err) {
+        loadingEl.style.display = 'none';
+        errorEl.textContent = err.message || 'Could not start payment.';
+        errorEl.style.display = 'block';
+        formWrap.style.display = '';
+        document.getElementById('payment-element').innerHTML = '';
+        document.getElementById('card-pay-btn').style.display = 'none';
+      }
+    }
+
+    // A redirect-based payment method (rare for card/Apple Pay/Google Pay,
+    // but Stripe requires handling it defensively) lands back here with
+    // these in the URL instead of confirmPayment() resolving in-page --
+    // show the success state directly, without fetching a fresh
+    // PaymentIntent (that would just start a second, unrelated payment).
+    if (cardPaymentsEnabled) {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('redirect_status') === 'succeeded' && params.get('payment_intent_client_secret')) {
+        document.getElementById('pay-section').classList.add('open');
+        methodListPanel.style.display = 'none';
+        detailPanels.forEach((p) => p.classList.remove('open'));
+        const panel = document.getElementById('detail-card');
+        if (panel) {
+          panel.classList.add('open');
+          document.getElementById('card-loading').style.display = 'none';
+          document.getElementById('card-form-wrap').style.display = 'none';
+          document.getElementById('card-success').style.display = 'block';
+        }
+      }
+    }
+
+    document.querySelectorAll('.s-change-method').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        detailPanels.forEach((p) => p.classList.remove('open'));
+        methodListPanel.style.display = '';
+      });
+    });
+
+    document.querySelectorAll('.s-copy-btn').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText(btn.dataset.copy);
+          const original = btn.textContent;
+          btn.textContent = 'Copied!';
+          setTimeout(() => { btn.textContent = original; }, 1600);
+        } catch (err) { /* clipboard unavailable */ }
+      });
+    });
+
+    recompute();
+  </script>
+</body>
+</html>

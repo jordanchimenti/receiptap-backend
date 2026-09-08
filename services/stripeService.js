@@ -325,6 +325,71 @@ async function payAffiliateCommission(stripeConnectAccountId, amountCents, commi
   });
 }
 
+// --- Split the Bill card payments (Stripe Connect) --------------------------
+// Same Express-account + hosted-onboarding pattern as the affiliate payout
+// functions above, but for a shopper collecting real card payments from
+// Split the Bill guests (routes/splitGroupShare.js). The money flow is
+// different, though: a guest's payment is a DESTINATION CHARGE (see
+// createSplitPaymentIntent) -- the PaymentIntent lives on ReceipTap's own
+// account so Stripe.js/Payment Element on the public guest page work
+// normally, but `transfer_data.destination` routes the full amount straight
+// to the shopper's connected account as part of the same charge. Unlike the
+// affiliate flow's separate payAffiliateCommission() transfer, ReceipTap's
+// own Stripe balance never holds this money even momentarily.
+
+/** Creates the Express account a shopper's Split the Bill card payments will
+ * route to. Only called once per shopper -- the id is saved and reused. */
+async function createShopperConnectAccount(customer) {
+  if (!stripe) throw new Error('Stripe is not configured yet (missing STRIPE_SECRET_KEY).');
+  return stripe.accounts.create({
+    type: 'express',
+    email: customer.email,
+    business_type: 'individual',
+    capabilities: { transfers: { requested: true } },
+  });
+}
+
+/** A one-time-use hosted link where the shopper enters their own bank/ID
+ * details directly with Stripe -- this app never sees or stores that data.
+ * Identical shape to createAffiliateOnboardingLink above; kept as its own
+ * function rather than shared so the two domains (affiliate payouts vs.
+ * shopper Split the Bill payments) can change independently. */
+async function createShopperOnboardingLink(stripeConnectAccountId, refreshUrl, returnUrl) {
+  if (!stripe) throw new Error('Stripe is not configured yet (missing STRIPE_SECRET_KEY).');
+  const link = await stripe.accountLinks.create({
+    account: stripeConnectAccountId,
+    refresh_url: refreshUrl,
+    return_url: returnUrl,
+    type: 'account_onboarding',
+  });
+  return link.url;
+}
+
+/** Same payoutsEnabled/detailsSubmitted check as getAffiliateConnectStatus --
+ * see that function's comment for why payoutsEnabled is the real signal. */
+async function getShopperConnectStatus(stripeConnectAccountId) {
+  if (!stripe) throw new Error('Stripe is not configured yet (missing STRIPE_SECRET_KEY).');
+  const account = await stripe.accounts.retrieve(stripeConnectAccountId);
+  return { payoutsEnabled: Boolean(account.payouts_enabled), detailsSubmitted: Boolean(account.details_submitted) };
+}
+
+/** Creates the PaymentIntent a guest's card/Apple Pay/Google Pay payment
+ * confirms against on the public guest page. amountCents/currency must
+ * always be computed server-side from the group's real item snapshot, never
+ * trusted from the client -- same rule the manual cash-payment route
+ * follows. metadata carries what the payment_intent.succeeded webhook
+ * handler below needs to record it as a real SplitPayment once it succeeds. */
+async function createSplitPaymentIntent({ amountCents, currency, destinationAccountId, metadata }) {
+  if (!stripe) throw new Error('Stripe is not configured yet (missing STRIPE_SECRET_KEY).');
+  return stripe.paymentIntents.create({
+    amount: amountCents,
+    currency: currency.toLowerCase(),
+    transfer_data: { destination: destinationAccountId },
+    automatic_payment_methods: { enabled: true },
+    metadata,
+  });
+}
+
 /** Attempts a real transfer for one commission and records the outcome.
  * Safe to call speculatively -- a Stripe error (e.g. insufficient platform
  * balance) just leaves the commission FAILED for manual follow-up rather
@@ -566,9 +631,66 @@ async function handleWebhookEvent(event) {
       await plantTreeForRenewal(event.data.object);
       break;
     }
+    case 'payment_intent.succeeded': {
+      await recordSplitPaymentFromIntent(event.data.object);
+      break;
+    }
     default:
       // Not every event type needs handling — safe to ignore the rest.
       break;
+  }
+}
+
+/** Records a guest's successful Split the Bill card payment as a real
+ * SplitPayment and flips its covered items to paid -- the same effect as
+ * the host manually using Record a cash payment, triggered here because a
+ * card payment has no host-side manual step. Silently does nothing for a
+ * PaymentIntent that isn't a Split the Bill payment (no splitGroupId in its
+ * metadata) -- this app's Stripe account also has ordinary subscription
+ * PaymentIntents flowing through the same webhook.
+ *
+ * Idempotent: Stripe can redeliver this event, and SplitPayment.
+ * stripePaymentIntentId's unique constraint turns a second attempt for the
+ * same PaymentIntent into a harmless no-op, not a duplicate payment. */
+async function recordSplitPaymentFromIntent(intent) {
+  const groupId = intent.metadata && intent.metadata.splitGroupId;
+  if (!groupId) return;
+
+  const existing = await prisma.splitPayment.findUnique({ where: { stripePaymentIntentId: intent.id } });
+  if (existing) return;
+
+  const group = await prisma.splitGroup.findUnique({ where: { id: groupId } });
+  if (!group) return;
+
+  let selectedDescriptions = [];
+  try {
+    const parsed = JSON.parse((intent.metadata && intent.metadata.itemDescriptions) || '[]');
+    if (Array.isArray(parsed)) selectedDescriptions = parsed;
+  } catch {
+    selectedDescriptions = [];
+  }
+  const selectedSet = new Set(selectedDescriptions);
+  const items = Array.isArray(group.items) ? group.items : [];
+  const updatedItems = items.map((it) => (selectedSet.has(it.description) ? { ...it, paid: true } : it));
+
+  try {
+    await prisma.$transaction([
+      prisma.splitPayment.create({
+        data: {
+          groupId: group.id,
+          guestId: null,
+          amountCents: intent.amount,
+          itemDescriptions: selectedDescriptions,
+          method: 'card',
+          stripePaymentIntentId: intent.id,
+        },
+      }),
+      prisma.splitGroup.update({ where: { id: group.id }, data: { items: updatedItems } }),
+    ]);
+  } catch (err) {
+    // Unique constraint race (two near-simultaneous webhook deliveries) --
+    // harmless, the first delivery already recorded this payment.
+    if (err.code !== 'P2002') throw err;
   }
 }
 
@@ -639,4 +761,8 @@ module.exports = {
   runScheduledPayouts,
   notifyBillingProblemIfNewlyBad,
   isNewBillingProblem,
+  createShopperConnectAccount,
+  createShopperOnboardingLink,
+  getShopperConnectStatus,
+  createSplitPaymentIntent,
 };

@@ -104,16 +104,30 @@ router.post('/signup', async (req, res) => {
     await recordLegalAcceptances(merchant.id, req);
 
     if (isDemoAccount) {
-      const verifyUrl = `${req.protocol}://${req.get('host')}/verify-email/${emailVerificationToken}`;
-      await sendVerificationEmail({ email: merchant.email, name: merchant.ownerName || merchant.businessName }, verifyUrl);
+      // Best-effort, same reasoning as every other transactional email in
+      // this app (see the RESEND_API_KEY comment in .env.example): a
+      // rejected/failed send must never take the whole signup down. The
+      // merchant row above is already committed by this point -- letting
+      // this throw would leave that account created but show the merchant a
+      // scary "something went wrong" error, with no way to tell their
+      // account actually exists. They can still resend the link later from
+      // the receipt-design page's "verify your email" banner.
+      try {
+        const verifyUrl = `${req.protocol}://${req.get('host')}/verify-email/${emailVerificationToken}`;
+        await sendVerificationEmail({ email: merchant.email, name: merchant.ownerName || merchant.businessName }, verifyUrl);
+      } catch (err) {
+        console.error('[signup] verification email failed to send:', err.message);
+      }
     }
 
     req.session.merchantId = merchant.id;
-    // Demo accounts always land on receipt design -- it's the only page
-    // they're allowed on (see middleware/demoAccountGate.js) -- rather than
-    // trusting `next`, which now defaults to the wallet's Business section
-    // instead of the real dashboard (same default as GET/POST /login).
-    res.redirect(isDemoAccount ? '/dashboard/settings/receipt' : safeNextPath(next, '/account/business'));
+    // Demo accounts always land on receipt design -- the wallet's dark-theme
+    // version of it, not the legacy navy-rail one (see
+    // middleware/demoAccountGate.js for the full set of pages a demo account
+    // may reach) -- rather than trusting `next`, which now defaults to the
+    // wallet's Business section instead of the real dashboard (same default
+    // as GET/POST /login).
+    res.redirect(isDemoAccount ? '/account/business/receipt-design' : safeNextPath(next, '/account/business'));
   } catch (err) {
     console.error('Signup failed:', err);
     res.render('signup', { error: 'Something went wrong on our end — please try again in a moment.', ...demoFields });
@@ -224,11 +238,11 @@ router.post('/merchant/google', async (req, res) => {
 
     req.session.merchantId = merchant.id;
     // Same reasoning as the plain signup form -- a demo account always lands
-    // on receipt design, the only page it's allowed on. Uses the merchant's
+    // on the wallet's dark-theme receipt design page. Uses the merchant's
     // actual isDemoAccount (not just this request's `demo` flag), so an
     // existing demo merchant logging back in still lands correctly even if
     // `demo` wasn't part of this particular request.
-    res.json({ success: true, redirect: merchant.isDemoAccount ? '/dashboard/settings/receipt' : safeNextPath(next, '/account/business') });
+    res.json({ success: true, redirect: merchant.isDemoAccount ? '/account/business/receipt-design' : safeNextPath(next, '/account/business') });
   } catch (err) {
     console.error('Google sign-in failed:', err);
     res.status(500).json({ error: 'Something went wrong on our end — please try again in a moment.' });
@@ -365,7 +379,7 @@ router.post('/merchant/apple/callback', async (req, res) => {
     });
 
     req.session.merchantId = merchant.id;
-    res.redirect(merchant.isDemoAccount ? '/dashboard/settings/receipt' : safeNextPath(parsedState.next, '/account/business'));
+    res.redirect(merchant.isDemoAccount ? '/account/business/receipt-design' : safeNextPath(parsedState.next, '/account/business'));
   } catch (err) {
     renderOAuthError(req, res, parsedState, err);
   }
@@ -411,7 +425,7 @@ router.get('/merchant/microsoft/callback', async (req, res) => {
     });
 
     req.session.merchantId = merchant.id;
-    res.redirect(merchant.isDemoAccount ? '/dashboard/settings/receipt' : safeNextPath(parsedState.next, '/account/business'));
+    res.redirect(merchant.isDemoAccount ? '/account/business/receipt-design' : safeNextPath(parsedState.next, '/account/business'));
   } catch (err) {
     renderOAuthError(req, res, parsedState, err);
   }

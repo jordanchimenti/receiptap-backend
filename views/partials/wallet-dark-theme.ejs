@@ -387,20 +387,27 @@
     text-decoration: none;
   }
   .w-tab-fab::before {
-    content: ''; position: absolute; inset: -60px; border-radius: 50%; z-index: -1;
-    /* A 3-stop fade (however far out it reaches) still reads as a lit disc
-       with a rim, because opacity is dropping at close to a constant rate
-       right up to the edge where it suddenly stops -- the eye reads that
-       remaining rate-of-change as a boundary. Approximating a smooth
-       (roughly Gaussian) falloff with several stops that decelerate near
-       the edge removes the rim; the glow thins out instead of switching off. */
+    /* -60px (a wider prior attempt at fixing the rim below) made the glow
+       bleed noticeably far up into the page above the bar -- since the
+       button sits low on the screen, that upper half was fully visible
+       while the lower half stayed mostly hidden behind the opaque bar
+       either side of the notch, so the whole thing read as one big
+       lopsided, "stretched" shape rather than a contained glow. Back to
+       the original -26px footprint; only the gradient below changed. */
+    content: ''; position: absolute; inset: -26px; border-radius: 50%; z-index: -1;
+    /* A 3-stop fade still reads as a lit disc with a rim, because opacity
+       drops at close to a constant rate right up to the edge where it
+       suddenly stops -- the eye reads that remaining rate-of-change as a
+       boundary. Approximating a smooth (roughly Gaussian) falloff with
+       several stops that decelerate near the edge removes the rim; the
+       glow thins out instead of switching off, within the same footprint. */
     background: radial-gradient(circle,
-      rgba(5,107,254,0.42) 0%,
-      rgba(5,107,254,0.28) 18%,
-      rgba(5,107,254,0.16) 34%,
-      rgba(5,107,254,0.08) 50%,
-      rgba(5,107,254,0.035) 66%,
-      rgba(5,107,254,0.012) 82%,
+      rgba(5,107,254,0.55) 0%,
+      rgba(5,107,254,0.40) 22%,
+      rgba(5,107,254,0.25) 42%,
+      rgba(5,107,254,0.12) 60%,
+      rgba(5,107,254,0.05) 76%,
+      rgba(5,107,254,0.015) 90%,
       transparent 100%);
   }
   .w-tab-fab svg { width: 26px; height: 26px; }

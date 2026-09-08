@@ -151,16 +151,24 @@
       padding: 24px;
     }
     .processing-overlay.open { display: flex; }
+    /* The logo file's wordmark is dark navy on a transparent background --
+       readable on the light "paper" card every other page sets behind it
+       (.logo-chip, e.g. account-login.ejs), invisible against this overlay's
+       near-black background otherwise. This page's own --paper-colored
+       .tips-card already reaches for the same token further down, so this
+       stays one card style, not two. */
+    .processing-logo-chip {
+      background: var(--paper); border-radius: 14px; padding: 14px 22px;
+      display: flex; animation: processing-breathe 2.4s ease-in-out infinite;
+    }
     /* The logo file is a wide wordmark (900x235), not a square icon -- sized
        by width with height auto so it isn't forced into a square crop. */
     .processing-logo {
-      width: 168px; height: auto; display: block;
-      filter: drop-shadow(0 4px 22px rgba(5,107,254,0.35));
-      animation: processing-breathe 2.4s ease-in-out infinite;
+      width: 148px; height: auto; display: block;
     }
     @keyframes processing-breathe {
-      0%, 100% { filter: drop-shadow(0 4px 18px rgba(5,107,254,0.25)); }
-      50% { filter: drop-shadow(0 4px 26px rgba(5,107,254,0.55)); }
+      0%, 100% { box-shadow: 0 4px 18px rgba(5,107,254,0.25); }
+      50% { box-shadow: 0 4px 26px rgba(5,107,254,0.55); }
     }
     .processing-heading { display: flex; flex-direction: column; gap: 6px; }
     .processing-title { font-size: 18px; font-weight: 700; color: var(--w-ink); text-align: center; }
@@ -265,7 +273,7 @@
 
   <!-- Processing overlay -->
   <div class="processing-overlay" id="processing-overlay">
-    <img src="/images/receiptap-logo.png" class="processing-logo" alt="ReceipTap" />
+    <div class="processing-logo-chip"><img src="/images/receiptap-logo.png" class="processing-logo" alt="ReceipTap" /></div>
     <div class="processing-heading">
       <div class="processing-title" id="processing-title">Processing receipt</div>
       <div class="processing-sub" id="processing-sub">Hang tight, this only takes a moment.</div>

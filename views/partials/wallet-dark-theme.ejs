@@ -330,7 +330,7 @@
     justify-content: space-between; padding: 10px 0 22px; z-index: 30;
   }
   .w-tabbar::before {
-    content: ''; position: absolute; inset: 0; z-index: -1;
+    content: ''; position: absolute; inset: 0; z-index: -1; border-top-left-radius: 18px; border-top-right-radius: 18px;
     background: rgba(10,10,10,0.92); backdrop-filter: blur(12px); border-top: 1px solid var(--w-line);
     /* A plain circular mask meets the flat edge at a hard 90-degree corner --
        any circle centred on (or above) the edge does, by simple geometry, no
@@ -342,13 +342,19 @@
        scratchpad/gen-notch.js from the session that authored this; the
        constants there (button radius 29, gap 6, fillet 13) are the ones to
        change, not these coordinates directly.
+       An earlier version of this path swept the main arc through the
+       BOTTOM of its circle instead of the top (a wraparound-angle bug),
+       which put the fillets' carefully-matched tangent against the wrong
+       side of the arc -- the two met at roughly opposite directions
+       instead of a continuous one, which is exactly what a sharp corner
+       is. Fixed by sweeping the short way, through the peak, directly.
        mask-position's -40px shifts the image up so the path's own flat
        baseline (drawn 40px into its viewBox, to leave the bump room to rise
        without clipping against the viewBox's own top edge) lands exactly on
        the bar's real top edge -- without it the whole top of the bar,
        border-line included, is hidden, not just the notch. */
-    -webkit-mask-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%202400%20140%27%3E%3Cpath%20d%3D%27M%200%2C40%20L%201153.8%2C40.0%20L%201153.8%2C40.0%20L%201155.5%2C39.9%20L%201157.1%2C39.6%20L%201158.7%2C39.0%20L%201160.2%2C38.3%20L%201161.6%2C37.4%20L%201162.9%2C36.3%20L%201164.0%2C35.0%20L%201165.0%2C33.6%20L%201165.7%2C32.1%20L%201166.3%2C30.5%20L%201166.3%2C30.5%20L%201165.3%2C35.8%20L%201165.0%2C41.2%20L%201165.6%2C46.5%20L%201167.0%2C51.7%20L%201169.2%2C56.6%20L%201172.1%2C61.1%20L%201175.7%2C65.2%20L%201179.8%2C68.6%20L%201184.4%2C71.3%20L%201189.4%2C73.4%20L%201194.6%2C74.6%20L%201200.0%2C75.0%20L%201205.4%2C74.6%20L%201210.6%2C73.4%20L%201215.6%2C71.3%20L%201220.2%2C68.6%20L%201224.3%2C65.2%20L%201227.9%2C61.1%20L%201230.8%2C56.6%20L%201233.0%2C51.7%20L%201234.4%2C46.5%20L%201235.0%2C41.2%20L%201234.7%2C35.8%20L%201233.7%2C30.5%20L%201233.7%2C30.5%20L%201234.3%2C32.1%20L%201235.0%2C33.6%20L%201236.0%2C35.0%20L%201237.1%2C36.3%20L%201238.4%2C37.4%20L%201239.8%2C38.3%20L%201241.3%2C39.0%20L%201242.9%2C39.6%20L%201244.5%2C39.9%20L%201246.2%2C40.0%20L%202400%2C40%20L%202400%2C140%20L%200%2C140%20Z%27%20fill%3D%27%23fff%27%2F%3E%3C%2Fsvg%3E");
-    mask-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%202400%20140%27%3E%3Cpath%20d%3D%27M%200%2C40%20L%201153.8%2C40.0%20L%201153.8%2C40.0%20L%201155.5%2C39.9%20L%201157.1%2C39.6%20L%201158.7%2C39.0%20L%201160.2%2C38.3%20L%201161.6%2C37.4%20L%201162.9%2C36.3%20L%201164.0%2C35.0%20L%201165.0%2C33.6%20L%201165.7%2C32.1%20L%201166.3%2C30.5%20L%201166.3%2C30.5%20L%201165.3%2C35.8%20L%201165.0%2C41.2%20L%201165.6%2C46.5%20L%201167.0%2C51.7%20L%201169.2%2C56.6%20L%201172.1%2C61.1%20L%201175.7%2C65.2%20L%201179.8%2C68.6%20L%201184.4%2C71.3%20L%201189.4%2C73.4%20L%201194.6%2C74.6%20L%201200.0%2C75.0%20L%201205.4%2C74.6%20L%201210.6%2C73.4%20L%201215.6%2C71.3%20L%201220.2%2C68.6%20L%201224.3%2C65.2%20L%201227.9%2C61.1%20L%201230.8%2C56.6%20L%201233.0%2C51.7%20L%201234.4%2C46.5%20L%201235.0%2C41.2%20L%201234.7%2C35.8%20L%201233.7%2C30.5%20L%201233.7%2C30.5%20L%201234.3%2C32.1%20L%201235.0%2C33.6%20L%201236.0%2C35.0%20L%201237.1%2C36.3%20L%201238.4%2C37.4%20L%201239.8%2C38.3%20L%201241.3%2C39.0%20L%201242.9%2C39.6%20L%201244.5%2C39.9%20L%201246.2%2C40.0%20L%202400%2C40%20L%202400%2C140%20L%200%2C140%20Z%27%20fill%3D%27%23fff%27%2F%3E%3C%2Fsvg%3E");
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%202400%20140%27%3E%3Cpath%20d%3D%27M%200%2C40%20L%201153.8%2C40.0%20L%201153.8%2C40.0%20L%201155.5%2C39.9%20L%201157.1%2C39.6%20L%201158.7%2C39.0%20L%201160.2%2C38.3%20L%201161.6%2C37.4%20L%201162.9%2C36.3%20L%201164.0%2C35.0%20L%201165.0%2C33.6%20L%201165.7%2C32.1%20L%201166.3%2C30.5%20L%201166.3%2C30.5%20L%201167.5%2C26.9%20L%201169.1%2C23.5%20L%201171.1%2C20.3%20L%201173.4%2C17.3%20L%201176.0%2C14.5%20L%201178.9%2C12.1%20L%201182.0%2C10.0%20L%201185.3%2C8.2%20L%201188.9%2C6.8%20L%201192.5%2C5.8%20L%201196.2%2C5.2%20L%201200.0%2C5.0%20L%201203.8%2C5.2%20L%201207.5%2C5.8%20L%201211.1%2C6.8%20L%201214.7%2C8.2%20L%201218.0%2C10.0%20L%201221.1%2C12.1%20L%201224.0%2C14.5%20L%201226.6%2C17.3%20L%201228.9%2C20.3%20L%201230.9%2C23.5%20L%201232.5%2C26.9%20L%201233.7%2C30.5%20L%201233.7%2C30.5%20L%201234.3%2C32.1%20L%201235.0%2C33.6%20L%201236.0%2C35.0%20L%201237.1%2C36.3%20L%201238.4%2C37.4%20L%201239.8%2C38.3%20L%201241.3%2C39.0%20L%201242.9%2C39.6%20L%201244.5%2C39.9%20L%201246.2%2C40.0%20L%202400%2C40%20L%202400%2C140%20L%200%2C140%20Z%27%20fill%3D%27%23fff%27%2F%3E%3C%2Fsvg%3E");
+    mask-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%202400%20140%27%3E%3Cpath%20d%3D%27M%200%2C40%20L%201153.8%2C40.0%20L%201153.8%2C40.0%20L%201155.5%2C39.9%20L%201157.1%2C39.6%20L%201158.7%2C39.0%20L%201160.2%2C38.3%20L%201161.6%2C37.4%20L%201162.9%2C36.3%20L%201164.0%2C35.0%20L%201165.0%2C33.6%20L%201165.7%2C32.1%20L%201166.3%2C30.5%20L%201166.3%2C30.5%20L%201167.5%2C26.9%20L%201169.1%2C23.5%20L%201171.1%2C20.3%20L%201173.4%2C17.3%20L%201176.0%2C14.5%20L%201178.9%2C12.1%20L%201182.0%2C10.0%20L%201185.3%2C8.2%20L%201188.9%2C6.8%20L%201192.5%2C5.8%20L%201196.2%2C5.2%20L%201200.0%2C5.0%20L%201203.8%2C5.2%20L%201207.5%2C5.8%20L%201211.1%2C6.8%20L%201214.7%2C8.2%20L%201218.0%2C10.0%20L%201221.1%2C12.1%20L%201224.0%2C14.5%20L%201226.6%2C17.3%20L%201228.9%2C20.3%20L%201230.9%2C23.5%20L%201232.5%2C26.9%20L%201233.7%2C30.5%20L%201233.7%2C30.5%20L%201234.3%2C32.1%20L%201235.0%2C33.6%20L%201236.0%2C35.0%20L%201237.1%2C36.3%20L%201238.4%2C37.4%20L%201239.8%2C38.3%20L%201241.3%2C39.0%20L%201242.9%2C39.6%20L%201244.5%2C39.9%20L%201246.2%2C40.0%20L%202400%2C40%20L%202400%2C140%20L%200%2C140%20Z%27%20fill%3D%27%23fff%27%2F%3E%3C%2Fsvg%3E");
     -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
     -webkit-mask-position: center -40px; mask-position: center -40px;
     -webkit-mask-size: 2400px 140px; mask-size: 2400px 140px;
@@ -381,8 +387,21 @@
     text-decoration: none;
   }
   .w-tab-fab::before {
-    content: ''; position: absolute; inset: -26px; border-radius: 50%; z-index: -1;
-    background: radial-gradient(circle, rgba(5,107,254,0.55) 0%, rgba(5,107,254,0.28) 45%, transparent 75%);
+    content: ''; position: absolute; inset: -60px; border-radius: 50%; z-index: -1;
+    /* A 3-stop fade (however far out it reaches) still reads as a lit disc
+       with a rim, because opacity is dropping at close to a constant rate
+       right up to the edge where it suddenly stops -- the eye reads that
+       remaining rate-of-change as a boundary. Approximating a smooth
+       (roughly Gaussian) falloff with several stops that decelerate near
+       the edge removes the rim; the glow thins out instead of switching off. */
+    background: radial-gradient(circle,
+      rgba(5,107,254,0.42) 0%,
+      rgba(5,107,254,0.28) 18%,
+      rgba(5,107,254,0.16) 34%,
+      rgba(5,107,254,0.08) 50%,
+      rgba(5,107,254,0.035) 66%,
+      rgba(5,107,254,0.012) 82%,
+      transparent 100%);
   }
   .w-tab-fab svg { width: 26px; height: 26px; }
   /* Every tap that navigates costs a server round trip, so without this the

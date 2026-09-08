@@ -1794,6 +1794,15 @@ router.post('/account/receipts/scan/confirm', requireCustomerAuth, async (req, r
     console.error('[scan] receipt-saved notification failed:', err.message);
   }
 
+  // Split the Bill's Confirm Items screen posts here with intent=split --
+  // it still lands on the exact same real ScannedReceipt row as the normal
+  // flow, but continues into the split-method picker (Smart Scan) instead of
+  // going straight to the wallet, since there's more to choose before this
+  // receipt is done.
+  if (intent === 'split') {
+    return res.redirect(`/account/receipts/scanned/${saved.id}/split`);
+  }
+
   res.redirect('/account/receipts');
 });
 
@@ -1807,7 +1816,7 @@ router.post('/account/receipts/scan/confirm', requireCustomerAuth, async (req, r
 // open the picture. For a receipt someone is keeping in order to claim it
 // back, that is backwards.
 router.get('/account/receipts/scanned/:id', requireCustomerAuth, async (req, res) => {
-  const receipt = await prisma.scannedReceipt.findUnique({ where: { id: req.params.id } });
+  const receipt = await prisma.scannedReceipt.findUnique({ where: { id: req.params.id }, include: { splitGroup: true } });
 
   // Same answer whether it never existed or belongs to someone else -- this
   // must not become a way to probe for other people's receipt IDs.
@@ -1878,6 +1887,370 @@ router.get('/account/receipts/scanned/:id/image', requireCustomerAuth, async (re
     if (!res.headersSent) res.status(404).end();
   });
   stream.pipe(res);
+});
+
+// Split the Bill, continued: Smart Scan is the step-2 method picker shown
+// right after Confirm Items saves the receipt. Pick items / Split evenly /
+// Create group are step 3 -- each computes a real breakdown from the receipt
+// that was just saved (no invented numbers), and on submit creates the
+// receipt's one real SplitGroup (see the schema comment on that model for
+// the host-managed design -- no invite links, no guest login, no
+// guest-facing page).
+router.get('/account/receipts/scanned/:id/split', requireCustomerAuth, async (req, res) => {
+  const receipt = await prisma.scannedReceipt.findUnique({ where: { id: req.params.id } });
+  if (!receipt || receipt.customerId !== req.session.customerId) {
+    return res.redirect('/account/receipts');
+  }
+
+  res.render('receipt-split-method', {
+    receipt,
+    money: (cents) => (cents / 100).toFixed(2),
+  });
+});
+
+router.get('/account/receipts/scanned/:id/split/items', requireCustomerAuth, async (req, res) => {
+  const receipt = await prisma.scannedReceipt.findUnique({ where: { id: req.params.id } });
+  if (!receipt || receipt.customerId !== req.session.customerId) {
+    return res.redirect('/account/receipts');
+  }
+
+  res.render('receipt-split-items', {
+    receipt,
+    items: Array.isArray(receipt.lineItems) ? receipt.lineItems : [],
+    money: (cents) => (cents / 100).toFixed(2),
+  });
+});
+
+router.post('/account/receipts/scanned/:id/split/items', requireCustomerAuth, async (req, res) => {
+  const receipt = await prisma.scannedReceipt.findUnique({ where: { id: req.params.id }, include: { splitGroup: true } });
+  if (!receipt || receipt.customerId !== req.session.customerId) {
+    return res.redirect('/account/receipts');
+  }
+  if (receipt.splitGroup) return res.redirect(`/account/receipts/scanned/${receipt.id}/group`);
+
+  let claimedDescriptions = [];
+  try {
+    const parsed = JSON.parse(req.body.claimedDescriptions || '[]');
+    if (Array.isArray(parsed)) claimedDescriptions = parsed.filter((d) => typeof d === 'string').slice(0, 200);
+  } catch {
+    claimedDescriptions = [];
+  }
+
+  const guestAmountCents = parseMoneyToCents(req.body.guestAmount);
+  if (guestAmountCents === null) {
+    return res.redirect(`/account/receipts/scanned/${receipt.id}/split/items`);
+  }
+  // The items the host kept for themselves are already theirs -- not owed by
+  // anyone, so they're marked paid in the snapshot from the start and their
+  // share of the total is excluded from what the group needs to collect.
+  const hostShareCents = Math.max(0, receipt.total - guestAmountCents);
+
+  await createSplitGroup(receipt, req.session.customerId, { hostShareCents, paidDescriptions: claimedDescriptions });
+
+  res.redirect(`/account/receipts/scanned/${receipt.id}/group`);
+});
+
+router.get('/account/receipts/scanned/:id/split/even', requireCustomerAuth, async (req, res) => {
+  const receipt = await prisma.scannedReceipt.findUnique({ where: { id: req.params.id } });
+  if (!receipt || receipt.customerId !== req.session.customerId) {
+    return res.redirect('/account/receipts');
+  }
+
+  res.render('receipt-split-even', {
+    receipt,
+    money: (cents) => (cents / 100).toFixed(2),
+  });
+});
+
+router.post('/account/receipts/scanned/:id/split/even', requireCustomerAuth, async (req, res) => {
+  const receipt = await prisma.scannedReceipt.findUnique({ where: { id: req.params.id }, include: { splitGroup: true } });
+  if (!receipt || receipt.customerId !== req.session.customerId) {
+    return res.redirect('/account/receipts');
+  }
+  if (receipt.splitGroup) return res.redirect(`/account/receipts/scanned/${receipt.id}/group`);
+
+  const perPersonTotalCents = parseMoneyToCents(req.body.perPersonTotal);
+  if (perPersonTotalCents === null) {
+    return res.redirect(`/account/receipts/scanned/${receipt.id}/split/even`);
+  }
+  // The host's own one share isn't owed by anyone else.
+  const hostShareCents = Math.min(receipt.total, perPersonTotalCents);
+
+  await createSplitGroup(receipt, req.session.customerId, { hostShareCents });
+
+  res.redirect(`/account/receipts/scanned/${receipt.id}/group`);
+});
+
+router.get('/account/receipts/scanned/:id/split/group', requireCustomerAuth, async (req, res) => {
+  const receipt = await prisma.scannedReceipt.findUnique({ where: { id: req.params.id } });
+  if (!receipt || receipt.customerId !== req.session.customerId) {
+    return res.redirect('/account/receipts');
+  }
+
+  res.render('receipt-split-group', { receipt });
+});
+
+router.post('/account/receipts/scanned/:id/split/group', requireCustomerAuth, async (req, res) => {
+  const receipt = await prisma.scannedReceipt.findUnique({ where: { id: req.params.id }, include: { splitGroup: true } });
+  if (!receipt || receipt.customerId !== req.session.customerId) {
+    return res.redirect('/account/receipts');
+  }
+  if (receipt.splitGroup) return res.redirect(`/account/receipts/scanned/${receipt.id}/group`);
+
+  const groupName = (req.body.groupName || '').trim().slice(0, 200);
+  if (!groupName) {
+    return res.render('receipt-split-group', { receipt, error: 'Give the group a name.' });
+  }
+  const groupDescription = (req.body.groupDescription || '').trim().slice(0, 400);
+
+  // Nothing's been claimed yet -- the whole receipt is left to collect.
+  await createSplitGroup(receipt, req.session.customerId, { hostShareCents: 0, name: groupName, description: groupDescription });
+
+  res.redirect(`/account/receipts/scanned/${receipt.id}/group`);
+});
+
+// --- Split the Bill: the "Collecting" group, once created ---------------
+//
+// Fully host-managed: guests are names the host types in, a payment is the
+// host recording cash they were physically handed, and "amount owed" per
+// guest is computed here at request time (never stored) so it can't drift
+// out of sync with the guest list. See the SplitGroup schema comment.
+
+async function createSplitGroup(receipt, customerId, { hostShareCents, name = null, description = null, paidDescriptions = [] }) {
+  const paidSet = new Set(paidDescriptions);
+  const items = (Array.isArray(receipt.lineItems) ? receipt.lineItems : []).map((it) => ({
+    description: it.description || 'Item',
+    amount: Number(it.amount) || 0,
+    quantity: it.quantity || 1,
+    paid: paidSet.has(it.description),
+  }));
+
+  const customer = await prisma.customer.findUnique({ where: { id: customerId } });
+
+  return prisma.splitGroup.create({
+    data: {
+      scannedReceiptId: receipt.id,
+      customerId,
+      hostShareCents,
+      name,
+      description,
+      items,
+      guests: { create: [{ name: (customer && customer.name) || 'You', isHost: true }] },
+    },
+  });
+}
+
+// Centralizes the owed/paid math so the group list, member-detail and
+// receipt-in-group views can never disagree about a number. Nothing here is
+// stored -- it's all derived from the group's own hostShareCents/items and
+// its real SplitPayment rows every time this is called.
+function computeGroupFinancials(receipt, group) {
+  const totalToCollectCents = Math.max(0, receipt.total - group.hostShareCents);
+  const totalCollectedCents = group.payments.reduce((sum, p) => sum + p.amountCents, 0);
+  const leftToCollectCents = Math.max(0, totalToCollectCents - totalCollectedCents);
+
+  const nonHostGuests = group.guests.filter((g) => !g.isHost);
+  const perGuestOwedCents = nonHostGuests.length ? Math.round(totalToCollectCents / nonHostGuests.length) : 0;
+
+  const guestsWithAmounts = group.guests.map((g) => {
+    const paidCents = group.payments.filter((p) => p.guestId === g.id).reduce((sum, p) => sum + p.amountCents, 0);
+    const owedCents = g.isHost ? 0 : perGuestOwedCents;
+    return { ...g, owedCents, paidCents, paid: g.isHost || paidCents >= owedCents };
+  });
+
+  return { totalToCollectCents, totalCollectedCents, leftToCollectCents, perGuestOwedCents, guestsWithAmounts };
+}
+
+async function loadOwnedGroup(req) {
+  const receipt = await prisma.scannedReceipt.findUnique({
+    where: { id: req.params.id },
+    include: { splitGroup: { include: { guests: { orderBy: { createdAt: 'asc' } }, payments: true } } },
+  });
+  if (!receipt || receipt.customerId !== req.session.customerId || !receipt.splitGroup) return null;
+  return { receipt, group: receipt.splitGroup };
+}
+
+router.get('/account/receipts/scanned/:id/group', requireCustomerAuth, async (req, res) => {
+  const loaded = await loadOwnedGroup(req);
+  if (!loaded) return res.redirect('/account/receipts');
+  const { receipt, group } = loaded;
+
+  res.render('split-group', {
+    receipt,
+    group,
+    ...computeGroupFinancials(receipt, group),
+    money: (cents) => (cents / 100).toFixed(2),
+  });
+});
+
+router.post('/account/receipts/scanned/:id/group/guests', requireCustomerAuth, async (req, res) => {
+  const loaded = await loadOwnedGroup(req);
+  if (!loaded) return res.redirect('/account/receipts');
+  const { receipt, group } = loaded;
+
+  const name = (req.body.name || '').trim().slice(0, 100);
+  if (name) {
+    await prisma.splitGuest.create({ data: { groupId: group.id, name } });
+  }
+  res.redirect(`/account/receipts/scanned/${receipt.id}/group`);
+});
+
+router.get('/account/receipts/scanned/:id/group/guests/:guestId', requireCustomerAuth, async (req, res) => {
+  const loaded = await loadOwnedGroup(req);
+  if (!loaded) return res.redirect('/account/receipts');
+  const { receipt, group } = loaded;
+
+  const financials = computeGroupFinancials(receipt, group);
+  const guest = financials.guestsWithAmounts.find((g) => g.id === req.params.guestId);
+  if (!guest) return res.redirect(`/account/receipts/scanned/${receipt.id}/group`);
+
+  res.render('split-group-guest', {
+    receipt,
+    group,
+    guest,
+    money: (cents) => (cents / 100).toFixed(2),
+  });
+});
+
+router.get('/account/receipts/scanned/:id/group/receipt', requireCustomerAuth, async (req, res) => {
+  const loaded = await loadOwnedGroup(req);
+  if (!loaded) return res.redirect('/account/receipts');
+  const { receipt, group } = loaded;
+  const host = group.guests.find((g) => g.isHost);
+
+  res.render('split-group-receipt', {
+    receipt,
+    group,
+    items: Array.isArray(group.items) ? group.items : [],
+    hostName: (host && host.name) || 'You',
+    ...computeGroupFinancials(receipt, group),
+    money: (cents) => (cents / 100).toFixed(2),
+  });
+});
+
+router.get('/account/receipts/scanned/:id/group/receipt/edit', requireCustomerAuth, async (req, res) => {
+  const loaded = await loadOwnedGroup(req);
+  if (!loaded) return res.redirect('/account/receipts');
+  const { receipt } = loaded;
+
+  res.render('split-group-receipt-edit', {
+    receipt,
+    items: Array.isArray(receipt.lineItems) ? receipt.lineItems : [],
+    money: (cents) => (cents / 100).toFixed(2),
+  });
+});
+
+router.post('/account/receipts/scanned/:id/group/receipt/edit', requireCustomerAuth, async (req, res) => {
+  const loaded = await loadOwnedGroup(req);
+  if (!loaded) return res.redirect('/account/receipts');
+  const { receipt, group } = loaded;
+
+  let parsedLineItems = [];
+  try {
+    parsedLineItems = JSON.parse(req.body.lineItems || '[]');
+  } catch {
+    parsedLineItems = [];
+  }
+  const subtotalCents = parseMoneyToCents(req.body.subtotal);
+  const taxCents = parseMoneyToCents(req.body.tax);
+  const totalCents = parseMoneyToCents(req.body.total);
+  if (subtotalCents === null || taxCents === null || totalCents === null) {
+    return res.redirect(`/account/receipts/scanned/${receipt.id}/group/receipt/edit`);
+  }
+
+  // Items already marked paid keep that flag if they still exist (matched by
+  // description) -- editing the receipt must never silently un-collect money
+  // that was actually handed over. A renamed or new item starts unpaid.
+  const previouslyPaid = new Set((Array.isArray(group.items) ? group.items : []).filter((it) => it.paid).map((it) => it.description));
+  const updatedGroupItems = parsedLineItems.map((it) => ({
+    description: it.description || 'Item',
+    amount: Number(it.amount) || 0,
+    quantity: it.quantity || 1,
+    paid: previouslyPaid.has(it.description || 'Item'),
+  }));
+
+  await prisma.$transaction([
+    prisma.scannedReceipt.update({
+      where: { id: receipt.id },
+      data: { lineItems: parsedLineItems, subtotal: subtotalCents, tax: taxCents, total: totalCents },
+    }),
+    prisma.splitGroup.update({ where: { id: group.id }, data: { items: updatedGroupItems } }),
+  ]);
+
+  res.redirect(`/account/receipts/scanned/${receipt.id}/group/receipt`);
+});
+
+router.get('/account/receipts/scanned/:id/group/pay', requireCustomerAuth, async (req, res) => {
+  const loaded = await loadOwnedGroup(req);
+  if (!loaded) return res.redirect('/account/receipts');
+  const { receipt, group } = loaded;
+
+  res.render('split-group-pay', {
+    receipt,
+    group,
+    items: Array.isArray(group.items) ? group.items : [],
+    guests: group.guests,
+    money: (cents) => (cents / 100).toFixed(2),
+  });
+});
+
+router.post('/account/receipts/scanned/:id/group/pay', requireCustomerAuth, async (req, res) => {
+  const loaded = await loadOwnedGroup(req);
+  if (!loaded) return res.redirect('/account/receipts');
+  const { receipt, group } = loaded;
+
+  let selectedDescriptions = [];
+  try {
+    const parsed = JSON.parse(req.body.itemDescriptions || '[]');
+    if (Array.isArray(parsed)) selectedDescriptions = parsed.filter((d) => typeof d === 'string');
+  } catch {
+    selectedDescriptions = [];
+  }
+
+  const items = Array.isArray(group.items) ? group.items : [];
+  const selectedSet = new Set(selectedDescriptions);
+  // The amount is never trusted from the client -- it's always the real sum
+  // of whichever unpaid items were actually checked, read back off the
+  // group's own item snapshot.
+  const amountCents = items
+    .filter((it) => selectedSet.has(it.description) && !it.paid)
+    .reduce((sum, it) => sum + Math.round(it.amount * 100), 0);
+
+  if (amountCents <= 0) {
+    return res.redirect(`/account/receipts/scanned/${receipt.id}/group/pay`);
+  }
+
+  let guestId = null;
+  if (req.body.payer === 'new') {
+    const newGuestName = (req.body.newGuestName || '').trim().slice(0, 100);
+    if (newGuestName) {
+      const guest = await prisma.splitGuest.create({ data: { groupId: group.id, name: newGuestName } });
+      guestId = guest.id;
+    }
+  } else if (req.body.payer && req.body.payer !== 'collected') {
+    const guest = group.guests.find((g) => g.id === req.body.payer);
+    if (guest) guestId = guest.id;
+  }
+
+  const updatedItems = items.map((it) => (selectedSet.has(it.description) ? { ...it, paid: true } : it));
+
+  await prisma.$transaction([
+    prisma.splitPayment.create({
+      data: { groupId: group.id, guestId, amountCents, itemDescriptions: Array.from(selectedSet), method: 'cash' },
+    }),
+    prisma.splitGroup.update({ where: { id: group.id }, data: { items: updatedItems } }),
+  ]);
+
+  res.redirect(`/account/receipts/scanned/${receipt.id}/group`);
+});
+
+router.post('/account/receipts/scanned/:id/group/archive', requireCustomerAuth, async (req, res) => {
+  const loaded = await loadOwnedGroup(req);
+  if (!loaded) return res.redirect('/account/receipts');
+  const { receipt, group } = loaded;
+
+  await prisma.splitGroup.update({ where: { id: group.id }, data: { status: 'archived' } });
+  res.redirect(`/account/receipts/scanned/${receipt.id}`);
 });
 
 // (Re)generates the shopper's share link for one scanned receipt -- a

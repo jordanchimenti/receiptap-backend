@@ -90,6 +90,18 @@
         <div class="r-row grand"><span class="k">Total</span><span class="v">$<%= money(receipt.total) %></span></div>
       </div>
 
+      <% if (receipt.splitGroup) { %>
+        <div class="r-sec">
+          <div class="r-sec-title">Split the Bill</div>
+          <div class="r-note" style="margin-bottom:10px;">
+            <%= receipt.splitGroup.status === 'archived' ? 'This group has been archived.' : 'You\'re collecting on this receipt.' %>
+          </div>
+          <a href="/account/receipts/scanned/<%= receipt.id %>/group" class="w-btn" style="width:100%;">
+            <%= receipt.splitGroup.status === 'archived' ? 'View group' : 'Open Collecting' %>
+          </a>
+        </div>
+      <% } %>
+
       <%# The block that decides whether this receipt can actually back a
           claim. Grouped together rather than scattered so it reads as one
           answer to one question. %>

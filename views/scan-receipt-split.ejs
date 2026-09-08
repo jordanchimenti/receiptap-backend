@@ -152,6 +152,31 @@
       box-shadow: 0 6px 24px rgba(5,107,254,0.35);
       margin-bottom: max(16px, env(safe-area-inset-bottom));
     }
+
+    .delete-modal-overlay {
+      display: none; position: fixed; inset: 0; background: rgba(3,8,28,0.6);
+      backdrop-filter: blur(3px); z-index: 200; align-items: flex-end; justify-content: center;
+    }
+    .delete-modal-overlay.open { display: flex; }
+    .delete-modal {
+      width: 100%; max-width: 480px; background: var(--w-card); border: 1px solid var(--w-line);
+      border-radius: 20px 20px 0 0; padding: 22px 20px max(22px, env(safe-area-inset-bottom));
+      box-sizing: border-box; animation: delete-modal-up 0.18s ease-out;
+    }
+    @media (min-width: 520px) {
+      .delete-modal-overlay { align-items: center; }
+      .delete-modal { border-radius: 18px; }
+    }
+    @keyframes delete-modal-up { from { transform: translateY(16px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    .delete-modal-title { font-size: 16.5px; font-weight: 700; margin-bottom: 6px; }
+    .delete-modal-sub { font-size: 13.5px; color: var(--w-ink-soft); margin-bottom: 20px; }
+    .delete-modal-actions { display: flex; flex-direction: column; gap: 10px; }
+    .delete-modal-btn {
+      width: 100%; border: none; border-radius: 12px; padding: 14px; font-size: 15px; font-weight: 700;
+      cursor: pointer; font-family: inherit;
+    }
+    .delete-modal-btn.confirm { background: var(--w-danger); color: #fff; }
+    .delete-modal-btn.cancel { background: var(--w-card-raised); border: 1px solid var(--w-line); color: var(--w-ink); }
   </style>
 </head>
 <body data-no-pull-refresh>
@@ -247,6 +272,17 @@
     </form>
   </div>
 
+  <div class="delete-modal-overlay" id="delete-modal-overlay">
+    <div class="delete-modal">
+      <div class="delete-modal-title">Delete this item?</div>
+      <div class="delete-modal-sub" id="delete-modal-sub">This will remove it from the receipt.</div>
+      <div class="delete-modal-actions">
+        <button type="button" class="delete-modal-btn confirm" id="delete-modal-confirm">Delete</button>
+        <button type="button" class="delete-modal-btn cancel" id="delete-modal-cancel">Cancel</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     // Seeded from the same extraction scan-receipt-review.ejs uses --
     // amount is the LINE TOTAL as printed (see scanReceiptService.js), so
@@ -307,9 +343,7 @@
       if (!card) return;
       const i = Number(card.dataset.index);
       if (e.target.closest('[data-action="delete"]')) {
-        items.splice(i, 1);
-        if (!items.length) items.push({ description: '', amount: 0, quantity: 1, subItems: [] });
-        renderItems();
+        openDeleteModal(i);
       } else if (e.target.closest('[data-action="inc"]')) {
         items[i].quantity += 1;
         renderItems();
@@ -317,6 +351,35 @@
         if (items[i].quantity > 1) items[i].quantity -= 1;
         renderItems();
       }
+    });
+
+    // --- Delete confirmation ---
+    let pendingDeleteIndex = null;
+    const deleteModalOverlay = document.getElementById('delete-modal-overlay');
+    const deleteModalSub = document.getElementById('delete-modal-sub');
+
+    function openDeleteModal(i) {
+      pendingDeleteIndex = i;
+      const name = items[i].description.trim();
+      deleteModalSub.textContent = name ? `"${name}" will be removed from the receipt.` : 'This will remove it from the receipt.';
+      deleteModalOverlay.classList.add('open');
+    }
+
+    function closeDeleteModal() {
+      pendingDeleteIndex = null;
+      deleteModalOverlay.classList.remove('open');
+    }
+
+    document.getElementById('delete-modal-cancel').addEventListener('click', closeDeleteModal);
+    deleteModalOverlay.addEventListener('click', (e) => {
+      if (e.target === deleteModalOverlay) closeDeleteModal();
+    });
+    document.getElementById('delete-modal-confirm').addEventListener('click', () => {
+      if (pendingDeleteIndex === null) return;
+      items.splice(pendingDeleteIndex, 1);
+      if (!items.length) items.push({ description: '', unitPrice: 0, quantity: 1, subItems: [] });
+      closeDeleteModal();
+      renderItems();
     });
 
     itemsList.addEventListener('input', (e) => {
@@ -335,7 +398,7 @@
     });
 
     document.getElementById('add-item-btn').addEventListener('click', () => {
-      items.push({ description: '', amount: 0, quantity: 1, subItems: [] });
+      items.push({ description: '', unitPrice: 0, quantity: 1, subItems: [] });
       renderItems();
     });
 

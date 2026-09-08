@@ -1,0 +1,254 @@
+<!-- views/split-group.ejs -->
+<!-- Split the Bill's real, ongoing state for one receipt: "Collecting".
+     Entirely host-managed -- guests are names the host typed in
+     (SplitGuest), "left to collect" and every guest's owed/paid amount are
+     computed from the group's real SplitPayment rows every render (see
+     computeGroupFinancials in routes/customer-account.js), never stored.
+     No guest login, no guest-facing page -- Share just hands the host a
+     plain-text summary to send however they like. -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title><%= group.name || receipt.merchantName %> - ReceipTap</title>
+  <link rel="stylesheet" href="/css/receiptap.css" />
+  <%- include('partials/wallet-dark-theme') %>
+  <style>
+    .g-header { display: flex; align-items: center; gap: 14px; margin-bottom: 4px; }
+    .g-header-text { flex: 1; min-width: 0; }
+    .g-title-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .g-title { font-size: 22px; font-weight: 700; }
+    .g-status-pill {
+      font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 999px;
+      background: rgba(234, 179, 8, 0.16); color: #eab308; display: inline-flex; align-items: center; gap: 5px;
+    }
+    .g-status-pill.archived { background: var(--w-card-raised); color: var(--w-ink-soft); }
+
+    .g-collect-row { display: flex; align-items: flex-end; justify-content: space-between; gap: 14px; margin: 24px 0 30px; }
+    .g-collect-label { font-size: 12.5px; color: var(--w-ink-soft); margin-bottom: 4px; }
+    .g-collect-value { font-size: 32px; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .g-share-btn {
+      flex-shrink: 0; display: flex; align-items: center; gap: 7px; border: none; cursor: pointer;
+      background: linear-gradient(115deg, #7b2ff7, #a970ff); color: #fff; font-family: inherit;
+      font-size: 13.5px; font-weight: 700; padding: 11px 18px; border-radius: 999px;
+      box-shadow: 0 6px 20px rgba(123, 47, 247, 0.35);
+    }
+
+    .g-sec-head { display: flex; align-items: center; justify-content: space-between; margin: 26px 2px 10px; }
+    .g-sec-title { font-size: 15.5px; font-weight: 700; }
+    .g-add-guest-toggle { background: none; border: none; color: var(--w-accent); font-size: 13.5px; font-weight: 700; font-family: inherit; cursor: pointer; display: flex; align-items: center; gap: 4px; }
+
+    .g-add-guest-row { display: none; gap: 8px; margin-bottom: 12px; }
+    .g-add-guest-row.open { display: flex; }
+    .g-add-guest-row input {
+      flex: 1; background: var(--w-card-raised); border: 1px solid var(--w-line); border-radius: 10px;
+      color: var(--w-ink); font-size: 14.5px; font-family: inherit; padding: 10px 13px;
+    }
+    .g-add-guest-row input:focus { outline: none; border-color: var(--w-accent); }
+    .g-add-guest-row button { flex-shrink: 0; background: var(--w-accent); color: #fff; border: none; border-radius: 10px; padding: 0 16px; font-weight: 700; font-family: inherit; cursor: pointer; }
+
+    .g-list { background: var(--w-card); border: 1px solid var(--w-line); border-radius: 16px; overflow: hidden; }
+    .g-row { display: flex; align-items: center; gap: 12px; padding: 14px 16px; text-decoration: none; color: inherit; }
+    .g-row + .g-row { border-top: 1px solid var(--w-line); }
+    .g-avatar {
+      width: 38px; height: 38px; border-radius: 50%; background: var(--w-card-raised); color: var(--w-ink-soft);
+      display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; flex-shrink: 0;
+    }
+    .g-row-text { flex: 1; min-width: 0; }
+    .g-row-name { font-size: 14.5px; font-weight: 700; display: flex; align-items: center; gap: 6px; }
+    .g-row-name .host-tag { font-size: 11.5px; font-weight: 400; color: var(--w-ink-soft); }
+    .g-row-sub { font-size: 12.5px; margin-top: 2px; }
+    .g-row-sub.paid { color: var(--w-ok); }
+    .g-row-sub.owes { color: #eab308; }
+    .g-row-check {
+      width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .g-row-check.paid { background: var(--w-ok-wash); color: var(--w-ok); }
+    .g-row-check.unpaid { background: var(--w-card-raised); color: var(--w-ink-soft); }
+    .g-row-amount { font-size: 14px; font-weight: 700; flex-shrink: 0; font-variant-numeric: tabular-nums; }
+    .g-row-status { font-size: 12px; font-weight: 700; flex-shrink: 0; }
+    .g-row-status.open { color: #eab308; }
+    .g-row-status.done { color: var(--w-ok); }
+    .g-row-chevron { color: var(--w-ink-soft); flex-shrink: 0; }
+
+    .g-activity-empty { display: flex; align-items: center; gap: 12px; background: var(--w-card); border: 1px solid var(--w-line); border-radius: 16px; padding: 16px; }
+    .g-activity-empty-icon { width: 38px; height: 38px; border-radius: 50%; background: var(--w-card-raised); color: var(--w-ink-soft); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .g-activity-empty-title { font-size: 14px; font-weight: 700; }
+    .g-activity-empty-sub { font-size: 12.5px; color: var(--w-ink-soft); margin-top: 2px; }
+    .g-activity-row { display: flex; align-items: center; gap: 12px; padding: 12px 16px; }
+    .g-activity-row + .g-activity-row { border-top: 1px solid var(--w-line); }
+    .g-activity-icon { width: 34px; height: 34px; border-radius: 50%; background: var(--w-ok-wash); color: var(--w-ok); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .g-activity-text { flex: 1; font-size: 13.5px; }
+    .g-activity-when { font-size: 11.5px; color: var(--w-ink-soft); }
+
+    .g-actions { background: var(--w-card); border: 1px solid var(--w-line); border-radius: 16px; overflow: hidden; margin-bottom: 20px; }
+    .g-action { display: flex; align-items: center; gap: 12px; padding: 15px 16px; text-decoration: none; color: var(--w-ink); background: none; border: none; width: 100%; box-sizing: border-box; font-family: inherit; font-size: 14.5px; font-weight: 700; cursor: pointer; text-align: left; }
+    .g-action + .g-action { border-top: 1px solid var(--w-line); }
+    .g-action .icon { width: 22px; display: flex; justify-content: center; flex-shrink: 0; }
+    .g-action.ok { color: var(--w-ok); }
+    .g-action.danger { color: var(--w-danger); }
+    .g-action-chevron { margin-left: auto; color: var(--w-ink-soft); }
+  </style>
+</head>
+<body data-no-pull-refresh>
+  <div class="w-shell">
+    <div class="g-header">
+      <a href="/account/receipts/scanned/<%= receipt.id %>" class="w-btn-icon" aria-label="Back">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      </a>
+      <div class="g-header-text">
+        <div class="g-title-row">
+          <div class="g-title"><%= (group.name || receipt.merchantName).toUpperCase() %></div>
+          <span class="g-status-pill<%= group.status === 'archived' ? ' archived' : '' %>">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            <%= group.status === 'archived' ? 'Archived' : 'Collecting' %>
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <div class="g-collect-row">
+      <div>
+        <div class="g-collect-label">Left to collect</div>
+        <div class="g-collect-value"><%= receipt.currency || 'CA' %>$<%= money(leftToCollectCents) %></div>
+      </div>
+      <button type="button" class="g-share-btn" id="share-btn" data-default-label="Share link">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 3.9M15.4 6.5L8.6 10.4"/></svg>
+        <span id="share-btn-label">Share link</span>
+      </button>
+    </div>
+
+    <div class="g-sec-head">
+      <div class="g-sec-title">Who owes what</div>
+      <button type="button" class="g-add-guest-toggle" id="add-guest-toggle">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
+        Add Guest
+      </button>
+    </div>
+    <form method="POST" action="/account/receipts/scanned/<%= receipt.id %>/group/guests" class="g-add-guest-row" id="add-guest-row">
+      <input type="text" name="name" maxlength="100" placeholder="Guest name" autocomplete="off" />
+      <button type="submit">Add</button>
+    </form>
+
+    <div class="g-list">
+      <% guestsWithAmounts.forEach(function (g) { %>
+        <a href="/account/receipts/scanned/<%= receipt.id %>/group/guests/<%= g.id %>" class="g-row">
+          <div class="g-avatar"><%= g.name.split(' ').map(function(w){return w[0];}).join('').slice(0,2).toUpperCase() %></div>
+          <div class="g-row-text">
+            <div class="g-row-name"><%= g.name %><% if (g.isHost) { %><span class="host-tag">(host)</span><% } %></div>
+            <% if (g.isHost) { %>
+              <div class="g-row-sub paid">Paid</div>
+            <% } else { %>
+              <div class="g-row-sub <%= g.paid ? 'paid' : 'owes' %>"><%= g.paid ? 'Paid' : 'Owes ' + (receipt.currency || 'CA') + '$' + money(g.owedCents - g.paidCents) %></div>
+            <% } %>
+          </div>
+          <div class="g-row-check <%= g.paid ? 'paid' : 'unpaid' %>">
+            <% if (g.paid) { %>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 13l4 4L19 7"/></svg>
+            <% } %>
+          </div>
+          <svg class="g-row-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>
+        </a>
+      <% }); %>
+    </div>
+
+    <div class="g-sec-head"><div class="g-sec-title">Receipts (1)</div></div>
+    <div class="g-list">
+      <a href="/account/receipts/scanned/<%= receipt.id %>/group/receipt" class="g-row">
+        <div class="g-avatar"><%= receipt.merchantName.slice(0,2).toUpperCase() %></div>
+        <div class="g-row-text">
+          <div class="g-row-name"><%= receipt.merchantName %></div>
+          <div class="g-row-sub" style="color:var(--w-ink-soft);"><%= receipt.purchaseDate ? receipt.purchaseDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }) : 'Undated' %></div>
+        </div>
+        <div>
+          <div class="g-row-amount" style="text-align:right;"><%= receipt.currency || 'CA' %>$<%= money(receipt.total) %></div>
+          <div class="g-row-status <%= leftToCollectCents > 0 ? 'open' : 'done' %>" style="text-align:right;"><%= leftToCollectCents > 0 ? 'Open' : 'Settled' %></div>
+        </div>
+        <svg class="g-row-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>
+      </a>
+    </div>
+
+    <div class="g-sec-head"><div class="g-sec-title">Activity</div></div>
+    <% if (!group.payments.length) { %>
+      <div class="g-activity-empty">
+        <div class="g-activity-empty-icon">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
+        </div>
+        <div>
+          <div class="g-activity-empty-title">No activity yet</div>
+          <div class="g-activity-empty-sub">Payments and group events will appear here.</div>
+        </div>
+      </div>
+    <% } else { %>
+      <div class="g-list">
+        <% group.payments.slice().reverse().forEach(function (p) { %>
+          <% var payer = guestsWithAmounts.find(function (g) { return g.id === p.guestId; }); %>
+          <div class="g-activity-row">
+            <div class="g-activity-icon">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+            </div>
+            <div class="g-activity-text">
+              <div><%= payer ? payer.name : 'Cash collected' %> &mdash; <%= receipt.currency || 'CA' %>$<%= money(p.amountCents) %></div>
+              <div class="g-activity-when"><%= p.createdAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) %></div>
+            </div>
+          </div>
+        <% }); %>
+      </div>
+    <% } %>
+
+    <div class="g-sec-head"><div class="g-sec-title">What you can do:</div></div>
+    <div class="g-actions">
+      <a href="/account/receipts/scanned/<%= receipt.id %>/group/pay" class="g-action ok">
+        <span class="icon"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="3"/></svg></span>
+        Record a cash payment
+        <svg class="g-action-chevron" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>
+      </a>
+      <button type="button" class="g-action" id="invite-friends-btn">
+        <span class="icon"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
+        Invite your friends
+        <svg class="g-action-chevron" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>
+      </button>
+      <% if (group.status !== 'archived') { %>
+        <form method="POST" action="/account/receipts/scanned/<%= receipt.id %>/group/archive"
+              onsubmit="return confirm('Archive this group? You can still view it from the receipt.');" style="margin:0;">
+          <button type="submit" class="g-action danger">
+            <span class="icon"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 8H3l1-4h16l1 4Z"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8M10 12h4"/></svg></span>
+            Archive this group
+          </button>
+        </form>
+      <% } %>
+    </div>
+  </div>
+
+  <script>
+    const addGuestToggle = document.getElementById('add-guest-toggle');
+    const addGuestRow = document.getElementById('add-guest-row');
+    addGuestToggle.addEventListener('click', () => {
+      addGuestRow.classList.toggle('open');
+      if (addGuestRow.classList.contains('open')) addGuestRow.querySelector('input').focus();
+    });
+
+    document.getElementById('invite-friends-btn').addEventListener('click', () => {
+      addGuestRow.classList.add('open');
+      addGuestRow.querySelector('input').focus();
+      addGuestRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+
+    const shareBtn = document.getElementById('share-btn');
+    const shareLabel = document.getElementById('share-btn-label');
+    shareBtn.addEventListener('click', async () => {
+      const text = <%- JSON.stringify(`${group.name || receipt.merchantName} — ${receipt.currency || 'CA'}$${(receipt.total/100).toFixed(2)} total. Left to collect: ${receipt.currency || 'CA'}$` ) %> + document.querySelector('.g-collect-value').textContent.replace(/^\D+\$?/, '') + ' — via ReceipTap';
+      if (navigator.share) {
+        try { await navigator.share({ text }); } catch (err) { /* cancelled */ }
+        return;
+      }
+      try {
+        await navigator.clipboard.writeText(text);
+        shareLabel.textContent = 'Copied!';
+        setTimeout(() => { shareLabel.textContent = shareBtn.dataset.defaultLabel; }, 1600);
+      } catch (err) { /* clipboard unavailable */ }
+    });
+  </script>
+</body>
+</html>

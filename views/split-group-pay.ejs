@@ -1,0 +1,229 @@
+<!-- views/split-group-pay.ejs -->
+<!-- Split the Bill's "Record a cash payment" -- the host's own record that
+     they were physically handed money for some of the receipt's items.
+     Nothing is charged through the app: the amount and which items get
+     marked collected are both recomputed server-side from the group's real
+     item snapshot on submit (see the POST handler), never trusted from the
+     client. Payers are host-managed too -- an existing guest, "No one /
+     collected" (the host already has the cash), or a brand-new name typed
+     in on the spot, exactly like the reference app's own "no account
+     needed" guest model. -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Record a Cash Payment - ReceipTap</title>
+  <link rel="stylesheet" href="/css/receiptap.css" />
+  <%- include('partials/wallet-dark-theme') %>
+  <style>
+    .p-header { display: flex; align-items: center; gap: 14px; margin-bottom: 26px; }
+    .p-header-title { flex: 1; text-align: center; font-size: 17px; font-weight: 700; margin-right: 38px; }
+
+    .p-eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--w-ink-soft); margin: 0 2px 10px; }
+    .p-payer-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 22px; }
+    .p-payer-pill {
+      background: var(--w-card-raised); border: 1.5px solid var(--w-line); border-radius: 999px;
+      color: var(--w-ink); font-size: 13px; font-weight: 700; font-family: inherit; padding: 9px 15px; cursor: pointer;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .p-payer-pill.selected { background: var(--w-ok-wash); border-color: var(--w-ok); color: var(--w-ok); }
+    .p-payer-pill.add { background: none; border-style: dashed; color: var(--w-accent); border-color: var(--w-accent); }
+
+    .p-cash-card {
+      background: var(--w-ok-wash); border: 1px solid rgba(48,209,88,0.35); border-radius: 16px; padding: 18px; margin-bottom: 26px;
+    }
+    .p-cash-label { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--w-ok); margin-bottom: 8px; }
+    .p-cash-amount { font-size: 34px; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .p-cash-sub { font-size: 12.5px; color: var(--w-ink-soft); margin-top: 2px; }
+
+    .p-merchant { font-size: 13.5px; font-weight: 700; margin-bottom: 10px; }
+    .p-items-card { background: var(--w-card); border: 1px solid var(--w-line); border-radius: 14px; padding: 4px 14px; margin-bottom: 14px; }
+    .p-item-row { display: flex; align-items: center; gap: 12px; padding: 13px 0; }
+    .p-item-row + .p-item-row { border-top: 1px solid var(--w-line); }
+    .p-item-checkbox {
+      width: 22px; height: 22px; border-radius: 50%; border: 1.5px solid var(--w-line); flex-shrink: 0;
+      background: var(--w-card-raised); cursor: pointer; display: flex; align-items: center; justify-content: center; color: transparent;
+    }
+    .p-item-checkbox.checked { background: var(--w-ok); border-color: var(--w-ok); color: #fff; }
+    .p-item-text { flex: 1; }
+    .p-item-name { font-size: 14.5px; font-weight: 700; }
+    .p-item-status { font-size: 12px; color: #eab308; margin-top: 1px; }
+    .p-item-amount { font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .p-empty { font-size: 13px; color: var(--w-ink-soft); padding: 16px 0; text-align: center; }
+
+    .p-note { font-size: 12px; color: var(--w-ink-soft); text-align: center; margin: 4px 0 22px; }
+
+    .p-submit-btn {
+      width: 100%; border: none; border-radius: 14px; padding: 16px; font-size: 16px; font-weight: 700;
+      color: #fff; cursor: pointer; font-family: inherit; display: flex; align-items: center; justify-content: center; gap: 8px;
+      background: var(--w-ok); box-shadow: 0 6px 20px rgba(48,209,88,0.3);
+      margin-bottom: max(16px, env(safe-area-inset-bottom));
+    }
+    .p-submit-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .p-modal-overlay { display: none; position: fixed; inset: 0; background: rgba(3,8,28,0.6); backdrop-filter: blur(3px); z-index: 200; align-items: flex-end; justify-content: center; }
+    .p-modal-overlay.open { display: flex; }
+    .p-modal { width: 100%; max-width: 480px; background: var(--w-card); border: 1px solid var(--w-line); border-radius: 20px 20px 0 0; padding: 22px 20px max(22px, env(safe-area-inset-bottom)); box-sizing: border-box; }
+    @media (min-width: 520px) { .p-modal-overlay { align-items: center; } .p-modal { border-radius: 18px; } }
+    .p-modal-back { background: none; border: none; color: var(--w-ink-soft); cursor: pointer; display: flex; align-items: center; margin-bottom: 6px; padding: 4px; }
+    .p-modal-title { font-size: 16.5px; font-weight: 700; margin-bottom: 6px; }
+    .p-modal-sub { font-size: 13px; color: var(--w-ink-soft); margin-bottom: 18px; line-height: 1.5; }
+    .p-modal input {
+      width: 100%; box-sizing: border-box; background: var(--w-card-raised); border: 1px solid var(--w-line); border-radius: 12px;
+      color: var(--w-ink); font-size: 15px; font-family: inherit; padding: 13px 14px; margin-bottom: 16px;
+    }
+    .p-modal input:focus { outline: none; border-color: var(--w-ok); }
+    .p-modal-add-btn {
+      width: 100%; border: none; border-radius: 12px; padding: 14px; font-size: 15px; font-weight: 700;
+      color: #fff; background: var(--w-ok); cursor: pointer; font-family: inherit; display: flex; align-items: center; justify-content: center; gap: 8px;
+    }
+  </style>
+</head>
+<body data-no-pull-refresh>
+  <div class="w-shell">
+    <div class="p-header">
+      <a href="/account/receipts/scanned/<%= receipt.id %>/group" class="w-btn-icon" aria-label="Back">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      </a>
+      <div class="p-header-title">Record a cash payment</div>
+    </div>
+
+    <div class="p-eyebrow">Who paid you in cash?</div>
+    <div class="p-payer-row" id="payer-row">
+      <button type="button" class="p-payer-pill selected" data-payer="collected">
+        No one / collected <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 13l4 4L19 7"/></svg>
+      </button>
+      <% guests.filter(function (g) { return !g.isHost; }).forEach(function (g) { %>
+        <button type="button" class="p-payer-pill" data-payer="<%= g.id %>"><%= g.name %></button>
+      <% }); %>
+      <button type="button" class="p-payer-pill add" id="add-payer-btn">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
+        Someone not in group
+      </button>
+    </div>
+
+    <div class="p-cash-card">
+      <div class="p-cash-label">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="3"/></svg>
+        Cash received
+      </div>
+      <div class="p-cash-amount" id="cash-amount"><%= receipt.currency || 'CA' %>$0</div>
+      <div class="p-cash-sub" id="cash-sub">across 0 items</div>
+    </div>
+
+    <div class="p-eyebrow">What did it cover?</div>
+    <div class="p-merchant"><%= receipt.merchantName %></div>
+    <div class="p-items-card" id="items-card">
+      <% var unpaidItems = items.filter(function (it) { return !it.paid; }); %>
+      <% if (!unpaidItems.length) { %>
+        <div class="p-empty">Every item on this receipt has already been marked paid.</div>
+      <% } else { %>
+        <% unpaidItems.forEach(function (it) { %>
+          <div class="p-item-row" data-description="<%= it.description.replace(/"/g, '&quot;') %>" data-amount="<%= it.amount %>">
+            <button type="button" class="p-item-checkbox" data-action="toggle">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 13l4 4L19 7"/></svg>
+            </button>
+            <div class="p-item-text">
+              <div class="p-item-name"><%= it.description %></div>
+              <div class="p-item-status">Unclaimed</div>
+            </div>
+            <div class="p-item-amount"><%= receipt.currency || 'CA' %>$<%= (Math.round((it.amount + Number.EPSILON) * 100) / 100).toFixed(2) %></div>
+          </div>
+        <% }); %>
+      <% } %>
+    </div>
+
+    <div class="p-note">Marks these items collected. No charge is sent through Split.</div>
+
+    <form method="POST" action="/account/receipts/scanned/<%= receipt.id %>/group/pay" id="pay-form">
+      <input type="hidden" name="payer" id="payer-input" value="collected" />
+      <input type="hidden" name="newGuestName" id="new-guest-name-input" />
+      <input type="hidden" name="itemDescriptions" id="item-descriptions-input" value="[]" />
+      <button type="submit" class="p-submit-btn" id="submit-btn" disabled>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="3"/></svg>
+        <span id="submit-btn-label">Record <%= receipt.currency || 'CA' %>$0</span>
+      </button>
+    </form>
+  </div>
+
+  <div class="p-modal-overlay" id="add-payer-overlay">
+    <div class="p-modal">
+      <button type="button" class="p-modal-back" id="add-payer-back" aria-label="Back">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <div class="p-modal-title">Who paid in cash?</div>
+      <div class="p-modal-sub">Not in this group? Split will track them by name. No account needed.</div>
+      <input type="text" id="new-guest-input" maxlength="100" placeholder="Enter a name" autocomplete="off" />
+      <button type="button" class="p-modal-add-btn" id="add-payer-confirm">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
+        Add
+      </button>
+    </div>
+  </div>
+
+  <script>
+    const currencyPrefix = <%- JSON.stringify(receipt.currency || 'CA') %> + '$';
+    function money(n) { return currencyPrefix + (Math.round((n + Number.EPSILON) * 100) / 100).toFixed(2); }
+
+    let selectedPayer = 'collected';
+    let newGuestName = '';
+
+    const payerRow = document.getElementById('payer-row');
+    function selectPayer(value, pillEl) {
+      selectedPayer = value;
+      payerRow.querySelectorAll('.p-payer-pill[data-payer]').forEach((p) => p.classList.remove('selected'));
+      if (pillEl) pillEl.classList.add('selected');
+      document.getElementById('payer-input').value = value;
+    }
+    payerRow.querySelectorAll('.p-payer-pill[data-payer]').forEach((pill) => {
+      pill.addEventListener('click', () => selectPayer(pill.dataset.payer, pill));
+    });
+
+    const addPayerBtn = document.getElementById('add-payer-btn');
+    const addPayerOverlay = document.getElementById('add-payer-overlay');
+    const newGuestInput = document.getElementById('new-guest-input');
+    addPayerBtn.addEventListener('click', () => { addPayerOverlay.classList.add('open'); newGuestInput.focus(); });
+    document.getElementById('add-payer-back').addEventListener('click', () => addPayerOverlay.classList.remove('open'));
+    addPayerOverlay.addEventListener('click', (e) => { if (e.target === addPayerOverlay) addPayerOverlay.classList.remove('open'); });
+    document.getElementById('add-payer-confirm').addEventListener('click', () => {
+      const name = newGuestInput.value.trim();
+      if (!name) return;
+      newGuestName = name;
+      document.getElementById('new-guest-name-input').value = name;
+      const pill = document.createElement('button');
+      pill.type = 'button';
+      pill.className = 'p-payer-pill';
+      pill.dataset.payer = 'new';
+      pill.textContent = name;
+      pill.addEventListener('click', () => selectPayer('new', pill));
+      payerRow.insertBefore(pill, addPayerBtn);
+      selectPayer('new', pill);
+      newGuestInput.value = '';
+      addPayerOverlay.classList.remove('open');
+    });
+
+    const itemRows = Array.from(document.querySelectorAll('.p-item-row'));
+    const submitBtn = document.getElementById('submit-btn');
+
+    function recompute() {
+      const checked = itemRows.filter((row) => row.querySelector('.p-item-checkbox').classList.contains('checked'));
+      const total = checked.reduce((sum, row) => sum + Number(row.dataset.amount), 0);
+      document.getElementById('cash-amount').textContent = money(total);
+      document.getElementById('cash-sub').textContent = 'across ' + checked.length + (checked.length === 1 ? ' item' : ' items');
+      document.getElementById('item-descriptions-input').value = JSON.stringify(checked.map((row) => row.dataset.description));
+      document.getElementById('submit-btn-label').textContent = 'Record ' + money(total);
+      submitBtn.disabled = checked.length === 0;
+    }
+
+    itemRows.forEach((row) => {
+      row.querySelector('[data-action="toggle"]').addEventListener('click', () => {
+        row.querySelector('.p-item-checkbox').classList.toggle('checked');
+        recompute();
+      });
+    });
+
+    recompute();
+  </script>
+</body>
+</html>

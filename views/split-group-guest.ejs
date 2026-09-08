@@ -1,0 +1,91 @@
+<!-- views/split-group-guest.ejs -->
+<!-- One guest's (or the host's) details within a Split the Bill group.
+     `guest` arrives pre-computed by computeGroupFinancials() in
+     routes/customer-account.js -- owedCents/paidCents/paid are all derived
+     from real SplitPayment rows, nothing here is invented. -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title><%= guest.name %> - ReceipTap</title>
+  <link rel="stylesheet" href="/css/receiptap.css" />
+  <%- include('partials/wallet-dark-theme') %>
+  <style>
+    .m-header { display: flex; align-items: center; margin-bottom: 30px; }
+    .m-header-text { flex: 1; text-align: center; }
+    .m-header-title { font-size: 17px; font-weight: 700; }
+    .m-header-sub { font-size: 12.5px; color: var(--w-ink-soft); margin-top: 1px; }
+    .m-header-spacer { width: 38px; flex-shrink: 0; }
+
+    .m-avatar {
+      width: 84px; height: 84px; border-radius: 50%; margin: 0 auto 18px; background: var(--w-card-raised);
+      color: var(--w-ink-soft); display: flex; align-items: center; justify-content: center; font-size: 26px; font-weight: 700;
+    }
+    .m-name { text-align: center; font-size: 22px; font-weight: 700; }
+    .m-role-row { text-align: center; display: flex; align-items: center; justify-content: center; gap: 8px; margin: 6px 0 22px; color: var(--w-ink-soft); font-size: 13.5px; }
+    .m-status-pill { font-size: 11.5px; font-weight: 700; padding: 3px 10px; border-radius: 999px; display: inline-flex; align-items: center; gap: 4px; }
+    .m-status-pill.paid { background: var(--w-ok-wash); color: var(--w-ok); }
+    .m-status-pill.unpaid { background: rgba(234, 179, 8, 0.16); color: #eab308; }
+    .m-amount { text-align: center; font-size: 40px; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .m-amount-label { text-align: center; font-size: 13px; color: var(--w-ink-soft); margin: 2px 0 28px; }
+
+    .m-sec-title { font-size: 14px; font-weight: 700; margin: 0 2px 12px; }
+    .m-experience-card { display: flex; gap: 12px; background: var(--w-card); border: 1px solid var(--w-line); border-radius: 14px; padding: 15px; margin-bottom: 26px; }
+    .m-experience-icon { width: 36px; height: 36px; border-radius: 10px; flex-shrink: 0; background: var(--w-accent-wash); color: var(--w-accent); display: flex; align-items: center; justify-content: center; }
+    .m-experience-title { font-size: 14px; font-weight: 700; margin-bottom: 3px; }
+    .m-experience-body { font-size: 12.5px; color: var(--w-ink-soft); line-height: 1.5; }
+
+    .m-details { background: var(--w-card); border: 1px solid var(--w-line); border-radius: 14px; padding: 4px 16px; }
+    .m-detail-row { display: flex; align-items: center; justify-content: space-between; padding: 13px 0; font-size: 14px; }
+    .m-detail-row + .m-detail-row { border-top: 1px solid var(--w-line); }
+    .m-detail-row .k { color: var(--w-ink-soft); }
+    .m-detail-row .v { font-weight: 700; font-variant-numeric: tabular-nums; }
+  </style>
+</head>
+<body data-no-pull-refresh>
+  <div class="w-shell">
+    <div class="m-header">
+      <a href="/account/receipts/scanned/<%= receipt.id %>/group" class="w-btn-icon" aria-label="Back">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      </a>
+      <div class="m-header-text">
+        <div class="m-header-title">Member details</div>
+        <div class="m-header-sub"><%= group.name || receipt.merchantName %></div>
+      </div>
+      <div class="m-header-spacer"></div>
+    </div>
+
+    <div class="m-avatar"><%= guest.name.split(' ').map(function(w){return w[0];}).join('').slice(0,2).toUpperCase() %></div>
+    <div class="m-name"><%= guest.name %></div>
+    <div class="m-role-row">
+      <%= guest.isHost ? 'Host' : 'Guest' %>
+      <span class="m-status-pill <%= guest.paid ? 'paid' : 'unpaid' %>">
+        <% if (guest.paid) { %><svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10"/></svg><% } %>
+        <%= guest.paid ? 'Paid' : 'Unpaid' %>
+      </span>
+    </div>
+    <div class="m-amount"><%= receipt.currency || 'CA' %>$<%= money(Math.max(0, guest.owedCents - guest.paidCents)) %></div>
+    <div class="m-amount-label"><%= guest.paid ? 'Nothing owed' : 'Still owed' %></div>
+
+    <div class="m-sec-title">Payment experience</div>
+    <div class="m-experience-card">
+      <div class="m-experience-icon">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 3l4 4-4 4M21 7H9M7 21l-4-4 4-4M3 17h12"/></svg>
+      </div>
+      <div>
+        <div class="m-experience-title">Pay Your Way</div>
+        <div class="m-experience-body">Payments are sent directly to the host outside Split. The host confirms them here after receiving the money.</div>
+      </div>
+    </div>
+
+    <div class="m-sec-title">Details</div>
+    <div class="m-details">
+      <div class="m-detail-row"><span class="k">Status</span><span class="v"><%= guest.paid ? 'Paid' : 'Unpaid' %></span></div>
+      <div class="m-detail-row"><span class="k">Amount owed</span><span class="v"><%= receipt.currency || 'CA' %>$<%= money(guest.owedCents) %></span></div>
+      <div class="m-detail-row"><span class="k">Amount paid</span><span class="v"><%= receipt.currency || 'CA' %>$<%= money(guest.paidCents) %></span></div>
+      <div class="m-detail-row"><span class="k">Role</span><span class="v"><%= guest.isHost ? 'Host' : 'Guest' %></span></div>
+    </div>
+  </div>
+</body>
+</html>

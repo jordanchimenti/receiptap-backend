@@ -1,0 +1,264 @@
+<!-- views/receipt-split-items.ejs -->
+<!-- Split the Bill, step 3 ("Pick items"): the shopper checks off which
+     line items are theirs; everything left unchecked is what gets split
+     among guests. Items, subtotal, tax and the receipt photo are all read
+     from the ScannedReceipt row Confirm Items already saved -- nothing
+     here is invented. Uses the brand's own radiant blue throughout rather
+     than the reference app's purple.
+
+     No invite links or guest-facing page -- "Split $X" creates the real
+     SplitGroup (see the schema comment on that model), marking whatever
+     the host checked off as already theirs (paid, not owed by anyone),
+     and takes the host straight to "Collecting". -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Confirm Items - ReceipTap</title>
+  <link rel="stylesheet" href="/css/receiptap.css" />
+  <%- include('partials/wallet-dark-theme') %>
+  <style>
+    .split-header { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; }
+    .split-merchant { font-size: 24px; font-weight: 700; margin: 4px 0 6px; }
+    .split-date-row { display: flex; align-items: center; gap: 7px; color: var(--w-ink-soft); font-size: 13.5px; padding-bottom: 16px; border-bottom: 1px solid var(--w-line); margin-bottom: 22px; }
+
+    .split-step-label { text-align: center; font-size: 15px; font-weight: 700; margin-bottom: 4px; }
+    .split-step-sub { text-align: center; font-size: 12.5px; color: var(--w-ink-soft); margin-bottom: 20px; }
+
+    .pick-items-card { background: var(--w-card); border: 1px solid var(--w-line); border-radius: 16px; padding: 4px 16px; margin-bottom: 26px; }
+    .pick-item-row { display: flex; align-items: center; gap: 14px; padding: 14px 0; }
+    .pick-item-row + .pick-item-row { border-top: 1px solid var(--w-line); }
+    .pick-item-checkbox {
+      width: 22px; height: 22px; border-radius: 7px; border: 1.5px solid var(--w-line); flex-shrink: 0;
+      background: var(--w-card-raised); cursor: pointer; display: flex; align-items: center; justify-content: center;
+      color: transparent;
+    }
+    .pick-item-checkbox.checked { background: var(--w-accent); border-color: var(--w-accent); color: #fff; }
+    .pick-item-text { flex: 1; }
+    .pick-item-name { font-size: 15px; font-weight: 700; }
+    .pick-item-price { font-size: 12.5px; color: var(--w-ink-soft); margin-top: 2px; }
+
+    .tip-eyebrow { font-size: 13px; color: var(--w-ink-soft); margin: 0 2px 6px; }
+    .tip-row { display: flex; align-items: baseline; justify-content: space-between; margin: 0 2px 12px; }
+    .tip-row-label { font-size: 15.5px; font-weight: 700; }
+    .tip-row-value { font-size: 15.5px; font-weight: 700; color: var(--w-accent); font-variant-numeric: tabular-nums; }
+    .tip-options { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 26px; }
+    .tip-option {
+      background: var(--w-card-raised); border: 1.5px solid var(--w-line); border-radius: 10px;
+      color: var(--w-ink); font-size: 13.5px; font-weight: 700; font-family: inherit;
+      padding: 11px 4px; cursor: pointer; text-align: center;
+    }
+    .tip-option.active { border-color: var(--w-accent); color: var(--w-accent); background: var(--w-accent-wash); }
+    .tip-custom-row { display: none; gap: 8px; margin-top: 10px; }
+    .tip-custom-row.open { display: flex; }
+    .tip-mode-btn {
+      flex-shrink: 0; width: 54px; background: var(--w-card-raised); border: 1.5px solid var(--w-line);
+      border-radius: 10px; color: var(--w-ink); font-size: 13.5px; font-weight: 700; cursor: pointer;
+    }
+    .tip-mode-btn.active { border-color: var(--w-accent); color: var(--w-accent); background: var(--w-accent-wash); }
+    .tip-custom-input {
+      flex: 1; background: var(--w-card-raised); border: 1.5px solid var(--w-line); border-radius: 10px;
+      color: var(--w-ink); font-size: 14.5px; font-family: inherit; padding: 10px 12px;
+    }
+    .tip-custom-input:focus { outline: none; border-color: var(--w-accent); }
+
+    .breakdown-card {
+      background: var(--w-card); border: 1px solid var(--w-line); border-radius: 16px; padding: 16px;
+      display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; margin-bottom: 24px;
+    }
+    .breakdown-title { font-size: 15.5px; font-weight: 700; margin-bottom: 14px; }
+    .breakdown-line { font-size: 13.5px; color: var(--w-ink-soft); margin-bottom: 6px; }
+    .breakdown-guest-row { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+    .breakdown-guest-label { font-size: 14px; font-weight: 700; }
+    .breakdown-guest-value { font-size: 17px; font-weight: 700; color: var(--w-accent); font-variant-numeric: tabular-nums; }
+    .breakdown-note { font-size: 11.5px; color: var(--w-ink-soft); margin-top: 12px; }
+    .breakdown-photo {
+      flex-shrink: 0; width: 64px; height: 64px; border-radius: 12px; overflow: hidden; position: relative;
+      border: none; padding: 0; cursor: pointer;
+    }
+    .breakdown-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .breakdown-photo-label {
+      position: absolute; inset: auto 0 0 0; background: rgba(0,0,0,0.6); color: #fff;
+      font-size: 10px; font-weight: 700; text-align: center; padding: 3px 0;
+    }
+
+    .split-continue-btn {
+      width: 100%; border: none; border-radius: 14px; padding: 16px; font-size: 16px; font-weight: 700;
+      color: #fff; cursor: pointer; font-family: inherit;
+      background: linear-gradient(90deg, var(--w-accent-deep), var(--w-accent) 55%, #35d0ff);
+      box-shadow: 0 6px 24px rgba(5,107,254,0.35);
+      margin-bottom: max(16px, env(safe-area-inset-bottom));
+    }
+  </style>
+</head>
+<body data-no-pull-refresh>
+  <div class="w-shell">
+    <div class="split-header">
+      <a href="/account/receipts/scanned/<%= receipt.id %>/split" class="w-btn-icon" aria-label="Back">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      </a>
+    </div>
+    <div class="split-merchant"><%= receipt.merchantName %></div>
+    <div class="split-date-row">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>
+      <%= receipt.purchaseDate ? receipt.purchaseDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' }) : 'Date not recorded' %>
+    </div>
+
+    <div class="split-step-label">Step 3: Select your items</div>
+    <div class="split-step-sub">The remaining items will be split among your guests.</div>
+
+    <div class="pick-items-card" id="pick-items-card"></div>
+
+    <div class="tip-eyebrow">How much did you tip on the receipt?</div>
+    <div class="tip-row">
+      <span class="tip-row-label">Receipt Tip</span>
+      <span class="tip-row-value" id="tip-summary">0% (<%= receipt.currency || 'CA' %>$0)</span>
+    </div>
+    <div class="tip-options">
+      <button type="button" class="tip-option" data-tip-preset="15">15%</button>
+      <button type="button" class="tip-option" data-tip-preset="20">20%</button>
+      <button type="button" class="tip-option" data-tip-preset="25">25%</button>
+      <button type="button" class="tip-option" id="tip-custom-toggle">%&nbsp;/&nbsp;<%= receipt.currency || 'CA' %>$</button>
+    </div>
+    <div class="tip-custom-row" id="tip-custom-row">
+      <button type="button" class="tip-mode-btn active" id="tip-mode-percent">%</button>
+      <button type="button" class="tip-mode-btn" id="tip-mode-amount"><%= receipt.currency || 'CA' %>$</button>
+      <input type="number" inputmode="decimal" min="0" step="0.01" class="tip-custom-input" id="tip-custom-input" placeholder="Enter %" />
+    </div>
+
+    <div class="breakdown-card">
+      <div style="flex:1; min-width:0;">
+        <div class="breakdown-title">Price Breakdown</div>
+        <div class="breakdown-line">Total amount to split:</div>
+        <div class="breakdown-guest-row">
+          <span class="breakdown-guest-label">Amount for guests</span>
+          <span class="breakdown-guest-value" id="guest-amount"><%= receipt.currency || 'CA' %>$0.00</span>
+        </div>
+        <div class="breakdown-note">This is the total amount to be split among your guests</div>
+      </div>
+      <button type="button" class="breakdown-photo" aria-label="View receipt photo"
+              onclick="openImageViewer('/account/receipts/scanned/<%= receipt.id %>/image', '<%= receipt.merchantName.replace(/'/g, "\\'") %>')">
+        <img src="/account/receipts/scanned/<%= receipt.id %>/image" alt="Receipt photo" />
+        <span class="breakdown-photo-label">View</span>
+      </button>
+    </div>
+
+    <form method="POST" action="/account/receipts/scanned/<%= receipt.id %>/split/items" id="split-items-form">
+      <input type="hidden" name="claimedDescriptions" id="claimed-input" />
+      <input type="hidden" name="tip" id="tip-input" />
+      <input type="hidden" name="guestAmount" id="guest-amount-input" />
+      <button type="submit" class="split-continue-btn" id="split-submit-btn">Split <%= receipt.currency || 'CA' %>$<%= money(receipt.total) %></button>
+    </form>
+  </div>
+
+  <%- include('partials/image-viewer') %>
+
+  <script>
+    const currencyPrefix = <%- JSON.stringify(receipt.currency || 'CA') %> + '$';
+    const items = <%- JSON.stringify(items.map((it) => ({ description: it.description || 'Item', amount: Number(it.amount) || 0, claimed: false }))) %>;
+    const receiptTaxDollars = <%- JSON.stringify((receipt.tax || 0) / 100) %>;
+    const receiptTotalDollars = <%- JSON.stringify(receipt.total / 100) %>;
+    const receiptTipDollars = <%- JSON.stringify((receipt.tip || 0) / 100) %>;
+
+    function money(n) { return currencyPrefix + (Math.round((n + Number.EPSILON) * 100) / 100).toFixed(2); }
+
+    const itemsSum = items.reduce((sum, it) => sum + it.amount, 0);
+
+    const card = document.getElementById('pick-items-card');
+    function renderItems() {
+      card.innerHTML = items.map((it, i) => `
+        <div class="pick-item-row" data-index="${i}">
+          <button type="button" class="pick-item-checkbox${it.claimed ? ' checked' : ''}" data-action="toggle">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 13l4 4L19 7"/></svg>
+          </button>
+          <div class="pick-item-text">
+            <div class="pick-item-name">${it.description}</div>
+            <div class="pick-item-price">${money(it.amount)}</div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    card.addEventListener('click', (e) => {
+      const row = e.target.closest('.pick-item-row');
+      if (!row) return;
+      const i = Number(row.dataset.index);
+      items[i].claimed = !items[i].claimed;
+      renderItems();
+      recompute();
+    });
+
+    // --- Tip ---
+    let tipMode = 'percent';
+    let tipValue = 0;
+    if (receiptTipDollars > 0 && itemsSum > 0) {
+      tipMode = 'percent';
+      tipValue = Math.round((receiptTipDollars / itemsSum) * 100);
+    }
+
+    function setTipPreset(pct, btn) {
+      tipMode = 'percent';
+      tipValue = pct;
+      document.querySelectorAll('.tip-option[data-tip-preset]').forEach((b) => b.classList.remove('active'));
+      if (btn) btn.classList.add('active');
+      document.getElementById('tip-custom-toggle').classList.remove('active');
+      document.getElementById('tip-custom-row').classList.remove('open');
+      recompute();
+    }
+    document.querySelectorAll('.tip-option[data-tip-preset]').forEach((btn) => {
+      btn.addEventListener('click', () => setTipPreset(Number(btn.dataset.tipPreset), btn));
+    });
+
+    const tipCustomToggle = document.getElementById('tip-custom-toggle');
+    const tipCustomRow = document.getElementById('tip-custom-row');
+    const tipCustomInput = document.getElementById('tip-custom-input');
+    const tipModePercentBtn = document.getElementById('tip-mode-percent');
+    const tipModeAmountBtn = document.getElementById('tip-mode-amount');
+
+    tipCustomToggle.addEventListener('click', () => {
+      document.querySelectorAll('.tip-option[data-tip-preset]').forEach((b) => b.classList.remove('active'));
+      tipCustomToggle.classList.add('active');
+      tipCustomRow.classList.add('open');
+      tipCustomInput.focus();
+    });
+    tipModePercentBtn.addEventListener('click', () => {
+      tipMode = 'percent'; tipModePercentBtn.classList.add('active'); tipModeAmountBtn.classList.remove('active');
+      tipCustomInput.placeholder = 'Enter %'; tipValue = Number(tipCustomInput.value) || 0; recompute();
+    });
+    tipModeAmountBtn.addEventListener('click', () => {
+      tipMode = 'amount'; tipModeAmountBtn.classList.add('active'); tipModePercentBtn.classList.remove('active');
+      tipCustomInput.placeholder = 'Enter ' + currencyPrefix; tipValue = Number(tipCustomInput.value) || 0; recompute();
+    });
+    tipCustomInput.addEventListener('input', () => { tipValue = Number(tipCustomInput.value) || 0; recompute(); });
+
+    function recompute() {
+      const claimedSubtotal = items.filter((it) => it.claimed).reduce((sum, it) => sum + it.amount, 0);
+      const guestsSubtotal = itemsSum - claimedSubtotal;
+      const share = itemsSum > 0 ? guestsSubtotal / itemsSum : 0;
+
+      const tipDollars = tipMode === 'percent' ? itemsSum * (tipValue / 100) : tipValue;
+      const tipPct = itemsSum > 0 ? (tipDollars / itemsSum) * 100 : 0;
+
+      const guestsTax = receiptTaxDollars * share;
+      const guestsTip = tipDollars * share;
+      const guestAmount = guestsSubtotal + guestsTax + guestsTip;
+
+      document.getElementById('guest-amount').textContent = money(guestAmount);
+      document.getElementById('tip-summary').textContent = Math.round(tipPct) + '% (' + money(tipDollars) + ')';
+
+      const fullTotal = itemsSum + receiptTaxDollars + tipDollars;
+      document.getElementById('split-submit-btn').textContent = 'Split ' + money(fullTotal);
+
+      document.getElementById('claimed-input').value = JSON.stringify(items.filter((it) => it.claimed).map((it) => it.description));
+      document.getElementById('tip-input').value = tipDollars.toFixed(2);
+      document.getElementById('guest-amount-input').value = guestAmount.toFixed(2);
+    }
+
+    document.querySelector(`.tip-option[data-tip-preset="${tipValue}"]`)?.classList.add('active');
+
+    renderItems();
+    recompute();
+  </script>
+</body>
+</html>

@@ -989,6 +989,7 @@ model Customer {
   notifications     Notification[]
   pushSubscriptions PushSubscription[]
   identifiers       ShopperIdentifier[]
+  splitGroups       SplitGroup[]
   legalAcceptances  ShopperLegalAcceptance[]
 
   @@index([referredByAffiliateId])
@@ -1110,9 +1111,96 @@ model ScannedReceipt {
   tax2 Int?
 
   shareLinks ScannedReceiptShareLink[]
+  splitGroup SplitGroup?
 
   @@index([customerId])
   @@index([warrantyExpiresAt])
+}
+
+// Split the Bill's real, ongoing state for one receipt -- created the moment
+// any of Pick items / Split evenly / Create group is completed. One group per
+// receipt (1:1), matching this app's scope for now: a bill split doesn't span
+// multiple receipts yet.
+//
+// Entirely host-managed, on purpose -- there is no guest login and no
+// guest-facing page. Guests are names the host types in (SplitGuest), a
+// payment is the host recording cash they were handed in person, and
+// "amount owed" per guest is computed at render time (totalToCollectCents
+// divided evenly across non-host guests), not stored, so it can never drift
+// out of sync with the guest list. See routes/customer-account.js's group
+// handlers for that math.
+model SplitGroup {
+  id               String         @id @default(cuid())
+  scannedReceiptId String         @unique
+  scannedReceipt   ScannedReceipt @relation(fields: [scannedReceiptId], references: [id], onDelete: Cascade)
+  customerId       String
+  customer         Customer       @relation(fields: [customerId], references: [id])
+
+  status String @default("collecting") // 'collecting' | 'archived'
+
+  // Set from the Create Group form when that's how the split started;
+  // null when it started from Pick items or Split evenly, in which case
+  // the UI just shows the receipt's own merchant name instead.
+  name        String?
+  description String?
+
+  // The portion of the receipt's total that's the host's own, not something
+  // to collect from anyone -- what's left over (total - hostShareCents) is
+  // totalToCollectCents. Computed once at creation from whichever split
+  // method the host picked (their claimed items' share, their one even
+  // split, or 0 for Create Group, where nothing's been claimed yet).
+  hostShareCents Int
+
+  // A snapshot of the receipt's line items at the moment the group was
+  // created, each with a `paid` flag -- kept separate from
+  // ScannedReceipt.lineItems (the receipt's own record of what was printed)
+  // so recording a payment never rewrites the receipt itself. Shape:
+  // [{ description: string, amount: number, quantity: number, paid: boolean }]
+  // `amount` is a dollar line total, matching ScannedReceipt.lineItems.
+  items Json
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  guests   SplitGuest[]
+  payments SplitPayment[]
+}
+
+model SplitGuest {
+  id      String     @id @default(cuid())
+  groupId String
+  group   SplitGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  name   String
+  // The host's own row -- created automatically with the group, always
+  // shown first, never owes anything (they already paid the receipt).
+  isHost Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  payments SplitPayment[]
+
+  @@index([groupId])
+}
+
+// One cash-in-hand payment the host recorded. guestId is null for "No one /
+// collected" -- the host already has the cash, not attributed to a specific
+// guest. itemDescriptions names which of the group's items this payment
+// covers, so those items flip from Unclaimed to paid on the receipt view.
+model SplitPayment {
+  id      String     @id @default(cuid())
+  groupId String
+  group   SplitGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  guestId String?
+  guest   SplitGuest? @relation(fields: [guestId], references: [id], onDelete: SetNull)
+
+  amountCents      Int
+  itemDescriptions Json
+  method           String   @default("cash")
+  createdAt        DateTime @default(now())
+
+  @@index([groupId])
 }
 
 // A time-limited, unauthenticated link to one scanned receipt's photo -- see

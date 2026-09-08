@@ -256,8 +256,18 @@
           checks for a photo itself. %>
       <input type="file" id="receiptPhoto" name="receiptPhoto" style="display:none;" />
       <div class="file-name" id="file-name" style="padding: 0 12px;"></div>
-      <button type="submit" class="w-btn" id="submit-btn" style="margin:14px 12px 8px; width:calc(100% - 24px); display:none;">Continue</button>
+      <button type="submit" class="w-btn" id="submit-btn" style="margin:14px 12px 8px; width:calc(100% - 24px); display:none;">Save Receipt</button>
+      <%# Splitting isn't built yet -- this stands the button up where it'll
+          live rather than shipping a page with a dead link. type="button"
+          (not submit) so tapping it can't accidentally trigger the upload,
+          and it's outside the <form> for the same reason. Shown/hidden in
+          lockstep with #submit-btn (see useFile() below) since there's
+          nothing to split before a photo is attached either. %>
     </form>
+    <button type="button" class="w-btn w-btn-secondary" id="split-bill-btn" style="margin:0 12px 8px; width:calc(100% - 24px); display:none;">Split the Bill</button>
+    <div id="split-bill-note" style="display:none; text-align:center; font-size:12.5px; color:var(--w-ink-soft); margin:0 12px 8px;">
+      Splitting a receipt with friends is coming soon.
+    </div>
 
     <div class="w-card tips-card">
       <div class="tips-zigzag"></div>
@@ -336,6 +346,11 @@
     const hiddenInput = document.getElementById('receiptPhoto');
     const fileName = document.getElementById('file-name');
     const submitBtn = document.getElementById('submit-btn');
+    const splitBillBtn = document.getElementById('split-bill-btn');
+    const splitBillNote = document.getElementById('split-bill-note');
+    splitBillBtn.addEventListener('click', () => {
+      splitBillNote.style.display = 'block';
+    });
 
     // The visible form only ever submits the ONE hidden #receiptPhoto
     // input the server expects -- however a photo was actually obtained
@@ -361,6 +376,7 @@
       }
       fileName.textContent = file.name;
       submitBtn.style.display = 'inline-flex';
+      splitBillBtn.style.display = 'inline-flex';
     }
 
     // Always goes through JS now, not just as a Safari/DataTransfer rescue --

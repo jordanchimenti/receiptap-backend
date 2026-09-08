@@ -396,25 +396,11 @@
           <input type="hidden" name="confirmDuplicate" value="1" />
           <button type="submit" class="w-btn">Save it anyway</button>
         <% } else { %>
-          <button type="submit" class="w-btn">Save Receipt</button>
+          <button type="submit" class="w-btn">Save to wallet</button>
         <% } %>
-        <%# Splitting isn't built yet -- this stands the button up where it'll
-            live rather than shipping a page with a dead link. type="button"
-            (not submit) so tapping it can't accidentally trigger the save
-            form. %>
-        <button type="button" class="w-btn w-btn-secondary" id="split-bill-btn" style="margin-top:10px;">Split the Bill</button>
-        <div id="split-bill-note" style="display:none; text-align:center; font-size:12.5px; color:var(--w-ink-soft); margin-top:8px;">
-          Splitting a receipt with friends is coming soon.
-        </div>
       </div>
     </form>
   </div>
-
-  <script>
-    document.getElementById('split-bill-btn').addEventListener('click', () => {
-      document.getElementById('split-bill-note').style.display = 'block';
-    });
-  </script>
 
   <script>
     // Live-mirror the merchant name and total into the receipt replica as

@@ -15,6 +15,47 @@
 <meta name="apple-mobile-web-app-title" content="ReceipTap" />
 <meta name="theme-color" content="#0A0A0A" />
 <script>
+  // Branded splash, covering the gap between "browser has this page's HTML"
+  // and "this page's HTML has painted" -- the black flash the customer
+  // otherwise sees is just <body>'s own background showing through before
+  // anything else has rendered. A script placed later (e.g. on
+  // DOMContentLoaded, the way the pull-to-refresh badge below is built)
+  // would run AFTER that first paint, so it could only ever show the splash
+  // on TOP of a flash of real content already visible -- too late to cover
+  // it. document.write(), run synchronously while this <head> script is
+  // still executing, writes directly into the parser's stream at this exact
+  // point -- landing the splash markup before <body> has been parsed at
+  // all, so it's the very first thing painted.
+  //
+  // Gated on sessionStorage so it shows once per app session (first load
+  // after opening the PWA, or a hard refresh that starts a new session) --
+  // not on every tab-bar tap, which are each a full page navigation in this
+  // server-rendered app and would otherwise retrigger it constantly.
+  (function () {
+    try {
+      if (sessionStorage.getItem('receiptap-splash-shown')) return;
+      sessionStorage.setItem('receiptap-splash-shown', '1');
+    } catch (err) {
+      return; // private mode, storage disabled -- skip rather than risk showing it every load
+    }
+    document.write(
+      '<div id="app-splash"><img src="/images/receiptap-mark.png" alt="" class="app-splash-mark" /></div>'
+    );
+    window.addEventListener('DOMContentLoaded', function () {
+      var el = document.getElementById('app-splash');
+      if (!el) return;
+      setTimeout(function () {
+        el.classList.add('app-splash-hide');
+        // Not transitionend -- with prefers-reduced-motion active, #app-splash's
+        // own transition is `none` (see the CSS below), so that event would
+        // never fire and this element would sit invisible in the DOM forever
+        // instead of actually being removed. A fixed timeout matching the
+        // transition's own duration cleans it up either way.
+        setTimeout(function () { el.remove(); }, 400);
+      }, 550);
+    });
+  })();
+
   // Chrome/Edge fire beforeinstallprompt once, early, and only on pages that
   // meet the install criteria -- often before any page-specific script has
   // run. Capture it here (this partial is in the <head> of every wallet and
@@ -207,6 +248,39 @@
      "warm paper"/"cool workspace" system untouched. ReceipTap's brand
      blue stands in for green throughout. -->
 <style>
+  /* App-open splash -- see the script above that writes #app-splash into the
+     document. The mark's own PNG is dark navy on transparent, meant for a
+     light card (the same reason the wordmark logo needed .logo-chip); here
+     it's forced to a pure white silhouette and given its own glow instead,
+     since alpha survives brightness/invert untouched so this works
+     regardless of the source art's actual color. */
+  #app-splash {
+    position: fixed; inset: 0; z-index: 3000;
+    display: flex; align-items: center; justify-content: center;
+    background: radial-gradient(circle at 30% 24%, #1157e0 0%, #063a9e 32%, #041a52 64%, #03081c 100%);
+    transition: opacity 0.4s ease;
+  }
+  #app-splash.app-splash-hide { opacity: 0; pointer-events: none; }
+  .app-splash-mark {
+    width: 92px; height: auto;
+    filter: brightness(0) invert(1) drop-shadow(0 0 14px rgba(255,255,255,0.45)) drop-shadow(0 0 30px rgba(5,107,254,0.7));
+    animation: app-splash-pulse 1.8s ease-in-out infinite;
+  }
+  @keyframes app-splash-pulse {
+    0%, 100% {
+      transform: scale(1);
+      filter: brightness(0) invert(1) drop-shadow(0 0 14px rgba(255,255,255,0.45)) drop-shadow(0 0 30px rgba(5,107,254,0.7));
+    }
+    50% {
+      transform: scale(1.06);
+      filter: brightness(0) invert(1) drop-shadow(0 0 22px rgba(255,255,255,0.7)) drop-shadow(0 0 55px rgba(5,107,254,1));
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .app-splash-mark { animation: none; }
+    #app-splash { transition: none; }
+  }
+
   /* Pull-to-refresh. A standalone PWA has no browser chrome and no native
      pull-to-refresh, so without this there is no way to reload a page from
      the home-screen app at all -- you'd have to close and reopen it.

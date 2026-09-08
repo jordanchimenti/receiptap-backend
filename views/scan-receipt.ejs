@@ -268,17 +268,13 @@
       <input type="file" id="receiptPhoto" name="receiptPhoto" style="display:none;" />
       <div class="file-name" id="file-name" style="padding: 0 12px;"></div>
       <button type="submit" class="w-btn" id="submit-btn" style="margin:14px 12px 8px; width:calc(100% - 24px); display:none;">Continue</button>
-      <%# Splitting isn't built yet -- this stands the button up where it'll
-          live rather than shipping a page with a dead link. type="button"
-          (not submit) so tapping it can't accidentally trigger the upload,
-          and it's outside the <form> for the same reason. Shown/hidden in
-          lockstep with #submit-btn (see useFile() below) since there's
-          nothing to split before a photo is attached either. %>
     </form>
+    <%# type="button", and outside the <form>, since this triggers the same
+        real upload/AI-read as Continue but lands on "Confirm items"
+        (scan-receipt-split.ejs) instead of "Confirm details" -- submitScan()
+        below handles both. Shown/hidden in lockstep with #submit-btn (see
+        useFile()) since there's nothing to split before a photo is attached. %>
     <button type="button" class="w-btn split-bill-btn" id="split-bill-btn" style="margin:18px 12px 8px; width:calc(100% - 24px); display:none;">Split the Bill</button>
-    <div id="split-bill-note" style="display:none; text-align:center; font-size:12.5px; color:var(--w-ink-soft); margin:0 12px 8px;">
-      Splitting a receipt with friends is coming soon.
-    </div>
 
     <div class="w-card tips-card">
       <div class="tips-zigzag"></div>
@@ -300,18 +296,37 @@
       <div class="processing-sub" id="processing-sub">Hang tight, this only takes a moment.</div>
     </div>
     <div class="processing-steps" id="processing-steps">
-      <div class="processing-step" id="step-photo">
-        <span class="step-icon"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l6 6L20 6"/></svg></span>
-        <span class="step-label">Photo ready</span>
+      <%# Shown right after a photo is captured/picked, before the "Continue"
+          button even appears -- covers the real local decode/resize/encode
+          work in prepareFileForUpload() (see the script below), not the
+          server round trip. %>
+      <div id="steps-capture-group">
+        <div class="processing-step" id="step-captured">
+          <span class="step-icon"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l6 6L20 6"/></svg></span>
+          <span class="step-label">Receipt captured successfully</span>
+        </div>
+        <div class="processing-step" id="step-preparing">
+          <span class="step-icon"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l6 6L20 6"/></svg></span>
+          <span class="step-label">Preparing file</span>
+        </div>
+        <div class="processing-step" id="step-compressing">
+          <span class="step-icon"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l6 6L20 6"/></svg></span>
+          <span class="step-label">Compressing image</span>
+        </div>
       </div>
-      <div class="processing-step" id="step-upload">
-        <span class="step-icon"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l6 6L20 6"/></svg></span>
-        <span class="step-label">Uploading</span>
-        <span class="step-detail" id="step-upload-detail"></span>
-      </div>
-      <div class="processing-step" id="step-read">
-        <span class="step-icon"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l6 6L20 6"/></svg></span>
-        <span class="step-label">Reading your receipt</span>
+      <%# Shown after tapping "Continue" -- the real server round trip.
+          No "photo ready" step here: the capture group above already
+          confirmed that moments earlier, right after the photo was taken. %>
+      <div id="steps-upload-group">
+        <div class="processing-step" id="step-upload">
+          <span class="step-icon"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l6 6L20 6"/></svg></span>
+          <span class="step-label">Uploading</span>
+          <span class="step-detail" id="step-upload-detail"></span>
+        </div>
+        <div class="processing-step" id="step-read">
+          <span class="step-icon"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l6 6L20 6"/></svg></span>
+          <span class="step-label">Extracting items and prices</span>
+        </div>
       </div>
     </div>
     <div class="processing-error" id="processing-error"></div>
@@ -358,10 +373,7 @@
     const fileName = document.getElementById('file-name');
     const submitBtn = document.getElementById('submit-btn');
     const splitBillBtn = document.getElementById('split-bill-btn');
-    const splitBillNote = document.getElementById('split-bill-note');
-    splitBillBtn.addEventListener('click', () => {
-      splitBillNote.style.display = 'block';
-    });
+    splitBillBtn.addEventListener('click', () => submitScan('split'));
 
     // The visible form only ever submits the ONE hidden #receiptPhoto
     // input the server expects -- however a photo was actually obtained
@@ -394,7 +406,11 @@
     // that's what lets the processing overlay show real upload progress via
     // XHR for every submission, not only the ones where DataTransfer failed.
     const processingOverlay = document.getElementById('processing-overlay');
-    const stepPhoto = document.getElementById('step-photo');
+    const stepsCaptureGroup = document.getElementById('steps-capture-group');
+    const stepsUploadGroup = document.getElementById('steps-upload-group');
+    const stepCaptured = document.getElementById('step-captured');
+    const stepPreparing = document.getElementById('step-preparing');
+    const stepCompressing = document.getElementById('step-compressing');
     const stepUpload = document.getElementById('step-upload');
     const stepUploadDetail = document.getElementById('step-upload-detail');
     const stepRead = document.getElementById('step-read');
@@ -404,8 +420,12 @@
     const processingTitle = document.getElementById('processing-title');
     const processingSub = document.getElementById('processing-sub');
 
+    function pause(ms) {
+      return new Promise((resolve) => setTimeout(resolve, ms));
+    }
+
     function resetOverlay() {
-      [stepPhoto, stepUpload, stepRead].forEach((el) => el.classList.remove('done', 'active'));
+      [stepCaptured, stepPreparing, stepCompressing, stepUpload, stepRead].forEach((el) => el.classList.remove('done', 'active'));
       stepUploadDetail.textContent = '';
       processingSteps.style.display = '';
       processingError.classList.remove('show');
@@ -428,16 +448,20 @@
       processingOverlay.classList.remove('open');
     });
 
-    document.getElementById('scan-form').addEventListener('submit', (e) => {
-      e.preventDefault();
+    // Shared by the form's own submit (intent omitted, lands on the normal
+    // "Confirm details" review) and the Split the Bill button (intent
+    // 'split', lands on "Confirm items" instead) -- same real upload and AI
+    // read either way, just a different landing page for the same result.
+    function submitScan(intent) {
       if (!pendingFile) {
         fileName.textContent = 'Take or choose a photo first.';
         return;
       }
 
       resetOverlay();
+      stepsCaptureGroup.style.display = 'none';
+      stepsUploadGroup.style.display = '';
       processingOverlay.classList.add('open');
-      stepPhoto.classList.add('done'); // real: we already have the file in hand
       stepUpload.classList.add('active');
 
       const xhr = new XMLHttpRequest();
@@ -477,8 +501,60 @@
 
       const body = new FormData();
       body.append('receiptPhoto', pendingFile);
+      if (intent) body.append('intent', intent);
       xhr.send(body);
+    }
+
+    document.getElementById('scan-form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      submitScan();
     });
+
+    // Drives the "capture" step group above through the real local work of
+    // getting a photo ready to upload -- decoding it to check its size, then
+    // resizing/re-encoding it if it's too big. Both file-picker paths below
+    // call this directly; the live camera path calls it too, but with
+    // alreadyPrepared set, since encodeWithinLimit() already did this same
+    // work synchronously as part of capturing the photo (there's no way to
+    // get a File out of a <canvas> without encoding it) -- there, the steps
+    // report real, already-true facts in a brief animated sequence rather
+    // than sitting on async work that isn't actually happening.
+    async function processFileWithOverlay(rawFile, opts) {
+      opts = opts || {};
+      resetOverlay();
+      stepsUploadGroup.style.display = 'none';
+      stepsCaptureGroup.style.display = '';
+      processingOverlay.classList.add('open');
+      stepCaptured.classList.add('done');
+
+      let file = rawFile;
+      if (opts.alreadyPrepared) {
+        stepPreparing.classList.add('active');
+        await pause(220);
+        stepPreparing.classList.remove('active');
+        stepPreparing.classList.add('done');
+
+        stepCompressing.classList.add('active');
+        await pause(220);
+        stepCompressing.classList.remove('active');
+        stepCompressing.classList.add('done');
+      } else {
+        stepPreparing.classList.add('active');
+        const [info] = await Promise.all([decodeAndMeasure(file), pause(200)]);
+        stepPreparing.classList.remove('active');
+        stepPreparing.classList.add('done');
+
+        stepCompressing.classList.add('active');
+        const [compressed] = await Promise.all([compressIfNeeded(file, info), pause(200)]);
+        file = compressed;
+        stepCompressing.classList.remove('active');
+        stepCompressing.classList.add('done');
+      }
+
+      await pause(350); // let the customer actually see the completed checklist before it closes
+      processingOverlay.classList.remove('open');
+      useFile(file);
+    }
 
     // Unlike the live camera below (which always captures at a bounded
     // resolution), a file picked from the photo library or the native
@@ -488,11 +564,11 @@
     // legibility gain (see the comment on MAX_EDGE near capturePhoto: the
     // model downsamples past ~1568px anyway), so it gets the same
     // downscale/compress pass the live camera's own capture goes through.
-    cameraFallbackInput.addEventListener('change', async () => {
-      if (cameraFallbackInput.files[0]) useFile(await prepareFileForUpload(cameraFallbackInput.files[0]));
+    cameraFallbackInput.addEventListener('change', () => {
+      if (cameraFallbackInput.files[0]) processFileWithOverlay(cameraFallbackInput.files[0]);
     });
-    fileInput.addEventListener('change', async () => {
-      if (fileInput.files[0]) useFile(await prepareFileForUpload(fileInput.files[0]));
+    fileInput.addEventListener('change', () => {
+      if (fileInput.files[0]) processFileWithOverlay(fileInput.files[0]);
     });
 
     // --- Live camera overlay ---
@@ -808,23 +884,31 @@
     const MAX_EDGE = 1800;
     const MAX_UPLOAD_BYTES = 4 * 1024 * 1024; // one under the server's 5MB
 
-    // Same downscale-and-compress pass encodeWithinLimit() below does for a
-    // live capture, but for a file that arrived already-encoded (photo
-    // picker, native camera fallback) instead of a live <video> frame.
-    // Already-small files are returned untouched -- decoding and
-    // re-encoding a receipt that's already a few hundred KB only costs
-    // time for no benefit.
-    async function prepareFileForUpload(file) {
-      if (file.size <= MAX_UPLOAD_BYTES) {
-        try {
-          const bitmap = await createImageBitmap(file);
-          const withinEdge = Math.max(bitmap.width, bitmap.height) <= MAX_EDGE;
-          bitmap.close();
-          if (withinEdge) return file;
-        } catch (err) {
-          return file; // not decodable here -- let the server's own validation handle it
-        }
+    // The two real phases behind the "Preparing file" / "Compressing image"
+    // steps above, for a file that arrived already-encoded (photo picker,
+    // native camera fallback) rather than a live <video> frame. Split into
+    // two functions (rather than the one prepareFileForUpload() this used to
+    // be) purely so each has its own step to report against -- decode/measure
+    // is real work distinct from the resize/re-encode that follows it.
+    async function decodeAndMeasure(file) {
+      try {
+        const bitmap = await createImageBitmap(file);
+        const info = { width: bitmap.width, height: bitmap.height };
+        bitmap.close();
+        return info;
+      } catch (err) {
+        return null; // not decodable here -- let the server's own validation handle it
       }
+    }
+
+    // Already-small files are returned untouched -- decoding and re-encoding
+    // a receipt that's already a few hundred KB only costs time for no
+    // benefit. info is decodeAndMeasure()'s result; null means it couldn't
+    // even be decoded, so there's nothing to measure against and this is a
+    // no-op too.
+    async function compressIfNeeded(file, info) {
+      if (!info) return file;
+      if (file.size <= MAX_UPLOAD_BYTES && Math.max(info.width, info.height) <= MAX_EDGE) return file;
 
       let bitmap;
       try {
@@ -889,8 +973,9 @@
         }
 
         successFeedback();
-        useFile(new File([blob], `receipt-${Date.now()}.jpg`, { type: 'image/jpeg' }));
-        closeCamera();
+        closeCamera(); // release the camera before the processing overlay covers it, not after
+        const file = new File([blob], `receipt-${Date.now()}.jpg`, { type: 'image/jpeg' });
+        processFileWithOverlay(file, { alreadyPrepared: true });
       }, 'image/jpeg', quality);
     }
 

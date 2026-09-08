@@ -1561,6 +1561,25 @@ router.post('/account/receipts/scan', requireCustomerAuth, handleReceiptScanUplo
   }
   const imageKey = storeResult.key;
 
+  // Split the Bill needs the items and charges this same extraction already
+  // produces, just presented as something to itemize rather than something
+  // to file away -- not a second AI call or a different upload.
+  if (req.body.intent === 'split') {
+    return res.render('scan-receipt-split', {
+      imageKey,
+      duplicate: null,
+      merchantName: extracted?.merchantName || '',
+      date: extracted?.date || '',
+      category: extracted?.category || '',
+      lineItems: extracted?.lineItems ? JSON.stringify(extracted.lineItems) : '[]',
+      currency: extracted?.currency || '',
+      subtotal: centsToInput(extracted?.subtotalCents),
+      tax: centsToInput(extracted?.taxCents),
+      tip: centsToInput(extracted?.tipCents),
+      error: extracted ? null : "We couldn't read that receipt — add items by hand below.",
+    });
+  }
+
   res.render('scan-receipt-review', {
     imageKey,
     duplicate: null,
@@ -1632,29 +1651,47 @@ router.get('/account/receipts/scan/preview', requireCustomerAuth, async (req, re
 });
 
 router.post('/account/receipts/scan/confirm', requireCustomerAuth, async (req, res) => {
-  const { imageKey, merchantName, date, total, category, lineItems, paymentMethod, receiptNumber } = req.body;
+  const { imageKey, merchantName, date, total, category, lineItems, paymentMethod, receiptNumber, intent } = req.body;
 
-  // Re-renders the review page with whatever they had typed still in place --
-  // losing a hand-corrected total to an error message would be its own bug.
+  // Re-renders whichever confirm screen the customer actually came from, with
+  // whatever they had typed still in place -- losing a hand-corrected total
+  // (or a hand-edited item list) to an error message would be its own bug.
+  // Two confirm screens post here now (the normal review, and the Split the
+  // Bill item editor), and they disagree on-error must land back on the one
+  // that sent it, not always the same one.
   const backToReview = (error, duplicate = null) =>
-    res.render('scan-receipt-review', {
-      imageKey,
-      duplicate,
-      couldNotRead: false,
-      merchantName: merchantName || '',
-      date: date || '',
-      total: total || '',
-      category: category || '',
-      lineItems: lineItems || '[]',
-      paymentMethod: paymentMethod || '',
-      receiptNumber: receiptNumber || '',
-      ...Object.fromEntries(SCAN_DETAIL_FIELDS.map((f) => [f, req.body[f] || ''])),
-      // Carried through the hidden field below, not re-extracted -- this is
-      // a re-render of what was already reviewed once, not a fresh photo.
-      isPreauth: req.body.isPreauth === '1',
-      categories: CATEGORIES,
-      error,
-    });
+    intent === 'split'
+      ? res.render('scan-receipt-split', {
+          imageKey,
+          duplicate,
+          merchantName: merchantName || '',
+          date: date || '',
+          category: category || '',
+          lineItems: lineItems || '[]',
+          currency: req.body.currency || '',
+          subtotal: req.body.subtotal || '',
+          tax: req.body.tax || '',
+          tip: req.body.tip || '',
+          error,
+        })
+      : res.render('scan-receipt-review', {
+          imageKey,
+          duplicate,
+          couldNotRead: false,
+          merchantName: merchantName || '',
+          date: date || '',
+          total: total || '',
+          category: category || '',
+          lineItems: lineItems || '[]',
+          paymentMethod: paymentMethod || '',
+          receiptNumber: receiptNumber || '',
+          ...Object.fromEntries(SCAN_DETAIL_FIELDS.map((f) => [f, req.body[f] || ''])),
+          // Carried through the hidden field below, not re-extracted -- this is
+          // a re-render of what was already reviewed once, not a fresh photo.
+          isPreauth: req.body.isPreauth === '1',
+          categories: CATEGORIES,
+          error,
+        });
 
   // The hidden imageKey field is user-controlled (round-tripped through the
   // browser), so it's checked against the same key shape as the preview

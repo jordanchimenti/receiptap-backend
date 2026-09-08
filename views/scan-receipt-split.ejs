@@ -1,0 +1,444 @@
+<!-- views/scan-receipt-split.ejs -->
+<!-- Split the Bill's "Confirm items" step -- the AI-extracted line items
+     from the SAME extraction pass scan-receipt-review.ejs uses, presented
+     as something to itemize and tip on rather than something to file away.
+     Everything here is real: items, unit prices and quantities come from
+     the receipt as read; nothing is invented to fill out the UI. Posts to
+     the same /account/receipts/scan/confirm route the normal review screen
+     uses (with intent=split so a duplicate/validation error bounces back
+     here, not there), so a confirmed split still just becomes a normal
+     ScannedReceipt row -- no new save path, no new table.
+
+     "Looks good. Continue" saves the receipt and returns to the wallet.
+     Assigning items to specific people isn't built yet -- this screen is
+     the real part of "splitting the bill" that exists today (agreeing on
+     what's actually on it, and the tip, before dividing it up). -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Confirm Items - ReceipTap</title>
+  <link rel="stylesheet" href="/css/receiptap.css" />
+  <%- include('partials/wallet-dark-theme') %>
+  <style>
+    .split-header {
+      display: flex; align-items: center; gap: 14px; margin-bottom: 4px;
+    }
+    .split-title { font-size: 19px; font-weight: 700; }
+    .split-ai-note {
+      display: flex; align-items: center; gap: 7px; color: var(--w-accent);
+      font-size: 12.5px; margin: 10px 2px 18px;
+    }
+    .split-ai-note svg { flex-shrink: 0; }
+
+    .photo-toggle {
+      display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
+      background: var(--w-card); border: 1px solid var(--w-line); border-radius: 14px;
+      padding: 13px 14px; cursor: pointer; color: var(--w-ink); font-family: inherit;
+      box-sizing: border-box;
+    }
+    .photo-toggle-icon {
+      width: 38px; height: 38px; border-radius: 10px; flex-shrink: 0;
+      background: var(--w-accent-wash); color: var(--w-accent);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .photo-toggle-text { flex: 1; }
+    .photo-toggle-title { font-size: 14.5px; font-weight: 700; }
+    .photo-toggle-sub { font-size: 12px; color: var(--w-ink-soft); margin-top: 1px; }
+    .photo-toggle-chevron { color: var(--w-ink-soft); transition: transform 0.2s; flex-shrink: 0; }
+    .photo-toggle.open .photo-toggle-chevron { transform: rotate(180deg); }
+    .photo-panel {
+      display: none; margin-top: 10px; border-radius: 14px; overflow: hidden;
+      border: 1px solid var(--w-line);
+    }
+    .photo-panel.open { display: block; }
+    .photo-panel img { display: block; width: 100%; height: auto; }
+
+    .items-eyebrow {
+      font-size: 11.5px; font-weight: 700; letter-spacing: 0.06em; color: var(--w-ink-soft);
+      margin: 26px 2px 10px;
+    }
+    .item-card {
+      background: var(--w-card); border: 1px solid var(--w-line); border-radius: 14px;
+      padding: 14px; margin-bottom: 10px;
+    }
+    .item-top-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+    .item-name-input {
+      flex: 1; background: none; border: none; color: var(--w-ink); font-size: 15.5px;
+      font-weight: 700; font-family: inherit; padding: 0; min-width: 0;
+    }
+    .item-name-input:focus { outline: none; }
+    .item-name-input::placeholder { color: var(--w-ink-soft); font-weight: 400; }
+    .item-delete-btn {
+      background: none; border: none; color: var(--w-ink-soft); cursor: pointer;
+      padding: 2px; flex-shrink: 0; display: flex;
+    }
+    .item-delete-btn:hover { color: var(--w-danger); }
+
+    .item-controls-row { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+    .item-price-field {
+      flex: 1; display: flex; align-items: center; gap: 4px;
+      background: var(--w-card-raised); border: 1px solid var(--w-line); border-radius: 10px;
+      padding: 8px 11px; min-width: 0;
+    }
+    .item-price-field span { color: var(--w-ink-soft); font-size: 13px; flex-shrink: 0; }
+    .item-price-field input {
+      flex: 1; min-width: 0; background: none; border: none; color: var(--w-ink);
+      font-size: 14.5px; font-family: inherit; padding: 0;
+    }
+    .item-price-field input:focus { outline: none; }
+    .item-qty-stepper {
+      display: flex; align-items: center; border: 1.5px solid var(--w-accent); border-radius: 10px;
+      overflow: hidden; flex-shrink: 0;
+    }
+    .item-qty-btn {
+      width: 30px; height: 34px; background: none; border: none; color: var(--w-accent);
+      font-size: 16px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center;
+    }
+    .item-qty-btn.plus { background: var(--w-accent); color: #fff; }
+    .item-qty-value { width: 26px; text-align: center; font-size: 14.5px; font-weight: 700; }
+    .item-line-total { flex-shrink: 0; font-size: 15px; font-weight: 700; min-width: 62px; text-align: right; }
+
+    .add-item-btn {
+      display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%;
+      background: none; border: none; color: var(--w-accent); font-size: 14.5px; font-weight: 700;
+      font-family: inherit; padding: 12px; cursor: pointer;
+    }
+
+    .tip-eyebrow { font-size: 13px; color: var(--w-ink-soft); margin: 22px 2px 6px; }
+    .tip-row { display: flex; align-items: baseline; justify-content: space-between; margin: 0 2px 12px; }
+    .tip-row-label { font-size: 15.5px; font-weight: 700; }
+    .tip-row-value { font-size: 15.5px; font-weight: 700; color: var(--w-accent); font-variant-numeric: tabular-nums; }
+    .tip-options { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+    .tip-option {
+      background: var(--w-card-raised); border: 1.5px solid var(--w-line); border-radius: 10px;
+      color: var(--w-ink); font-size: 13.5px; font-weight: 700; font-family: inherit;
+      padding: 11px 4px; cursor: pointer; text-align: center;
+    }
+    .tip-option.active { border-color: var(--w-accent); color: var(--w-accent); background: var(--w-accent-wash); }
+    .tip-custom-row { display: none; gap: 8px; margin-top: 10px; }
+    .tip-custom-row.open { display: flex; }
+    .tip-mode-btn {
+      flex-shrink: 0; width: 54px; background: var(--w-card-raised); border: 1.5px solid var(--w-line);
+      border-radius: 10px; color: var(--w-ink); font-size: 13.5px; font-weight: 700; cursor: pointer;
+    }
+    .tip-mode-btn.active { border-color: var(--w-accent); color: var(--w-accent); background: var(--w-accent-wash); }
+    .tip-custom-input {
+      flex: 1; background: var(--w-card-raised); border: 1.5px solid var(--w-line); border-radius: 10px;
+      color: var(--w-ink); font-size: 14.5px; font-family: inherit; padding: 10px 12px;
+    }
+    .tip-custom-input:focus { outline: none; border-color: var(--w-accent); }
+
+    .summary-card {
+      background: var(--w-card); border: 1px solid var(--w-line); border-radius: 14px;
+      padding: 14px 16px; margin: 22px 0 18px;
+    }
+    .summary-row { display: flex; align-items: center; justify-content: space-between; padding: 7px 0; font-size: 14.5px; }
+    .summary-row.muted { color: var(--w-ink-soft); }
+    .summary-row input {
+      width: 90px; text-align: right; background: var(--w-card-raised); border: 1px solid var(--w-line);
+      border-radius: 8px; color: var(--w-ink); font-size: 14px; font-family: inherit; padding: 5px 9px;
+    }
+    .summary-row input:focus { outline: none; border-color: var(--w-accent); }
+    .summary-total { border-top: 1px solid var(--w-line); margin-top: 4px; padding-top: 12px; }
+    .summary-total .summary-row { font-size: 17px; font-weight: 700; }
+    .summary-total .summary-row span:last-child { color: var(--w-accent); font-variant-numeric: tabular-nums; }
+
+    .split-continue-btn {
+      width: 100%; border: none; border-radius: 14px; padding: 16px; font-size: 16px; font-weight: 700;
+      color: #fff; cursor: pointer; font-family: inherit;
+      background: linear-gradient(90deg, var(--w-accent-deep), var(--w-accent) 55%, #35d0ff);
+      box-shadow: 0 6px 24px rgba(5,107,254,0.35);
+      margin-bottom: max(16px, env(safe-area-inset-bottom));
+    }
+  </style>
+</head>
+<body data-no-pull-refresh>
+  <div class="w-shell">
+    <div class="split-header">
+      <a href="/account/receipts" class="w-btn-icon" aria-label="Back">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      </a>
+      <div class="split-title">Confirm items</div>
+    </div>
+    <div class="split-ai-note">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.8 5.6L19.4 9.4 13.8 11.2 12 17l-1.8-5.8L4.6 9.4l5.6-1.8L12 2z"/><path d="M19 15l.8 2.5L22.3 18.3 19.8 19.1 19 21.5 18.2 19.1 15.7 18.3 18.2 17.5z"/></svg>
+      Smart scan by AI. Confirm items and charges before you split.
+    </div>
+
+    <% if (typeof error !== 'undefined' && error) { %>
+      <div class="w-error"><%= error %></div>
+    <% } %>
+    <% if (typeof duplicate !== 'undefined' && duplicate) { %>
+      <div class="w-error">
+        Looks like you already saved a receipt from <%= duplicate.merchantName %> around then.
+      </div>
+    <% } %>
+
+    <% if (typeof imageKey !== 'undefined' && imageKey) { %>
+      <button type="button" class="photo-toggle" id="photo-toggle">
+        <span class="photo-toggle-icon">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h3l2-2h6l2 2h3a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1Z"/><circle cx="12" cy="13" r="3.5"/></svg>
+        </span>
+        <span class="photo-toggle-text">
+          <div class="photo-toggle-title">Receipt photo</div>
+          <div class="photo-toggle-sub" id="photo-toggle-sub">Tap to see the full receipt</div>
+        </span>
+        <svg class="photo-toggle-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      </button>
+      <div class="photo-panel" id="photo-panel">
+        <img src="/account/receipts/scan/preview?key=<%= encodeURIComponent(imageKey) %>" alt="Receipt photo" />
+      </div>
+    <% } %>
+
+    <div class="items-eyebrow">ITEMS</div>
+    <div id="items-list"></div>
+    <button type="button" class="add-item-btn" id="add-item-btn">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+      Add an item
+    </button>
+
+    <div class="tip-eyebrow">How much did you tip on the receipt?</div>
+    <div class="tip-row">
+      <span class="tip-row-label">Receipt Tip</span>
+      <span class="tip-row-value" id="tip-summary">0% (CA$0)</span>
+    </div>
+    <div class="tip-options">
+      <button type="button" class="tip-option" data-tip-preset="15">15%</button>
+      <button type="button" class="tip-option" data-tip-preset="20">20%</button>
+      <button type="button" class="tip-option" data-tip-preset="25">25%</button>
+      <button type="button" class="tip-option" id="tip-custom-toggle">%&nbsp;/&nbsp;$</button>
+    </div>
+    <div class="tip-custom-row" id="tip-custom-row">
+      <button type="button" class="tip-mode-btn active" id="tip-mode-percent">%</button>
+      <button type="button" class="tip-mode-btn" id="tip-mode-amount">$</button>
+      <input type="number" inputmode="decimal" min="0" step="0.01" class="tip-custom-input" id="tip-custom-input" placeholder="Enter %" />
+    </div>
+
+    <div class="summary-card">
+      <div class="summary-row muted"><span>Subtotal</span><span id="summary-subtotal">$0.00</span></div>
+      <div class="summary-row muted">
+        <span>Tax</span>
+        <input type="number" inputmode="decimal" min="0" step="0.01" id="tax-input" value="<%= typeof tax !== 'undefined' ? tax : '' %>" />
+      </div>
+      <div class="summary-row muted"><span>Tip</span><span id="summary-tip">$0.00</span></div>
+      <div class="summary-total">
+        <div class="summary-row"><span>Total</span><span id="summary-total">$0.00</span></div>
+      </div>
+    </div>
+
+    <form method="POST" action="/account/receipts/scan/confirm" id="split-form">
+      <input type="hidden" name="intent" value="split" />
+      <input type="hidden" name="imageKey" value="<%= typeof imageKey !== 'undefined' ? imageKey : '' %>" />
+      <input type="hidden" name="merchantName" value="<%= typeof merchantName !== 'undefined' ? merchantName : '' %>" />
+      <input type="hidden" name="date" value="<%= typeof date !== 'undefined' ? date : '' %>" />
+      <input type="hidden" name="category" value="<%= typeof category !== 'undefined' ? category : '' %>" />
+      <input type="hidden" name="currency" value="<%= typeof currency !== 'undefined' ? currency : '' %>" />
+      <input type="hidden" name="lineItems" id="lineItems-input" />
+      <input type="hidden" name="subtotal" id="subtotal-input" />
+      <input type="hidden" name="tax" id="tax-hidden-input" />
+      <input type="hidden" name="tip" id="tip-input" />
+      <input type="hidden" name="total" id="total-input" />
+      <% if (typeof duplicate !== 'undefined' && duplicate) { %>
+        <input type="hidden" name="confirmDuplicate" value="1" />
+      <% } %>
+      <button type="submit" class="split-continue-btn"><%= (typeof duplicate !== 'undefined' && duplicate) ? 'Save it anyway' : 'Looks good. Continue' %></button>
+    </form>
+  </div>
+
+  <script>
+    // Seeded from the same extraction scan-receipt-review.ejs uses --
+    // amount is the LINE TOTAL as printed (see scanReceiptService.js), so
+    // it's divided by quantity here to get a per-unit price the stepper can
+    // multiply back up. Falls back to one blank item so the page still
+    // has something to edit if the receipt couldn't be read at all.
+    let parsedItems = [];
+    try {
+      parsedItems = JSON.parse(<%- JSON.stringify(typeof lineItems !== 'undefined' ? lineItems : '[]') %>);
+    } catch (err) { parsedItems = []; }
+
+    let items = (Array.isArray(parsedItems) && parsedItems.length ? parsedItems : [{ description: '', amount: 0, quantity: 1, subItems: [] }])
+      .map((item) => {
+        const quantity = item.quantity && item.quantity > 0 ? item.quantity : 1;
+        return {
+          description: item.description || '',
+          quantity,
+          unitPrice: quantity ? (item.amount || 0) / quantity : (item.amount || 0),
+          subItems: Array.isArray(item.subItems) ? item.subItems : [],
+        };
+      });
+
+    const itemsList = document.getElementById('items-list');
+
+    function money(n) {
+      return '$' + (Math.round((n + Number.EPSILON) * 100) / 100).toFixed(2);
+    }
+
+    function renderItems() {
+      itemsList.innerHTML = items.map((item, i) => `
+        <div class="item-card" data-index="${i}">
+          <div class="item-top-row">
+            <input type="text" class="item-name-input" placeholder="Item name" value="${item.description.replace(/"/g, '&quot;')}" data-field="description" />
+            <button type="button" class="item-delete-btn" data-action="delete" aria-label="Remove item">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m-8 0 1 13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1l1-13"/></svg>
+            </button>
+          </div>
+          <div class="item-controls-row">
+            <div class="item-price-field">
+              <span>$</span>
+              <input type="number" inputmode="decimal" min="0" step="0.01" data-field="unitPrice" value="${item.unitPrice.toFixed(2)}" />
+              <span>/ea</span>
+            </div>
+            <div class="item-qty-stepper">
+              <button type="button" class="item-qty-btn" data-action="dec">−</button>
+              <span class="item-qty-value">${item.quantity}</span>
+              <button type="button" class="item-qty-btn plus" data-action="inc">+</button>
+            </div>
+            <div class="item-line-total">${money(item.unitPrice * item.quantity)}</div>
+          </div>
+        </div>
+      `).join('');
+      recompute();
+    }
+
+    itemsList.addEventListener('click', (e) => {
+      const card = e.target.closest('.item-card');
+      if (!card) return;
+      const i = Number(card.dataset.index);
+      if (e.target.closest('[data-action="delete"]')) {
+        items.splice(i, 1);
+        if (!items.length) items.push({ description: '', amount: 0, quantity: 1, subItems: [] });
+        renderItems();
+      } else if (e.target.closest('[data-action="inc"]')) {
+        items[i].quantity += 1;
+        renderItems();
+      } else if (e.target.closest('[data-action="dec"]')) {
+        if (items[i].quantity > 1) items[i].quantity -= 1;
+        renderItems();
+      }
+    });
+
+    itemsList.addEventListener('input', (e) => {
+      const card = e.target.closest('.item-card');
+      if (!card) return;
+      const i = Number(card.dataset.index);
+      const field = e.target.dataset.field;
+      if (field === 'description') items[i].description = e.target.value;
+      if (field === 'unitPrice') items[i].unitPrice = Number(e.target.value) || 0;
+      // Only the line total and summary need to redraw, not the input the
+      // customer is mid-typing in -- a full renderItems() here would steal
+      // focus and the cursor position on every keystroke.
+      const totalEl = card.querySelector('.item-line-total');
+      if (totalEl) totalEl.textContent = money(items[i].unitPrice * items[i].quantity);
+      recompute();
+    });
+
+    document.getElementById('add-item-btn').addEventListener('click', () => {
+      items.push({ description: '', amount: 0, quantity: 1, subItems: [] });
+      renderItems();
+    });
+
+    // --- Receipt photo toggle ---
+    const photoToggle = document.getElementById('photo-toggle');
+    if (photoToggle) {
+      const photoPanel = document.getElementById('photo-panel');
+      const photoSub = document.getElementById('photo-toggle-sub');
+      photoToggle.addEventListener('click', () => {
+        const open = photoPanel.classList.toggle('open');
+        photoToggle.classList.toggle('open', open);
+        photoSub.textContent = open ? 'Tap to hide' : 'Tap to see the full receipt';
+      });
+    }
+
+    // --- Tip ---
+    // tipMode/tipValue describe the customer's CHOICE (a percent of the
+    // subtotal, or a flat amount) -- the dollar amount actually charged is
+    // always derived from that choice against the current subtotal, never
+    // stored as its own number, so editing an item's price after picking
+    // "20%" updates the tip too instead of leaving it stale.
+    let tipMode = 'percent';
+    let tipValue = 0;
+
+    function setTipPreset(pct, btn) {
+      tipMode = 'percent';
+      tipValue = pct;
+      document.querySelectorAll('.tip-option[data-tip-preset]').forEach((b) => b.classList.remove('active'));
+      if (btn) btn.classList.add('active');
+      document.getElementById('tip-custom-toggle').classList.remove('active');
+      document.getElementById('tip-custom-row').classList.remove('open');
+      recompute();
+    }
+
+    document.querySelectorAll('.tip-option[data-tip-preset]').forEach((btn) => {
+      btn.addEventListener('click', () => setTipPreset(Number(btn.dataset.tipPreset), btn));
+    });
+
+    const tipCustomToggle = document.getElementById('tip-custom-toggle');
+    const tipCustomRow = document.getElementById('tip-custom-row');
+    const tipCustomInput = document.getElementById('tip-custom-input');
+    const tipModePercentBtn = document.getElementById('tip-mode-percent');
+    const tipModeAmountBtn = document.getElementById('tip-mode-amount');
+
+    tipCustomToggle.addEventListener('click', () => {
+      document.querySelectorAll('.tip-option[data-tip-preset]').forEach((b) => b.classList.remove('active'));
+      tipCustomToggle.classList.add('active');
+      tipCustomRow.classList.add('open');
+      tipCustomInput.focus();
+    });
+    tipModePercentBtn.addEventListener('click', () => {
+      tipMode = 'percent';
+      tipModePercentBtn.classList.add('active');
+      tipModeAmountBtn.classList.remove('active');
+      tipCustomInput.placeholder = 'Enter %';
+      tipValue = Number(tipCustomInput.value) || 0;
+      recompute();
+    });
+    tipModeAmountBtn.addEventListener('click', () => {
+      tipMode = 'amount';
+      tipModeAmountBtn.classList.add('active');
+      tipModePercentBtn.classList.remove('active');
+      tipCustomInput.placeholder = 'Enter $';
+      tipValue = Number(tipCustomInput.value) || 0;
+      recompute();
+    });
+    tipCustomInput.addEventListener('input', () => {
+      tipValue = Number(tipCustomInput.value) || 0;
+      recompute();
+    });
+
+    const taxInput = document.getElementById('tax-input');
+    taxInput.addEventListener('input', recompute);
+
+    function recompute() {
+      const subtotal = items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
+      const tax = Number(taxInput.value) || 0;
+      const tip = tipMode === 'percent' ? subtotal * (tipValue / 100) : tipValue;
+      const tipPct = subtotal > 0 ? (tip / subtotal) * 100 : 0;
+      const total = subtotal + tax + tip;
+
+      document.getElementById('summary-subtotal').textContent = money(subtotal);
+      document.getElementById('summary-tip').textContent = money(tip);
+      document.getElementById('summary-total').textContent = money(total);
+      document.getElementById('tip-summary').textContent = Math.round(tipPct) + '% (' + money(tip) + ')';
+
+      document.getElementById('lineItems-input').value = JSON.stringify(
+        items
+          .filter((item) => item.description.trim() || item.unitPrice)
+          .map((item) => ({
+            description: item.description.trim() || 'Item',
+            amount: Math.round((item.unitPrice * item.quantity + Number.EPSILON) * 100) / 100,
+            quantity: item.quantity,
+            subItems: item.subItems,
+          }))
+      );
+      document.getElementById('subtotal-input').value = subtotal.toFixed(2);
+      document.getElementById('tax-hidden-input').value = tax.toFixed(2);
+      document.getElementById('tip-input').value = tip.toFixed(2);
+      document.getElementById('total-input').value = total.toFixed(2);
+    }
+
+    renderItems();
+  </script>
+</body>
+</html>

@@ -156,6 +156,28 @@
       <% } %>
     </div>
 
+    <%# Real, auto-confirming PayPal for Split the Bill -- a Partner Referral
+        connection (services/paypalService.js), separate from the plain
+        paypalMeHandle field above (which stays as the manual, no-onboarding
+        fallback). Same "just a link, not a form control" reasoning as the
+        Card payments card above it. %>
+    <div class="w-card settings-card">
+      <h2>Automatic PayPal</h2>
+      <% if (paypalConnectError) { %>
+        <div class="w-error">Couldn't start PayPal onboarding — please try again in a moment.</div>
+      <% } %>
+      <% if (paypalConnectPending) { %>
+        <div class="success-note" style="margin-bottom:14px;">PayPal has your details — this turns on automatically once they finish reviewing your account.</div>
+      <% } %>
+      <% if (customer.paypalOnboarded) { %>
+        <p class="sub">✅ Connected. Guests can pay through PayPal right on your Split the Bill link, and it's marked paid automatically — no need to record it yourself.</p>
+        <a href="/account/connect-paypal/start" class="w-btn w-btn-secondary" style="width:100%; box-sizing:border-box; text-align:center; display:block; text-decoration:none;">Update details</a>
+      <% } else { %>
+        <p class="sub">Connect your real PayPal account so a guest's PayPal payment gets marked paid automatically, instead of you having to record it yourself. Your PayPal.me handle above still works as a fallback either way.</p>
+        <a href="/account/connect-paypal/start" class="w-btn" style="width:100%; box-sizing:border-box; text-align:center; display:block; text-decoration:none;">Connect PayPal</a>
+      <% } %>
+    </div>
+
     <%# Saving receipts. Sits above Card recognition because it applies to
         every shopper on every POS, while recognition is Square-only and only
         appears once a link exists. %>

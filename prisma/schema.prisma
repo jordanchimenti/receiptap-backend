@@ -953,6 +953,17 @@ model Customer {
   stripeConnectAccountId String? @unique
   stripeConnectOnboarded Boolean @default(false)
 
+  // Same idea, PayPal's side (services/paypalService.js) -- a real Partner
+  // Referral onboarding (PayPal's equivalent of Stripe Connect Express),
+  // so a guest's PayPal payment routes straight into this shopper's own
+  // PayPal account (Orders v2 with payee.merchant_id, no platform fee).
+  // paypalMerchantId is the seller's PayPal-assigned merchant ID (returned
+  // on the onboarding redirect as merchantIdInPayPal) -- distinct from
+  // paypalMeHandle above, which stays as the manual, no-onboarding-needed
+  // fallback for a shopper who hasn't connected a real account yet.
+  paypalMerchantId String? @unique
+  paypalOnboarded  Boolean @default(false)
+
   // "Forgot password?" flow -- token is single-use (cleared on success) and
   // expires 1 hour after being issued, whichever comes first.
   resetToken          String?   @unique
@@ -1220,15 +1231,40 @@ model SplitPayment {
 
   amountCents      Int
   itemDescriptions Json
-  method           String   @default("cash") // 'cash' | 'card'
+  method           String   @default("cash") // 'cash' | 'card' | 'paypal'
   // Set only for method='card' -- the PaymentIntent this payment came from.
   // Unique so the payment_intent.succeeded webhook handler
   // (services/stripeService.js) can never record the same card payment
   // twice if Stripe retries delivery.
   stripePaymentIntentId String?  @unique
-  createdAt             DateTime @default(now())
+  // Same idempotency reasoning, PayPal's side -- set only for method='paypal',
+  // the Orders v2 order this payment came from. Unique so the
+  // PAYMENT.CAPTURE.COMPLETED webhook handler (services/paypalService.js)
+  // can't double-record if PayPal retries delivery.
+  paypalOrderId String?  @unique
+  createdAt     DateTime @default(now())
 
   @@index([groupId])
+}
+
+// A short-lived record of what a guest's real PayPal order (Orders v2) was
+// for -- which group and which of its items -- keyed by the real PayPal
+// order id. Exists only because Orders v2's custom_id field caps at 127
+// characters, nowhere near enough room for a full itemDescriptions list the
+// way Stripe's PaymentIntent metadata could hold (see createSplitPaymentIntent
+// in services/stripeService.js for the equivalent Stripe flow, which needs no
+// table like this one). The PAYMENT.CAPTURE.COMPLETED webhook handler
+// (services/paypalService.js) reads this back to know what to record, then
+// deletes the row -- it's scratch state for one in-flight payment, not a
+// record of anything that needs to outlive it (the SplitPayment row it
+// produces is the permanent one).
+model PendingPaypalOrder {
+  id               String   @id @default(cuid())
+  orderId          String   @unique
+  groupId          String
+  amountCents      Int
+  itemDescriptions Json
+  createdAt        DateTime @default(now())
 }
 
 // A time-limited, unauthenticated link to one Split the Bill group -- the

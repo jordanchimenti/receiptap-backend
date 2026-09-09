@@ -49,6 +49,7 @@ const { listIdentifiersForShopper, revokeIdentifierByHash } = require('../servic
 const { claimReceiptForShopper } = require('../services/claimReceipt');
 const { getBaseUrl } = require('../lib/baseUrl');
 const { createShopperConnectAccount, createShopperOnboardingLink, getShopperConnectStatus } = require('../services/stripeService');
+const { createPartnerReferral, getSellerStatus } = require('../services/paypalService');
 const { buildState, parseState } = require('../lib/oauthState');
 const appleAuthService = require('../services/appleAuthService');
 const microsoftAuthService = require('../services/microsoftAuthService');
@@ -2418,6 +2419,8 @@ router.get('/account/settings', requireCustomerAuth, async (req, res) => {
     recognitionRevoked: req.query.recognitionRevoked === '1',
     connectError: req.query.connect_error === '1',
     connectPending: req.query.connect_pending === '1',
+    paypalConnectError: req.query.paypal_connect_error === '1',
+    paypalConnectPending: req.query.paypal_connect_pending === '1',
   });
 });
 
@@ -2534,6 +2537,49 @@ router.get('/account/connect-stripe/return', requireCustomerAuth, async (req, re
   } catch (err) {
     console.error('Stripe Connect status check failed:', err.message);
     res.redirect('/account/settings?connect_error=1');
+  }
+});
+
+// PayPal's mirror of the Stripe Connect start/return pair above -- a real
+// Partner Referral onboarding (services/paypalService.js) instead of
+// Stripe's accountLinks. Unlike Stripe's return route, which re-derives
+// everything from the signed-in session, PayPal's return redirect is the
+// only place this app learns the seller's real PayPal merchant id
+// (merchantIdInPayPal) -- there's no equivalent of Stripe's "ask the
+// account object for its own id" here, so it has to come off the query
+// string PayPal appends to partner_config_override.return_url.
+router.get('/account/connect-paypal/start', requireCustomerAuth, async (req, res) => {
+  const customer = await prisma.customer.findUnique({ where: { id: req.session.customerId } });
+
+  try {
+    const baseUrl = getBaseUrl(req);
+    const url = await createPartnerReferral(customer, `${baseUrl}/account/connect-paypal/return`);
+    res.redirect(url);
+  } catch (err) {
+    console.error('PayPal Connect onboarding failed to start:', err.message);
+    // Distinct query param from Stripe's connect_error -- the settings page
+    // shows two separate connect cards (Card payments/Stripe, PayPal) and
+    // each needs to say which provider actually failed, not a generic
+    // banner that could misname the other one.
+    res.redirect('/account/settings?paypal_connect_error=1');
+  }
+});
+
+router.get('/account/connect-paypal/return', requireCustomerAuth, async (req, res) => {
+  const merchantIdInPayPal = req.query.merchantIdInPayPal;
+  if (!merchantIdInPayPal) return res.redirect('/account/settings?paypal_connect_error=1');
+
+  try {
+    const status = await getSellerStatus(merchantIdInPayPal);
+    const ready = status.paymentsReceivable && status.primaryEmailConfirmed;
+    await prisma.customer.update({
+      where: { id: req.session.customerId },
+      data: { paypalMerchantId: merchantIdInPayPal, paypalOnboarded: ready },
+    });
+    res.redirect(ready ? '/account/settings' : '/account/settings?paypal_connect_pending=1');
+  } catch (err) {
+    console.error('PayPal Connect status check failed:', err.message);
+    res.redirect('/account/settings?paypal_connect_error=1');
   }
 });
 

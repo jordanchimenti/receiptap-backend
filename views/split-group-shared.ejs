@@ -172,9 +172,9 @@
                 <span class="s-method-radio"></span>
               </button>
             <% } %>
-            <% if (paypalMeHandle) { %>
+            <% if (paypalMeHandle || paypalCheckoutEnabled) { %>
               <button type="button" class="s-method-row" data-method="paypal">
-                <div><div class="s-method-name">PayPal</div><div class="s-method-hint">Choose this method</div></div>
+                <div><div class="s-method-name">PayPal</div><div class="s-method-hint"><%= paypalCheckoutEnabled ? 'Pay right now' : 'Choose this method' %></div></div>
                 <span class="s-method-radio"></span>
               </button>
             <% } %>
@@ -227,7 +227,25 @@
           </div>
         <% } %>
 
-        <% if (paypalMeHandle) { %>
+        <% if (paypalCheckoutEnabled) { %>
+          <div class="s-detail-panel" id="detail-paypal">
+            <div class="s-detail-amount" id="paypal-amount"><%= receipt.currency || 'CA' %>$0.00</div>
+            <div class="s-detail-sub">Send to <%= hostName %></div>
+            <div id="paypal-loading" class="s-card-loading">Loading PayPal&hellip;</div>
+            <div id="paypal-button-wrap" style="display:none;">
+              <div id="paypal-button-container"></div>
+              <div class="s-card-error" id="paypal-error"></div>
+            </div>
+            <div class="s-card-success" id="paypal-success">
+              <div class="s-card-success-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 13l4 4L19 7"/></svg>
+              </div>
+              <div class="s-card-success-title">Payment sent</div>
+              <div class="s-card-success-sub"><%= hostName %> will see it shortly.</div>
+            </div>
+            <button type="button" class="s-change-method" id="paypal-change-method">Change method</button>
+          </div>
+        <% } else if (paypalMeHandle) { %>
           <div class="s-detail-panel" id="detail-paypal">
             <div class="s-detail-amount" id="paypal-amount"><%= receipt.currency || 'CA' %>$0.00</div>
             <div class="s-detail-sub">Send to <%= hostName %></div>
@@ -309,6 +327,9 @@
 
   <% if (cardPaymentsEnabled) { %>
     <script src="https://js.stripe.com/v3/"></script>
+  <% } %>
+  <% if (paypalCheckoutEnabled) { %>
+    <script src="https://www.paypal.com/sdk/js?client-id=<%= paypalClientId %>&currency=<%= receipt.currency || 'CAD' %>&intent=capture&components=buttons"></script>
   <% } %>
 
   <script>
@@ -400,6 +421,7 @@
         const panel = document.getElementById('detail-' + btn.dataset.method);
         if (panel) panel.classList.add('open');
         if (btn.dataset.method === 'card') initCardPayment();
+        if (btn.dataset.method === 'paypal' && paypalCheckoutEnabled) initPaypalPayment();
       });
     });
 
@@ -484,6 +506,71 @@
         document.getElementById('payment-element').innerHTML = '';
         document.getElementById('card-pay-btn').style.display = 'none';
       }
+    }
+
+    // --- PayPal, via a real connected account -----------------------------
+    // Same "server records it, not the browser" rule as card payments above:
+    // onApprove below just tells the guest it worked, but the
+    // PAYMENT.CAPTURE.COMPLETED webhook (services/paypalService.js) is what
+    // actually creates the SplitPayment row and marks these items paid.
+    // Only shown at all when the host has connected a real account
+    // (paypalCheckoutEnabled) -- otherwise the page renders the plain
+    // paypal.me link instead, and this whole block does nothing.
+    const paypalCheckoutEnabled = <%- JSON.stringify(Boolean(paypalCheckoutEnabled)) %>;
+    let paypalButtonsRendered = false;
+
+    function initPaypalPayment() {
+      if (paypalButtonsRendered) return; // PayPal Buttons render once; createOrder below reads live selection on each click
+      paypalButtonsRendered = true;
+
+      const loadingEl = document.getElementById('paypal-loading');
+      const buttonWrap = document.getElementById('paypal-button-wrap');
+      const errorEl = document.getElementById('paypal-error');
+
+      if (typeof paypal === 'undefined' || !paypal.Buttons) {
+        loadingEl.textContent = "Couldn't load PayPal — please try again in a moment.";
+        return;
+      }
+
+      paypal.Buttons({
+        style: { layout: 'vertical', color: 'gold', shape: 'pill', label: 'paypal' },
+        createOrder: async () => {
+          errorEl.style.display = 'none';
+          const checked = itemRows.filter((row) => row.querySelector('.s-item-checkbox').classList.contains('checked'));
+          const itemDescriptions = checked.map((row) => row.dataset.description);
+
+          const res = await fetch(<%- JSON.stringify(`/split/${token}/paypal-order`) %>, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ itemDescriptions }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Could not start payment.');
+          return data.orderId;
+        },
+        onApprove: async (data) => {
+          const res = await fetch(<%- JSON.stringify(`/split/${token}/paypal-capture`) %>, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ orderId: data.orderID }),
+          });
+          const result = await res.json();
+          if (!res.ok) {
+            errorEl.textContent = result.error || 'Payment failed. Please try again.';
+            errorEl.style.display = 'block';
+            return;
+          }
+          buttonWrap.style.display = 'none';
+          document.getElementById('paypal-success').style.display = 'block';
+        },
+        onError: (err) => {
+          errorEl.textContent = 'Payment failed. Please try again.';
+          errorEl.style.display = 'block';
+        },
+      }).render('#paypal-button-container');
+
+      loadingEl.style.display = 'none';
+      buttonWrap.style.display = '';
     }
 
     // A redirect-based payment method (rare for card/Apple Pay/Google Pay,

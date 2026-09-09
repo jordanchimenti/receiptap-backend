@@ -183,7 +183,7 @@ router.post('/logout', (req, res) => {
 // gets an editable placeholder business name -- same tradeoff already made
 // for the equivalent customer-facing flow in routes/customer-account.js.
 router.post('/merchant/google', async (req, res) => {
-  const { credential, refCode, next, demo, acceptAll } = req.body;
+  const { credential, refCode, next, demo, acceptAll, from } = req.body;
   if (!credential) return res.status(400).json({ error: 'Missing Google credential' });
 
   let payload;
@@ -211,9 +211,18 @@ router.post('/merchant/google', async (req, res) => {
     } else {
       // New account -- same consent requirement as the plain signup form
       // (views/signup.ejs checks this client-side too, but that can always
-      // be bypassed, so it's enforced here independently).
+      // be bypassed, so it's enforced here independently). The login page
+      // has no consent checkbox at all (agreeing to terms only happens once,
+      // at signup) -- so a login-page Google button that turns out to be a
+      // brand-new account can't collect consent inline the way signup's can.
+      // Point them at signup instead of showing a "check a box that doesn't
+      // exist here" error.
       if (!acceptAll) {
-        return res.status(400).json({ error: "Please agree to the Terms of Service (which include the Data Processing Agreement), and confirm you've read the Privacy Policy, first." });
+        const message =
+          from === 'login'
+            ? "We couldn't find an account for that email — create one at /signup."
+            : "Please agree to the Terms of Service (which include the Data Processing Agreement), and confirm you've read the Privacy Policy, first.";
+        return res.status(400).json({ error: message });
       }
 
       const referrer = await resolveReferrer({ prisma, refCode, req, email });
@@ -256,7 +265,7 @@ router.post('/merchant/google', async (req, res) => {
 // out twice. Google's handler above is left as its own inline block
 // rather than refactored onto this, since it already works and isn't part
 // of this change.
-async function findOrCreateMerchantFromOAuth({ providerIdField, sub, email: rawEmail, name, refCode, demo, acceptAll, req }) {
+async function findOrCreateMerchantFromOAuth({ providerIdField, sub, email: rawEmail, name, refCode, demo, acceptAll, from, req }) {
   const email = normalizeEmail(rawEmail);
   let merchant = await prisma.merchant.findUnique({ where: { email } });
 
@@ -268,11 +277,16 @@ async function findOrCreateMerchantFromOAuth({ providerIdField, sub, email: rawE
     return merchant;
   }
 
+  // Same reasoning as the Google handler above -- the login page has no
+  // consent checkbox (that only lives on /signup), so a brand-new account
+  // reached via a login-page OAuth button gets pointed at signup instead of
+  // an unactionable "check a box that isn't there" error.
   if (!acceptAll) {
-    throw Object.assign(
-      new Error("Please agree to the Terms of Service (which include the Data Processing Agreement), and confirm you've read the Privacy Policy, first."),
-      { status: 400 }
-    );
+    const message =
+      from === 'login'
+        ? "We couldn't find an account for that email — create one at /signup."
+        : "Please agree to the Terms of Service (which include the Data Processing Agreement), and confirm you've read the Privacy Policy, first.";
+    throw Object.assign(new Error(message), { status: 400 });
   }
 
   const referrer = await resolveReferrer({ prisma, refCode, req, email });
@@ -375,6 +389,7 @@ router.post('/merchant/apple/callback', async (req, res) => {
       refCode: parsedState.refCode,
       demo: parsedState.demo,
       acceptAll: parsedState.acceptAll,
+      from: parsedState.from,
       req,
     });
 
@@ -421,6 +436,7 @@ router.get('/merchant/microsoft/callback', async (req, res) => {
       refCode: parsedState.refCode,
       demo: parsedState.demo,
       acceptAll: parsedState.acceptAll,
+      from: parsedState.from,
       req,
     });
 

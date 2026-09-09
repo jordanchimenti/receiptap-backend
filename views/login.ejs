@@ -42,10 +42,6 @@
       position: absolute; right: 4px; top: 50%; transform: translateY(-50%); background: none; border: none;
       color: var(--ml-ink-soft); cursor: pointer; padding: 8px; display: flex;
     }
-    .consent-row { display: flex; align-items: flex-start; gap: 8px; text-align: left; margin: 6px 0 18px; }
-    .consent-row input[type="checkbox"] { margin-top: 3px; flex-shrink: 0; }
-    .consent-row label { font-size: 12.5px; color: var(--ml-ink-soft); line-height: 1.45; font-weight: 400; }
-    .consent-row label a { color: var(--ml-accent); font-weight: 600; text-decoration: none; }
     .auth-pill-btn {
       display: block; width: 100%; box-sizing: border-box; background: var(--ml-accent); color: #fff; border: none;
       border-radius: 999px; padding: 14px 20px; font-size: 15px; font-weight: 700; cursor: pointer; font-family: inherit;
@@ -104,13 +100,6 @@
           </div>
         </div>
 
-        <div class="consent-row">
-          <input type="checkbox" id="acceptAll" required />
-          <label for="acceptAll">
-            I agree to the <a href="/legal/terms" target="_blank" rel="noopener">Terms of Service</a>, which include the <a href="/legal/dpa" target="_blank" rel="noopener">Data Processing Agreement</a>, and I have read the <a href="/legal/privacy" target="_blank" rel="noopener">Privacy Policy</a>.
-          </label>
-        </div>
-
         <button type="submit" class="auth-pill-btn">Log in</button>
       </form>
 
@@ -148,33 +137,25 @@
       input.type = input.type === 'password' ? 'text' : 'password';
     });
 
-    function consentChecked() {
-      return document.getElementById('acceptAll').checked;
-    }
-
     function showError(msg) {
       const el = document.getElementById('error-box');
       el.textContent = msg;
       el.style.display = 'block';
     }
 
-    // Google/Apple/Microsoft can each act as a signup too (a brand-new
-    // merchant who's never created an account can start straight from
-    // this login page) -- the server only enforces the checkbox in that
-    // new-account case (see findOrCreateMerchantFromOAuth in
-    // routes/auth.js), same as the signup page's own OAuth buttons, so
-    // the checkbox has to be read and carried through here too, not just
-    // on /signup.
+    // Agreeing to the Terms only happens once, at signup -- this page never
+    // collects consent. Google/Apple/Microsoft can each ALSO act as a
+    // signup (a brand-new merchant who's never created an account can start
+    // straight from a login button), but with no checkbox here to represent
+    // real consent, the server treats a brand-new account reached this way
+    // as "no account found" and points them at /signup instead (see
+    // findOrCreateMerchantFromOAuth in routes/auth.js) -- an existing
+    // merchant logging back in is unaffected either way.
     function startOAuth(provider, event) {
       event.preventDefault();
-      if (!consentChecked()) {
-        showError("Please agree to the Terms of Service (which include the Data Processing Agreement), and confirm you've read the Privacy Policy, first.");
-        return false;
-      }
       const params = new URLSearchParams({
         from: 'login',
         next: REDIRECT_TO,
-        acceptAll: '1',
       });
       window.location.href = '/merchant/' + provider + '/connect?' + params;
       return false;
@@ -185,15 +166,10 @@
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script>
       async function handleGoogleSignIn(response) {
-        if (!consentChecked()) {
-          showError("Please agree to the Terms of Service (which include the Data Processing Agreement), and confirm you've read the Privacy Policy, first.");
-          return;
-        }
-
         const res = await fetch('/merchant/google', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ credential: response.credential, next: REDIRECT_TO, acceptAll: true }),
+          body: JSON.stringify({ credential: response.credential, next: REDIRECT_TO, from: 'login' }),
         });
         const data = await res.json();
         if (!res.ok) {

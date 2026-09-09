@@ -833,7 +833,7 @@ async function renderWallet(req, res, { isFullWallet }) {
   // other, and on a phone over a slow link the wait was plainly visible.
   const isFiltered = Boolean(search || from || to || category || deductible);
 
-  const [customer, transactions, scannedReceipts, partnerAccount] = await Promise.all([
+  const [customer, transactions, scannedReceipts, partnerAccount, splitDashboard] = await Promise.all([
     prisma.customer.findUnique({ where: { id: req.session.customerId } }),
     prisma.transaction.findMany({
       where,
@@ -846,6 +846,7 @@ async function renderWallet(req, res, { isFullWallet }) {
     // the page" flag. Affiliate.email is unique, so this is an exact match.
     prisma.customer.findUnique({ where: { id: req.session.customerId }, select: { email: true } })
       .then((c) => (c?.email ? prisma.affiliate.findUnique({ where: { email: c.email }, select: { id: true } }) : null)),
+    computeSplitDashboardTotals(req.session.customerId),
   ]);
 
   // Filtered? Then the extras genuinely describe a different set of rows and
@@ -1029,6 +1030,7 @@ async function renderWallet(req, res, { isFullWallet }) {
       receiptCount: merged.length,
     },
     categories,
+    splitDashboard,
     receipts: isFullWallet ? merged : monthReceipts.slice(0, RECENT_RECEIPT_LIMIT),
     filters: { search: search || '', from: from || '', to: to || '', category: category || '', deductible },
     // The customer's standing rule, and the full list to choose from -- the
@@ -2041,6 +2043,54 @@ async function createSplitGroup(receipt, customerId, { hostShareCents, name = nu
   });
 }
 
+// Buckets every Split the Bill group this customer hosts into exactly one
+// of three real states -- never a fourth "you owe" bucket, since guests pay
+// through an anonymous, no-login link (routes/splitGroupShare.js) and
+// nothing ties a guest back to a Customer account, so there's no data this
+// app could show for "bills I owe someone else" without inventing it:
+//   - collecting: still open, money left to collect (leftToCollectCents > 0)
+//   - collected:  fully paid but the host hasn't archived it yet
+//   - archived:   the host closed it out (POST .../group/archive)
+// "Collected" and "archived" both show the amount actually collected, not
+// the receipt's original total -- a group archived early (before every
+// item was claimed) shouldn't read as if the full amount came in.
+async function computeSplitDashboardTotals(customerId) {
+  const groups = await prisma.splitGroup.findMany({
+    where: { customerId },
+    include: {
+      scannedReceipt: { select: { total: true, currency: true } },
+      payments: { select: { amountCents: true } },
+    },
+  });
+
+  const byCurrency = { collecting: new Map(), collected: new Map(), archived: new Map() };
+  const counts = { collecting: 0, collected: 0, archived: 0 };
+
+  for (const group of groups) {
+    const totalToCollectCents = Math.max(0, group.scannedReceipt.total - group.hostShareCents);
+    const totalCollectedCents = group.payments.reduce((sum, p) => sum + p.amountCents, 0);
+    const leftToCollectCents = Math.max(0, totalToCollectCents - totalCollectedCents);
+    const currency = group.scannedReceipt.currency || 'CAD';
+
+    const bucket = group.status === 'archived' ? 'archived' : leftToCollectCents > 0 ? 'collecting' : 'collected';
+    const cents = bucket === 'collecting' ? leftToCollectCents : totalCollectedCents;
+
+    counts[bucket] += 1;
+    if (cents > 0) byCurrency[bucket].set(currency, (byCurrency[bucket].get(currency) || 0) + cents);
+  }
+
+  const toTotals = (map) =>
+    Array.from(map, ([currency, cents]) => ({ currency, amount: (cents / 100).toFixed(2) })).sort(
+      (a, b) => b.amount - a.amount
+    );
+
+  return {
+    collecting: { totals: toTotals(byCurrency.collecting), count: counts.collecting },
+    collected: { totals: toTotals(byCurrency.collected), count: counts.collected },
+    archived: { totals: toTotals(byCurrency.archived), count: counts.archived },
+  };
+}
+
 // Centralizes the owed/paid math so the group list, member-detail and
 // receipt-in-group views can never disagree about a number. Nothing here is
 // stored -- it's all derived from the group's own hostShareCents/items and
@@ -2405,6 +2455,25 @@ router.post('/account/settings/preferences', requireCustomerAuth, async (req, re
     .replace(/^@/, '')
     .slice(0, 60) || null;
 
+  // Same tolerance as paypalMeHandle above -- a pasted venmo.com/u/name (or
+  // venmo.com/name) URL or a leading "@" is stripped down to the bare
+  // username the guest-page venmo:// deep link (routes/splitGroupShare.js)
+  // needs.
+  const venmoHandle = (req.body.venmoHandle || '')
+    .trim()
+    .replace(/^(https?:\/\/)?(www\.)?venmo\.com\/(u\/)?/i, '')
+    .replace(/^@/, '')
+    .slice(0, 60) || null;
+
+  // Same idea for Cash App -- a pasted cash.app/$cashtag URL or a leading
+  // "$" is stripped down to the bare cashtag (no "$"), since the guest-page
+  // link builds "https://cash.app/$" + cashAppHandle itself.
+  const cashAppHandle = (req.body.cashAppHandle || '')
+    .trim()
+    .replace(/^(https?:\/\/)?(www\.)?cash\.app\//i, '')
+    .replace(/^\$/, '')
+    .slice(0, 60) || null;
+
   await prisma.customer.update({
     where: { id: req.session.customerId },
     data: {
@@ -2415,6 +2484,8 @@ router.post('/account/settings/preferences', requireCustomerAuth, async (req, re
       autoSaveOnTap: req.body.autoSaveOnTap === 'on',
       loyaltyEmails: req.body.loyaltyEmails === 'on',
       paypalMeHandle,
+      venmoHandle,
+      cashAppHandle,
       interacContact: (req.body.interacContact || '').trim().slice(0, 120) || null,
     },
   });

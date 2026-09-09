@@ -159,7 +159,20 @@ router.post('/login', async (req, res) => {
     }
 
     req.session.merchantId = merchant.id;
-    res.redirect(redirect);
+
+    // A demo account has nothing to do on billing beyond the "Add your card"
+    // CTA business-more.ejs already offers -- if the redirect carried through
+    // this login happens to be billing, it's almost always because their
+    // session lapsed while they were there (requireAuth in
+    // routes/account-business.js captures req.originalUrl into the login
+    // redirect) rather than something they were deliberately headed back to.
+    // Land them on the Business "More" section instead -- same page every
+    // other unblocked link from a demo account's dashboard already points
+    // at, with the Personal/Business toggle right on it. Any other explicit
+    // redirect (e.g. toggling Personal -> Business) is still honored as-is.
+    const isBillingRedirect = redirect.startsWith('/account/business/billing') || redirect.startsWith('/dashboard/billing');
+    const finalRedirect = merchant.isDemoAccount && isBillingRedirect ? '/account/business/more' : redirect;
+    res.redirect(finalRedirect);
   } catch (err) {
     console.error('Login failed:', err);
     res.render('login', { error: 'Something went wrong on our end — please try again in a moment.', redirect, ...oauthFields });

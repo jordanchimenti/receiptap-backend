@@ -113,10 +113,18 @@
         this money either way. %>
     <div class="w-card settings-card">
       <h2>Split the Bill payouts</h2>
-      <p class="sub">Shown to guests on your Split the Bill link, so they know how to pay you back. Leave either blank to hide that option.</p>
+      <p class="sub">Shown to guests on your Split the Bill link, so they know how to pay you back. Leave any blank to hide that option.</p>
       <div class="w-field">
         <label>PayPal.me handle (optional)</label>
         <input type="text" name="paypalMeHandle" value="<%= customer.paypalMeHandle || '' %>" placeholder="yourname" maxlength="60" />
+      </div>
+      <div class="w-field">
+        <label>Venmo username (optional)</label>
+        <input type="text" name="venmoHandle" value="<%= customer.venmoHandle || '' %>" placeholder="yourname" maxlength="60" />
+      </div>
+      <div class="w-field">
+        <label>Cash App $Cashtag (optional)</label>
+        <input type="text" name="cashAppHandle" value="<%= customer.cashAppHandle || '' %>" placeholder="yourname" maxlength="60" />
       </div>
       <div class="w-field">
         <label>Interac e-Transfer email or phone (optional)</label>

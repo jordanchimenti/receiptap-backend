@@ -31,7 +31,8 @@ router.get('/split/:token', async (req, res) => {
           scannedReceipt: true,
           customer: {
             select: {
-              name: true, email: true, paypalMeHandle: true, interacContact: true,
+              name: true, email: true, paypalMeHandle: true, venmoHandle: true,
+              cashAppHandle: true, interacContact: true,
               stripeConnectAccountId: true, stripeConnectOnboarded: true,
             },
           },
@@ -65,6 +66,8 @@ router.get('/split/:token', async (req, res) => {
     token: req.params.token,
     hostName: group.customer.name || group.customer.email,
     paypalMeHandle: group.customer.paypalMeHandle,
+    venmoHandle: group.customer.venmoHandle,
+    cashAppHandle: group.customer.cashAppHandle,
     interacContact: group.customer.interacContact,
     cardPaymentsEnabled: Boolean(group.customer.stripeConnectOnboarded && group.customer.stripeConnectAccountId),
     stripePublishableKey: process.env.STRIPE_PUBLISHABLE_KEY || null,

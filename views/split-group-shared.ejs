@@ -3,8 +3,8 @@
      (routes/splitGroupShare.js). Whoever has this link can see the group's
      still-unclaimed items and pick which ones they're covering -- which
      items are checked is client-side scratch state, never sent back to the
-     server on its own. For PayPal/Interac/Cash, paying happens entirely
-     outside ReceipTap and the host is the one who confirms it arrived
+     server on its own. For PayPal/Venmo/Cash App/Interac/Cash, paying
+     happens entirely outside ReceipTap and the host is the one who confirms it arrived
      (Record a cash payment). Card/Apple Pay/Google Pay is the one real
      exception -- POST /split/:token/pay-intent creates a real Stripe
      PaymentIntent (a destination charge routed to the host's own connected
@@ -178,6 +178,18 @@
                 <span class="s-method-radio"></span>
               </button>
             <% } %>
+            <% if (venmoHandle) { %>
+              <button type="button" class="s-method-row" data-method="venmo">
+                <div><div class="s-method-name">Venmo</div><div class="s-method-hint">Choose this method</div></div>
+                <span class="s-method-radio"></span>
+              </button>
+            <% } %>
+            <% if (cashAppHandle) { %>
+              <button type="button" class="s-method-row" data-method="cashapp">
+                <div><div class="s-method-name">Cash App</div><div class="s-method-hint">Choose this method</div></div>
+                <span class="s-method-radio"></span>
+              </button>
+            <% } %>
             <% if (interacContact) { %>
               <button type="button" class="s-method-row" data-method="interac">
                 <div><div class="s-method-name">Interac e-Transfer</div><div class="s-method-hint">Choose this method</div></div>
@@ -228,6 +240,41 @@
               <div class="s-detail-card-value">paypal.me/<%= paypalMeHandle %></div>
             </div>
             <button type="button" class="s-copy-btn" data-copy="paypal.me/<%= paypalMeHandle %>">Copy PayPal details</button>
+            <button type="button" class="s-change-method">Change method</button>
+          </div>
+        <% } %>
+
+        <% if (venmoHandle) { %>
+          <div class="s-detail-panel" id="detail-venmo">
+            <div class="s-detail-amount" id="venmo-amount"><%= receipt.currency || 'CA' %>$0.00</div>
+            <div class="s-detail-sub">Send to <%= hostName %></div>
+            <a href="#" class="s-open-app-btn" id="venmo-open-btn" style="background: linear-gradient(115deg, #008cff, #3d95ce); box-shadow: 0 8px 22px rgba(0,140,255,0.32);">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M19.5 3c1.1 2 1.6 4 1.6 6.5 0 7.5-6.4 17-11.6 17-2.6 0-4.9-1.6-6-4l4.4-2.2c.5 1 1.2 1.6 2 1.6 1.1 0 2-1 2.7-2.6 1-2.3 1.7-5.7 1.7-8.4 0-2.4-.4-4.4-1.2-6L19.5 3Z"/></svg>
+              Open Venmo to Pay
+            </a>
+            <div class="s-detail-card">
+              <div class="s-detail-card-label">Venmo</div>
+              <div class="s-detail-card-value">@<%= venmoHandle %></div>
+            </div>
+            <button type="button" class="s-copy-btn" data-copy="@<%= venmoHandle %>">Copy Venmo username</button>
+            <div class="s-cash-note">Works best from your phone with the Venmo app installed — on desktop, copy the username above instead.</div>
+            <button type="button" class="s-change-method">Change method</button>
+          </div>
+        <% } %>
+
+        <% if (cashAppHandle) { %>
+          <div class="s-detail-panel" id="detail-cashapp">
+            <div class="s-detail-amount" id="cashapp-amount"><%= receipt.currency || 'CA' %>$0.00</div>
+            <div class="s-detail-sub">Send to <%= hostName %></div>
+            <a href="#" target="_blank" rel="noopener" class="s-open-app-btn" id="cashapp-open-btn" style="background: linear-gradient(115deg, #00c244, #00d757); box-shadow: 0 8px 22px rgba(0,194,68,0.32);">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M17 2H7C4.2 2 2 4.2 2 7v10c0 2.8 2.2 5 5 5h10c2.8 0 5-2.2 5-5V7c0-2.8-2.2-5-5-5Zm-1.8 12.8c-.6.6-1.4 1-2.3 1.1l-.1 1.2c0 .3-.3.5-.6.5h-1c-.3 0-.6-.3-.5-.6l.1-1.2c-1-.2-1.9-.7-2.5-1.4-.2-.2-.2-.5 0-.7l.7-.7c.2-.2.5-.2.7 0 .5.5 1.2.8 2 .8.9 0 1.6-.4 1.6-1.1 0-.6-.5-.9-1.8-1.2-1.7-.4-3.1-1-3.1-2.8 0-1.4 1.1-2.4 2.6-2.7l.1-1.2c0-.3.3-.5.6-.5h1c.3 0 .6.3.5.6l-.1 1.1c.8.2 1.5.6 2 1.1.2.2.2.5 0 .7l-.6.7c-.2.2-.5.2-.7.1-.4-.4-1-.6-1.6-.6-.8 0-1.4.4-1.4 1 0 .6.6.8 1.9 1.1 1.9.5 3 1.2 3 2.9 0 1-.4 1.8-1.1 2.4Z"/></svg>
+              Open Cash App to Pay
+            </a>
+            <div class="s-detail-card">
+              <div class="s-detail-card-label">Cash App</div>
+              <div class="s-detail-card-value">$<%= cashAppHandle %></div>
+            </div>
+            <button type="button" class="s-copy-btn" data-copy="$<%= cashAppHandle %>">Copy Cash App $Cashtag</button>
             <button type="button" class="s-change-method">Change method</button>
           </div>
         <% } %>
@@ -298,12 +345,38 @@
       if (interacAmountEl) interacAmountEl.textContent = money(total);
       const cashAmountEl = document.getElementById('cash-amount');
       if (cashAmountEl) cashAmountEl.textContent = money(total);
+      const venmoAmountEl = document.getElementById('venmo-amount');
+      if (venmoAmountEl) venmoAmountEl.textContent = money(total);
+      const cashappAmountEl = document.getElementById('cashapp-amount');
+      if (cashappAmountEl) cashappAmountEl.textContent = money(total);
 
       const paypalOpenBtn = document.getElementById('paypal-open-btn');
       if (paypalOpenBtn) {
         const handle = <%- JSON.stringify(paypalMeHandle || '') %>;
         const currency = <%- JSON.stringify(receipt.currency || 'CAD') %>;
         paypalOpenBtn.href = 'https://paypal.me/' + handle + '/' + total.toFixed(2) + currency;
+      }
+
+      // Venmo has no equivalent to paypal.me's real, cross-platform web
+      // page -- venmo://paycharge is Venmo's own documented deep-link
+      // format, but it only ever opens something on a phone with the
+      // Venmo app installed (silently does nothing on desktop, hence the
+      // copy-the-username fallback in the detail panel above).
+      const venmoOpenBtn = document.getElementById('venmo-open-btn');
+      if (venmoOpenBtn) {
+        const handle = <%- JSON.stringify(venmoHandle || '') %>;
+        const note = <%- JSON.stringify(`ReceipTap split — ${receipt.merchantName}`) %>;
+        venmoOpenBtn.href = 'venmo://paycharge?txn=pay&recipients=' + encodeURIComponent(handle)
+          + '&amount=' + total.toFixed(2) + '&note=' + encodeURIComponent(note);
+      }
+
+      // Cash App's cash.app/$cashtag/amount IS a real cross-platform web
+      // page (like paypal.me) -- opens the app on mobile, a payable web
+      // page on desktop.
+      const cashappOpenBtn = document.getElementById('cashapp-open-btn');
+      if (cashappOpenBtn) {
+        const handle = <%- JSON.stringify(cashAppHandle || '') %>;
+        cashappOpenBtn.href = 'https://cash.app/$' + handle + '/' + total.toFixed(2);
       }
     }
 

@@ -933,13 +933,15 @@ model Customer {
 
   // How a Split the Bill guest pays this shopper back -- shown only on the
   // public, unauthenticated guest page (routes/splitGroupShare.js), never
-  // anywhere else. ReceipTap never touches this money: paypalMeHandle builds
-  // a real paypal.me link the guest's PayPal app opens with the amount
-  // pre-filled; interacContact is just an email/phone shown with a copy
-  // button, since no third party can trigger an Interac e-Transfer directly
-  // (there's no equivalent deep link) -- the guest still sends it themselves
-  // from their own banking app.
+  // anywhere else. ReceipTap never touches this money: paypalMeHandle,
+  // venmoHandle, and cashAppHandle each build a real deep link the guest's
+  // own app opens with the amount pre-filled; interacContact is just an
+  // email/phone shown with a copy button, since no third party can trigger
+  // an Interac e-Transfer directly (there's no equivalent deep link) -- the
+  // guest still sends it themselves from their own banking app.
   paypalMeHandle String?
+  venmoHandle    String?
+  cashAppHandle  String?
   interacContact String?
 
   // Card payments for Split the Bill -- a guest's card charge is a Stripe

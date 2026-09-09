@@ -20,15 +20,41 @@
   <style>
     .wallet-header { display: flex; align-items: flex-start; justify-content: space-between; }
 
-    .summary-card {
-      padding: 20px 22px; margin: 18px 0 10px; display: flex; align-items: center; justify-content: space-between;
-      background: radial-gradient(120% 140% at 100% 0%, var(--w-accent-wash) 0%, var(--w-card) 60%);
-      border-color: rgba(5,107,254,0.3);
+    /* Identical shape for all four -- only one is ever visible at a time
+       (the toggle below swaps them), so if their box dimensions ever
+       drifted apart the page would visibly jump size on every switch. Only
+       the background tint/border colour differ between them. */
+    .summary-card, .outstanding-card, .archived-card {
+      padding: 20px 22px; margin: 18px 0 10px; min-height: 66px;
+      display: flex; align-items: center; justify-content: space-between;
     }
-    .summary-eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--w-ink-soft); }
+    .summary-card { background: radial-gradient(120% 140% at 100% 0%, var(--w-accent-wash) 0%, var(--w-card) 60%); border-color: rgba(5,107,254,0.3); }
+    /* Collecting and Collected share this tone -- both are the customer's
+       own money (still coming vs. already in), just at different points in
+       the same lifecycle. */
+    .outstanding-card { background: radial-gradient(120% 140% at 100% 0%, var(--w-ok-wash) 0%, var(--w-card) 60%); border-color: rgba(48,209,88,0.3); }
+    /* Archived is deliberately neutral, not green -- it's closed-out
+       history, not active money. */
+    .archived-card { background: var(--w-card); border-color: var(--w-line); }
+
+    .summary-eyebrow, .outstanding-eyebrow, .archived-eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--w-ink-soft); }
     .summary-num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 700; font-size: 26px; margin-top: 4px; }
     .summary-num.accent { color: var(--w-accent); }
     .summary-stat:last-child { text-align: right; }
+
+    .outstanding-amounts, .archived-amounts { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; }
+    .outstanding-num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 700; font-size: 26px; color: var(--w-ok); line-height: 1.15; }
+    .archived-num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 700; font-size: 26px; color: var(--w-ink); line-height: 1.15; }
+
+    /* Below the one visible summary box -- swaps which panel shows instead
+       of stacking all of them permanently, so only one ever takes up
+       scroll space at a time. Reuses .chip's look, just centered. */
+    .summary-toggle { display: flex; justify-content: center; gap: 8px; margin: 0 0 10px; flex-wrap: wrap; }
+    .summary-toggle-btn {
+      font-size: 12.5px; font-weight: 700; padding: 7px 16px; border-radius: 999px; cursor: pointer;
+      border: 1px solid var(--w-line); color: var(--w-ink-soft); background: var(--w-card-raised); font-family: inherit;
+    }
+    .summary-toggle-btn.active { background: var(--w-accent); border-color: var(--w-accent); color: #fff; }
 
     /* Colour, radius and weight all come from .w-btn. This only adds the
        breathing room either side -- 16px above so it clears the summary card,
@@ -352,7 +378,12 @@
     </div>
 
     <% if (!isFullWallet) { %>
-    <div class="w-card summary-card">
+    <% const hasCollecting = splitDashboard.collecting.count > 0; %>
+    <% const hasCollected = splitDashboard.collected.count > 0; %>
+    <% const hasArchived = splitDashboard.archived.count > 0; %>
+    <% const hasAnySplitTab = hasCollecting || hasCollected || hasArchived; %>
+
+    <div class="w-card summary-card" id="summary-panel-month">
       <div class="summary-stat">
         <div class="summary-eyebrow">This month</div>
         <div class="summary-num">$<%= summary.monthTotal %></div>
@@ -362,6 +393,74 @@
         <div class="summary-num accent"><%= summary.receiptCount %></div>
       </div>
     </div>
+
+    <% if (hasCollecting) { %>
+    <div class="w-card outstanding-card" id="summary-panel-collecting" style="display: none;">
+      <div class="summary-stat">
+        <div class="outstanding-eyebrow">Collecting</div>
+        <div class="outstanding-amounts">
+          <% splitDashboard.collecting.totals.forEach(function (t) { %>
+            <div class="outstanding-num"><%= t.currency %>$<%= t.amount %></div>
+          <% }); %>
+        </div>
+      </div>
+      <div class="summary-stat">
+        <div class="outstanding-eyebrow">Open splits</div>
+        <div class="summary-num accent"><%= splitDashboard.collecting.count %></div>
+      </div>
+    </div>
+    <% } %>
+
+    <% if (hasCollected) { %>
+    <div class="w-card outstanding-card" id="summary-panel-collected" style="display: none;">
+      <div class="summary-stat">
+        <div class="outstanding-eyebrow">Collected</div>
+        <div class="outstanding-amounts">
+          <% if (splitDashboard.collected.totals.length) { %>
+            <% splitDashboard.collected.totals.forEach(function (t) { %>
+              <div class="outstanding-num"><%= t.currency %>$<%= t.amount %></div>
+            <% }); %>
+          <% } else { %>
+            <div class="outstanding-num">$0.00</div>
+          <% } %>
+        </div>
+      </div>
+      <div class="summary-stat">
+        <div class="outstanding-eyebrow">Splits</div>
+        <div class="summary-num accent"><%= splitDashboard.collected.count %></div>
+      </div>
+    </div>
+    <% } %>
+
+    <% if (hasArchived) { %>
+    <div class="w-card archived-card" id="summary-panel-archived" style="display: none;">
+      <div class="summary-stat">
+        <div class="archived-eyebrow">Archived</div>
+        <div class="archived-amounts">
+          <% if (splitDashboard.archived.totals.length) { %>
+            <% splitDashboard.archived.totals.forEach(function (t) { %>
+              <div class="archived-num"><%= t.currency %>$<%= t.amount %></div>
+            <% }); %>
+          <% } else { %>
+            <div class="archived-num">$0.00</div>
+          <% } %>
+        </div>
+      </div>
+      <div class="summary-stat">
+        <div class="archived-eyebrow">Splits</div>
+        <div class="summary-num"><%= splitDashboard.archived.count %></div>
+      </div>
+    </div>
+    <% } %>
+
+    <% if (hasAnySplitTab) { %>
+    <div class="summary-toggle">
+      <button type="button" class="summary-toggle-btn active" data-panel="month">This month</button>
+      <% if (hasCollecting) { %><button type="button" class="summary-toggle-btn" data-panel="collecting">Collecting</button><% } %>
+      <% if (hasCollected) { %><button type="button" class="summary-toggle-btn" data-panel="collected">Collected</button><% } %>
+      <% if (hasArchived) { %><button type="button" class="summary-toggle-btn" data-panel="archived">Archived</button><% } %>
+    </div>
+    <% } %>
 
     <%# The way into the full history, directly under the month summary: the
         two things a customer wants off this page are "what did I spend" and
@@ -658,6 +757,22 @@
   <%- include('partials/image-viewer') %>
   <%- include('partials/push-controls') %>
   <script>
+    // Swaps which one dashboard summary panel is visible (This month /
+    // Collecting / Collected / Archived) -- only ever one at a time, so
+    // they never all stack up and take up scroll space together. Generic
+    // over however many panel buttons actually rendered (each hidden
+    // entirely, in the template, when that bucket is empty), rather than
+    // hardcoding which panels exist.
+    document.querySelectorAll('.summary-toggle-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        document.querySelectorAll('.summary-toggle-btn').forEach(function (b) { b.classList.remove('active'); });
+        btn.classList.add('active');
+        document.querySelectorAll('[id^="summary-panel-"]').forEach(function (panel) {
+          panel.style.display = panel.id === 'summary-panel-' + btn.dataset.panel ? '' : 'none';
+        });
+      });
+    });
+
     // Marking receipts before a tax export means working down the list, so
     // this posts in place rather than reloading the page each time. The button
     // is disabled while in flight so a double-tap can't send two opposite

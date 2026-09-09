@@ -390,6 +390,19 @@ async function createSplitPaymentIntent({ amountCents, currency, destinationAcco
   });
 }
 
+/** Registers a web domain with Stripe for Apple Pay, on ReceipTap's own
+ * platform account (the account behind STRIPE_PUBLISHABLE_KEY, which is
+ * what the split-bill guest page's Payment Element uses). This is what lets
+ * Safari show an Apple Pay button inside that Payment Element at all --
+ * without it, Apple Pay silently never appears, no error. Google Pay needs
+ * no equivalent step. Safe to call more than once: Stripe just returns the
+ * existing domain object instead of erroring on a duplicate. Meant to be
+ * run once per domain from a one-off script, not on every server boot. */
+async function registerApplePayDomain(domainName) {
+  if (!stripe) throw new Error('Stripe is not configured yet (missing STRIPE_SECRET_KEY).');
+  return stripe.applePayDomains.create({ domain_name: domainName });
+}
+
 /** Attempts a real transfer for one commission and records the outcome.
  * Safe to call speculatively -- a Stripe error (e.g. insufficient platform
  * balance) just leaves the commission FAILED for manual follow-up rather
@@ -765,4 +778,5 @@ module.exports = {
   createShopperOnboardingLink,
   getShopperConnectStatus,
   createSplitPaymentIntent,
+  registerApplePayDomain,
 };

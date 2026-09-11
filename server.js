@@ -66,6 +66,22 @@ app.use('/webhooks/pos/shopify', express.raw({ type: 'application/json' }));
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Apple Pay's own domain-verification file. This can't just live in public/
+// under a .well-known/ folder -- express.static's default dotfiles:'ignore'
+// silently 404s any path with a dot-prefixed segment, which is exactly what
+// broke this: the file was previously only reachable at the bare
+// receiptap.com (hosted outside this app, likely from before APP_BASE_URL
+// switched to the www canonical domain), while every real guest -- and the
+// Stripe Apple Pay domain registration itself -- uses www.receiptap.com,
+// where it 404'd. An explicit route sidesteps the dotfiles restriction
+// without loosening it for anything else in public/. File contents are
+// public by design (that's the whole mechanism -- Apple/Stripe fetch this
+// to confirm domain ownership), so serving it isn't a secrets concern.
+app.get('/.well-known/apple-developer-merchantid-domain-association', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'apple-developer-merchantid-domain-association'));
+});
+
 // Static assets were going out with `max-age=0`, which meant the browser
 // re-validated the stylesheet and the logo on EVERY page navigation. On a
 // desktop that's invisible; on a phone it's two extra network round trips

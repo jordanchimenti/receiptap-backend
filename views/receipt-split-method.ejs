@@ -21,21 +21,21 @@
     .split-header-title { flex: 1; text-align: center; font-size: 17px; font-weight: 700; margin-right: 38px; }
 
     .receipt-summary-card {
-      background: linear-gradient(155deg, #2a1a52 0%, #1a1030 60%, #100a20 100%);
-      border: 1px solid rgba(139, 92, 246, 0.28); border-radius: 20px;
+      background: linear-gradient(155deg, #12264f 0%, #0d1a38 60%, #0a1224 100%);
+      border: 1px solid rgba(5, 107, 254, 0.28); border-radius: 20px;
       padding: 20px; display: flex; align-items: flex-start; justify-content: space-between;
-      box-shadow: 0 12px 32px rgba(88, 40, 200, 0.18);
+      box-shadow: 0 12px 32px rgba(5, 107, 254, 0.18);
     }
-    .receipt-summary-eyebrow { font-size: 10.5px; font-weight: 700; letter-spacing: 0.08em; color: #b9a5f0; text-transform: uppercase; }
+    .receipt-summary-eyebrow { font-size: 10.5px; font-weight: 700; letter-spacing: 0.08em; color: #9dc0f7; text-transform: uppercase; }
     .receipt-summary-merchant { font-size: 21px; font-weight: 700; margin: 3px 0 18px; }
     .receipt-summary-cols { display: flex; gap: 34px; }
-    .receipt-summary-label { font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; color: #9d8cc4; text-transform: uppercase; margin-bottom: 4px; }
+    .receipt-summary-label { font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; color: #7d95bd; text-transform: uppercase; margin-bottom: 4px; }
     .receipt-summary-value { font-size: 15px; font-weight: 700; }
     .receipt-photo-btn {
       width: 44px; height: 44px; border-radius: 13px; flex-shrink: 0; border: none; cursor: pointer;
-      background: linear-gradient(140deg, #a970ff, #6f3fd6); color: #fff;
+      background: linear-gradient(140deg, #35d0ff, var(--w-accent-deep)); color: #fff;
       display: flex; align-items: center; justify-content: center;
-      box-shadow: 0 6px 18px rgba(140, 80, 255, 0.4);
+      box-shadow: 0 6px 18px rgba(5, 107, 254, 0.4);
     }
 
     .split-step-label { text-align: center; font-size: 13px; font-weight: 700; color: var(--w-ink-soft); margin: 30px 0 16px; }
@@ -54,7 +54,10 @@
     .split-tile-sub { font-size: 12.5px; opacity: 0.85; margin-top: 2px; }
     .split-tile-chevron { color: rgba(255,255,255,0.85); flex-shrink: 0; }
 
-    .split-tile.items { background: linear-gradient(115deg, #7b2ff7, #a970ff); --tile-shadow: rgba(123, 47, 247, 0.35); }
+    /* Both the top two tiles are brand blue now -- items is the deeper,
+       moodier end of it and even is the brighter end, so the two stay
+       visually distinct at a glance without reaching for a different hue. */
+    .split-tile.items { background: linear-gradient(115deg, #021b47, var(--w-accent-deep) 65%, var(--w-accent)); --tile-shadow: rgba(5, 107, 254, 0.35); }
     .split-tile.even { background: linear-gradient(115deg, var(--w-accent-deep), var(--w-accent) 55%, #35d0ff); --tile-shadow: rgba(5, 107, 254, 0.35); }
     .split-tile.group { background: linear-gradient(115deg, #0d9c5c, #34d399); --tile-shadow: rgba(13, 156, 92, 0.32); }
 

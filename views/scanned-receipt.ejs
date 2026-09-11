@@ -43,13 +43,19 @@
       font-size: 14px; font-weight: 600; padding: 13px; border-radius: 12px;
       font-family: inherit; margin-top: 16px;
     }
+    .r-head-row { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; }
   </style>
 </head>
 <body>
   <div class="w-shell">
-    <div style="margin-bottom:16px;">
-      <div class="w-eyebrow">Receipt</div>
-      <h1 class="w-title" style="font-size:20px;">Scanned</h1>
+    <div class="r-head-row">
+      <a href="/account/receipts" class="w-btn-icon" aria-label="Back">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      </a>
+      <div>
+        <div class="w-eyebrow">Receipt</div>
+        <h1 class="w-title" style="font-size:20px;">Scanned</h1>
+      </div>
     </div>
 
     <div class="w-card">
@@ -168,7 +174,6 @@
     </form>
   </div>
 
-  <%- include('partials/back-affordance', { backFallback: '/account/receipts' }) %>
   <%- include('partials/image-viewer') %>
 </body>
 </html>

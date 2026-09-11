@@ -1567,7 +1567,15 @@ router.post('/account/receipts/scan', requireCustomerAuth, handleReceiptScanUplo
 
   // Split the Bill needs the items and charges this same extraction already
   // produces, just presented as something to itemize rather than something
-  // to file away -- not a second AI call or a different upload.
+  // to file away -- not a second AI call or a different upload. Everything
+  // the review flow captures for tax-substantiation purposes (taxNumber,
+  // buyerName, cashierName, etc.) is extracted here too and carried through
+  // as hidden fields on scan-receipt-split.ejs -- the split screen doesn't
+  // show them (that's not what this flow is for), but the receipt it saves
+  // must end up exactly as complete as one saved the normal way. Same for
+  // `total`: the AI's own read of the printed total, not a value this
+  // screen invents from summing items -- see scan-receipt-split.ejs's own
+  // comment on why that distinction matters.
   if (req.body.intent === 'split') {
     return res.render('scan-receipt-split', {
       imageKey,
@@ -1580,6 +1588,21 @@ router.post('/account/receipts/scan', requireCustomerAuth, handleReceiptScanUplo
       subtotal: centsToInput(extracted?.subtotalCents),
       tax: centsToInput(extracted?.taxCents),
       tip: centsToInput(extracted?.tipCents),
+      total: centsToInput(extracted?.totalCents),
+      paymentMethod: extracted?.paymentMethod || '',
+      receiptNumber: extracted?.receiptNumber || '',
+      merchantAddress: extracted?.merchantAddress || '',
+      taxNumber: extracted?.taxNumber || '',
+      taxNumber2: extracted?.taxNumber2 || '',
+      buyerName: extracted?.buyerName || '',
+      purchaseTimeText: extracted?.timeText || '',
+      merchantPhone: extracted?.merchantPhone || '',
+      cashierName: extracted?.cashierName || '',
+      itemCount: extracted?.itemCount != null ? String(extracted.itemCount) : '',
+      taxLabel: extracted?.taxLabel || '',
+      paymentReferenceNumber: extracted?.paymentReferenceNumber || '',
+      businessPurpose: '',
+      isPreauth: Boolean(extracted?.isPreauth),
       error: extracted ? null : "We couldn't read that receipt — add items by hand below.",
     });
   }
@@ -1670,12 +1693,18 @@ router.post('/account/receipts/scan/confirm', requireCustomerAuth, async (req, r
           duplicate,
           merchantName: merchantName || '',
           date: date || '',
+          total: total || '',
           category: category || '',
           lineItems: lineItems || '[]',
-          currency: req.body.currency || '',
-          subtotal: req.body.subtotal || '',
-          tax: req.body.tax || '',
-          tip: req.body.tip || '',
+          paymentMethod: paymentMethod || '',
+          receiptNumber: receiptNumber || '',
+          // Carried through from the hidden fields the form already has, same
+          // reasoning as the review branch below -- this is a re-render of
+          // what was already extracted once, not a fresh photo, so nothing
+          // here should silently revert to blank on a duplicate/validation
+          // bounce-back.
+          ...Object.fromEntries(SCAN_DETAIL_FIELDS.map((f) => [f, req.body[f] || ''])),
+          isPreauth: req.body.isPreauth === '1',
           error,
         })
       : res.render('scan-receipt-review', {

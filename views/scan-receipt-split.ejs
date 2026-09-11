@@ -243,6 +243,7 @@
 
     <div class="summary-card">
       <div class="summary-row muted"><span>Subtotal</span><span id="summary-subtotal">$0.00</span></div>
+      <div class="summary-row muted" id="discount-row" style="display:none;"><span>Discount</span><span id="summary-discount"></span></div>
       <div class="summary-row muted">
         <span>Tax</span>
         <input type="number" inputmode="decimal" min="0" step="0.01" id="tax-input" value="<%= typeof tax !== 'undefined' ? tax : '' %>" />
@@ -265,6 +266,26 @@
       <input type="hidden" name="tax" id="tax-hidden-input" />
       <input type="hidden" name="tip" id="tip-input" />
       <input type="hidden" name="total" id="total-input" />
+      <%# Not shown on this screen -- Split the Bill only needs items/tax/tip
+          to itemize and split, same as the summary card above. But the
+          receipt this form saves must end up exactly as complete as one
+          saved the normal way (views/scan-receipt-review.ejs), so every
+          other field the AI extraction read off the photo is carried
+          through here silently rather than being dropped on the floor. %>
+      <input type="hidden" name="paymentMethod" value="<%= typeof paymentMethod !== 'undefined' ? paymentMethod : '' %>" />
+      <input type="hidden" name="receiptNumber" value="<%= typeof receiptNumber !== 'undefined' ? receiptNumber : '' %>" />
+      <input type="hidden" name="merchantAddress" value="<%= typeof merchantAddress !== 'undefined' ? merchantAddress : '' %>" />
+      <input type="hidden" name="taxNumber" value="<%= typeof taxNumber !== 'undefined' ? taxNumber : '' %>" />
+      <input type="hidden" name="taxNumber2" value="<%= typeof taxNumber2 !== 'undefined' ? taxNumber2 : '' %>" />
+      <input type="hidden" name="buyerName" value="<%= typeof buyerName !== 'undefined' ? buyerName : '' %>" />
+      <input type="hidden" name="purchaseTimeText" value="<%= typeof purchaseTimeText !== 'undefined' ? purchaseTimeText : '' %>" />
+      <input type="hidden" name="merchantPhone" value="<%= typeof merchantPhone !== 'undefined' ? merchantPhone : '' %>" />
+      <input type="hidden" name="cashierName" value="<%= typeof cashierName !== 'undefined' ? cashierName : '' %>" />
+      <input type="hidden" name="itemCount" value="<%= typeof itemCount !== 'undefined' ? itemCount : '' %>" />
+      <input type="hidden" name="taxLabel" value="<%= typeof taxLabel !== 'undefined' ? taxLabel : '' %>" />
+      <input type="hidden" name="paymentReferenceNumber" value="<%= typeof paymentReferenceNumber !== 'undefined' ? paymentReferenceNumber : '' %>" />
+      <input type="hidden" name="businessPurpose" value="<%= typeof businessPurpose !== 'undefined' ? businessPurpose : '' %>" />
+      <input type="hidden" name="isPreauth" value="<%= typeof isPreauth !== 'undefined' && isPreauth ? '1' : '' %>" />
       <% if (typeof duplicate !== 'undefined' && duplicate) { %>
         <input type="hidden" name="confirmDuplicate" value="1" />
       <% } %>
@@ -304,6 +325,22 @@
           subItems: Array.isArray(item.subItems) ? item.subItems : [],
         };
       });
+
+    // A deal/discount printed on the receipt isn't captured as its own line
+    // item -- the AI extraction only reads individual purchased items -- so
+    // summing items+tax can overstate the real total whenever the receipt
+    // had one (see views/receipt-split-items.ejs's own comment for the full
+    // reasoning; same fix, applied here too since this screen is where a
+    // receipt saved via Split the Bill gets its total in the first place).
+    // Computed ONCE from the AI's initial read and held fixed as a flat
+    // adjustment -- editing an item's price or removing one changes what's
+    // owed for that item, not whether the original deal still applied.
+    const receiptTotalDollars = <%- JSON.stringify(typeof total !== 'undefined' && total !== '' ? Number(total) : null) %>;
+    const initialTaxDollars = <%- JSON.stringify(typeof tax !== 'undefined' && tax !== '' ? Number(tax) : 0) %>;
+    const initialItemsSubtotal = items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
+    const discountDollars = receiptTotalDollars != null
+      ? Math.max(0, (initialItemsSubtotal + initialTaxDollars) - receiptTotalDollars)
+      : 0;
 
     const itemsList = document.getElementById('items-list');
 
@@ -478,9 +515,14 @@
       const tax = Number(taxInput.value) || 0;
       const tip = tipMode === 'percent' ? subtotal * (tipValue / 100) : tipValue;
       const tipPct = subtotal > 0 ? (tip / subtotal) * 100 : 0;
-      const total = subtotal + tax + tip;
+      const total = subtotal - discountDollars + tax + tip;
 
       document.getElementById('summary-subtotal').textContent = money(subtotal);
+      const discountRow = document.getElementById('discount-row');
+      if (discountDollars > 0.004) {
+        discountRow.style.display = '';
+        document.getElementById('summary-discount').textContent = '-' + money(discountDollars);
+      }
       document.getElementById('summary-tip').textContent = money(tip);
       document.getElementById('summary-total').textContent = money(total);
       document.getElementById('tip-summary').textContent = Math.round(tipPct) + '% (' + money(tip) + ')';

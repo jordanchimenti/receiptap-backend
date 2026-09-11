@@ -240,14 +240,26 @@
       const tipDollars = tipMode === 'percent' ? itemsSum * (tipValue / 100) : tipValue;
       const tipPct = itemsSum > 0 ? (tipDollars / itemsSum) * 100 : 0;
 
+      // A deal/discount printed on the receipt isn't captured as its own
+      // line item -- the AI extraction only reads individual purchased
+      // items (services/scanReceiptService.js) -- so summing lineItems can
+      // overstate the real subtotal whenever the receipt had one.
+      // receiptTotalDollars is always the true, printed total; this is the
+      // gap between what items+tax alone add up to and that real total,
+      // applied proportionally the same way tax/tip already are, so a
+      // discount benefits guests and host in the same proportion they're
+      // splitting everything else.
+      const discountDollars = Math.max(0, (itemsSum + receiptTaxDollars) - receiptTotalDollars);
+      const guestsDiscount = discountDollars * share;
+
       const guestsTax = receiptTaxDollars * share;
       const guestsTip = tipDollars * share;
-      const guestAmount = guestsSubtotal + guestsTax + guestsTip;
+      const guestAmount = guestsSubtotal - guestsDiscount + guestsTax + guestsTip;
 
       document.getElementById('guest-amount').textContent = money(guestAmount);
       document.getElementById('tip-summary').textContent = Math.round(tipPct) + '% (' + money(tipDollars) + ')';
 
-      const fullTotal = itemsSum + receiptTaxDollars + tipDollars;
+      const fullTotal = receiptTotalDollars + tipDollars;
       document.getElementById('split-submit-btn').textContent = 'Split ' + money(fullTotal);
 
       document.getElementById('claimed-input').value = JSON.stringify(items.filter((it) => it.claimed).map((it) => it.description));

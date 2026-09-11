@@ -145,6 +145,7 @@
         </button>
       </div>
       <div class="total-row"><span>Subtotal</span><span id="total-subtotal"><%= receipt.currency || 'CA' %>$0.00</span></div>
+      <div class="total-row" id="discount-row" style="display:none;"><span>Discount</span><span id="total-discount"></span></div>
       <div class="total-row"><span>Tax</span><span id="total-tax"><%= receipt.currency || 'CA' %>$0.00</span></div>
       <div class="total-row grand"><span>Total (Split Evenly)</span><span id="total-grand"><%= receipt.currency || 'CA' %>$0.00</span></div>
 
@@ -171,6 +172,7 @@
     const subtotalDollars = <%- JSON.stringify((receipt.subtotal != null ? receipt.subtotal : receipt.total) / 100) %>;
     const taxDollars = <%- JSON.stringify((receipt.tax || 0) / 100) %>;
     const receiptTipDollars = <%- JSON.stringify((receipt.tip || 0) / 100) %>;
+    const receiptTotalDollars = <%- JSON.stringify(receipt.total / 100) %>;
 
     function money(n) { return currencyPrefix + (Math.round((n + Number.EPSILON) * 100) / 100).toFixed(2); }
 
@@ -238,17 +240,33 @@
     function recompute() {
       const tipDollars = tipMode === 'percent' ? subtotalDollars * (tipValue / 100) : tipValue;
       const tipPct = subtotalDollars > 0 ? (tipDollars / subtotalDollars) * 100 : 0;
-      const total = subtotalDollars + taxDollars + tipDollars;
+
+      // A deal/discount printed on the receipt isn't captured in its own
+      // field -- subtotal/tax are only ever what the receipt prints as
+      // separate lines (services/scanReceiptService.js) -- so subtotal+tax
+      // alone can overstate the real total whenever the receipt had one.
+      // receiptTotalDollars is always the true, printed total; this is that
+      // gap, shown and split evenly same as everything else here.
+      const discountDollars = Math.max(0, (subtotalDollars + taxDollars) - receiptTotalDollars);
+      const total = subtotalDollars - discountDollars + taxDollars + tipDollars;
 
       const perPersonSubtotal = subtotalDollars / peopleCount;
+      const perPersonDiscount = discountDollars / peopleCount;
       const perPersonTax = taxDollars / peopleCount;
       const perPersonTotal = total / peopleCount;
 
       document.getElementById('tip-summary').textContent = Math.round(tipPct) + '% (' + money(tipDollars) + ')';
       document.getElementById('total-subtotal').textContent = money(subtotalDollars);
+      const discountRow = document.getElementById('discount-row');
+      if (discountDollars > 0.004) {
+        discountRow.style.display = '';
+        document.getElementById('total-discount').textContent = '-' + money(discountDollars);
+      } else {
+        discountRow.style.display = 'none';
+      }
       document.getElementById('total-tax').textContent = money(taxDollars);
       document.getElementById('total-grand').textContent = money(total);
-      document.getElementById('per-person-subtotal').textContent = money(perPersonSubtotal);
+      document.getElementById('per-person-subtotal').textContent = money(perPersonSubtotal - perPersonDiscount);
       document.getElementById('per-person-tax').textContent = money(perPersonTax);
       document.getElementById('split-submit-btn').textContent = 'Split ' + money(total);
 

@@ -171,12 +171,6 @@
           <div class="s-pay-title">Pay Your Way</div>
           <div class="s-pay-sub">Choose how you want to pay <%= hostName %>. ReceipTap will show the exact amount and where to send it.</div>
           <div class="s-method-list">
-            <% if (cardPaymentsEnabled) { %>
-              <button type="button" class="s-method-row" data-method="card">
-                <div><div class="s-method-name">Card, Apple Pay, or Google Pay</div><div class="s-method-hint">Pay right now</div></div>
-                <span class="s-method-radio"></span>
-              </button>
-            <% } %>
             <% if (paypalMeHandle || paypalCheckoutEnabled) { %>
               <button type="button" class="s-method-row" data-method="paypal">
                 <div><div class="s-method-name">PayPal</div><div class="s-method-hint"><%= paypalCheckoutEnabled ? 'Pay right now' : 'Choose this method' %></div></div>
@@ -362,6 +356,7 @@
       document.getElementById('proportional-note').classList.toggle('open', anySelected);
       document.getElementById('totals-block').classList.toggle('open', anySelected);
       document.getElementById('pay-section').classList.toggle('open', anySelected);
+      if (anySelected && <%- JSON.stringify(Boolean(cardPaymentsEnabled)) %>) showCardPaymentDirectly();
 
       document.getElementById('sel-subtotal').textContent = money(selectedSubtotal);
       document.getElementById('sel-tax').textContent = money(selectedTax);
@@ -429,10 +424,27 @@
         detailPanels.forEach((p) => p.classList.remove('open'));
         const panel = document.getElementById('detail-' + btn.dataset.method);
         if (panel) panel.classList.add('open');
-        if (btn.dataset.method === 'card') initCardPayment();
         if (btn.dataset.method === 'paypal' && paypalCheckoutEnabled) initPaypalPayment();
       });
     });
+
+    // Card/Apple Pay/Google Pay is the common case, so it's shown directly
+    // the moment there's something to pay -- no "pick a method" tap first.
+    // Other methods the host has set up (PayPal, Venmo, Cash App, Interac,
+    // cash) stay one "Change method" tap away, same as before. Triggered
+    // once, the first time a guest selects an item -- not on every
+    // checkbox toggle, since that would keep abandoning and recreating the
+    // PaymentIntent underneath whatever the guest is already looking at.
+    let cardShownDirectly = false;
+    function showCardPaymentDirectly() {
+      if (cardShownDirectly) return;
+      cardShownDirectly = true;
+      methodListPanel.style.display = 'none';
+      detailPanels.forEach((p) => p.classList.remove('open'));
+      const panel = document.getElementById('detail-card');
+      if (panel) panel.classList.add('open');
+      initCardPayment();
+    }
 
     // --- Card / Apple Pay / Google Pay, via Stripe ---------------------
     // Real money, so this is the one payment method whose result the

@@ -92,6 +92,11 @@
     .s-change-method { display: block; text-align: center; background: none; border: none; color: var(--w-ink-soft); font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; width: 100%; padding: 8px; }
 
     .s-card-loading { text-align: center; padding: 30px 0; color: var(--w-ink-soft); font-size: 13.5px; }
+    .s-or-divider {
+      display: flex; align-items: center; gap: 10px; font-size: 11px; font-weight: 700; letter-spacing: 0.06em;
+      text-transform: uppercase; color: var(--w-ink-soft); margin-bottom: 14px;
+    }
+    .s-or-divider .line { flex: 1; height: 1px; background: var(--w-line); }
     .s-pay-btn {
       display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; border: none;
       background: var(--w-accent); color: #fff; font-weight: 700; font-size: 15.5px;
@@ -209,6 +214,10 @@
             <div class="s-detail-sub">Send to <%= hostName %></div>
             <div id="card-loading" class="s-card-loading">Loading payment form&hellip;</div>
             <div id="card-form-wrap" style="display:none;">
+              <div id="express-checkout-element" style="margin-bottom: 14px;"></div>
+              <div class="s-or-divider" id="card-or-divider" style="display:none;">
+                <span class="line"></span>Or pay with card<span class="line"></span>
+              </div>
               <div id="payment-element"></div>
               <div class="s-card-error" id="card-error"></div>
               <button type="button" class="s-pay-btn" id="card-pay-btn">
@@ -472,6 +481,56 @@
         const paymentElement = elements.create('payment');
         paymentElement.mount('#payment-element');
 
+        // Real, separate Apple Pay / Google Pay buttons (their own logos,
+        // shown side by side when both are available on the guest's
+        // device/browser) -- distinct from the generic card form below.
+        // Shares this same `elements` instance (and so the same
+        // PaymentIntent already created above) rather than creating its
+        // own, per Stripe's own guidance for reusing an Elements instance.
+        // Renders nothing at all on a device/browser with neither wallet
+        // set up (e.g. Chrome desktop with no Google Pay) -- that's Stripe's
+        // own eligibility check, not something to work around.
+        const expressContainer = document.getElementById('express-checkout-element');
+        const orDivider = document.getElementById('card-or-divider');
+        expressContainer.innerHTML = '';
+        const expressCheckoutElement = elements.create('expressCheckout', { buttonHeight: 48 });
+        expressCheckoutElement.mount('#express-checkout-element');
+
+        // Only show "Or pay with card" once we know a wallet button is
+        // actually rendered -- otherwise the divider sits above an empty
+        // space and reads as a mistake.
+        expressCheckoutElement.on('availablepaymentmethodschange', (event) => {
+          orDivider.style.display = event && event.availablePaymentMethods ? '' : 'none';
+        });
+
+        const finishSuccess = () => {
+          formWrap.style.display = 'none';
+          document.getElementById('card-success').style.display = 'block';
+        };
+        const finishError = (message, resetBtn) => {
+          errorEl.textContent = message || 'Payment failed. Please try again.';
+          errorEl.style.display = 'block';
+          if (resetBtn) {
+            payBtn.disabled = false;
+            document.getElementById('card-pay-btn-label').textContent = 'Pay now';
+          }
+        };
+
+        expressCheckoutElement.on('confirm', async () => {
+          errorEl.style.display = 'none';
+          const { error: submitError } = await elements.submit();
+          if (submitError) return finishError(submitError.message, false);
+
+          const { error } = await stripe.confirmPayment({
+            elements,
+            clientSecret: data.clientSecret,
+            confirmParams: { return_url: window.location.href },
+            redirect: 'if_required',
+          });
+          if (error) return finishError(error.message, false);
+          finishSuccess();
+        });
+
         payBtn.onclick = async () => {
           payBtn.disabled = true;
           document.getElementById('card-pay-btn-label').textContent = 'Paying…';
@@ -483,16 +542,8 @@
             redirect: 'if_required',
           });
 
-          if (error) {
-            errorEl.textContent = error.message || 'Payment failed. Please try again.';
-            errorEl.style.display = 'block';
-            payBtn.disabled = false;
-            document.getElementById('card-pay-btn-label').textContent = 'Pay now';
-            return;
-          }
-
-          formWrap.style.display = 'none';
-          document.getElementById('card-success').style.display = 'block';
+          if (error) return finishError(error.message, true);
+          finishSuccess();
         };
 
         loadingEl.style.display = 'none';

@@ -1,0 +1,116 @@
+<!-- views/account-withdraw.ejs -->
+<!-- Standard (free) vs. Instant (percentage fee, shown only when Stripe says
+     this connected account + its bank are actually eligible) withdrawal.
+     Instant's fee estimate is display copy only -- config/payouts.js's
+     INSTANT_WITHDRAWAL_FEE_PERCENT -- the real amount Stripe sends is always
+     re-fetched server-side at submit time (POST /account/balance/withdraw in
+     routes/customer-payouts.js), never computed here. -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Withdraw - ReceipTap</title>
+  <link rel="stylesheet" href="/css/receiptap.css" />
+  <%- include('partials/wallet-dark-theme') %>
+  <style>
+    .wd-header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+
+    .avail-card { padding: 18px 20px; margin-bottom: 18px; text-align: center; }
+    .avail-label { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--w-ink-soft); }
+    .avail-num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 700; font-size: 30px; margin-top: 4px; }
+
+    .method-option {
+      display: block; padding: 16px 18px; margin-bottom: 12px; border-radius: 14px;
+      border: 1px solid var(--w-line); background: var(--w-card); cursor: pointer;
+    }
+    .method-option.selected { border-color: var(--w-accent); background: var(--w-accent-wash); }
+    .method-option input { display: none; }
+    .method-row { display: flex; justify-content: space-between; align-items: center; }
+    .method-name { font-weight: 700; font-size: 15px; }
+    .method-fee { font-family: var(--font-mono); font-weight: 700; font-size: 13.5px; }
+    .method-fee.free { color: var(--w-ok); }
+    .method-sub { font-size: 12.5px; color: var(--w-ink-soft); margin-top: 4px; }
+
+    .fee-breakdown { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--w-line); font-size: 13px; }
+    .fee-breakdown-row { display: flex; justify-content: space-between; padding: 3px 0; }
+    .fee-breakdown-row.total { font-weight: 700; margin-top: 4px; }
+
+    .disabled-note { padding: 14px 16px; margin-bottom: 18px; border-radius: 12px; background: var(--w-card); color: var(--w-ink-soft); font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div class="w-shell">
+    <div class="wd-header">
+      <a href="/account/balance" class="w-btn-icon" aria-label="Back">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      </a>
+      <h1 class="w-title" style="font-size:22px;">Withdraw</h1>
+    </div>
+
+    <% if (error) { %>
+      <div class="w-error" style="margin-bottom:16px;"><%= error %></div>
+    <% } %>
+
+    <div class="w-card avail-card">
+      <div class="avail-label">Available to withdraw</div>
+      <div class="avail-num">$<%= money(availableCents) %></div>
+    </div>
+
+    <% if (availableCents <= 0) { %>
+      <div class="disabled-note">Nothing available to withdraw right now.</div>
+    <% } else { %>
+      <form method="POST" action="/account/balance/withdraw">
+        <label class="method-option selected" id="option-standard">
+          <input type="radio" name="method" value="standard" checked />
+          <div class="method-row">
+            <div class="method-name">Standard</div>
+            <div class="method-fee free">FREE</div>
+          </div>
+          <div class="method-sub">Normal bank processing time (1–2 business days)</div>
+        </label>
+
+        <div class="w-field" id="standard-amount-field" style="margin: 4px 0 16px;">
+          <label for="amount">Amount</label>
+          <input type="text" inputmode="decimal" name="amount" id="amount" value="<%= money(availableCents) %>" />
+        </div>
+
+        <% if (instant.eligible) { %>
+          <label class="method-option" id="option-instant">
+            <input type="radio" name="method" value="instant" />
+            <div class="method-row">
+              <div class="method-name">Instant</div>
+              <div class="method-fee"><%= feePercent %>% fee</div>
+            </div>
+            <div class="method-sub">Receive within minutes</div>
+            <div class="fee-breakdown">
+              <div class="fee-breakdown-row"><span>Amount</span><span>$<%= money(availableCents) %></span></div>
+              <div class="fee-breakdown-row"><span>Estimated instant fee (~<%= feePercent %>%)</span><span>-$<%= money(Math.round(availableCents * feePercent / 100)) %></span></div>
+              <div class="fee-breakdown-row total"><span>Estimated net payout</span><span>$<%= money(availableCents - Math.round(availableCents * feePercent / 100)) %></span></div>
+            </div>
+            <div class="method-sub" style="margin-top:8px;">The exact fee is set by Stripe at the moment you withdraw — this is an estimate.</div>
+          </label>
+        <% } else { %>
+          <div class="disabled-note">Instant withdrawal isn't available yet<% if (instant.reason) { %>: <%= instant.reason %><% } %>.</div>
+        <% } %>
+
+        <button type="submit" class="w-btn" style="width:100%; box-sizing:border-box; margin-top:8px;">Withdraw</button>
+      </form>
+    <% } %>
+  </div>
+
+  <script>
+    (function () {
+      var radios = document.querySelectorAll('input[name="method"]');
+      var standardField = document.getElementById('standard-amount-field');
+      radios.forEach(function (radio) {
+        radio.addEventListener('change', function () {
+          document.querySelectorAll('.method-option').forEach(function (el) { el.classList.remove('selected'); });
+          radio.closest('.method-option').classList.add('selected');
+          standardField.style.display = radio.value === 'standard' ? '' : 'none';
+        });
+      });
+    })();
+  </script>
+</body>
+</html>

@@ -371,6 +371,35 @@ function escapeHtml(value) {
     .replace(/"/g, '&quot;');
 }
 
+// Sent when a host's ReceipTap Balance withdrawal fails (see
+// services/stripeService.js's recordPayoutEvent, called from the
+// payout.failed webhook). Deliberately email, not just the in-app bell --
+// same reasoning as sendBillingProblemEmail: money the host is expecting
+// didn't move, and they may not have the wallet open to see a bell icon.
+// Called only through services/notificationService.js's
+// notifyWithdrawalFailed, which swallows failures the same way every other
+// notification email here does.
+async function sendWithdrawalFailedEmail({ email, name, amountLabel, reason }) {
+  const subject = 'Your ReceipTap withdrawal failed';
+
+  if (!resend) {
+    console.log(`[emailService] RESEND_API_KEY not set -- withdrawal failed email for ${email}: ${subject}`);
+    return;
+  }
+
+  await send({
+    from: FROM_ADDRESS,
+    to: email,
+    subject,
+    html: `
+      <p>Hi${name ? ' ' + name : ''},</p>
+      <p>Your withdrawal of <strong>${escapeHtml(amountLabel)}</strong> from your ReceipTap Balance didn't go through${reason ? `: <strong>${escapeHtml(reason)}</strong>` : '.'}</p>
+      <p>The amount is still available in your ReceipTap Balance -- nothing was lost. This usually means the bank or card on file with Stripe needs to be updated.</p>
+      ${actionButton('/account/balance', 'View your balance')}
+    `,
+  });
+}
+
 module.exports = {
   sendPasswordResetEmail,
   sendVerificationEmail,
@@ -381,4 +410,5 @@ module.exports = {
   sendReturnPucksEmail,
   sendHardwareOrderConfirmationEmail,
   sendHardwareOrderStatusEmail,
+  sendWithdrawalFailedEmail,
 };

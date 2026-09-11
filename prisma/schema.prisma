@@ -1024,6 +1024,7 @@ model Customer {
   identifiers       ShopperIdentifier[]
   splitGroups       SplitGroup[]
   legalAcceptances  ShopperLegalAcceptance[]
+  payouts           Payout[]
 
   @@index([referredByAffiliateId])
 }
@@ -1245,6 +1246,53 @@ model SplitPayment {
   createdAt     DateTime @default(now())
 
   @@index([groupId])
+}
+
+// One withdrawal attempt from a host's OWN Stripe Connect balance to their
+// own bank account (standard or Instant) -- see services/stripeService.js's
+// "Host balance / withdrawals" section. Distinct from Commission above: a
+// Commission is money ReceipTap PUSHES to an affiliate via
+// stripe.transfers.create, out of ReceipTap's own platform balance. A Payout
+// is money a Customer PULLS themselves via stripe.payouts.create (called
+// with the Stripe-Account header set to their own connected account) -- it
+// never touches ReceipTap's platform balance, same as the split-bill
+// destination charges that put the money there in the first place.
+//
+// One row per real Stripe Payout object, kept in sync via upsert-by-
+// stripePayoutId on every payout.* webhook event (payout.created/.paid/
+// .failed/.canceled) -- naturally idempotent since every field here is safe
+// to overwrite with the latest event data, unlike SplitPayment's
+// findUnique-before-create pattern above (a Payout row is expected to be
+// written to more than once as its status changes; a SplitPayment row is
+// never expected to change after it's created).
+model Payout {
+  id         String   @id @default(cuid())
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id])
+
+  stripePayoutId String @unique
+
+  amountCents Int
+  currency    String @default("usd")
+
+  method String // 'standard' | 'instant'
+
+  // Display-only snapshot of what Stripe actually deducted, read back from
+  // the Payout object after the fact -- never computed client-side. Null
+  // for method='standard', which has no fee by design (see config/payouts.js).
+  applicationFeeCents Int?
+
+  // Mirrors Stripe's own Payout.status values exactly, no translation layer:
+  // 'pending' | 'in_transit' | 'paid' | 'failed' | 'canceled'.
+  status        String  @default("pending")
+  failureCode   String?
+  failureReason String?
+
+  arrivalDate DateTime? // Stripe's estimated/actual arrival date
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([customerId, createdAt])
 }
 
 // A short-lived record of what a guest's real PayPal order (Orders v2) was

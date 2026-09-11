@@ -1,0 +1,201 @@
+<!-- views/account-balance.ejs -->
+<!-- ReceipTap Balance: a host's own Stripe Connect balance (the same
+     connected account /account/connect-stripe sets up for Split the Bill),
+     plus recent incoming card payments and withdrawal history. Every figure
+     here comes live from Stripe's Balance API (GET /account/balance in
+     routes/customer-payouts.js) -- never computed from SplitGroup/SplitPayment
+     rows, which is a separate concept (the split ledger) from this financial
+     balance. Reached from More > ReceipTap Balance, or the Card payments
+     card on Settings once onboarded. -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ReceipTap Balance - ReceipTap</title>
+  <link rel="stylesheet" href="/css/receiptap.css" />
+  <%- include('partials/wallet-dark-theme') %>
+  <style>
+    .bal-header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+
+    .balance-card {
+      padding: 22px; margin-bottom: 18px;
+      background: radial-gradient(120% 140% at 100% 0%, var(--w-accent-wash) 0%, var(--w-card) 60%);
+      border-color: rgba(5,107,254,0.3);
+    }
+    .balance-row { display: flex; justify-content: space-between; align-items: flex-end; }
+    .balance-stat-label { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--w-ink-soft); }
+    .balance-stat-num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 700; font-size: 28px; margin-top: 4px; }
+    .balance-stat.pending .balance-stat-num { font-size: 20px; color: var(--w-ink-soft); }
+    .balance-stat.pending { text-align: right; }
+
+    .withdraw-btn { margin-top: 18px; }
+
+    .panel { padding: 20px; margin-bottom: 18px; }
+    .panel-eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--w-ink-soft); }
+    .panel-title { font-family: var(--font-display); font-size: 17px; font-weight: 700; margin: 2px 0 16px; }
+
+    .paypal-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; }
+    .paypal-row .sub { font-size: 12.5px; color: var(--w-ink-soft); line-height: 1.5; max-width: 30ch; }
+    .paypal-amount { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 700; font-size: 20px; flex-shrink: 0; }
+    .paypal-link { display: inline-block; margin-top: 14px; font-size: 13px; font-weight: 700; color: var(--w-accent); text-decoration: none; }
+
+    .bal-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--w-line); }
+    .bal-row:last-child { border-bottom: none; padding-bottom: 0; }
+    .bal-row-amount { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 700; }
+    .bal-row-sub { font-size: 12px; color: var(--w-ink-soft); margin-top: 2px; }
+    .bal-status { font-size: 11.5px; font-weight: 700; text-transform: capitalize; }
+    .bal-status.paid { color: var(--w-ok); }
+    .bal-status.failed, .bal-status.canceled { color: var(--w-danger); }
+    .bal-status.pending, .bal-status.in_transit { color: var(--w-ink-soft); }
+
+    .empty-panel {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      padding: 30px 10px; color: var(--w-ink-soft); text-align: center;
+    }
+    .empty-panel .sub { font-size: 12.5px; margin-top: 2px; }
+  </style>
+</head>
+<body>
+  <div class="w-shell">
+    <div class="bal-header">
+      <a href="/account/more" class="w-btn-icon" aria-label="Back">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      </a>
+      <div>
+        <div class="w-eyebrow">Split the Bill</div>
+        <h1 class="w-title" style="font-size:22px;">ReceipTap Balance</h1>
+      </div>
+    </div>
+
+    <% if (showError) { %>
+      <div class="w-error" style="margin-bottom:16px;">Couldn't reach your balance just now — please try again.</div>
+    <% } %>
+
+    <% if (!onboarded) { %>
+      <div class="w-card empty-panel">
+        <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="2" y="6" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg>
+        <div>No balance yet</div>
+        <div class="sub">Set up card payments to collect Split the Bill reimbursements and withdraw them here.</div>
+        <a href="/account/connect-stripe/start" class="w-btn" style="margin-top:16px; text-decoration:none;">Set up card payments</a>
+      </div>
+    <% } else { %>
+      <div class="w-card balance-card">
+        <div class="balance-row">
+          <div class="balance-stat">
+            <div class="balance-stat-label">Available</div>
+            <div class="balance-stat-num" id="bal-available"><%= available ? '$' + money(available.amount) : '—' %></div>
+          </div>
+          <div class="balance-stat pending">
+            <div class="balance-stat-label">Pending</div>
+            <div class="balance-stat-num" id="bal-pending"><%= pending ? '$' + money(pending.amount) : '—' %></div>
+          </div>
+        </div>
+        <a href="/account/balance/withdraw" class="w-btn withdraw-btn" style="width:100%; box-sizing:border-box; text-align:center; display:block; text-decoration:none;">Withdraw</a>
+      </div>
+
+      <div class="w-card panel">
+        <div class="panel-eyebrow">Activity</div>
+        <div class="panel-title">Recent incoming payments</div>
+        <div id="recent-payments">
+          <% if (recentPayments.length > 0) { %>
+            <% recentPayments.forEach(function(p) { %>
+              <div class="bal-row">
+                <div>
+                  <div class="bal-row-amount">$<%= money(p.amountCents) %></div>
+                  <div class="bal-row-sub">Split the Bill payment</div>
+                </div>
+                <div class="bal-row-sub"><%= p.createdAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) %></div>
+              </div>
+            <% }); %>
+          <% } else { %>
+            <div class="empty-panel"><div class="sub">No card payments collected yet</div></div>
+          <% } %>
+        </div>
+      </div>
+
+      <div class="w-card panel">
+        <div class="panel-eyebrow">Withdrawals</div>
+        <div class="panel-title">Payout history</div>
+        <div id="payout-history">
+          <% if (payouts.length > 0) { %>
+            <% payouts.forEach(function(p) { %>
+              <div class="bal-row">
+                <div>
+                  <div class="bal-row-amount">$<%= money(p.amountCents) %></div>
+                  <div class="bal-row-sub"><%= p.method === 'instant' ? 'Instant' : 'Standard' %><% if (p.failureReason) { %> — <%= p.failureReason %><% } %></div>
+                </div>
+                <div class="bal-status <%= p.status %>"><%= p.status.replace('_', ' ') %></div>
+              </div>
+            <% }); %>
+          <% } else { %>
+            <div class="empty-panel"><div class="sub">No withdrawals yet</div></div>
+          <% } %>
+        </div>
+      </div>
+    <% } %>
+
+    <%# Independent of Stripe's onboarded state above -- a host can have
+        Stripe, PayPal, both, or neither connected. Read-only: PayPal has no
+        API for a partner to read a connected seller's balance or withdraw
+        from it (see routes/customer-payouts.js's paypalReceivedCents
+        comment), so this is a real running total from ReceipTap's own
+        payment records, never a live balance, and never a Withdraw button. %>
+    <% if (paypalOnboarded) { %>
+      <div class="w-card panel paypal-panel">
+        <div class="panel-eyebrow">PayPal</div>
+        <div class="paypal-row">
+          <div>
+            <div class="panel-title" style="margin:2px 0 4px;">Received via PayPal</div>
+            <div class="sub">Total collected from Split the Bill guests who paid you by PayPal. This isn't a live balance — manage and withdraw it in your own PayPal account.</div>
+          </div>
+          <div class="paypal-amount">$<%= money(paypalReceivedCents) %></div>
+        </div>
+        <a href="https://www.paypal.com/myaccount/summary" target="_blank" rel="noopener" class="paypal-link">Open PayPal →</a>
+      </div>
+    <% } %>
+  </div>
+
+  <%- include('partials/wallet-tab-bar', { activeTab: 'more' }) %>
+
+  <% if (onboarded) { %>
+  <script>
+    // Same fetch-every-few-seconds pattern as /account/install/status --
+    // keeps the balance current if a guest's payment or a withdrawal's
+    // status lands via webhook while this page is open, no manual refresh.
+    (function () {
+      var IDLE_LIMIT_MS = 5 * 60 * 1000;
+      var startedAt = Date.now();
+      var timer = setInterval(poll, 6000);
+
+      document.addEventListener('visibilitychange', function () {
+        if (document.hidden) {
+          clearInterval(timer);
+        } else if (!timer) {
+          startedAt = Date.now();
+          timer = setInterval(poll, 6000);
+        }
+      });
+
+      async function poll() {
+        if (document.hidden) return;
+        if (Date.now() - startedAt > IDLE_LIMIT_MS) {
+          clearInterval(timer);
+          timer = null;
+          return;
+        }
+        try {
+          var res = await fetch('/account/balance/status');
+          var data = await res.json();
+          if (!data.onboarded || data.error) return;
+          document.getElementById('bal-available').textContent = '$' + (data.availableCents / 100).toFixed(2);
+          document.getElementById('bal-pending').textContent = '$' + (data.pendingCents / 100).toFixed(2);
+        } catch (err) {
+          /* offline or signed out -- keep waiting, this is a convenience, not required */
+        }
+      }
+    })();
+  </script>
+  <% } %>
+</body>
+</html>

@@ -300,6 +300,7 @@ app.use('/account', async (req, res, next) => {
 });
 
 app.use(require('./routes/customer-account'));    // consumer wallet: /account/*
+app.use(require('./routes/customer-payouts'));     // ReceipTap Balance: /account/balance/*
 
 // Same shape as the customer unread-count middleware above, kept entirely
 // separate (see that middleware's comment on /business) rather than shared,

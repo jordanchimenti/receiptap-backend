@@ -22,7 +22,8 @@ Solo founder, first-time coder. Explain in plain language, one step at a time.
 - `server.js` — mounts everything. Order matters, see Gotchas.
 - `routes/` — auth, legal, pucks, receipt, webhooks, oauth-square,
   merchant-dashboard, merchant-expenses, repeat-customers, analytics,
-  pdf-export, theme-settings, email-capture, customer-account, billing, admin
+  pdf-export, theme-settings, email-capture, customer-account,
+  customer-payouts, billing, admin
 - `middleware/` — subscriptionGate, requireAdmin, ownerFlag, legalReacceptance
 - `services/` — categorize-receipt, generate-receipt-pdf, stripeService,
   legalAcceptanceService, shopperConsentService, dataRetentionService,
@@ -31,6 +32,8 @@ Solo founder, first-time coder. Explain in plain language, one step at a time.
   consent-string versions. See Conventions.
 - `config/retention.js` — single source of truth for every data-retention
   window. See Conventions.
+- `config/payouts.js` — the Instant Withdrawal fee percentage shown on
+  ReceipTap Balance (display copy only — see Not done yet).
 - `views/` — EJS pages; `views/partials/dashboard-header.ejs` is the merchant
   sidebar included by every dashboard page
 - `public/css/receiptap.css` — the whole design system, one file
@@ -201,9 +204,35 @@ Solo founder, first-time coder. Explain in plain language, one step at a time.
   always will, forever. `purgeDeactivatedMerchants()` in
   `services/dataRetentionService.js` anonymizes the `Merchant` row in place
   instead of deleting it, deliberately, not as a workaround for a bug.
+  `Payout.customerId` (ReceipTap Balance withdrawals, see "Not done yet") is
+  ALSO RESTRICT and, unlike the relations above, this one is a KNOWN GAP, not
+  a deliberate choice: `deleteShopperEverywhere()` does not yet delete
+  `Payout` rows, so it will start failing for any host who has ever withdrawn
+  once that feature has real usage. Needs a fix before relying on that
+  function for a shopper who's used ReceipTap Balance.
 
 ## Not done yet
 
+- **ReceipTap Balance (Split the Bill host withdrawals) is built but
+  UNVERIFIED against a real Stripe test-mode Instant Payout.** A host's
+  Split the Bill Connect balance (the same account `/account/connect-stripe`
+  already sets up) is now visible in-app at `/account/balance`, with Standard
+  (free) and Instant (`config/payouts.js`'s `INSTANT_WITHDRAWAL_FEE_PERCENT`,
+  currently 3%) withdrawal via `stripe.payouts.create` in
+  `services/stripeService.js`'s "Host balance / withdrawals" section. Two
+  real gaps before this is production-ready: (1) the Instant fee is only
+  actually collected once the Stripe Dashboard's Platform Pricing Tool is
+  configured to match the constant — nothing in this codebase enforces it,
+  see `config/payouts.js`'s own comment — and that Dashboard step has not
+  been done; (2) `payout.*`/`account.updated` webhook events require
+  enabling "Events from Connected accounts" on the existing
+  `/webhooks/stripe` endpoint (same endpoint, same `STRIPE_WEBHOOK_SECRET` —
+  see the updated comment in `.env.example`), which also has not been done,
+  so `recordPayoutEvent`/`syncCustomerConnectStatusFromAccount` in
+  `services/stripeService.js` are correct code with no live events reaching
+  them yet. `STRIPE_CONNECT_APPROVAL.md` (repo root) is the submission
+  drafted for Stripe's review of this use case — not yet sent, and no
+  approval should be assumed until Stripe responds in writing.
 - **Toast POS integration is built but UNVERIFIED against real data.**
   Unlike Square/Clover/Lightspeed/Shopify, Toast has no redirect-based OAuth
   for third-party apps at the self-serve tier — a restaurant on Toast RMS

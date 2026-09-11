@@ -111,7 +111,7 @@
     <div class="g-collect-row">
       <div>
         <div class="g-collect-label">Left to collect</div>
-        <div class="g-collect-value"><%= receipt.currency || 'CA' %>$<%= money(leftToCollectCents) %></div>
+        <div class="g-collect-value" id="g-collect-value"><%= receipt.currency || 'CA' %>$<%= money(leftToCollectCents) %></div>
       </div>
       <button type="button" class="g-share-btn" id="share-btn" data-default-label="Share link">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 3.9M15.4 6.5L8.6 10.4"/></svg>
@@ -133,17 +133,17 @@
 
     <div class="g-list">
       <% guestsWithAmounts.forEach(function (g) { %>
-        <a href="/account/receipts/scanned/<%= receipt.id %>/group/guests/<%= g.id %>" class="g-row">
+        <a href="/account/receipts/scanned/<%= receipt.id %>/group/guests/<%= g.id %>" class="g-row" data-guest-id="<%= g.id %>">
           <div class="g-avatar"><%= g.name.split(' ').map(function(w){return w[0];}).join('').slice(0,2).toUpperCase() %></div>
           <div class="g-row-text">
             <div class="g-row-name"><%= g.name %><% if (g.isHost) { %><span class="host-tag">(host)</span><% } %></div>
             <% if (g.isHost) { %>
-              <div class="g-row-sub paid">Paid</div>
+              <div class="g-row-sub paid" data-role="sub">Paid</div>
             <% } else { %>
-              <div class="g-row-sub <%= g.paid ? 'paid' : 'owes' %>"><%= g.paid ? 'Paid' : 'Owes ' + (receipt.currency || 'CA') + '$' + money(g.owedCents - g.paidCents) %></div>
+              <div class="g-row-sub <%= g.paid ? 'paid' : 'owes' %>" data-role="sub" data-owed-cents="<%= g.owedCents %>"><%= g.paid ? 'Paid' : 'Owes ' + (receipt.currency || 'CA') + '$' + money(g.owedCents - g.paidCents) %></div>
             <% } %>
           </div>
-          <div class="g-row-check <%= g.paid ? 'paid' : 'unpaid' %>">
+          <div class="g-row-check <%= g.paid ? 'paid' : 'unpaid' %>" data-role="check">
             <% if (g.paid) { %>
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 13l4 4L19 7"/></svg>
             <% } %>
@@ -250,6 +250,58 @@
         setTimeout(() => { shareLabel.textContent = shareBtn.dataset.defaultLabel; }, 1600);
       } catch (err) { /* clipboard unavailable */ }
     });
+
+    // Polled while this page is open, same fetch-every-few-seconds pattern
+    // as /account/install/status -- so a guest's card/PayPal payment
+    // (recorded by a webhook, not by anything this tab did) shows up without
+    // the host needing to refresh. See GET .../group/status in
+    // routes/customer-account.js.
+    (function () {
+      const currency = <%- JSON.stringify(receipt.currency || 'CA') %>;
+      const IDLE_LIMIT_MS = 5 * 60 * 1000;
+      let startedAt = Date.now();
+      let timer = setInterval(poll, 6000);
+
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+          clearInterval(timer);
+        } else if (!timer) {
+          startedAt = Date.now();
+          timer = setInterval(poll, 6000);
+        }
+      });
+
+      async function poll() {
+        if (document.hidden) return;
+        if (Date.now() - startedAt > IDLE_LIMIT_MS) {
+          clearInterval(timer);
+          timer = null;
+          return;
+        }
+        try {
+          const res = await fetch(window.location.pathname + '/status');
+          const data = await res.json();
+          document.getElementById('g-collect-value').textContent = currency + '$' + (data.leftToCollectCents / 100).toFixed(2);
+          data.guests.forEach((g) => {
+            const row = document.querySelector('.g-row[data-guest-id="' + g.id + '"]');
+            if (!row) return;
+            const sub = row.querySelector('[data-role="sub"]');
+            const check = row.querySelector('[data-role="check"]');
+            if (!sub || !check || sub.dataset.owedCents === undefined) return; // host row -- always "Paid", nothing to update
+            if (g.paid) {
+              sub.textContent = 'Paid';
+              sub.classList.add('paid'); sub.classList.remove('owes');
+              check.classList.add('paid'); check.classList.remove('unpaid');
+              check.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 13l4 4L19 7"/></svg>';
+            } else {
+              sub.textContent = 'Owes ' + currency + '$' + ((g.owedCents - g.paidCents) / 100).toFixed(2);
+            }
+          });
+        } catch (err) {
+          /* offline or signed out -- keep waiting, this is a convenience, not required */
+        }
+      }
+    })();
   </script>
 </body>
 </html>

@@ -11,7 +11,7 @@
 // notification couldn't be sent.
 
 const prisma = require('../lib/prisma');
-const { sendLoyaltyRewardReadyEmail, sendWarrantyExpiringEmail } = require('./emailService');
+const { sendLoyaltyRewardReadyEmail, sendWarrantyExpiringEmail, sendWithdrawalFailedEmail } = require('./emailService');
 const { isEmailSuppressed } = require('./emailSuppressionService');
 const { sendToCustomer } = require('./pushService');
 
@@ -127,6 +127,79 @@ async function sendWarrantyExpiringEmailSafely({ customer, merchantName, totalLa
   }
 }
 
+// --- ReceipTap Balance withdrawals -------------------------------------------
+// Fired from services/stripeService.js's recordPayoutEvent on a genuine
+// payout status transition (never on a webhook redelivery for a status
+// already recorded -- see that function's comment). "Completed" is in-app +
+// push only, same as loyalty: good news the customer can see next time they
+// open the app. "Failed" adds email too, same reasoning as
+// notifyBillingProblem on the merchant side -- money they're expecting
+// didn't move, and a bell icon they might not see isn't enough.
+
+async function notifyWithdrawalCompleted({ customerId, amountCents, method }) {
+  const customer = await prisma.customer.findUnique({ where: { id: customerId } });
+  if (!customer) return null;
+
+  const notification = await prisma.notification.create({
+    data: {
+      customerId,
+      type: 'WITHDRAWAL_COMPLETED',
+      title: 'Withdrawal complete',
+      body: `${money(amountCents)} (${method === 'instant' ? 'Instant' : 'Standard'}) is on its way to your bank.`,
+      linkUrl: '/account/balance',
+    },
+  });
+
+  await sendPushSafely(customerId, {
+    title: notification.title,
+    body: notification.body,
+    url: '/account/balance',
+    tag: 'withdrawal',
+  });
+
+  return notification;
+}
+
+async function notifyWithdrawalFailed({ customerId, amountCents, reason }) {
+  const customer = await prisma.customer.findUnique({ where: { id: customerId } });
+  if (!customer) return null;
+
+  const notification = await prisma.notification.create({
+    data: {
+      customerId,
+      type: 'WITHDRAWAL_FAILED',
+      title: 'Withdrawal failed',
+      body: `${money(amountCents)} couldn't be sent to your bank. The amount is still in your ReceipTap Balance.`,
+      linkUrl: '/account/balance',
+    },
+  });
+
+  await Promise.all([
+    sendPushSafely(customerId, {
+      title: notification.title,
+      body: notification.body,
+      url: '/account/balance',
+      tag: 'withdrawal',
+    }),
+    sendWithdrawalFailedEmailSafely({ customer, amountCents, reason }),
+  ]);
+
+  return notification;
+}
+
+async function sendWithdrawalFailedEmailSafely({ customer, amountCents, reason }) {
+  try {
+    await sendWithdrawalFailedEmail({
+      email: customer.email,
+      name: customer.name,
+      amountLabel: money(amountCents),
+      reason,
+    });
+  } catch (err) {
+    console.error(`[notificationService] withdrawal-failed email to ${customer.email} failed:`, err.message);
+  }
+}
+
 // --- Receipt activity -------------------------------------------------------
 // Deliberately in-app only: no email, no push. A loyalty card filling up is
 // news the customer couldn't otherwise know. Saving or deleting a receipt is
@@ -203,6 +276,8 @@ async function markAllRead(customerId) {
 module.exports = {
   notifyLoyaltyCardFull,
   notifyWarrantyExpiring,
+  notifyWithdrawalCompleted,
+  notifyWithdrawalFailed,
   notifyReceiptSaved,
   notifyReceiptDeleted,
   notifyAllCustomersOfAnnouncement,

@@ -3,6 +3,7 @@ const prisma = require('../lib/prisma');
 const { MERCHANT_AFFILIATE_RATE, REGULAR_AFFILIATE_RATE } = require('./affiliateRates');
 const { notifyBillingProblem, notifyPayoutCompleted, notifyTreePlanted, notifyReturnPucks } = require('./merchantNotificationService');
 const { plantTreeForSubscriptionMonth } = require('./goodApiService');
+const { notifyWithdrawalCompleted, notifyWithdrawalFailed } = require('./notificationService');
 
 const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2024-06-20' })
@@ -403,6 +404,204 @@ async function registerApplePayDomain(domainName) {
   return stripe.applePayDomains.create({ domain_name: domainName });
 }
 
+// --- Host balance / withdrawals (Stripe Connect) ----------------------------
+// Builds on the same Customer Connect accounts as the Split the Bill section
+// above -- a host's collected reimbursements already sit in their OWN
+// connected account (destination charges never touch ReceipTap's platform
+// balance), so "withdraw" here always means the CUSTOMER pulling their own
+// money to their own bank via stripe.payouts.create, called with the
+// Stripe-Account header set to their connected account id. This never moves
+// money out of ReceipTap's platform balance the way payAffiliateCommission's
+// stripe.transfers.create does.
+//
+// See config/payouts.js for why the Instant fee percentage shown in the UI
+// is display copy, not something enforced by any function below -- the real
+// deduction is Stripe's own Platform Pricing Tool, applied automatically
+// because destination charges already make ReceipTap the fee payer on these
+// accounts.
+
+/** Raw Stripe Balance for a host's connected account, with the Instant
+ * Payout net-of-fee figure expanded. Never cached/computed locally -- the
+ * ReceipTap Balance screen always reads this live, per the requirement that
+ * the displayed amount reconcile with Stripe's own balance, not a database
+ * sum of SplitPayment rows. */
+async function getHostConnectBalance(stripeConnectAccountId) {
+  if (!stripe) throw new Error('Stripe is not configured yet (missing STRIPE_SECRET_KEY).');
+  return stripe.balance.retrieve(
+    { expand: ['instant_available.net_available'] },
+    { stripeAccount: stripeConnectAccountId }
+  );
+}
+
+/** Whether this host can withdraw Instant right now -- both their external
+ * account (bank/debit card) must support it AND they must actually have an
+ * instant-available balance greater than zero. Always returns a real reason
+ * rather than just a boolean, so the withdraw screen can explain why Instant
+ * is hidden instead of silently omitting it. */
+async function getInstantPayoutEligibility(stripeConnectAccountId) {
+  if (!stripe) throw new Error('Stripe is not configured yet (missing STRIPE_SECRET_KEY).');
+
+  const [externalAccounts, balance] = await Promise.all([
+    stripe.accounts.listExternalAccounts(
+      stripeConnectAccountId,
+      { object: 'bank_account', limit: 10 },
+      { stripeAccount: stripeConnectAccountId }
+    ),
+    getHostConnectBalance(stripeConnectAccountId),
+  ]);
+
+  const hasInstantBank = externalAccounts.data.some(
+    (acct) => Array.isArray(acct.available_payout_methods) && acct.available_payout_methods.includes('instant')
+  );
+  if (!hasInstantBank) {
+    return { eligible: false, reason: 'No bank on file supports Instant transfers yet.' };
+  }
+
+  const instantEntry = (balance.instant_available || []).find((entry) => entry.amount > 0);
+  if (!instantEntry) {
+    return { eligible: false, reason: 'Nothing is instantly available to withdraw right now.' };
+  }
+
+  return { eligible: true, reason: null, currency: instantEntry.currency };
+}
+
+/** Standard withdrawal -- no method param, no application_fee_amount, so
+ * it's genuinely free to the host by omission. amountCents must already be
+ * validated by the caller against the live available balance (never trust a
+ * stale client figure -- same rule routes/customer-account.js's group/pay
+ * route follows for money math). */
+async function createStandardHostPayout(stripeConnectAccountId, { amountCents, currency }) {
+  if (!stripe) throw new Error('Stripe is not configured yet (missing STRIPE_SECRET_KEY).');
+  return stripe.payouts.create(
+    { amount: amountCents, currency: currency.toLowerCase() },
+    { stripeAccount: stripeConnectAccountId }
+  );
+}
+
+/** Instant withdrawal -- re-fetches the balance's net_available figure fresh
+ * at call time and uses THAT as the amount, never a client-submitted one.
+ * That figure already reflects whatever percentage is configured in the
+ * Stripe Dashboard's Platform Pricing Tool, so the fee is whatever Stripe
+ * actually deducts, not a locally computed percentage. Returns both the
+ * created Payout and the applicationFeeCents implied by gross-vs-net so the
+ * caller can record an honest snapshot immediately, before any webhook
+ * arrives. */
+async function createInstantHostPayout(stripeConnectAccountId, { currency }) {
+  if (!stripe) throw new Error('Stripe is not configured yet (missing STRIPE_SECRET_KEY).');
+
+  const balance = await getHostConnectBalance(stripeConnectAccountId);
+  const grossEntry = (balance.instant_available || []).find((entry) => entry.currency === currency.toLowerCase());
+  const netEntry = grossEntry?.net_available?.[0];
+  if (!grossEntry || !netEntry || netEntry.amount <= 0) {
+    throw new Error('Nothing is instantly available to withdraw right now.');
+  }
+
+  const payout = await stripe.payouts.create(
+    { amount: netEntry.amount, currency: currency.toLowerCase(), method: 'instant', destination: netEntry.destination },
+    { stripeAccount: stripeConnectAccountId }
+  );
+
+  return { payout, applicationFeeCents: grossEntry.amount - netEntry.amount };
+}
+
+/** Keeps the local Payout row in sync with a payout.* connected-account
+ * event. Upsert, not findUnique-before-create -- unlike SplitPayment (which
+ * is written once and never expected to change), a Payout row IS expected to
+ * be written to more than once as its status moves pending -> in_transit ->
+ * paid/failed, so "already exists" isn't a signal to skip, it's the normal
+ * case. Naturally idempotent regardless: re-delivering the same event just
+ * re-applies the same status.
+ *
+ * stripeConnectAccountId here is the connected account the event belongs to
+ * (event.account) -- resolved against Customer first since that's the only
+ * domain this function knows how to record a Payout row for. Affiliate also
+ * uses Connect Express accounts and will emit the same event types on this
+ * same webhook subscription -- a miss here is expected and silently ignored,
+ * not an error (see handleConnectAccountEvent below for that check). */
+async function recordPayoutEvent(payoutObject, stripeConnectAccountId) {
+  const customer = await prisma.customer.findUnique({ where: { stripeConnectAccountId } });
+  if (!customer) return; // not a Customer-owned connected account -- e.g. an Affiliate account
+
+  const existing = await prisma.payout.findUnique({ where: { stripePayoutId: payoutObject.id } });
+  const oldStatus = existing?.status;
+
+  const data = {
+    customerId: customer.id,
+    amountCents: payoutObject.amount,
+    currency: payoutObject.currency,
+    method: payoutObject.method === 'instant' ? 'instant' : 'standard',
+    status: payoutObject.status,
+    failureCode: payoutObject.failure_code || null,
+    failureReason: payoutObject.failure_message || null,
+    arrivalDate: payoutObject.arrival_date ? new Date(payoutObject.arrival_date * 1000) : null,
+  };
+  // Never overwrite a fee snapshot the create route already stored -- Stripe's
+  // payout.* events carry no application-fee figure of their own to replace it with.
+  if (!existing) data.applicationFeeCents = null;
+
+  await prisma.payout.upsert({
+    where: { stripePayoutId: payoutObject.id },
+    create: { stripePayoutId: payoutObject.id, ...data },
+    update: data,
+  });
+
+  if (oldStatus === payoutObject.status) return; // no real transition -- e.g. a redelivered event
+  try {
+    if (payoutObject.status === 'paid') {
+      await notifyWithdrawalCompleted({ customerId: customer.id, amountCents: payoutObject.amount, method: data.method });
+    } else if (payoutObject.status === 'failed') {
+      await notifyWithdrawalFailed({
+        customerId: customer.id,
+        amountCents: payoutObject.amount,
+        reason: payoutObject.failure_message || null,
+      });
+    }
+  } catch (err) {
+    console.error(`[stripeService] withdrawal notification for payout ${payoutObject.id} failed:`, err.message);
+  }
+}
+
+/** Mirrors an account.updated connected-account event into
+ * Customer.stripeConnectOnboarded -- the same payouts_enabled check
+ * getShopperConnectStatus already does on manual return, just triggered by
+ * the webhook so a host's balance/withdraw screens reflect a KYC status
+ * change without them needing to click back through onboarding. Same
+ * Customer-first, silently-ignore-if-Affiliate resolution as
+ * recordPayoutEvent above. */
+async function syncCustomerConnectStatusFromAccount(accountObject) {
+  const customer = await prisma.customer.findUnique({ where: { stripeConnectAccountId: accountObject.id } });
+  if (!customer) return;
+
+  const onboarded = Boolean(accountObject.payouts_enabled);
+  if (customer.stripeConnectOnboarded === onboarded) return; // no real change
+  await prisma.customer.update({ where: { id: customer.id }, data: { stripeConnectOnboarded: onboarded } });
+}
+
+/** Routes a CONNECTED-ACCOUNT-scope webhook event (event.account is set) --
+ * distinct from handleWebhookEvent's switch below, which only ever sees
+ * PLATFORM-scope events (ReceipTap's own subscriptions, Split the Bill
+ * PaymentIntents). Both scopes arrive on the same /webhooks/stripe endpoint
+ * once "Events from Connected accounts" is enabled on it in the Stripe
+ * Dashboard -- see STRIPE_CONNECT_APPROVAL.md and this repo's README for the
+ * one-time Dashboard step this requires. */
+async function handleConnectAccountEvent(event) {
+  switch (event.type) {
+    case 'payout.created':
+    case 'payout.updated':
+    case 'payout.paid':
+    case 'payout.failed':
+    case 'payout.canceled':
+      await recordPayoutEvent(event.data.object, event.account);
+      break;
+    case 'account.updated':
+      await syncCustomerConnectStatusFromAccount(event.data.object);
+      break;
+    default:
+      // e.g. account.external_account.updated, person.updated -- not needed yet.
+      break;
+  }
+}
+
 /** Attempts a real transfer for one commission and records the outcome.
  * Safe to call speculatively -- a Stripe error (e.g. insufficient platform
  * balance) just leaves the commission FAILED for manual follow-up rather
@@ -598,6 +797,12 @@ async function syncPuckReturnWindows(merchantId, newStatus) {
  * access — it just reads Merchant.subscriptionStatus.
  */
 async function handleWebhookEvent(event) {
+  // Connected-account events (payout.*, account.updated for a host's own
+  // Connect account) carry a top-level `account` field platform-scope events
+  // never have -- see handleConnectAccountEvent's comment for why both
+  // scopes share this one endpoint.
+  if (event.account) return handleConnectAccountEvent(event);
+
   switch (event.type) {
     case 'customer.subscription.created':
     case 'customer.subscription.updated': {
@@ -779,4 +984,10 @@ module.exports = {
   getShopperConnectStatus,
   createSplitPaymentIntent,
   registerApplePayDomain,
+  getHostConnectBalance,
+  getInstantPayoutEligibility,
+  createStandardHostPayout,
+  createInstantHostPayout,
+  recordPayoutEvent,
+  syncCustomerConnectStatusFromAccount,
 };

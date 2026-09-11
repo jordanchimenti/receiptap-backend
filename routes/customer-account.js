@@ -2155,6 +2155,25 @@ router.get('/account/receipts/scanned/:id/group', requireCustomerAuth, async (re
   });
 });
 
+// Polled by split-group.ejs while the host has the group page open, same
+// fetch-every-few-seconds pattern as /account/install/status -- so a guest's
+// card/PayPal payment (recorded by a webhook, not by anything this browser
+// tab did) shows up without the host needing to refresh. JSON only, no
+// markup -- the page already has the rendering logic, this just hands it
+// fresh numbers.
+router.get('/account/receipts/scanned/:id/group/status', requireCustomerAuth, async (req, res) => {
+  const loaded = await loadOwnedGroup(req);
+  if (!loaded) return res.status(404).json({ error: 'not found' });
+  const { receipt, group } = loaded;
+  const financials = computeGroupFinancials(receipt, group);
+  res.json({
+    totalToCollectCents: financials.totalToCollectCents,
+    totalCollectedCents: financials.totalCollectedCents,
+    leftToCollectCents: financials.leftToCollectCents,
+    guests: financials.guestsWithAmounts.map((g) => ({ id: g.id, paid: g.paid, paidCents: g.paidCents, owedCents: g.owedCents })),
+  });
+});
+
 router.post('/account/receipts/scanned/:id/group/guests', requireCustomerAuth, async (req, res) => {
   const loaded = await loadOwnedGroup(req);
   if (!loaded) return res.redirect('/account/receipts');

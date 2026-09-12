@@ -152,7 +152,7 @@ Rules that matter more than completeness:
 
 const INSTRUCTIONS = buildInstructions('a photo of a purchase receipt');
 const EMAIL_INSTRUCTIONS = buildInstructions(
-  'the text of an email receipt, order confirmation, or shipping notice -- read past any marketing/footer boilerplate to the actual order details'
+  'the text of an email receipt, order confirmation, or shipping notice -- read past any marketing/footer boilerplate to the actual order details -- possibly followed by one or more attached PDF documents (an invoice or a fuller receipt) if the email text alone did not already contain everything; read those the same way you would a photographed receipt'
 );
 
 // Money on receipts is decimal; everything in this project is stored in cents.
@@ -206,15 +206,29 @@ async function extractReceiptData(source, mimetype) {
  * instruction. `emailText` should be the plain-text rendering of the email
  * (HTML stripped) -- Claude reads printed receipt language fine as plain
  * text, and this avoids feeding raw HTML markup into the prompt.
+ *
+ * `pdfBuffers` (optional) adds one or more attached PDFs as their own
+ * document content blocks, read directly -- no separate PDF text-
+ * extraction step, since Claude reads a PDF's pages natively. Only ever
+ * passed in by services/emailReceiptService.js as a FALLBACK, when
+ * `emailText` alone didn't already yield a usable receipt (see that
+ * file's comment on why: many merchant emails only say "your invoice is
+ * attached", with every real figure inside the PDF, not the email body).
  */
-async function extractReceiptDataFromEmail(emailText) {
+async function extractReceiptDataFromEmail(emailText, pdfBuffers) {
   if (!process.env.ANTHROPIC_API_KEY) {
     console.warn('[scan-receipt] ANTHROPIC_API_KEY not set, skipping extraction');
     return null;
   }
 
+  const pdfBlocks = (pdfBuffers || []).map((buffer) => ({
+    type: 'document',
+    source: { type: 'base64', media_type: 'application/pdf', data: buffer.toString('base64') },
+  }));
+
   return runExtraction([
     { type: 'text', text: `--- EMAIL CONTENT ---\n${emailText}\n--- END EMAIL CONTENT ---` },
+    ...pdfBlocks,
     { type: 'text', text: EMAIL_INSTRUCTIONS },
   ]);
 }

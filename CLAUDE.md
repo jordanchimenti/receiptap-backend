@@ -226,39 +226,50 @@ Solo founder, first-time coder. Explain in plain language, one step at a time.
 
 ## Not done yet
 
-- **Consumer automatic email receipts (Phase 1) is built but UNVERIFIED
-  against a real Nylas account.** A shopper can connect an email inbox
-  (`/account/connect-email/start`, Settings) so receipts that arrive by
-  email are added to their wallet automatically, with no card-transaction
+- **Consumer automatic email receipts (Phase 1) is built and VERIFIED live**
+  against a real Nylas Sandbox app and a real connected Gmail inbox
+  (2026-09-12) — a real test email produced a real `ScannedReceipt` end to
+  end: webhook delivery, sender/subject filter, AI extraction, wallet
+  surfacing, original-document download. A shopper can connect an email
+  inbox (`/account/connect-email/start`, Settings) so receipts that arrive
+  by email are added to their wallet automatically, with no card-transaction
   match required and no points/rewards/ledger involved anywhere in this
   feature (see `docs/CONSUMER_FLOW_AUDIT.md` for the full design and phased
   plan). Reuses the existing `ScannedReceipt` model (tagged
   `source: 'email'`) and the existing AI extraction pipeline
   (`extractReceiptDataFromEmail` in `services/scanReceiptService.js`) rather
-  than a second receipt schema or parser, per that audit's constraints. No
-  Nylas account/app has been created yet — every part of the Nylas v3
-  integration (`services/emailProviderService.js`: hosted OAuth, token
-  exchange, webhook signature verification, message/attachment fetching)
-  was built and syntax/boot-tested against Nylas's *published API docs*,
-  never against a live grant, so the actual OAuth round-trip, webhook
-  delivery, and real message shapes are unconfirmed. `message.raw_mime` is
-  used speculatively in `services/emailReceiptService.js` with a fallback
-  to a plain-text rendering if Nylas doesn't actually return it — flagged
-  in-code as needing confirmation once real credentials exist. Candidate
-  classification runs on the existing `setInterval`-poller pattern
-  (`services/emailReceiptPoller.js`, mirroring
+  than a second receipt schema or parser, per that audit's constraints.
+  Three real bugs were found and fixed only by testing against a live
+  account, none of which syntax-checking or a boot test could have caught:
+  (1) `emailProviderService.js`'s `getMessage()` returned Nylas's raw
+  `{request_id, data}` envelope unwrapped, so every field the caller
+  actually read (body, from, snippet) was silently `undefined` -- meaning
+  no email could ever have classified as a receipt before this was fixed;
+  (2) the private Supabase bucket (`receipts-private`) only allowed image
+  MIME types, since it was built for scan photos -- storing an email's text
+  or a PDF failed outright until `text/plain`/`message/rfc822`/
+  `application/pdf` were added to its allow-list (a Supabase-side config
+  change, not code); (3) PDF-attachment detection compared
+  `content_type === 'application/pdf'` with strict equality, but real
+  providers commonly report `application/pdf; name=x.pdf` -- never matched,
+  silently breaking PDF handling entirely. `message.raw_mime` is still used
+  speculatively with a fallback to plain text if Nylas doesn't return it --
+  not yet confirmed either way against a real message, since the two real
+  test messages so far didn't carry a raw MIME source. See §13 of the audit
+  doc for a fourth thing tested and found genuinely missing: a receipt
+  whose real data lives behind a "click here to view" link rather than in
+  the email body or a PDF attachment is not read at all today (deliberately
+  not built -- following an arbitrary link found in inbound email is a real
+  SSRF risk that needs its own design, not a natural extension of the PDF
+  fallback above). Candidate classification runs on the existing
+  `setInterval`-poller pattern (`services/emailReceiptPoller.js`, mirroring
   `lightspeedPoller.js`/`toastPoller.js`), not a job queue — this codebase
   has none anywhere, and extending that pattern here was a deliberate,
   flagged tradeoff rather than new infrastructure. `MerchantRegistry` (an
   email-sender-domain directory, separate from a real `Merchant` row until
   one claims it) has no claim-flow UI yet — deferred past Phase 1. Phase 2
   (push/deep-link surfacing) and Phase 3 (card-link + nudge) are both
-  explicitly not started. To actually test this end to end: register a
-  Nylas v3 app (dashboard-v3.nylas.com), set `NYLAS_CLIENT_ID`/
-  `NYLAS_API_KEY` (see `.env.example`), connect a real inbox from Settings,
-  create the webhook subscription and set `NYLAS_WEBHOOK_SECRET` once Nylas
-  hands one back, then send a real receipt email to the connected inbox and
-  watch it appear in the wallet.
+  explicitly not started.
 - **ReceipTap Balance (Split the Bill host withdrawals) is built but
   UNVERIFIED against a real Stripe test-mode Instant Payout.** A host's
   Split the Bill Connect balance (the same account `/account/connect-stripe`

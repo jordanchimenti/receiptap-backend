@@ -68,6 +68,19 @@ function htmlToPlainText(html) {
     .trim();
 }
 
+// Bounds on the PDF-fallback extraction path below -- a message that needed
+// this fallback already passed the sender/subject filter, but that filter
+// says nothing about how large or how many PDFs it's attached, and this is
+// the one place in the whole pipeline that pays for an attachment download
+// before knowing whether the message is even a receipt. 15MB comfortably
+// covers a real invoice/receipt PDF while keeping a hostile or oversized
+// attachment from turning into an expensive download + a large Anthropic
+// call; 2 attachments is enough for the real pattern this exists for (an
+// invoice plus a payment confirmation), not an invitation to process an
+// email's entire attachment list.
+const MAX_PDF_BYTES_FOR_EXTRACTION = 15 * 1024 * 1024;
+const MAX_PDFS_FOR_EXTRACTION = 2;
+
 function extractSenderDomain(fromAddress) {
   const at = String(fromAddress || '').lastIndexOf('@');
   return at === -1 ? null : fromAddress.slice(at + 1).trim().toLowerCase();
@@ -125,9 +138,51 @@ async function processPendingMessage(processedMessage, emailConnection) {
   const bodyText = htmlToPlainText(message.body) || message.snippet || '';
   const senderDomain = extractSenderDomain(message.from?.[0]?.email);
 
+  // Nylas (like most providers) often reports a Content-Type WITH
+  // parameters, e.g. "application/pdf; name=invoice.pdf" -- a strict
+  // equality check against 'application/pdf' silently misses every one of
+  // those, which is most real-world PDF attachments, not an edge case.
+  // Comparing only the base media type (before any ';') is what both the
+  // fallback below and the source-document storage further down actually
+  // need.
+  const pdfAttachments = Array.isArray(message.attachments)
+    ? message.attachments.filter((a) => String(a.content_type || '').split(';')[0].trim() === 'application/pdf')
+    : [];
+
   let extracted = null;
   if (bodyText.trim()) {
     extracted = await extractReceiptDataFromEmail(bodyText);
+  }
+
+  // Fallback for the "your invoice is attached" pattern: the email body
+  // alone said nothing usable, but a PDF is attached that might actually
+  // hold the receipt. Only reached when body-only extraction already
+  // failed, so the common case (a receipt fully written into the email
+  // itself) never pays for a PDF download it doesn't need -- same
+  // data-minimization posture as everything else in this file, just
+  // applied one step later than the sender/subject filter above.
+  // downloadedPdfs is filled in here and reused below when storing this
+  // message's original documents, so a message that needed this fallback
+  // never downloads the same PDF twice.
+  const downloadedPdfs = new Map(); // attachment.id -> Buffer
+  if ((!extracted || !extracted.merchantName || extracted.totalCents == null) && pdfAttachments.length) {
+    const candidates = pdfAttachments
+      .filter((a) => !a.size || a.size <= MAX_PDF_BYTES_FOR_EXTRACTION)
+      .slice(0, MAX_PDFS_FOR_EXTRACTION);
+    const buffers = [];
+    for (const attachment of candidates) {
+      try {
+        const buffer = await downloadAttachment(emailConnection.grantId, attachment.id, message.id);
+        if (buffer.length > MAX_PDF_BYTES_FOR_EXTRACTION) continue; // a.size wasn't trustworthy
+        downloadedPdfs.set(attachment.id, buffer);
+        buffers.push(buffer);
+      } catch (err) {
+        console.error(`[email-receipt] attachment download failed for message ${message.id}:`, err.message);
+      }
+    }
+    if (buffers.length) {
+      extracted = await extractReceiptDataFromEmail(bodyText, buffers);
+    }
   }
 
   if (!extracted || !extracted.merchantName || extracted.totalCents == null) {
@@ -198,13 +253,14 @@ async function processPendingMessage(processedMessage, emailConnection) {
   // ScannedReceiptSourceDocument row per attachment, never used to decide
   // whether this message IS a receipt (that's already been decided from
   // the email body above) -- only ever additive evidence.
-  const pdfAttachments = Array.isArray(message.attachments)
-    ? message.attachments.filter((a) => a.content_type === 'application/pdf')
-    : [];
   const attachmentArtifacts = [];
   for (const attachment of pdfAttachments) {
     try {
-      const buffer = await downloadAttachment(emailConnection.grantId, attachment.id, message.id);
+      // Reuse the buffer if the PDF-fallback path above already downloaded
+      // this exact attachment while trying to extract a receipt from it --
+      // no reason to fetch the same bytes from Nylas twice.
+      const buffer = downloadedPdfs.get(attachment.id)
+        || await downloadAttachment(emailConnection.grantId, attachment.id, message.id);
       const key = await fileStorage.putPrivate('email-receipts', {
         originalname: attachment.filename || `${attachment.id}.pdf`,
         buffer,

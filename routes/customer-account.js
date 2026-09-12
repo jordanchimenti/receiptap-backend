@@ -1919,6 +1919,22 @@ const SOURCE_DOCUMENT_EXT = {
   email_text: 'txt',
   attachment_pdf: 'pdf',
 };
+// attachment_image has no single fixed mimetype/extension (png/jpg/webp
+// all reach services/emailReceiptService.js's storage step) -- buildKey()
+// in lib/fileStorage.js always preserves the original file's extension in
+// storageKey, so that's read back here instead of adding a third fixed map
+// entry that could only ever be wrong for two of the three real cases.
+const IMAGE_EXT_MIME = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp' };
+function sourceDocumentContentType(doc) {
+  if (SOURCE_DOCUMENT_MIME[doc.type]) return SOURCE_DOCUMENT_MIME[doc.type];
+  const ext = doc.storageKey.split('.').pop().toLowerCase();
+  return IMAGE_EXT_MIME[ext] || 'application/octet-stream';
+}
+function sourceDocumentExtension(doc) {
+  if (SOURCE_DOCUMENT_EXT[doc.type]) return SOURCE_DOCUMENT_EXT[doc.type];
+  const ext = doc.storageKey.split('.').pop().toLowerCase();
+  return IMAGE_EXT_MIME[ext] ? ext : 'bin';
+}
 
 router.get('/account/receipts/scanned/:id/original/:docId', requireCustomerAuth, async (req, res) => {
   const doc = await prisma.scannedReceiptSourceDocument.findUnique({
@@ -1939,8 +1955,8 @@ router.get('/account/receipts/scanned/:id/original/:docId', requireCustomerAuth,
   }
 
   res.set('Cache-Control', 'private, no-store');
-  res.set('Content-Type', SOURCE_DOCUMENT_MIME[doc.type] || 'application/octet-stream');
-  res.set('Content-Disposition', `attachment; filename="receipt-original.${SOURCE_DOCUMENT_EXT[doc.type] || 'bin'}"`);
+  res.set('Content-Type', sourceDocumentContentType(doc));
+  res.set('Content-Disposition', `attachment; filename="receipt-original.${sourceDocumentExtension(doc)}"`);
   stream.on('error', (err) => {
     console.error('[email-receipt] original document stream error:', err.message);
     if (!res.headersSent) res.status(404).end();

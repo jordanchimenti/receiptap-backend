@@ -1241,7 +1241,9 @@ model ScannedReceiptSourceDocument {
 
   // 'email_eml' (raw MIME source, when Nylas provides it) |
   // 'email_text' (plain-text rendering of the body, the honest fallback
-  // when it doesn't) | 'attachment_pdf' (a PDF the merchant attached)
+  // when it doesn't) | 'attachment_pdf' (a PDF the merchant attached) |
+  // 'attachment_image' (a photographed/scanned receipt attached or
+  // embedded as an image -- jpeg/png/webp -- rather than a PDF)
   type String
 
   storageKey  String

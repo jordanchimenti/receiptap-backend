@@ -152,7 +152,7 @@ Rules that matter more than completeness:
 
 const INSTRUCTIONS = buildInstructions('a photo of a purchase receipt');
 const EMAIL_INSTRUCTIONS = buildInstructions(
-  'the text of an email receipt, order confirmation, or shipping notice -- read past any marketing/footer boilerplate to the actual order details -- possibly followed by one or more attached PDF documents (an invoice or a fuller receipt) if the email text alone did not already contain everything; read those the same way you would a photographed receipt'
+  'the text of an email receipt, order confirmation, or shipping notice -- read past any marketing/footer boilerplate to the actual order details -- possibly followed by one or more attached PDF documents or photographed/scanned receipt images (an invoice, a fuller receipt, or a picture of a paper receipt) if the email text alone did not already contain everything; read those the same way you would a photographed receipt'
 );
 
 // Money on receipts is decimal; everything in this project is stored in cents.
@@ -207,28 +207,35 @@ async function extractReceiptData(source, mimetype) {
  * (HTML stripped) -- Claude reads printed receipt language fine as plain
  * text, and this avoids feeding raw HTML markup into the prompt.
  *
- * `pdfBuffers` (optional) adds one or more attached PDFs as their own
- * document content blocks, read directly -- no separate PDF text-
- * extraction step, since Claude reads a PDF's pages natively. Only ever
- * passed in by services/emailReceiptService.js as a FALLBACK, when
- * `emailText` alone didn't already yield a usable receipt (see that
- * file's comment on why: many merchant emails only say "your invoice is
- * attached", with every real figure inside the PDF, not the email body).
+ * `attachments` (optional) adds one or more attached PDFs or images as
+ * their own content blocks, read directly -- a PDF's pages or an image
+ * (a photographed/scanned receipt attached or embedded inline, rather
+ * than a PDF) are both things Claude reads natively, no separate
+ * extraction step for either. Each entry is `{ buffer, mimetype }`; a
+ * `mimetype` starting with `image/` becomes an `image` content block
+ * (same shape extractReceiptData above already builds for a photo scan),
+ * anything else is treated as a PDF `document` block. Only ever passed in
+ * by services/emailReceiptService.js as a FALLBACK, when `emailText`
+ * alone didn't already yield a usable receipt (see that file's comment on
+ * why: many merchant emails only say "your invoice is attached" or embed
+ * a photographed receipt, with every real figure in the attachment, not
+ * the email body).
  */
-async function extractReceiptDataFromEmail(emailText, pdfBuffers) {
+async function extractReceiptDataFromEmail(emailText, attachments) {
   if (!process.env.ANTHROPIC_API_KEY) {
     console.warn('[scan-receipt] ANTHROPIC_API_KEY not set, skipping extraction');
     return null;
   }
 
-  const pdfBlocks = (pdfBuffers || []).map((buffer) => ({
-    type: 'document',
-    source: { type: 'base64', media_type: 'application/pdf', data: buffer.toString('base64') },
-  }));
+  const attachmentBlocks = (attachments || []).map(({ buffer, mimetype }) =>
+    mimetype.startsWith('image/')
+      ? { type: 'image', source: { type: 'base64', media_type: mimetype, data: buffer.toString('base64') } }
+      : { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: buffer.toString('base64') } }
+  );
 
   return runExtraction([
     { type: 'text', text: `--- EMAIL CONTENT ---\n${emailText}\n--- END EMAIL CONTENT ---` },
-    ...pdfBlocks,
+    ...attachmentBlocks,
     { type: 'text', text: EMAIL_INSTRUCTIONS },
   ]);
 }

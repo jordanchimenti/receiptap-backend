@@ -68,18 +68,26 @@ function htmlToPlainText(html) {
     .trim();
 }
 
-// Bounds on the PDF-fallback extraction path below -- a message that needed
-// this fallback already passed the sender/subject filter, but that filter
-// says nothing about how large or how many PDFs it's attached, and this is
-// the one place in the whole pipeline that pays for an attachment download
-// before knowing whether the message is even a receipt. 15MB comfortably
-// covers a real invoice/receipt PDF while keeping a hostile or oversized
-// attachment from turning into an expensive download + a large Anthropic
-// call; 2 attachments is enough for the real pattern this exists for (an
-// invoice plus a payment confirmation), not an invitation to process an
-// email's entire attachment list.
-const MAX_PDF_BYTES_FOR_EXTRACTION = 15 * 1024 * 1024;
-const MAX_PDFS_FOR_EXTRACTION = 2;
+// Bounds on the attachment-fallback extraction path below -- a message that
+// needed this fallback already passed the sender/subject filter, but that
+// filter says nothing about how large or how many attachments it carries,
+// and this is the one place in the whole pipeline that pays for an
+// attachment download before knowing whether the message is even a
+// receipt. 15MB comfortably covers a real invoice/receipt PDF or a full-
+// resolution photo while keeping a hostile or oversized attachment from
+// turning into an expensive download + a large Anthropic call; 2
+// attachments is enough for the real pattern this exists for (an invoice
+// plus a payment confirmation, or a couple of photographed receipts), not
+// an invitation to process an email's entire attachment list.
+const MAX_ATTACHMENT_BYTES_FOR_EXTRACTION = 15 * 1024 * 1024;
+const MAX_ATTACHMENTS_FOR_EXTRACTION = 2;
+
+// Images this fallback will actually try to read -- matches
+// ALLOWED_SCAN_TYPES in routes/customer-account.js (the direct photo-upload
+// path), not Anthropic's full supported-image-type list, so an email
+// attachment gets exactly the same trust boundary a customer's own upload
+// already does.
+const ALLOWED_IMAGE_ATTACHMENT_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
 
 function extractSenderDomain(fromAddress) {
   const at = String(fromAddress || '').lastIndexOf('@');
@@ -145,37 +153,46 @@ async function processPendingMessage(processedMessage, emailConnection) {
   // Comparing only the base media type (before any ';') is what both the
   // fallback below and the source-document storage further down actually
   // need.
+  const baseMediaType = (a) => String(a.content_type || '').split(';')[0].trim();
   const pdfAttachments = Array.isArray(message.attachments)
-    ? message.attachments.filter((a) => String(a.content_type || '').split(';')[0].trim() === 'application/pdf')
+    ? message.attachments.filter((a) => baseMediaType(a) === 'application/pdf')
     : [];
+  const imageAttachments = Array.isArray(message.attachments)
+    ? message.attachments.filter((a) => ALLOWED_IMAGE_ATTACHMENT_TYPES.includes(baseMediaType(a)))
+    : [];
+  // Order matters only for the MAX_ATTACHMENTS_FOR_EXTRACTION cap below --
+  // a PDF is more likely to be the actual invoice than an inline logo/
+  // tracking image, so PDFs are tried first if a message somehow has both.
+  const fallbackAttachments = [...pdfAttachments, ...imageAttachments];
 
   let extracted = null;
   if (bodyText.trim()) {
     extracted = await extractReceiptDataFromEmail(bodyText);
   }
 
-  // Fallback for the "your invoice is attached" pattern: the email body
-  // alone said nothing usable, but a PDF is attached that might actually
-  // hold the receipt. Only reached when body-only extraction already
-  // failed, so the common case (a receipt fully written into the email
-  // itself) never pays for a PDF download it doesn't need -- same
-  // data-minimization posture as everything else in this file, just
-  // applied one step later than the sender/subject filter above.
-  // downloadedPdfs is filled in here and reused below when storing this
-  // message's original documents, so a message that needed this fallback
-  // never downloads the same PDF twice.
-  const downloadedPdfs = new Map(); // attachment.id -> Buffer
-  if ((!extracted || !extracted.merchantName || extracted.totalCents == null) && pdfAttachments.length) {
-    const candidates = pdfAttachments
-      .filter((a) => !a.size || a.size <= MAX_PDF_BYTES_FOR_EXTRACTION)
-      .slice(0, MAX_PDFS_FOR_EXTRACTION);
+  // Fallback for the "your invoice is attached" / "here's a photo of your
+  // receipt" pattern: the email body alone said nothing usable, but a PDF
+  // or image is attached that might actually hold the receipt. Only
+  // reached when body-only extraction already failed, so the common case
+  // (a receipt fully written into the email itself) never pays for an
+  // attachment download it doesn't need -- same data-minimization posture
+  // as everything else in this file, just applied one step later than the
+  // sender/subject filter above. downloadedAttachments is filled in here
+  // and reused below when storing this message's original documents, so a
+  // message that needed this fallback never downloads the same attachment
+  // twice.
+  const downloadedAttachments = new Map(); // attachment.id -> Buffer
+  if ((!extracted || !extracted.merchantName || extracted.totalCents == null) && fallbackAttachments.length) {
+    const candidates = fallbackAttachments
+      .filter((a) => !a.size || a.size <= MAX_ATTACHMENT_BYTES_FOR_EXTRACTION)
+      .slice(0, MAX_ATTACHMENTS_FOR_EXTRACTION);
     const buffers = [];
     for (const attachment of candidates) {
       try {
         const buffer = await downloadAttachment(emailConnection.grantId, attachment.id, message.id);
-        if (buffer.length > MAX_PDF_BYTES_FOR_EXTRACTION) continue; // a.size wasn't trustworthy
-        downloadedPdfs.set(attachment.id, buffer);
-        buffers.push(buffer);
+        if (buffer.length > MAX_ATTACHMENT_BYTES_FOR_EXTRACTION) continue; // a.size wasn't trustworthy
+        downloadedAttachments.set(attachment.id, buffer);
+        buffers.push({ buffer, mimetype: baseMediaType(attachment) });
       } catch (err) {
         console.error(`[email-receipt] attachment download failed for message ${message.id}:`, err.message);
       }
@@ -246,28 +263,34 @@ async function processPendingMessage(processedMessage, emailConnection) {
     mimetype: rawEml ? 'message/rfc822' : 'text/plain',
   }, { prefix: emailConnection.customerId });
 
-  // A merchant-attached PDF is a real, separate original alongside the
-  // email itself -- e.g. an invoice PDF next to a short "your invoice is
-  // attached" email body. Fetched and stored here (outside the DB
-  // transaction below, since these are slow external calls), one
-  // ScannedReceiptSourceDocument row per attachment, never used to decide
-  // whether this message IS a receipt (that's already been decided from
-  // the email body above) -- only ever additive evidence.
+  // A merchant-attached PDF or image is a real, separate original alongside
+  // the email itself -- e.g. an invoice PDF next to a short "your invoice
+  // is attached" email body, or a photographed receipt embedded inline.
+  // Fetched and stored here (outside the DB transaction below, since these
+  // are slow external calls), one ScannedReceiptSourceDocument row per
+  // attachment, never used to decide whether this message IS a receipt
+  // (that's already been decided from the email body/fallback above) --
+  // only ever additive evidence. Every PDF/image attachment gets archived
+  // this way, not just the ones the fallback above actually needed.
   const attachmentArtifacts = [];
-  for (const attachment of pdfAttachments) {
+  const imageExtension = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp' };
+  for (const attachment of fallbackAttachments) {
+    const isImage = imageAttachments.includes(attachment);
+    const mimetype = isImage ? baseMediaType(attachment) : 'application/pdf';
+    const ext = isImage ? imageExtension[mimetype] : 'pdf';
     try {
-      // Reuse the buffer if the PDF-fallback path above already downloaded
+      // Reuse the buffer if the fallback path above already downloaded
       // this exact attachment while trying to extract a receipt from it --
       // no reason to fetch the same bytes from Nylas twice.
-      const buffer = downloadedPdfs.get(attachment.id)
+      const buffer = downloadedAttachments.get(attachment.id)
         || await downloadAttachment(emailConnection.grantId, attachment.id, message.id);
       const key = await fileStorage.putPrivate('email-receipts', {
-        originalname: attachment.filename || `${attachment.id}.pdf`,
+        originalname: attachment.filename || `${attachment.id}.${ext}`,
         buffer,
-        mimetype: 'application/pdf',
+        mimetype,
       }, { prefix: emailConnection.customerId });
       attachmentArtifacts.push({
-        type: 'attachment_pdf',
+        type: isImage ? 'attachment_image' : 'attachment_pdf',
         storageKey: key,
         contentHash: crypto.createHash('sha256').update(buffer).digest('hex'),
       });

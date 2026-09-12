@@ -254,12 +254,17 @@ Solo founder, first-time coder. Explain in plain language, one step at a time.
   providers commonly report `application/pdf; name=x.pdf` -- never matched,
   silently breaking PDF handling entirely. `message.raw_mime` is still used
   speculatively with a fallback to plain text if Nylas doesn't return it --
-  not yet confirmed either way against a real message, since the two real
-  test messages so far didn't carry a raw MIME source. See §13 of the audit
-  doc for a fourth thing tested and found genuinely missing: a receipt
-  whose real data lives behind a "click here to view" link rather than in
-  the email body or a PDF attachment is not read at all today (deliberately
-  not built -- following an arbitrary link found in inbound email is a real
+  not yet confirmed either way against a real message, since the real test
+  messages so far didn't carry a raw MIME source. A receipt whose data
+  lives in a photographed/scanned image attachment rather than the email
+  body (someone emails a photo of a paper receipt, e.g.) is also now
+  supported, verified live the same way as the PDF case -- same fallback
+  path, restricted to png/jpeg/webp matching the direct photo-upload
+  path's own `ALLOWED_SCAN_TYPES`. See §13 of the audit doc for the one
+  pattern tested and found genuinely missing: a receipt whose real data
+  lives behind a "click here to view" link rather than in the email body
+  or an attachment is not read at all today (deliberately not built --
+  following an arbitrary link found in inbound email is a real
   SSRF risk that needs its own design, not a natural extension of the PDF
   fallback above). Candidate classification runs on the existing
   `setInterval`-poller pattern (`services/emailReceiptPoller.js`, mirroring

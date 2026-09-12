@@ -140,7 +140,7 @@
           <% sourceDocuments.forEach(function (doc) { %>
             <a class="w-btn w-btn-secondary" style="width:100%; box-sizing:border-box; text-align:center; display:block; text-decoration:none; margin-bottom:8px;"
                href="/account/receipts/scanned/<%= receipt.id %>/original/<%= doc.id %>">
-              <%= doc.type === 'attachment_pdf' ? 'Download attached PDF' : 'Download the email' %>
+              <%= doc.type === 'attachment_pdf' ? 'Download attached PDF' : doc.type === 'attachment_image' ? 'Download attached image' : 'Download the email' %>
             </a>
           <% }); %>
           <div class="r-missing" style="margin-top:2px;">

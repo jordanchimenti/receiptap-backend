@@ -179,6 +179,37 @@
       <% } %>
     </div>
 
+    <%# Automatic email receipts -- connects an inbox via Nylas's hosted
+        OAuth (services/emailProviderService.js) so a receipt emailed by any
+        merchant, connected to ReceipTap or not, becomes a normal wallet
+        receipt on its own. See routes/customer-email-connect.js and
+        docs/CONSUMER_FLOW_AUDIT.md for the full design. Disconnecting stops
+        new receipts from arriving; it never deletes ones already saved. %>
+    <div class="w-card settings-card">
+      <h2>Automatic email receipts</h2>
+      <% if (emailConnectError) { %>
+        <div class="w-error">Couldn't connect your inbox — please try again in a moment.</div>
+      <% } %>
+      <% if (emailAlreadyConnected) { %>
+        <div class="w-error">You already have an inbox connected — disconnect it first to connect a different one.</div>
+      <% } %>
+      <% if (emailConnected) { %>
+        <div class="success-note" style="margin-bottom:14px;">Inbox connected. New receipts will start appearing in your wallet automatically.</div>
+      <% } %>
+      <% if (emailDisconnected) { %>
+        <div class="success-note" style="margin-bottom:14px;">Disconnected. Receipts already in your wallet are untouched.</div>
+      <% } %>
+      <% if (emailConnection) { %>
+        <p class="sub">✅ Connected<%= emailConnection.providerAccountId ? ' (' + emailConnection.providerAccountId + ')' : '' %>. ReceipTap only ever looks at messages that look like a receipt, and only keeps the ones that are — see our <a href="/legal/wallet-privacy">Privacy Policy</a> for exactly what's stored.</p>
+        <form method="POST" action="/account/connect-email/disconnect">
+          <button type="submit" class="w-btn w-btn-secondary" style="width:100%; box-sizing:border-box;">Disconnect</button>
+        </form>
+      <% } else { %>
+        <p class="sub">Connect your inbox so a receipt any merchant emails you — not just ReceipTap ones — shows up in your wallet automatically. ReceipTap never sees your inbox password, and never stores anything that isn't a confirmed receipt.</p>
+        <a href="/account/connect-email/start" class="w-btn" style="width:100%; box-sizing:border-box; text-align:center; display:block; text-decoration:none;">Connect your inbox</a>
+      <% } %>
+    </div>
+
     <%# Saving receipts. Sits above Card recognition because it applies to
         every shopper on every POS, while recognition is Square-only and only
         appears once a link exists. %>

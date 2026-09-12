@@ -766,6 +766,28 @@ storage is best-effort, same posture as every other file cleanup in this
 service. Still gated behind `RETENTION_PURGE_ENABLED` like everything
 else — see item 2 — so this doesn't turn on live deletion by itself.
 
+**29. Indefinite retention of email-sourced receipts — OPEN.**
+**Where:** Wallet Privacy Policy, new "Connecting your email" section
+(added `2026-09-12.1`, for the consumer automatic-email-receipt feature —
+see `docs/CONSUMER_FLOW_AUDIT.md`).
+**Status: OPEN.** Founder/product decision as built: a `ScannedReceipt`
+with `source: 'email'`, and its original document(s)
+(`ScannedReceiptSourceDocument` rows), are exempted from
+`purgeExpiredScannedReceipts()`'s normal `SHOPPER_RECEIPT_MONTHS` clock and
+kept indefinitely instead — see `config/retention.js`'s
+`EMAIL_RECEIPT_RETENTION` comment and the exclusion in
+`services/dataRetentionService.js`. This is deliberate (an emailed receipt
+is often the only copy of that record that exists anywhere, unlike a
+tapped or scanned one this app also has other evidence for), not an
+oversight, and a customer's own `deleteShopperEverywhere()` erasure request
+still deletes them immediately regardless. But it's a real departure from
+this document's otherwise-uniform "same schedule for every receipt" story,
+and a real, non-time-boxed retention period is exactly the kind of thing a
+data-minimization-minded regulator or lawyer would want a specific
+justification for, not just a comment in the code. Needs a founder/counsel
+sign-off before this is treated as final, same posture as every other
+open item in this file.
+
 ---
 
 ## Also flagged during fact-finding, resolved on this pass

@@ -261,6 +261,14 @@ async function purgeExpiredScannedReceipts({ dryRun = true } = {}) {
   const details = { ScannedReceipt: 0 };
   let error = null;
   const expiredWhere = {
+    // source: 'email' is deliberately excluded from this window -- per the
+    // consumer email-receipt feature's privacy policy (config/legal.js's
+    // SHOPPER_PRIVACY version), a confirmed email receipt and its original
+    // are retained indefinitely, not on the SHOPPER_RECEIPT_MONTHS clock a
+    // photo scan follows. See docs/CONSUMER_FLOW_AUDIT.md section 10 --
+    // this is a deliberate policy choice, not an oversight, and reversing
+    // it later is a real privacy-policy change, not just a code change.
+    source: { not: 'email' },
     OR: [{ purchaseDate: { lt: cutoff } }, { purchaseDate: null, createdAt: { lt: cutoff } }],
   };
 
@@ -522,7 +530,7 @@ async function deleteShopperByEmail(email, merchantId, { dryRun = true } = {}) {
  */
 async function deleteShopperEverywhere(email, { dryRun = true, initiatedByMerchantId = null } = {}) {
   const startedAt = new Date();
-  const details = { Transaction_unlinked: 0, ShopperConsent: 0, LoyaltyCard: 0, ScannedReceipt: 0, ShopperIdentifier: 0, Notification: 0, PushSubscription: 0, Customer: 0 };
+  const details = { Transaction_unlinked: 0, ShopperConsent: 0, LoyaltyCard: 0, ScannedReceipt: 0, ShopperIdentifier: 0, Notification: 0, PushSubscription: 0, ProcessedEmailMessage: 0, EmailConnection: 0, EmailInboxConsent: 0, Customer: 0 };
   let error = null;
   let found = false;
 
@@ -548,7 +556,7 @@ async function deleteShopperEverywhere(email, { dryRun = true, initiatedByMercha
       // thing a right-to-erasure request is asking us not to do.
       const scannedReceipts = await prisma.scannedReceipt.findMany({
         where: { customerId: customer.id },
-        select: { imageUrl: true },
+        select: { imageUrl: true, sourceDocuments: { select: { storageKey: true } } },
       });
       const scannedReceiptCount = scannedReceipts.length;
       // Every passive identifier that could still recognise this person --
@@ -556,6 +564,23 @@ async function deleteShopperEverywhere(email, { dryRun = true, initiatedByMercha
       // shopper exists, but a full erasure means nothing about them survives,
       // so this counts and deletes both.
       const identifierCount = await prisma.shopperIdentifier.count({ where: { shopperId: customer.id } });
+      // EmailConnection/EmailInboxConsent (consumer automatic email
+      // receipts, see docs/CONSUMER_FLOW_AUDIT.md) are both
+      // customerId -> Customer ON DELETE RESTRICT, same as the tables
+      // above -- found missing from this function while adding the feature
+      // itself, which would otherwise have made prisma.customer.delete()
+      // below fail outright (not silently skip cleanup, the way the old
+      // photo-deletion bug did) for any customer who ever connected an
+      // inbox. ProcessedEmailMessage.emailConnectionId is ALSO RESTRICT, so
+      // it has to go before its parent EmailConnection row, not just before
+      // Customer.
+      const emailConnectionIds = (
+        await prisma.emailConnection.findMany({ where: { customerId: customer.id }, select: { id: true } })
+      ).map((c) => c.id);
+      const processedEmailMessageCount = await prisma.processedEmailMessage.count({
+        where: { emailConnectionId: { in: emailConnectionIds } },
+      });
+      const emailInboxConsentCount = await prisma.emailInboxConsent.count({ where: { customerId: customer.id } });
 
       if (dryRun) {
         details.Transaction_unlinked = txnIds.length;
@@ -563,14 +588,17 @@ async function deleteShopperEverywhere(email, { dryRun = true, initiatedByMercha
         details.LoyaltyCard = loyaltyCardCount;
         details.ScannedReceipt = scannedReceiptCount;
         details.ShopperIdentifier = identifierCount;
+        details.ProcessedEmailMessage = processedEmailMessageCount;
+        details.EmailConnection = emailConnectionIds.length;
+        details.EmailInboxConsent = emailInboxConsentCount;
         details.Customer = 1;
       } else {
         // ScannedReceipt.customerId, ShopperIdentifier.shopperId,
-        // Notification.customerId and PushSubscription.customerId are all ON
-        // DELETE RESTRICT (see
-        // prisma/schema.prisma) -- those rows have to go before the Customer
-        // delete below or Postgres rejects the whole transaction. Order matters
-        // here, not just membership.
+        // Notification.customerId, PushSubscription.customerId,
+        // EmailConnection.customerId and EmailInboxConsent.customerId are
+        // all ON DELETE RESTRICT (see prisma/schema.prisma) -- those rows
+        // have to go before the Customer delete below or Postgres rejects
+        // the whole transaction. Order matters here, not just membership.
         const results = await prisma.$transaction([
           prisma.shopperConsent.deleteMany({ where: { receiptId: { in: txnIds } } }),
           prisma.transaction.updateMany({ where: { id: { in: txnIds } }, data: { customerId: null } }),
@@ -579,11 +607,36 @@ async function deleteShopperEverywhere(email, { dryRun = true, initiatedByMercha
           prisma.shopperIdentifier.deleteMany({ where: { shopperId: customer.id } }),
           prisma.notification.deleteMany({ where: { customerId: customer.id } }),
           prisma.pushSubscription.deleteMany({ where: { customerId: customer.id } }),
+          prisma.processedEmailMessage.deleteMany({ where: { emailConnectionId: { in: emailConnectionIds } } }),
+          prisma.emailConnection.deleteMany({ where: { customerId: customer.id } }),
+          prisma.emailInboxConsent.deleteMany({ where: { customerId: customer.id } }),
           prisma.customer.delete({ where: { id: customer.id } }),
         ]);
         // Only once the rows are certainly gone -- deleting files first would
         // leave receipts pointing at nothing if the transaction rolled back.
-        scannedReceipts.forEach((r) => deleteUploadedFile(r.imageUrl));
+        // fileStorage.removePrivate directly, NOT deleteUploadedFile --
+        // found while adding this: deleteUploadedFile calls removePublic,
+        // which expects a full public-bucket URL and silently no-ops on a
+        // bare private-bucket key (see removePrivate's own doc comment,
+        // which names "a scanned receipt photo" as exactly its use case).
+        // r.imageUrl has always been a bare private key from putPrivate, so
+        // this call was never actually deleting the photo in production --
+        // a real pre-existing bug, fixed here rather than propagated into
+        // this same function's new source-document cleanup.
+        // purgeExpiredScannedReceipts (the time-based purge job) already
+        // gets this right, for comparison. Source documents (an email
+        // receipt's original(s), see ScannedReceiptSourceDocument) are
+        // cascade-deleted at the DB level by the scannedReceipt.deleteMany
+        // above, but that cascade never touches the storage objects those
+        // rows pointed at -- cleaned up here too. A full erasure request
+        // overrides the "email receipts kept indefinitely" retention policy
+        // (see purgeExpiredScannedReceipts's comment) -- the customer's own
+        // erasure request always wins over the platform's retention
+        // preference.
+        scannedReceipts.forEach((r) => {
+          fileStorage.removePrivate(r.imageUrl).catch(() => {});
+          r.sourceDocuments.forEach((doc) => fileStorage.removePrivate(doc.storageKey).catch(() => {}));
+        });
 
         details.ShopperConsent = results[0].count;
         details.Transaction_unlinked = results[1].count;
@@ -592,6 +645,9 @@ async function deleteShopperEverywhere(email, { dryRun = true, initiatedByMercha
         details.ShopperIdentifier = results[4].count;
         details.Notification = results[5].count;
         details.PushSubscription = results[6].count;
+        details.ProcessedEmailMessage = results[7].count;
+        details.EmailConnection = results[8].count;
+        details.EmailInboxConsent = results[9].count;
         details.Customer = 1;
 
         for (const mId of merchantIds) {

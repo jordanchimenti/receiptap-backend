@@ -91,9 +91,19 @@ const LEGAL_DOCUMENTS = {
   // receipts now age out on the same SHOPPER_RECEIPT_MONTHS schedule as
   // tapped ones (purgeExpiredScannedReceipts in dataRetentionService.js),
   // instead of being kept until account deletion. Wording updated to match.
+  // 2026-09-12.1 (SHOPPER_PRIVACY only) -- new "Connecting your email"
+  // section disclosing the consumer automatic-email-receipt feature (see
+  // docs/CONSUMER_FLOW_AUDIT.md): Nylas as the email-access provider, the
+  // cheap sender/subject filter before anything is fetched in full,
+  // Anthropic reading email text (not a photo) to confirm/extract a
+  // receipt, immediate deletion of anything that isn't a receipt, and the
+  // one deliberate exception to this document's retention story --
+  // email-sourced receipts and their originals are kept indefinitely
+  // rather than on the SHOPPER_RECEIPT_MONTHS schedule. Also added Nylas
+  // to the cross-border-transfer list in "Where your data is stored."
   SHOPPER_PRIVACY: {
-    version: '2026-09-01.4',
-    lastUpdated: '2026-09-01',
+    version: '2026-09-12.1',
+    lastUpdated: '2026-09-12',
     label: 'Wallet Privacy Policy',
   },
 };

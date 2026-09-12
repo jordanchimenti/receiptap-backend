@@ -124,10 +124,16 @@ const RECEIPT_SCHEMA = {
   additionalProperties: false,
 };
 
-const INSTRUCTIONS = `This is a photo of a purchase receipt. Read it for a personal expense wallet and record every field the receipt actually prints.
+// Parameterized on sourceLabel so the one prompt serves both input adapters
+// (extractReceiptData's photo, extractReceiptDataFromEmail's email text)
+// without duplicating every rule below for a second time -- see
+// docs/CONSUMER_FLOW_AUDIT.md's "add an adapter, don't fork the parser"
+// instruction.
+function buildInstructions(sourceLabel) {
+  return `This is ${sourceLabel}. Read it for a personal expense wallet and record every field the receipt actually prints.
 
 Rules that matter more than completeness:
-- Never guess. If a field is not printed, or is not legible in this photo, use null for a number/boolean field or an empty string for a text field. A missing value is useful; a wrong one is not.
+- Never guess. If a field is not printed, or is not legible, use null for a number/boolean field or an empty string for a text field. A missing value is useful; a wrong one is not.
 - date is one of the two fields this app cannot function without (the other is total) -- look specifically for a printed date near the top or bottom of the receipt before concluding there isn't one. It is not optional just because it's easy to miss next to a time stamp.
 - Amounts are plain numbers with no currency symbol (42.17, not "$42.17").
 - subtotal, tax and tip are only what the receipt itself shows as separate lines. Do not calculate them from the total. This does NOT mean report only the first tax line you see: if tax is split across more than one printed line (e.g. separate GST and HST amounts, or a line reading "tax included" printed after the total instead of before it -- common on gas-pump receipts), add every such line together into the single tax value. Reading and summing what's printed is not the same as calculating a number that isn't printed.
@@ -142,6 +148,12 @@ Rules that matter more than completeness:
 - paymentReferenceNumber is the payment's own reference/approval/authorization number, printed near the card brand and last-4 digits but as its own line. Do not reuse the card's last 4 digits or the receiptNumber for this.
 - For each line item, quantity is only set when the receipt prints one next to that item; leave it null rather than assuming 1. subItems are lines printed under an item with no price of their own (modifiers, included components) -- leave null or empty when there are none, and never invent one that isn't printed.
 - If this is not a receipt at all, set merchantName to null.`;
+}
+
+const INSTRUCTIONS = buildInstructions('a photo of a purchase receipt');
+const EMAIL_INSTRUCTIONS = buildInstructions(
+  'the text of an email receipt, order confirmation, or shipping notice -- read past any marketing/footer boilerplate to the actual order details'
+);
 
 // Money on receipts is decimal; everything in this project is stored in cents.
 function toCents(value) {
@@ -171,11 +183,44 @@ async function extractReceiptData(source, mimetype) {
     return null;
   }
 
-  try {
-    const base64 = Buffer.isBuffer(source)
-      ? source.toString('base64')
-      : fs.readFileSync(source).toString('base64');
+  const base64 = Buffer.isBuffer(source)
+    ? source.toString('base64')
+    : fs.readFileSync(source).toString('base64');
 
+  return runExtraction([
+    { type: 'image', source: { type: 'base64', media_type: mimetype, data: base64 } },
+    { type: 'text', text: INSTRUCTIONS },
+  ]);
+}
+
+/**
+ * Same extraction, same schema, same field mapping as extractReceiptData
+ * above -- the only difference is the input is an email's own HTML/plain-
+ * text body (already minimized: only a candidate that passed
+ * services/emailReceiptService.js's cheap first-pass filter ever reaches
+ * this call, per the data-minimization requirement in
+ * docs/CONSUMER_FLOW_AUDIT.md) instead of a photographed image. Reuses the
+ * exact RECEIPT_SCHEMA/INSTRUCTIONS an image scan uses -- this is
+ * deliberately NOT a second parser, just a second input adapter into the
+ * same one, per that document's "add an adapter, don't fork the parser"
+ * instruction. `emailText` should be the plain-text rendering of the email
+ * (HTML stripped) -- Claude reads printed receipt language fine as plain
+ * text, and this avoids feeding raw HTML markup into the prompt.
+ */
+async function extractReceiptDataFromEmail(emailText) {
+  if (!process.env.ANTHROPIC_API_KEY) {
+    console.warn('[scan-receipt] ANTHROPIC_API_KEY not set, skipping extraction');
+    return null;
+  }
+
+  return runExtraction([
+    { type: 'text', text: `--- EMAIL CONTENT ---\n${emailText}\n--- END EMAIL CONTENT ---` },
+    { type: 'text', text: EMAIL_INSTRUCTIONS },
+  ]);
+}
+
+async function runExtraction(contentBlocks) {
+  try {
     const response = await anthropic.messages.create({
       model: 'claude-opus-5',
       max_tokens: 2000, // room for line items; the old 500 truncated longer receipts
@@ -183,12 +228,13 @@ async function extractReceiptData(source, mimetype) {
       // reasoning one -- at the default effort this took 26 seconds, which is
       // a long time to hold someone on a spinner right after they take a
       // photo. Low effort answers in a fraction of that with no loss on a task
-      // where the answer is either legible or it isn't.
+      // where the answer is either legible or it isn't. Email text is even
+      // less demanding than a photo, so the same low effort applies there too.
       output_config: { effort: 'low' },
       tools: [
         {
           name: 'record_receipt',
-          description: 'Record every field printed on the photographed receipt.',
+          description: 'Record every field printed on the receipt.',
           // See RECEIPT_SCHEMA's own comment above -- this schema is too
           // large for Anthropic's strict-mode compiler regardless of how
           // the individual fields are typed. Not a loosening of quality:
@@ -199,15 +245,7 @@ async function extractReceiptData(source, mimetype) {
         },
       ],
       tool_choice: { type: 'tool', name: 'record_receipt' },
-      messages: [
-        {
-          role: 'user',
-          content: [
-            { type: 'image', source: { type: 'base64', media_type: mimetype, data: base64 } },
-            { type: 'text', text: INSTRUCTIONS },
-          ],
-        },
-      ],
+      messages: [{ role: 'user', content: contentBlocks }],
     });
 
     const call = response.content.find((block) => block.type === 'tool_use');
@@ -265,4 +303,4 @@ async function extractReceiptData(source, mimetype) {
   }
 }
 
-module.exports = { extractReceiptData };
+module.exports = { extractReceiptData, extractReceiptDataFromEmail };

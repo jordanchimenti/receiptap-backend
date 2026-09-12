@@ -114,7 +114,7 @@ model Merchant {
   // this is some kind of global/sharded counter, not a small per-retailer
   // one despite Lightspeed's own docs calling it that. Null until the first
   // poll after connecting.
-  lightspeedLastSaleVersion BigInt?
+  lightspeedLastSaleVersion      BigInt?
 
   // Toast POS. Unlike Square/Clover/Lightspeed, there is no redirect-based
   // OAuth here -- Toast's self-serve "Standard API access" has the MERCHANT
@@ -143,7 +143,7 @@ model Merchant {
   // here, in at-most-1-hour chunks (Toast's startDate/endDate query only
   // accepts up to a 1-hour range). Null until the first poll after
   // connecting.
-  toastLastPollAt DateTime?
+  toastLastPollAt           DateTime?
 
   // Billing — ReceipTap's own subscription (merchant pays ReceipTap monthly).
   // Trial lives in Stripe: card collected at checkout, 30-day trial, then
@@ -203,6 +203,11 @@ model Merchant {
   referredByAffiliate   Affiliate?   @relation("ReferredMerchants", fields: [referredByAffiliateId], references: [id])
   ownAffiliateAccount   Affiliate?   @relation("AffiliateOwnMerchant")
   commissionsGenerated  Commission[]
+
+  // Registry entries this merchant has claimed after the fact -- see
+  // MerchantRegistry's own comment for what "claiming" means. A merchant who
+  // never had unconnected receipts pointing at them has none of these.
+  claimedRegistryEntries MerchantRegistry[]
 }
 
 enum SubscriptionStatus {
@@ -293,8 +298,8 @@ model HardwareOrder {
   // affiliate (see prisma's Affiliate model comment) orders pucks to keep on
   // hand and hand-deliver to businesses they're signing up -- same order/
   // payment/shipping/tracking machinery either way, just a different buyer.
-  merchantId String?
-  merchant   Merchant? @relation(fields: [merchantId], references: [id])
+  merchantId  String?
+  merchant    Merchant?  @relation(fields: [merchantId], references: [id])
   affiliateId String?
   affiliate   Affiliate? @relation(fields: [affiliateId], references: [id])
 
@@ -1016,15 +1021,17 @@ model Customer {
   // state like every other one.
   homeScreenAddedAt DateTime?
 
-  transactions      Transaction[]
-  loyaltyCards      LoyaltyCard[]
-  scannedReceipts   ScannedReceipt[]
-  notifications     Notification[]
-  pushSubscriptions PushSubscription[]
-  identifiers       ShopperIdentifier[]
-  splitGroups       SplitGroup[]
-  legalAcceptances  ShopperLegalAcceptance[]
-  payouts           Payout[]
+  transactions       Transaction[]
+  loyaltyCards       LoyaltyCard[]
+  scannedReceipts    ScannedReceipt[]
+  notifications      Notification[]
+  pushSubscriptions  PushSubscription[]
+  identifiers        ShopperIdentifier[]
+  splitGroups        SplitGroup[]
+  legalAcceptances   ShopperLegalAcceptance[]
+  payouts            Payout[]
+  emailConnections   EmailConnection[]
+  emailInboxConsents EmailInboxConsent[]
 
   @@index([referredByAffiliateId])
 }
@@ -1144,11 +1151,189 @@ model ScannedReceipt {
   // Not extracted by the AI scan pass yet; schema only, for symmetry.
   tax2 Int?
 
+  // Which pipeline produced this row -- a plain string, not a Postgres enum,
+  // matching this codebase's existing convention for small closed
+  // vocabularies (see SplitPayment.method) and sidestepping the "can't
+  // ALTER TYPE and use it as a DEFAULT in the same migration" gotcha. Every
+  // row before this column existed becomes 'photo' automatically via the
+  // column default -- nothing about an existing scan changes.
+  // 'photo' | 'email'
+  source String @default("photo")
+
+  // Set only for source='email', when the sender doesn't correspond to a
+  // real, connected Merchant -- see MerchantRegistry's own comment. Null for
+  // every photo scan, and null for an email receipt from a sender who HAS
+  // since become a real Merchant and been reattributed (that reattribution
+  // updates this to point at nothing, since the receipt's real ownership at
+  // that point belongs to Merchant, not the registry -- see MerchantRegistry
+  // for the reattribution mechanics this is deliberately kept simple around).
+  merchantRegistryId String?
+  merchantRegistry   MerchantRegistry? @relation(fields: [merchantRegistryId], references: [id])
+
+  sourceDocuments ScannedReceiptSourceDocument[]
+
   shareLinks ScannedReceiptShareLink[]
   splitGroup SplitGroup?
 
   @@index([customerId])
   @@index([warrantyExpiresAt])
+  @@index([merchantRegistryId])
+}
+
+// An unconnected merchant identity -- "we've seen receipts from this sender,
+// but they don't have a ReceipTap account." Distinct from the real Merchant
+// tenant table on purpose: Merchant carries live POS OAuth tokens and a
+// Stripe subscription, and is created only through actual SaaS signup.
+// A MerchantRegistry row needs none of that -- it exists purely so multiple
+// ScannedReceipt rows from the same sender (across many different
+// customers' inboxes) can be recognized as the same merchant, and so that if
+// that business ever DOES sign up for the real SaaS, the receipts already
+// attributed to this registry entry can be handed over to their real
+// Merchant record in one reattribution step.
+//
+// "Claiming": when a Merchant signs up and their registry entry is found
+// (matched by verified sending domain, a manual/support-assisted step for
+// now -- no self-serve claim flow exists yet, see docs/CONSUMER_FLOW_AUDIT.md),
+// set claimedByMerchantId on this row. Existing ScannedReceipt rows pointing
+// at this registry entry are NOT bulk-migrated to Transaction (they stay
+// ScannedReceipt rows forever -- that's a real receipt with a real photo/
+// email original, not a POS transaction) -- claiming only means future
+// lookups can offer richer merchant-branded treatment where useful.
+model MerchantRegistry {
+  id             String  @id @default(cuid())
+  normalizedName String
+  // The sending domain new receipts are matched against, e.g.
+  // "messaging.squareup.com" or "shopify.com". Unique because a domain
+  // belongs to exactly one registry entry -- lib/findDuplicateReceipt.js's
+  // normalizeMerchant() is the existing name-normalization logic this reuses
+  // conceptually, extended here from "within one customer's wallet" to
+  // "across every customer's inbox."
+  senderDomain   String? @unique
+  displayName    String
+
+  claimedByMerchantId String?
+  claimedByMerchant   Merchant? @relation(fields: [claimedByMerchantId], references: [id])
+  claimedAt           DateTime?
+
+  createdAt DateTime @default(now())
+
+  scannedReceipts ScannedReceipt[]
+
+  @@index([normalizedName])
+}
+
+// The original artifact behind an email-sourced ScannedReceipt -- the email
+// equivalent of ScannedReceipt.imageUrl for a photo scan. Kept as its own
+// table (rather than a second imageUrl-shaped column) because an email
+// receipt can have more than one relevant document (the email itself,
+// rendered as a PDF the customer actually saw, AND a separate PDF
+// attachment the merchant included) -- scoped to ScannedReceipt only for
+// now, not a generic polymorphic table, since Transaction/POS receipts have
+// no artifact-storage precedent or requirement today (see
+// docs/CONSUMER_FLOW_AUDIT.md section 9 for why this isn't extended there
+// yet). Storage itself is lib/fileStorage.js's existing private-bucket
+// putPrivate/getPrivate, unmodified -- storageKey is that function's
+// returned key, not a URL.
+model ScannedReceiptSourceDocument {
+  id               String         @id @default(cuid())
+  scannedReceiptId String
+  scannedReceipt   ScannedReceipt @relation(fields: [scannedReceiptId], references: [id], onDelete: Cascade)
+
+  // 'email_eml' (raw MIME source, when Nylas provides it) |
+  // 'email_text' (plain-text rendering of the body, the honest fallback
+  // when it doesn't) | 'attachment_pdf' (a PDF the merchant attached)
+  type String
+
+  storageKey  String
+  contentHash String
+  capturedAt  DateTime @default(now())
+
+  @@index([scannedReceiptId])
+}
+
+// One connected inbox. providerAccountId/grantId are Nylas's own identifiers
+// for this connection -- Nylas holds the actual Google/Microsoft OAuth
+// token and manages its refresh; this app only ever stores Nylas's
+// reference to that grant, never a raw Google/Microsoft token. See
+// services/emailProviderService.js and docs/CONSUMER_FLOW_AUDIT.md section 9
+// for why this mirrors the POS OAuth token-storage shape (services/
+// cloverService.js's getValidAccessToken) rather than the Stripe/PayPal
+// Connect shape (which never stores a token at all, since Stripe/PayPal
+// hold custody -- Nylas is closer to a POS provider here: it's brokering
+// access to a resource this app doesn't own outright).
+model EmailConnection {
+  id         String   @id @default(cuid())
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id])
+
+  // 'nylas' -- a plain string, not an enum, so a future second provider
+  // (per the EmailProvider interface this is designed behind) never needs a
+  // migration to add.
+  provider          String
+  providerAccountId String
+  grantId           String @unique
+
+  // 'connected' | 'disconnected' | 'error'
+  status String @default("connected")
+
+  connectedAt    DateTime  @default(now())
+  disconnectedAt DateTime?
+  lastSyncedAt   DateTime?
+
+  processedMessages ProcessedEmailMessage[]
+
+  @@index([customerId])
+}
+
+// ReceipTap's own record of a customer choosing to connect an inbox --
+// separate from BOTH existing consent tables on purpose. ShopperConsent is
+// required-non-nullable to a specific Transaction (a tap-screen decision
+// about one purchase); this is an account-level grant made before any
+// receipt exists. ShopperLegalAcceptance is correctly account-level but is
+// an append-only "did you accept this document text" log with no
+// revocation concept -- you don't "un-accept" Terms, but you very much can
+// revoke inbox access. This table borrows the versioning idea from one and
+// the granted/revoked lifecycle from the other rather than forcing a bad
+// fit into either. consentVersion refers to a new version string in
+// config/legal.js, following that file's existing version-bump discipline.
+model EmailInboxConsent {
+  id         String   @id @default(cuid())
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id])
+
+  consentVersion String
+  grantedAt      DateTime  @default(now())
+  revokedAt      DateTime?
+
+  @@index([customerId])
+}
+
+// Tracks every inbound message this app has ever looked at, permanently,
+// for dedupe and audit -- WITHOUT retaining the message content for
+// anything that wasn't classified as a receipt. This is the one thing
+// neither existing idempotency idiom in this codebase covers: PK-reuse
+// (Transaction.id) and unique-column-plus-findUnique (SplitPayment.
+// stripePaymentIntentId) both dedupe a row that DOES get created. A
+// rejected email creates no ScannedReceipt at all, so there is nothing to
+// hang a unique column off of -- this table is the minimal thing that
+// satisfies "permanent dedupe + audit trail" and "delete non-receipt
+// content immediately" at the same time: it stores an ID and a decision,
+// never a body.
+model ProcessedEmailMessage {
+  id                String          @id @default(cuid())
+  emailConnectionId String
+  emailConnection   EmailConnection @relation(fields: [emailConnectionId], references: [id])
+
+  providerMessageId String @unique
+
+  // 'pending' | 'receipt' | 'rejected'
+  status String @default("pending")
+
+  scannedReceiptId String?
+
+  processedAt DateTime @default(now())
+
+  @@index([emailConnectionId])
 }
 
 // Split the Bill's real, ongoing state for one receipt -- created the moment
@@ -1230,9 +1415,9 @@ model SplitPayment {
   guestId String?
   guest   SplitGuest? @relation(fields: [guestId], references: [id], onDelete: SetNull)
 
-  amountCents      Int
-  itemDescriptions Json
-  method           String   @default("cash") // 'cash' | 'card' | 'paypal'
+  amountCents           Int
+  itemDescriptions      Json
+  method                String   @default("cash") // 'cash' | 'card' | 'paypal'
   // Set only for method='card' -- the PaymentIntent this payment came from.
   // Unique so the payment_intent.succeeded webhook handler
   // (services/stripeService.js) can never record the same card payment
@@ -1242,8 +1427,8 @@ model SplitPayment {
   // the Orders v2 order this payment came from. Unique so the
   // PAYMENT.CAPTURE.COMPLETED webhook handler (services/paypalService.js)
   // can't double-record if PayPal retries delivery.
-  paypalOrderId String?  @unique
-  createdAt     DateTime @default(now())
+  paypalOrderId         String?  @unique
+  createdAt             DateTime @default(now())
 
   @@index([groupId])
 }

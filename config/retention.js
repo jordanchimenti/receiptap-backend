@@ -63,10 +63,28 @@ const LEGAL_ACCEPTANCE_RETENTION_MONTHS = Infinity;
 // re-enroll them in marketing. Also Infinity, same reasoning as above.
 const EMAIL_SUPPRESSION_RETENTION_MONTHS = Infinity;
 
+// A ScannedReceipt with source='email' (see docs/CONSUMER_FLOW_AUDIT.md and
+// the schema comment on ScannedReceipt.source), and its
+// ScannedReceiptSourceDocument original(s), are retained indefinitely --
+// NOT on the SHOPPER_RECEIPT_MONTHS clock a photo scan follows. This is a
+// deliberate product/privacy-policy decision (the spec this feature was
+// built from calls for "kept indefinitely for the customer's records"),
+// enforced directly in services/dataRetentionService.js's
+// purgeExpiredScannedReceipts (a `source: { not: 'email' }` exclusion from
+// that function's WHERE clause), not as a numeric window here -- there is
+// no month count to compare against for "never." Documented here anyway,
+// same as every other retention rule in this file, so it's never a
+// surprise buried only in the purge job's own code. A customer's own
+// erasure request (services/dataRetentionService.js's
+// deleteShopperEverywhere) still overrides this -- indefinite retention is
+// the platform's default, never a way to refuse an erasure request.
+const EMAIL_RECEIPT_RETENTION = 'indefinite -- see comment above';
+
 module.exports = {
   SHOPPER_RECEIPT_MONTHS,
   SHOPPER_ACCOUNT_MONTHS,
   DEACTIVATED_MERCHANT_PURGE_DAYS,
   LEGAL_ACCEPTANCE_RETENTION_MONTHS,
   EMAIL_SUPPRESSION_RETENTION_MONTHS,
+  EMAIL_RECEIPT_RETENTION,
 };

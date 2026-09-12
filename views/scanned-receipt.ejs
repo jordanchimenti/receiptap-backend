@@ -130,16 +130,35 @@
         <% } %>
       </div>
 
-      <div class="r-sec">
-        <div class="r-sec-title">Original photo</div>
-        <a href="javascript:void 0" onclick="openImageViewer('/account/receipts/scanned/<%= receipt.id %>/image', '<%= receipt.merchantName.replace(/'/g, "\\'") %>'); return false;">
-          <img class="r-photo" src="/account/receipts/scanned/<%= receipt.id %>/image" alt="Photo of the receipt from <%= receipt.merchantName %>" />
-        </a>
-        <div class="r-missing" style="margin-top:10px;">
-          This photo is the record that actually supports a claim — the figures above
-          are read from it. Tax authorities accept a legible image; keep it.
+      <% if (receipt.source === 'email') { %>
+        <%# The email path stores its original(s) as ScannedReceiptSourceDocument
+            rows, not as receipt.imageUrl (that field holds the same text/eml
+            storage key as a fallback slot -- see services/emailReceiptService.js
+            -- never a real image, so the photo viewer above doesn't apply here). %>
+        <div class="r-sec">
+          <div class="r-sec-title">Original receipt<%= sourceDocuments.length > 1 ? 's' : '' %></div>
+          <% sourceDocuments.forEach(function (doc) { %>
+            <a class="w-btn w-btn-secondary" style="width:100%; box-sizing:border-box; text-align:center; display:block; text-decoration:none; margin-bottom:8px;"
+               href="/account/receipts/scanned/<%= receipt.id %>/original/<%= doc.id %>">
+              <%= doc.type === 'attachment_pdf' ? 'Download attached PDF' : 'Download the email' %>
+            </a>
+          <% }); %>
+          <div class="r-missing" style="margin-top:2px;">
+            This is what the merchant actually sent — the figures above are read from it.
+          </div>
         </div>
-      </div>
+      <% } else { %>
+        <div class="r-sec">
+          <div class="r-sec-title">Original photo</div>
+          <a href="javascript:void 0" onclick="openImageViewer('/account/receipts/scanned/<%= receipt.id %>/image', '<%= receipt.merchantName.replace(/'/g, "\\'") %>'); return false;">
+            <img class="r-photo" src="/account/receipts/scanned/<%= receipt.id %>/image" alt="Photo of the receipt from <%= receipt.merchantName %>" />
+          </a>
+          <div class="r-missing" style="margin-top:10px;">
+            This photo is the record that actually supports a claim — the figures above
+            are read from it. Tax authorities accept a legible image; keep it.
+          </div>
+        </div>
+      <% } %>
 
       <div class="r-sec">
         <div class="r-sec-title">Share with your accountant</div>
@@ -169,7 +188,7 @@
     </div>
 
     <form method="POST" action="/account/receipts/scanned/<%= receipt.id %>/delete"
-          onsubmit="return confirm('Delete this receipt and its photo? This cannot be undone.');">
+          onsubmit="return confirm('Delete this receipt and its <%= receipt.source === "email" ? "original" : "photo" %>? This cannot be undone.');">
       <button type="submit" class="r-danger">Delete this receipt</button>
     </form>
   </div>

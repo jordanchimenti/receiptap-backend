@@ -63,6 +63,7 @@ app.use('/webhooks/stripe', express.raw({ type: 'application/json' }));
 app.use('/webhooks/pos/square', express.raw({ type: 'application/json' }));
 app.use('/webhooks/pos/lightspeed', express.raw({ type: 'application/json' }));
 app.use('/webhooks/pos/shopify', express.raw({ type: 'application/json' }));
+app.use('/webhooks/email', express.raw({ type: 'application/json' }));
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -317,6 +318,8 @@ app.use('/account', async (req, res, next) => {
 
 app.use(require('./routes/customer-account'));    // consumer wallet: /account/*
 app.use(require('./routes/customer-payouts'));     // ReceipTap Balance: /account/balance/*
+app.use(require('./routes/customer-email-connect')); // Automatic email receipts: /account/connect-email/*
+app.use(require('./routes/emailWebhook'));           // Inbound Nylas webhook: /webhooks/email
 
 // Same shape as the customer unread-count middleware above, kept entirely
 // separate (see that middleware's comment on /business) rather than shared,
@@ -563,6 +566,40 @@ setTimeout(() => {
     runToastPoll().catch((err) => console.error('[toast poller] unexpected error:', err));
   }, TOAST_POLL_INTERVAL_MS);
 }, TOAST_POLL_BOOT_DELAY_MS);
+
+// Consumer automatic email receipts: same non-distributed setInterval
+// pattern as the POS pollers above -- see docs/CONSUMER_FLOW_AUDIT.md
+// section 7 for why this feature deliberately doesn't introduce a real job
+// queue. Runs both the bounded 90-day backfill discovery for newly
+// connected inboxes and the AI-call-bearing pending-message classification
+// batch, back to back, every tick (see services/emailReceiptPoller.js).
+const { runEmailPoll } = require('./services/emailReceiptPoller');
+const EMAIL_POLL_INTERVAL_MS = 2 * 60 * 1000; // every 2 minutes -- this is also the webhook's own backstop, not just backfill
+const EMAIL_POLL_BOOT_DELAY_MS = 240 * 1000; // stagger past the Toast poller's own boot delay
+
+let emailPollRunning = false;
+
+async function runEmailPollSafely() {
+  if (emailPollRunning) {
+    console.warn('[email poller] previous poll still in progress -- skipping this tick');
+    return;
+  }
+  emailPollRunning = true;
+  try {
+    await runEmailPoll();
+  } catch (err) {
+    console.error('[email poller] poll run failed:', err);
+  } finally {
+    emailPollRunning = false;
+  }
+}
+
+setTimeout(() => {
+  runEmailPollSafely().catch((err) => console.error('[email poller] unexpected error:', err));
+  setInterval(() => {
+    runEmailPollSafely().catch((err) => console.error('[email poller] unexpected error:', err));
+  }, EMAIL_POLL_INTERVAL_MS);
+}, EMAIL_POLL_BOOT_DELAY_MS);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {

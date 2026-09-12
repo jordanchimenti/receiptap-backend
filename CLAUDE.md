@@ -23,17 +23,23 @@ Solo founder, first-time coder. Explain in plain language, one step at a time.
 - `routes/` — auth, legal, pucks, receipt, webhooks, oauth-square,
   merchant-dashboard, merchant-expenses, repeat-customers, analytics,
   pdf-export, theme-settings, email-capture, customer-account,
-  customer-payouts, billing, admin
+  customer-payouts, customer-email-connect, emailWebhook, billing, admin
 - `middleware/` — subscriptionGate, requireAdmin, ownerFlag, legalReacceptance
 - `services/` — categorize-receipt, generate-receipt-pdf, stripeService,
   legalAcceptanceService, shopperConsentService, dataRetentionService,
-  emailSuppressionService, notificationService, pushService
+  emailSuppressionService, notificationService, pushService,
+  emailProviderService, emailReceiptService, emailReceiptPoller
 - `config/legal.js` — single source of truth for legal-document and
   consent-string versions. See Conventions.
 - `config/retention.js` — single source of truth for every data-retention
   window. See Conventions.
 - `config/payouts.js` — the Instant Withdrawal fee percentage shown on
   ReceipTap Balance (display copy only — see Not done yet).
+- `config/emailSenderHeuristics.js` — the cheap sender-domain/subject/body
+  keyword check a candidate email must pass before its full body is ever
+  fetched, for the consumer automatic-email-receipt feature (see Not done
+  yet). Not a whitelist that blocks anything outside it from ever being a
+  receipt — just what's cheap to check before spending an AI call.
 - `views/` — EJS pages; `views/partials/dashboard-header.ejs` is the merchant
   sidebar included by every dashboard page
 - `public/css/receiptap.css` — the whole design system, one file
@@ -210,9 +216,49 @@ Solo founder, first-time coder. Explain in plain language, one step at a time.
   `Payout` rows, so it will start failing for any host who has ever withdrawn
   once that feature has real usage. Needs a fix before relying on that
   function for a shopper who's used ReceipTap Balance.
+  `EmailConnection.customerId` and `EmailInboxConsent.customerId` (consumer
+  automatic email receipts, see "Not done yet") are ALSO RESTRICT, but this
+  one IS handled: `deleteShopperEverywhere()` deletes both before the
+  `Customer` row, same as every other child table in this list.
+  `ScannedReceiptSourceDocument.scannedReceiptId`, by contrast, is
+  `ON DELETE CASCADE` — deleting a `ScannedReceipt` deletes its source
+  documents automatically, no explicit child-delete needed for that one.
 
 ## Not done yet
 
+- **Consumer automatic email receipts (Phase 1) is built but UNVERIFIED
+  against a real Nylas account.** A shopper can connect an email inbox
+  (`/account/connect-email/start`, Settings) so receipts that arrive by
+  email are added to their wallet automatically, with no card-transaction
+  match required and no points/rewards/ledger involved anywhere in this
+  feature (see `docs/CONSUMER_FLOW_AUDIT.md` for the full design and phased
+  plan). Reuses the existing `ScannedReceipt` model (tagged
+  `source: 'email'`) and the existing AI extraction pipeline
+  (`extractReceiptDataFromEmail` in `services/scanReceiptService.js`) rather
+  than a second receipt schema or parser, per that audit's constraints. No
+  Nylas account/app has been created yet — every part of the Nylas v3
+  integration (`services/emailProviderService.js`: hosted OAuth, token
+  exchange, webhook signature verification, message/attachment fetching)
+  was built and syntax/boot-tested against Nylas's *published API docs*,
+  never against a live grant, so the actual OAuth round-trip, webhook
+  delivery, and real message shapes are unconfirmed. `message.raw_mime` is
+  used speculatively in `services/emailReceiptService.js` with a fallback
+  to a plain-text rendering if Nylas doesn't actually return it — flagged
+  in-code as needing confirmation once real credentials exist. Candidate
+  classification runs on the existing `setInterval`-poller pattern
+  (`services/emailReceiptPoller.js`, mirroring
+  `lightspeedPoller.js`/`toastPoller.js`), not a job queue — this codebase
+  has none anywhere, and extending that pattern here was a deliberate,
+  flagged tradeoff rather than new infrastructure. `MerchantRegistry` (an
+  email-sender-domain directory, separate from a real `Merchant` row until
+  one claims it) has no claim-flow UI yet — deferred past Phase 1. Phase 2
+  (push/deep-link surfacing) and Phase 3 (card-link + nudge) are both
+  explicitly not started. To actually test this end to end: register a
+  Nylas v3 app (dashboard-v3.nylas.com), set `NYLAS_CLIENT_ID`/
+  `NYLAS_API_KEY` (see `.env.example`), connect a real inbox from Settings,
+  create the webhook subscription and set `NYLAS_WEBHOOK_SECRET` once Nylas
+  hands one back, then send a real receipt email to the connected inbox and
+  watch it appear in the wallet.
 - **ReceipTap Balance (Split the Bill host withdrawals) is built but
   UNVERIFIED against a real Stripe test-mode Instant Payout.** A host's
   Split the Bill Connect balance (the same account `/account/connect-stripe`

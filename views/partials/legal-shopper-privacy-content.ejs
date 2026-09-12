@@ -68,6 +68,7 @@
       <li><strong>Your name</strong> — only if you sign in with Google, Apple, or Microsoft, and only if that provider gives it to us. Signing up with just an email and password doesn't ask for a name.</li>
       <li><strong>The receipts you save from a tap</strong> — which business, what you bought, how much, and when — so we can show them to you in one place.</li>
       <li><strong>Receipt photos you scan or upload</strong> — see "Scanning a receipt" below for exactly how these are used.</li>
+      <li><strong>Access to your email inbox, if you choose to connect it</strong> — see "Connecting your email" below for exactly what we look at, what we keep, and what we never keep.</li>
       <li><strong>The IP address your device connects from</strong> — only at the moment you tap a consent checkbox (like agreeing to receive marketing emails from a business at the tap screen). This is kept as proof of that specific choice, not to track you.</li>
     </ul>
     <p>
@@ -119,6 +120,63 @@
 
   <hr />
 
+  <!-- =================== CONNECTING YOUR EMAIL =================== -->
+  <section id="email-connect">
+    <div class="section-banner">The important part</div>
+    <h2>Connecting your email</h2>
+    <p>
+      You can optionally connect an email inbox (Gmail, Outlook, or another
+      provider) so receipts that arrive by email — order confirmations,
+      shipping notices, digital receipts from stores you didn't tap a puck
+      at — are added to your wallet automatically, without you scanning or
+      forwarding anything yourself. This is entirely separate from tapping a
+      puck or scanning a photo: connecting your email never requires, and
+      never depends on, having paid with a specific card.
+    </p>
+    <p>
+      We connect through Nylas, a third-party email-access provider, using
+      their own secure sign-in screen for your email provider — we never
+      see or store your email password. You can disconnect at any time from
+      Settings; disconnecting revokes our access immediately and stops any
+      further reading of your inbox, but doesn't remove receipts we already
+      saved to your wallet before you disconnected.
+    </p>
+    <p>
+      We do not read your whole inbox. For each new message, we first check
+      only the sender and subject line for signs it might be a receipt.
+      Nothing else about a message that doesn't pass this check is ever
+      looked at, kept, or sent anywhere. Only a message that passes is
+      fetched in full and read by Anthropic, the same AI company used for
+      receipt scanning (see "Scanning a receipt" above), so it can be
+      confirmed as a real receipt and its details extracted — for this
+      feature, that means the email's text, not a photo.
+    </p>
+    <p>
+      If that check decides a message isn't actually a receipt, nothing
+      about it is retained — no content, no summary. We keep only a record
+      that a given message ID was looked at and rejected, so we don't
+      re-fetch or re-analyze it on a later check; that record never
+      contains anything from the message itself. If a message is confirmed
+      as a receipt, we keep the receipt details in your wallet, along with
+      the original email (or its PDF attachment, if that's how the receipt
+      arrived) — kept indefinitely, unlike a tapped or scanned receipt,
+      which follows the schedule described in "How long we keep your data"
+      below. We treat an email receipt's original document the same way we
+      treat a scanned receipt's photo: as the evidence behind the figures we
+      show you, so it's kept for as long as you keep the receipt, not on a
+      time-based schedule.
+      <span class="review">[[REVIEW: confirm this indefinite-retention choice for email receipt originals against counsel's advice on data-minimization once this feature has real usage -- it is a deliberate product decision (a receipt kept for tax substantiation shouldn't expire on our schedule), not an oversight, but it is also the one exception to this document's otherwise-uniform retention story and should be reviewed as such.]]</span>
+    </p>
+    <p>
+      Deleting your account, or deleting an individual email-sourced
+      receipt, deletes that receipt's original document along with it, the
+      same as deleting a scanned receipt deletes its photo.
+    </p>
+    <p class="back-top"><a href="#email-connect">↑ Back to top</a></p>
+  </section>
+
+  <hr />
+
   <!-- =================== BUSINESS GETS YOUR EMAIL TOO =================== -->
   <section id="business-email">
     <h2>The business gets your email too, for a tap receipt</h2>
@@ -149,7 +207,14 @@
       <strong><%= Math.round(retention.SHOPPER_RECEIPT_MONTHS / 12) %> years</strong>,
       and then delete them. Both kinds of receipt follow the same
       schedule, measured from the purchase date on the receipt itself
-      (or, for a scan with no legible date, from when you uploaded it).
+      (or, for a scan with no legible date, from when you uploaded it). A
+      receipt added through a connected email inbox is the one exception:
+      as described in "Connecting your email" above, we keep those and
+      their original documents indefinitely rather than on this schedule,
+      since a receipt that arrived that way often is the only copy that
+      exists anywhere. Deleting your account still deletes them right away,
+      the same as everything else described here — indefinite retention is
+      our default, never a reason to refuse a deletion you ask for.
       We keep them that long on purpose: the Canada Revenue Agency expects
       business records to be kept for six years after the end of the tax
       year they belong to, and US limitation periods can run to seven.
@@ -202,8 +267,9 @@
       additionally send part of it outside Canada: Google, Apple, or
       Microsoft, to confirm your identity if you sign in with one of them;
       Anthropic, for AI category suggestions and receipt scanning, as
-      described above; and Resend, if you ever request a password-reset
-      email from us.
+      described above; Nylas, if you connect an email inbox, as described
+      in "Connecting your email" above; and Resend, if you ever request a
+      password-reset email from us.
       <span class="review">[[REVIEW: confirm whether an additional cross-border transfer safeguard (e.g. standard contractual clauses) is legally required given the application server's US location, beyond disclosing it here.]]</span>
     </p>
     <p class="back-top"><a href="#storage">↑ Back to top</a></p>

@@ -967,6 +967,12 @@ async function renderWallet(req, res, { isFullWallet }) {
       autoSaved: false, // a scanned receipt was uploaded by hand, never matched
       link: r.imageUrl,
       missing: missingSubstantiationFields('scanned', r),
+      // 'photo' | 'email' -- same ScannedReceipt row either way, this is
+      // just which pipeline produced it (see the schema comment on
+      // ScannedReceipt.source). No separate 'kind' for email on purpose:
+      // it renders identically to a photo scan everywhere except the one
+      // additive "Original receipt" section on the detail view.
+      source: r.source,
     })),
   ].sort((a, b) => b.sortDate - a.sortDate);
 
@@ -1849,7 +1855,10 @@ router.post('/account/receipts/scan/confirm', requireCustomerAuth, async (req, r
 // open the picture. For a receipt someone is keeping in order to claim it
 // back, that is backwards.
 router.get('/account/receipts/scanned/:id', requireCustomerAuth, async (req, res) => {
-  const receipt = await prisma.scannedReceipt.findUnique({ where: { id: req.params.id }, include: { splitGroup: true } });
+  const receipt = await prisma.scannedReceipt.findUnique({
+    where: { id: req.params.id },
+    include: { splitGroup: true, sourceDocuments: { orderBy: { capturedAt: 'desc' } } },
+  });
 
   // Same answer whether it never existed or belongs to someone else -- this
   // must not become a way to probe for other people's receipt IDs.
@@ -1891,7 +1900,52 @@ router.get('/account/receipts/scanned/:id', requireCustomerAuth, async (req, res
     shareLinkActive: isShareLinkActive(latestShareLink, new Date()),
     shareLinkDays: shareLinkDays(),
     baseUrl: getBaseUrl(req),
+    sourceDocuments: receipt.sourceDocuments,
   });
+});
+
+// The "Original receipt" download for an email-sourced ScannedReceipt --
+// same private-bucket-proxy pattern as the photo route just above, except
+// ownership is checked through the PARENT ScannedReceipt (a source
+// document has no customerId of its own), and content-type comes from the
+// document's own recorded `type` rather than guessed from a file extension.
+const SOURCE_DOCUMENT_MIME = {
+  email_eml: 'message/rfc822',
+  email_text: 'text/plain',
+  attachment_pdf: 'application/pdf',
+};
+const SOURCE_DOCUMENT_EXT = {
+  email_eml: 'eml',
+  email_text: 'txt',
+  attachment_pdf: 'pdf',
+};
+
+router.get('/account/receipts/scanned/:id/original/:docId', requireCustomerAuth, async (req, res) => {
+  const doc = await prisma.scannedReceiptSourceDocument.findUnique({
+    where: { id: req.params.docId },
+    include: { scannedReceipt: true },
+  });
+
+  if (!doc || doc.scannedReceiptId !== req.params.id || doc.scannedReceipt.customerId !== req.session.customerId) {
+    return res.status(404).end();
+  }
+
+  let stream;
+  try {
+    stream = await fileStorage.getPrivate(doc.storageKey);
+  } catch (err) {
+    console.error('[email-receipt] streaming original document failed:', err.message);
+    return res.status(404).end();
+  }
+
+  res.set('Cache-Control', 'private, no-store');
+  res.set('Content-Type', SOURCE_DOCUMENT_MIME[doc.type] || 'application/octet-stream');
+  res.set('Content-Disposition', `attachment; filename="receipt-original.${SOURCE_DOCUMENT_EXT[doc.type] || 'bin'}"`);
+  stream.on('error', (err) => {
+    console.error('[email-receipt] original document stream error:', err.message);
+    if (!res.headersSent) res.status(404).end();
+  });
+  stream.pipe(res);
 });
 
 // Streams a saved receipt's photo. Auth-gated and ownership-checked the same
@@ -2404,7 +2458,10 @@ router.post('/account/receipts/scanned/:id/share', requireCustomerAuth, async (r
 });
 
 router.post('/account/receipts/scanned/:id/delete', requireCustomerAuth, async (req, res) => {
-  const receipt = await prisma.scannedReceipt.findUnique({ where: { id: req.params.id } });
+  const receipt = await prisma.scannedReceipt.findUnique({
+    where: { id: req.params.id },
+    include: { sourceDocuments: true },
+  });
 
   // Same answer whether it never existed or belongs to someone else -- this
   // must not become a way to probe for other people's receipt IDs.
@@ -2418,6 +2475,23 @@ router.post('/account/receipts/scanned/:id/delete', requireCustomerAuth, async (
   // receipt after they asked for it to be gone. fileStorage handles either
   // backend, including files written before remote storage was switched on.
   await fileStorage.removePrivate(receipt.imageUrl);
+
+  // An email receipt can carry more than one original (the email itself
+  // plus any PDF attachments) -- the DB rows already cascade-deleted with
+  // the receipt above (ScannedReceiptSourceDocument.scannedReceiptId is
+  // onDelete: Cascade), but that cascade only removes the rows, not the
+  // storage objects they pointed at. removePrivate on receipt.imageUrl
+  // above already covers the primary artifact (it shares that same key,
+  // see services/emailReceiptService.js) -- this covers any additional
+  // ones, e.g. a separate PDF attachment.
+  for (const doc of receipt.sourceDocuments) {
+    if (doc.storageKey === receipt.imageUrl) continue; // already removed above
+    try {
+      await fileStorage.removePrivate(doc.storageKey);
+    } catch (err) {
+      console.error(`[email-receipt] failed to remove source document ${doc.id}:`, err.message);
+    }
+  }
 
   try {
     await notifyReceiptDeleted({
@@ -2437,12 +2511,17 @@ router.post('/account/receipts/scanned/:id/delete', requireCustomerAuth, async (
 // (services/dataRetentionService.js) exists and works but has no UI yet;
 // that's a separate, bigger addition than what was asked for here.
 router.get('/account/settings', requireCustomerAuth, async (req, res) => {
-  const [customer, identifiers] = await Promise.all([
+  const [customer, identifiers, emailConnection] = await Promise.all([
     prisma.customer.findUnique({ where: { id: req.session.customerId } }),
     // Live links only -- a revoked one is kept for audit but is not something
     // the shopper still has switched on, so showing it would misrepresent
     // what's actually active.
     listIdentifiersForShopper(req.session.customerId),
+    // A separate table, not a boolean on Customer the way Stripe/PayPal
+    // Connect are -- see EmailConnection's schema comment for why.
+    prisma.emailConnection.findFirst({
+      where: { customerId: req.session.customerId, status: 'connected' },
+    }),
   ]);
 
   // Deliberately never exposes identifierValueHash. It's a pseudonymous
@@ -2469,6 +2548,11 @@ router.get('/account/settings', requireCustomerAuth, async (req, res) => {
     connectPending: req.query.connect_pending === '1',
     paypalConnectError: req.query.paypal_connect_error === '1',
     paypalConnectPending: req.query.paypal_connect_pending === '1',
+    emailConnection,
+    emailConnectError: req.query.email_connect_error === '1',
+    emailAlreadyConnected: req.query.email_already_connected === '1',
+    emailConnected: req.query.email_connected === '1',
+    emailDisconnected: req.query.email_disconnected === '1',
   });
 });
 

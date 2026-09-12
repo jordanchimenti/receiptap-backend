@@ -145,9 +145,14 @@ async function listMessages(grantId, { receivedAfter, pageToken, limit = 50 } = 
  * list-messages summary above. This is the "only fetch full bodies for
  * candidates that pass" boundary the spec's data-minimization requirement
  * is built around; nothing upstream of this call should ever request or
- * store a full message body. */
+ * store a full message body. Unwraps Nylas's {request_id, data} envelope
+ * (same as listMessages above) -- the single-message endpoint wraps its
+ * result in `data` as an object rather than an array, which this used to
+ * return unwrapped, silently handing callers `undefined` for every field
+ * they actually wanted (body, from, snippet). */
 async function getMessage(grantId, messageId) {
-  return nylasFetch(`/v3/grants/${encodeURIComponent(grantId)}/messages/${encodeURIComponent(messageId)}`);
+  const result = await nylasFetch(`/v3/grants/${encodeURIComponent(grantId)}/messages/${encodeURIComponent(messageId)}`);
+  return result.data || null;
 }
 
 /** Downloads one attachment's raw bytes -- a separate function from
